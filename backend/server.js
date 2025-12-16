@@ -1,6 +1,8 @@
 const http = require('http');
 
 const PORT = 3000;
+// For production, restrict to specific origins
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:8080';
 
 // Sample jokes database
 const jokes = [
@@ -12,8 +14,8 @@ const jokes = [
 ];
 
 const server = http.createServer((req, res) => {
-  // Enable CORS for frontend access
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  // Enable CORS for frontend access (restricted to specific origin for security)
+  res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   

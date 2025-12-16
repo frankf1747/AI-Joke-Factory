@@ -51,12 +51,12 @@ async function getRandomJoke() {
         allJokesContainer.classList.add('hidden');
         
     } catch (error) {
-        jokeDisplay.innerHTML = `
-            <p class="setup" style="color: #dc3545;">
-                ⚠️ Error: Could not connect to backend. 
-                Make sure the server is running on port 3000.
-            </p>
-        `;
+        jokeDisplay.innerHTML = '';
+        const errorP = document.createElement('p');
+        errorP.className = 'setup';
+        errorP.style.color = '#dc3545';
+        errorP.textContent = '⚠️ Error: Could not connect to backend. Make sure the server is running on port 3000.';
+        jokeDisplay.appendChild(errorP);
         console.error('Error fetching joke:', error);
     } finally {
         getJokeBtn.disabled = false;
@@ -66,10 +66,20 @@ async function getRandomJoke() {
 
 // Display a single joke
 function displayJoke(joke) {
-    jokeDisplay.innerHTML = `
-        <p class="setup">${joke.setup}</p>
-        <p class="punchline">${joke.punchline}</p>
-    `;
+    // Clear existing content
+    jokeDisplay.innerHTML = '';
+    
+    // Create elements safely to prevent XSS
+    const setupP = document.createElement('p');
+    setupP.className = 'setup';
+    setupP.textContent = joke.setup;
+    
+    const punchlineP = document.createElement('p');
+    punchlineP.className = 'punchline';
+    punchlineP.textContent = joke.punchline;
+    
+    jokeDisplay.appendChild(setupP);
+    jokeDisplay.appendChild(punchlineP);
 }
 
 // Get all jokes from the backend
@@ -103,15 +113,30 @@ async function getAllJokes() {
 
 // Display all jokes
 function displayAllJokes(jokes) {
-    allJokesContainer.innerHTML = '<h2 style="text-align: center; margin-bottom: 20px; color: #333;">All Jokes</h2>';
+    // Clear and add title
+    allJokesContainer.innerHTML = '';
+    const title = document.createElement('h2');
+    title.style.textAlign = 'center';
+    title.style.marginBottom = '20px';
+    title.style.color = '#333';
+    title.textContent = 'All Jokes';
+    allJokesContainer.appendChild(title);
     
+    // Create joke cards safely
     jokes.forEach(joke => {
         const jokeCard = document.createElement('div');
         jokeCard.className = 'joke-card';
-        jokeCard.innerHTML = `
-            <p class="setup">${joke.setup}</p>
-            <p class="punchline">${joke.punchline}</p>
-        `;
+        
+        const setupP = document.createElement('p');
+        setupP.className = 'setup';
+        setupP.textContent = joke.setup;
+        
+        const punchlineP = document.createElement('p');
+        punchlineP.className = 'punchline';
+        punchlineP.textContent = joke.punchline;
+        
+        jokeCard.appendChild(setupP);
+        jokeCard.appendChild(punchlineP);
         allJokesContainer.appendChild(jokeCard);
     });
     
