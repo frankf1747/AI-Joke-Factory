@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Joke Factory</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎭 AI Joke Factory</h1>
+            <p class="subtitle">Your source for algorithmically selected humor!</p>
+        </header>
+
+        <main>
+            <div class="joke-container">
+                <div id="jokeDisplay" class="joke-display">
+                    <p class="setup">Click the button below to get a joke!</p>
+                </div>
+            </div>
+
+            <div class="controls">
+                <button id="getJokeBtn" class="btn btn-primary">Get a Random Joke</button>
+                <button id="getAllJokesBtn" class="btn btn-secondary">Show All Jokes</button>
+            </div>
+
+            <div id="allJokesContainer" class="all-jokes-container hidden"></div>
+        </main>
+
+        <footer>
+            <p class="status">Backend Status: <span id="backendStatus">Checking...</span></p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
