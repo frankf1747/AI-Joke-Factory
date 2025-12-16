@@ -98,11 +98,12 @@ async function getAllJokes() {
         displayAllJokes(jokes);
         
     } catch (error) {
-        allJokesContainer.innerHTML = `
-            <p style="color: #dc3545; text-align: center;">
-                ⚠️ Error: Could not connect to backend.
-            </p>
-        `;
+        allJokesContainer.innerHTML = '';
+        const errorP = document.createElement('p');
+        errorP.style.color = '#dc3545';
+        errorP.style.textAlign = 'center';
+        errorP.textContent = '⚠️ Error: Could not connect to backend.';
+        allJokesContainer.appendChild(errorP);
         allJokesContainer.classList.remove('hidden');
         console.error('Error fetching jokes:', error);
     } finally {

@@ -1,7 +1,8 @@
 const http = require('http');
 
 const PORT = 3000;
-// For production, restrict to specific origins
+// CORS: Allow requests from the frontend (which runs on port 8080)
+// For production, set ALLOWED_ORIGIN env var to your frontend's actual URL
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:8080';
 
 // Sample jokes database
