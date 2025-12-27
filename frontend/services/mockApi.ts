@@ -91,6 +91,7 @@ type MockDb = {
 };
 
 const LS_KEY = 'joke_factory_mock_db_v1';
+const MAX_TEAMS = 20;
 
 function isoNow(): string {
   return new Date().toISOString();
@@ -100,13 +101,19 @@ function loadDb(): MockDb {
   const raw = localStorage.getItem(LS_KEY);
   if (raw) {
     try {
-      return JSON.parse(raw) as MockDb;
+      const db = JSON.parse(raw) as MockDb;
+      // Lightweight migration: older mock DBs used 30 teams; cap to 20 for the current demo setup.
+      if (Array.isArray((db as any).teams) && (db as any).teams.length > MAX_TEAMS) {
+        (db as any).teams = (db as any).teams.slice(0, MAX_TEAMS);
+        persistDb(db);
+      }
+      return db;
     } catch {
       // fallthrough to fresh db
     }
   }
 
-  const teams: Team[] = Array.from({ length: 30 }, (_, i) => ({
+  const teams: Team[] = Array.from({ length: MAX_TEAMS }, (_, i) => ({
     id: (i + 1) as TeamId,
     name: `Team ${i + 1}`,
   }));
@@ -133,6 +140,13 @@ function loadDb(): MockDb {
   };
   persistDb(db);
   return db;
+}
+
+export function setMockRoundNumber(roundNumber: 1 | 2) {
+  const db = loadDb();
+  db.round.round_number = roundNumber;
+  // Keep id stable so existing session round_id continues to work.
+  persistDb(db);
 }
 
 function persistDb(db: MockDb) {
@@ -315,7 +329,16 @@ function route(
       assigned_at: null,
     };
     db.participants[String(user_id)] = participant;
-    db.assignments[String(user_id)] = { role: null, team_id: null };
+
+    // Instructor login in the existing UI maps password -> display_name (e.g. "Charles2026").
+    // In the real backend, that name would be assigned INSTRUCTOR. Mirror that behavior here
+    // so users can access the Instructor page while using mock API.
+    const isInstructorName = display_name === 'Charles2026' || display_name === 'Fernanda2026';
+    db.assignments[String(user_id)] = { role: isInstructorName ? 'INSTRUCTOR' : null, team_id: null };
+    if (isInstructorName) {
+      participant.status = 'ASSIGNED';
+      participant.assigned_at = isoNow();
+    }
     persistDb(db);
 
     const resp: ApiSessionJoinResponse = {

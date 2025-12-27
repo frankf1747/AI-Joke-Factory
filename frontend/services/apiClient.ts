@@ -32,7 +32,8 @@ function getBaseUrl(): string {
 
 function shouldUseMockApi(): boolean {
   const prod = Boolean((import.meta as any).env?.PROD);
-  return prod && !getConfiguredBaseUrl();
+  const forceMock = String((import.meta as any).env?.VITE_USE_MOCK_API ?? '').toLowerCase() === 'true';
+  return forceMock || (prod && !getConfiguredBaseUrl());
 }
 
 function getUserIdHeader(): string | undefined {
