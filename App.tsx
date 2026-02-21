@@ -6,87 +6,30 @@ import QualityControl from './views/QualityControl';
 import Customer from './views/Customer';
 import Instructor from './views/Instructor';
 import { Button } from './components';
-import { Loader2, Bug } from 'lucide-react';
-
-const DebugPanel: React.FC = () => {
-    const { login, updateUser, user } = useGame();
-    const [isOpen, setIsOpen] = useState(false);
-
-    const handleSwitch = async (role: Role, team: string = 'N/A') => {
-        if (user) {
-            await updateUser(user.id, { role, team });
-        } else {
-            // Debug-only: join session (role assignment is controlled by instructor/round state).
-            await login("Dev User", role);
-        }
-    };
-
-    if (!isOpen) {
-        return (
-            <div className="fixed top-4 right-4 z-50">
-                <button 
-                    onClick={() => setIsOpen(true)}
-                    className="bg-gray-900 text-white p-2 rounded-full shadow-lg opacity-50 hover:opacity-100 transition-opacity"
-                    title="Open Debug Panel"
-                >
-                    <Bug size={20} />
-                </button>
-            </div>
-        );
-    }
-
-    return (
-        <div className="fixed top-4 right-4 z-50 bg-gray-900 text-white p-4 rounded-xl shadow-2xl w-56 border border-gray-700 animate-in fade-in slide-in-from-top-5">
-            <div className="flex justify-between items-center border-b border-gray-700 pb-2 mb-3">
-                <span className="font-bold text-xs uppercase tracking-wider text-gray-400">Debug Controls</span>
-                <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white hover:bg-gray-800 rounded-full p-1">✕</button>
-            </div>
-            
-            <div className="space-y-1">
-                <p className="text-[10px] text-gray-500 mb-2 uppercase font-bold">Switch View (Current User)</p>
-                <button onClick={() => handleSwitch(Role.INSTRUCTOR)} className="w-full text-left text-xs font-medium hover:bg-blue-600 hover:text-white p-2 rounded transition-colors flex items-center">
-                    <span className="w-2 h-2 rounded-full bg-blue-400 mr-2"></span> Instructor
-                </button>
-                <button onClick={() => handleSwitch(Role.JOKE_MAKER, '1')} className="w-full text-left text-xs font-medium hover:bg-green-600 hover:text-white p-2 rounded transition-colors flex items-center">
-                    <span className="w-2 h-2 rounded-full bg-green-400 mr-2"></span> JM (Team 1)
-                </button>
-                <button onClick={() => handleSwitch(Role.QUALITY_CONTROL, '1')} className="w-full text-left text-xs font-medium hover:bg-purple-600 hover:text-white p-2 rounded transition-colors flex items-center">
-                    <span className="w-2 h-2 rounded-full bg-purple-400 mr-2"></span> QC (Team 1)
-                </button>
-                <button onClick={() => handleSwitch(Role.CUSTOMER)} className="w-full text-left text-xs font-medium hover:bg-amber-600 hover:text-white p-2 rounded transition-colors flex items-center">
-                    <span className="w-2 h-2 rounded-full bg-amber-400 mr-2"></span> Customer
-                </button>
-                <button onClick={() => handleSwitch(Role.UNASSIGNED, 'N/A')} className="w-full text-left text-xs font-medium hover:bg-gray-700 hover:text-white p-2 rounded transition-colors flex items-center">
-                    <span className="w-2 h-2 rounded-full bg-gray-400 mr-2"></span> Lobby
-                </button>
-                 <button onClick={() => window.location.reload()} className="w-full text-left text-xs font-medium text-red-400 hover:bg-red-900/50 p-2 rounded transition-colors border-t border-gray-700 mt-2 flex items-center">
-                    Reload App
-                </button>
-            </div>
-            {user && (
-                 <div className="mt-3 pt-2 border-t border-gray-700">
-                    <p className="text-[10px] text-gray-500">User: <span className="text-gray-300">{user.name}</span></p>
-                    <p className="text-[10px] text-gray-500">Role: <span className="text-gray-300">{user.role}</span></p>
-                    <p className="text-[10px] text-gray-500">Team: <span className="text-gray-300">{user.team}</span></p>
-                 </div>
-            )}
-        </div>
-    );
-};
+import { Loader2 } from 'lucide-react';
 
 const LoginScreen: React.FC = () => {
   const { login, instructorLogin } = useGame();
-  const [name, setName] = useState('');
+  const [member1, setMember1] = useState('');
+  const [member2, setMember2] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [activeTab, setActiveTab] = useState<'STUDENT' | 'INSTRUCTOR'>('STUDENT');
 
+  const normalizeTeamName = (a: string, b: string) =>
+    [a, b]
+      .map(n => n.trim().toLowerCase())
+      .filter(Boolean)
+      .sort((x, y) => x.localeCompare(y))
+      .join('_');
+
   const handleStudentLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (name.trim()) {
-      // Students join as UNASSIGNED pairs initially
-      await login(name, Role.UNASSIGNED);
-    }
+    const normalized = normalizeTeamName(member1, member2);
+    if (!normalized) return;
+    // Students join as UNASSIGNED pairs initially
+    await login(normalized, Role.UNASSIGNED);
   };
 
   const handleInstructorLogin = async (e: React.FormEvent) => {
@@ -128,17 +71,31 @@ const LoginScreen: React.FC = () => {
         <div className="p-8 bg-gray-50/50">
           {activeTab === 'STUDENT' ? (
             <form onSubmit={handleStudentLogin} className="space-y-6">
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">Your Names (Pair)</label>
-                <input 
-                  required
-                  type="text" 
-                  className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all placeholder-gray-400"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="e.g. John, Joe"
-                />
-                <p className="text-xs text-gray-500 mt-1">Enter both students who will share this role.</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">Team Members</label>
+                  <input
+                    required
+                    type="text"
+                    className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all placeholder-gray-400"
+                    value={member1}
+                    onChange={e => setMember1(e.target.value)}
+                    placeholder="Member 1 (e.g. Joe)"
+                  />
+                </div>
+                <div>
+                  <input
+                    required
+                    type="text"
+                    className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all placeholder-gray-400"
+                    value={member2}
+                    onChange={e => setMember2(e.target.value)}
+                    placeholder="Member 2 (e.g. John)"
+                  />
+                </div>
+                <p className="text-xs text-gray-500">
+                    You and your partner will share one role (JM or QC)
+                </p>
               </div>
               <Button type="submit" className="w-full justify-center py-3 text-base font-semibold">Join Lobby</Button>
             </form>
@@ -152,19 +109,38 @@ const LoginScreen: React.FC = () => {
                   className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all"
                   value={displayName}
                   onChange={e => setDisplayName(e.target.value)}
-                  placeholder="professor_1"
+                  placeholder="Instructor Name"
                 />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">Admin Password</label>
-                <input 
-                  required
-                  type="password" 
-                  className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="Password"
-                />
+                <div className="relative">
+                  <input 
+                    required
+                    type={showPassword ? "text" : "password"} 
+                    className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition-all pr-10"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="Password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-700"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+                      </svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </div>
               <Button type="submit" className="w-full justify-center py-3 text-base font-semibold">Login as Instructor</Button>
             </form>
@@ -215,10 +191,6 @@ const GameRouter: React.FC = () => {
       return <WaitingRoom />;
   }
   
-  // Note: We removed the check for config.status === 'LOBBY' here.
-  // This allows the DebugPanel to force a view (JM/QC/Customer) even if the game status is LOBBY.
-  // In normal flow, users only get a role != UNASSIGNED when the Instructor starts the game (status -> PLAYING).
-
   // Fallback for team N/A if role is assigned but something glitched, though formTeams handles this.
   if (user.team === 'N/A' && user.role !== Role.CUSTOMER) {
       return <WaitingRoom />;
@@ -240,7 +212,6 @@ const App: React.FC = () => {
   return (
     <GameProvider>
       <GameRouter />
-      <DebugPanel />
     </GameProvider>
   );
 };

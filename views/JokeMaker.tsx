@@ -1,15 +1,35 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useGame } from '../context';
-import { Button, Card, StatBox, RoleLayout, Modal } from '../components';
-import { Plus, Trash2, Send, CheckCircle, AlertCircle, MessageSquare } from 'lucide-react';
+import { Button, Card, StatBox, RoleLayout, Modal, PerformanceToggle } from '../components';
+import { Plus, Trash2, Send, CheckCircle, AlertCircle, MessageSquare, Info } from 'lucide-react';
 import { Role, Batch } from '../types';
 
+const performanceTagUi = (raw: unknown): { text: string; boxColor: string } => {
+  const key = String(raw ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/[\s_]+/g, '_');
+  if (key === 'HIGH_PERFORMING' || key === 'HIGH') {
+    return { text: 'High Demand', boxColor: 'bg-emerald-50 text-emerald-800' };
+  }
+  if (key === 'AVG' || key === 'AVERAGE' || key === 'AVG_PERFORMING' || key === 'AVERAGE_PERFORMING') {
+    return { text: 'Regular Demand', boxColor: 'bg-amber-50 text-amber-800' };
+  }
+  if (key === 'LOW_PERFORMING' || key === 'LOW') {
+    return { text: 'Overstocked', boxColor: 'bg-red-50 text-red-800' };
+  }
+  return { text: '-', boxColor: 'bg-slate-50 text-slate-700' };
+};
+
 const JokeMaker: React.FC = () => {
-  const { user, batches, addBatch, config, teamSummary } = useGame();
+  const { user, roster, batches, addBatch, config, teamSummary } = useGame();
   
   const [currentJokes, setCurrentJokes] = useState<string[]>([]);
   const [jokeInput, setJokeInput] = useState('');
+  const [jokeAddError, setJokeAddError] = useState<string | null>(null);
   const [complianceChecked, setComplianceChecked] = useState(false);
+  const [dismissedTeamPopup, setDismissedTeamPopup] = useState(false);
+  const [scratchpadText, setScratchpadText] = useState('');
   
   // Feedback Modal State
   const [feedbackBatch, setFeedbackBatch] = useState<Batch | null>(null);
@@ -19,17 +39,54 @@ const JokeMaker: React.FC = () => {
   const totalBatches = teamSummary?.batches_created ?? myBatches.length;
   const avgScore = teamSummary ? teamSummary.avg_score_overall.toFixed(1) : 'N/A';
   const mySales = teamSummary?.total_sales ?? 0;
+  const mySoldJokes = Number((teamSummary as any)?.sold_jokes_count ?? mySales ?? 0);
   const myRank = teamSummary?.rank ?? '-';
+  const perfTag = performanceTagUi((teamSummary as any)?.performance_label);
+  const profitNum = typeof (teamSummary as any)?.profit === 'number' ? Number((teamSummary as any).profit) : null;
+  // Use config (from active round API) for market_price and cost_of_publishing
+  const marketPrice = typeof config.marketPrice === 'number' && config.marketPrice > 0 ? config.marketPrice : null;
+  const publishCost = typeof config.costOfPublishing === 'number' && config.costOfPublishing >= 0 ? config.costOfPublishing : null;
+  const profit =
+    profitNum !== null && Number.isFinite(profitNum)
+      ? `$${profitNum.toFixed(2)}`
+      : '—';
+  const profitValueColor =
+    profitNum !== null && Number.isFinite(profitNum)
+      ? (profitNum < 0 ? 'text-red-700' : 'text-emerald-700')
+      : 'text-slate-700';
+  const profitBoxColor =
+    profitNum !== null && Number.isFinite(profitNum)
+      ? (profitNum < 0
+        ? 'bg-red-50 text-red-800'
+        : 'bg-emerald-50 text-emerald-800')
+      : 'bg-slate-50 text-slate-700';
+  const pDisplay = marketPrice !== null && Number.isFinite(marketPrice) ? `$${marketPrice.toFixed(2)}` : '—';
+  const cDisplay = publishCost !== null && Number.isFinite(publishCost) ? `$${publishCost.toFixed(2)}` : '—';
 
   const isRound1 = config.round === 1;
-  const targetBatchSize = isRound1 ? config.round1BatchSize : null;
-  const maxBatchSize = isRound1 ? config.round1BatchSize : config.round2BatchLimit;
+  // Before Round 1 starts, backend may still report a placeholder batch size (often 1).
+  // For JM UX, show a sensible default (5) while paused, then switch to the real config once active.
+  const defaultRound1BatchSize = 5;
+  const round1BatchSizeForUi = (isRound1 && !config.isActive) ? defaultRound1BatchSize : config.round1BatchSize;
+  const targetBatchSize = isRound1 ? round1BatchSizeForUi : null;
+  const maxBatchSize = isRound1 ? round1BatchSizeForUi : config.round2BatchLimit;
   const isInputDisabled = currentJokes.length >= maxBatchSize || !config.isActive;
 
+  const normalizeJoke = (s: string) =>
+    s.trim().replace(/\s+/g, ' ').toLowerCase();
+
   const handleAddJoke = () => {
-    if (!jokeInput.trim()) return;
+    const trimmed = jokeInput.trim();
+    if (!trimmed) return;
     if (currentJokes.length >= maxBatchSize) return;
-    setCurrentJokes([...currentJokes, jokeInput.trim()]);
+    const nextNorm = normalizeJoke(trimmed);
+    const isDuplicate = currentJokes.some(j => normalizeJoke(j) === nextNorm);
+    if (isDuplicate) {
+      setJokeAddError('That joke is already in this batch. Please add a different one.');
+      return;
+    }
+    setJokeAddError(null);
+    setCurrentJokes([...currentJokes, trimmed]);
     setJokeInput('');
   };
 
@@ -66,8 +123,36 @@ const JokeMaker: React.FC = () => {
     return normalized.replace(/\b\w/g, c => c.toUpperCase());
   };
 
+  useEffect(() => {
+    // If instructor closes popups server-side, allow it to show again next time it opens.
+    if (!config.showTeamPopup) setDismissedTeamPopup(false);
+  }, [config.showTeamPopup]);
+
   return (
     <RoleLayout>
+      {/* Round 2: Team popup (backend-controlled via is_popped_active) */}
+      <Modal
+        isOpen={config.round === 2 && config.showTeamPopup && !dismissedTeamPopup}
+        onClose={() => setDismissedTeamPopup(true)}
+        title="Meet Your Team"
+        showCloseButton={false}
+      >
+        <div className="space-y-2">
+          <p className="text-sm text-gray-600">
+            Great job! Go sit with your team members:
+          </p>
+          <div className="divide-y divide-gray-100 border border-gray-200 rounded">
+            {(roster.length ? roster : (user ? [user] : [])).map(m => (
+              <div key={m.id} className="flex items-center justify-between px-3 py-2">
+                <span className="font-medium text-gray-900">{m.name}</span>
+                <span className="text-xs font-bold text-gray-500">{m.role.replace('_', ' ')}</span>
+              </div>
+            ))}
+          </div>
+
+        </div>
+      </Modal>
+
       {/* QC Feedback Modal */}
       <Modal 
         isOpen={!!feedbackBatch} 
@@ -131,7 +216,10 @@ const JokeMaker: React.FC = () => {
               <div className="flex flex-col gap-2">
                 <textarea
                   value={jokeInput}
-                  onChange={(e) => setJokeInput(e.target.value)}
+                  onChange={(e) => {
+                    setJokeInput(e.target.value);
+                    if (jokeAddError) setJokeAddError(null);
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
@@ -143,6 +231,11 @@ const JokeMaker: React.FC = () => {
                   rows={3}
                   disabled={isInputDisabled}
                 />
+                {jokeAddError && (
+                  <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
+                    {jokeAddError}
+                  </div>
+                )}
                 <Button 
                   onClick={handleAddJoke} 
                   disabled={!jokeInput.trim() || isInputDisabled}
@@ -205,12 +298,51 @@ const JokeMaker: React.FC = () => {
 
         {/* Right Column: Dashboard & History */}
         <div className="space-y-6">
+          <PerformanceToggle label={mySales > 0 ? (teamSummary as any)?.performance_label : undefined} />
           <div className="grid grid-cols-2 gap-4">
             <StatBox label="Current Rank" value={myRank} color="bg-green-100 text-green-900 border-2 border-green-400 shadow-md" />
-            <StatBox label="Batches Created" value={totalBatches} />
+            <StatBox
+              label="Sold / Accepted"
+              value={`${mySoldJokes} / ${teamSummary?.accepted_jokes ?? 0}`}
+              valueClassName="text-blue-900"
+              labelClassName="text-blue-900"
+            />
             <StatBox label="Avg Score" value={avgScore} color="bg-indigo-50 text-indigo-700" />
+            <StatBox label="Batches Created" value={totalBatches} />
             <StatBox label="Total Sales" value={mySales} color="bg-amber-50 text-amber-700" />
+            <div className="flip-card h-full">
+              <div className="flip-card-inner">
+                <div className={`flip-card-face ${profitBoxColor} p-4 flex flex-col items-center justify-center shadow-sm relative`}>
+                  <Info size={16} className="text-gray-400 absolute top-2 right-2 opacity-80" />
+                  <span className={`text-3xl font-bold ${profitValueColor}`}>{profit}</span>
+                  <span className="text-sm uppercase tracking-wide opacity-80 mt-1">Profit</span>
+                  <span className="text-[11px] text-gray-600 mt-1">p={pDisplay} • c={cDisplay}</span>
+                </div>
+                <div
+                  className={`flip-card-face flip-card-back ${profitBoxColor} p-4 flex flex-col items-center justify-center shadow-sm`}
+                  title="Profit = p × Total Sales − n × Published"
+                >
+                  <div className="inline-flex flex-col items-start text-xs sm:text-sm font-semibold text-gray-900 leading-snug">
+                    <div>{pDisplay} × Total Sales</div>
+                    <div className="flex items-center gap-1 mt-1 ml-3">
+                      <span className="text-lg font-bold text-gray-800">−</span>
+                      <span>{cDisplay} × Published</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
+
+          <Card title="Joke Clipboard">
+            <textarea
+              value={scratchpadText}
+              onChange={(e) => setScratchpadText(e.target.value)}
+              placeholder="Paste your AI-generated jokes here, then copy them into the batch input one by one."
+              className="w-full h-[300px] bg-white border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none resize-y placeholder-gray-400"
+              rows={12}
+            />
+          </Card>
 
           <Card title="Submitted Batches">
             <div className="space-y-4 max-h-[400px] overflow-y-auto">

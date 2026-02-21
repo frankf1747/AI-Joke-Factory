@@ -2,8 +2,10 @@ import { apiRequest } from './apiClient';
 import type {
   ApiInstructorLobbyResponse,
   ApiInstructorStatsResponse,
+  ApiInstructorDeleteUserResponse,
   ApiInstructorLoginRequest,
   ApiInstructorLoginResponse,
+  ApiInstructorRoundConfigResponse,
   RoundId,
   TeamId,
   UserId,
@@ -34,7 +36,25 @@ export const instructorService = {
     return apiRequest<void>(`/v1/instructor/rounds/${round_id}/users/${user_id}`, { method: 'PATCH', body });
   },
 
-  start(round_id: RoundId, body: { customer_budget: number; batch_size: number }): Promise<void> {
+  deleteUser(round_id: RoundId, user_id: UserId): Promise<ApiInstructorDeleteUserResponse> {
+    return apiRequest<ApiInstructorDeleteUserResponse>(`/v1/instructor/rounds/${round_id}/users/${user_id}`, { method: 'DELETE' });
+  },
+
+  updateRoundConfig(
+    round_id: RoundId,
+    body: { customer_budget: number; batch_size: number },
+  ): Promise<ApiInstructorRoundConfigResponse> {
+    return apiRequest<ApiInstructorRoundConfigResponse>(`/v1/instructor/rounds/${round_id}/config`, { method: 'POST', body });
+  },
+
+  popups(round_id: RoundId, body: { is_popped_active: boolean }): Promise<ApiInstructorRoundConfigResponse> {
+    return apiRequest<ApiInstructorRoundConfigResponse>(`/v1/instructor/rounds/${round_id}/popups`, { method: 'POST', body });
+  },
+
+  start(
+    round_id: RoundId,
+    body: { customer_budget: number; batch_size: number; market_price: number; cost_of_publishing: number },
+  ): Promise<void> {
     return apiRequest<void>(`/v1/instructor/rounds/${round_id}/start`, { method: 'POST', body });
   },
 

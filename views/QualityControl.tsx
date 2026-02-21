@@ -1,0 +1,534 @@
+import React, { useEffect, useState } from 'react';
+import { useGame } from '../context';
+import { Button, Card, StatBox, RoleLayout, Modal, PerformanceToggle } from '../components';
+import { Star, CheckCircle, Clock, Tag, AlertTriangle, Info, ChevronDown, ChevronUp } from 'lucide-react';
+import { Batch } from '../types';
+
+const performanceTagUi = (raw: unknown): { text: string; boxColor: string } => {
+  const key = String(raw ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/[\s_]+/g, '_');
+  if (key === 'HIGH_PERFORMING' || key === 'HIGH') {
+    return { text: 'High Demand', boxColor: 'bg-emerald-50 text-emerald-800' };
+  }
+  if (key === 'AVG' || key === 'AVERAGE' || key === 'AVG_PERFORMING' || key === 'AVERAGE_PERFORMING') {
+    return { text: 'Regular Demand', boxColor: 'bg-amber-50 text-amber-800' };
+  }
+  if (key === 'LOW_PERFORMING' || key === 'LOW') {
+    return { text: 'Overstocked', boxColor: 'bg-red-50 text-red-800' };
+  }
+  return { text: '-', boxColor: 'bg-slate-50 text-slate-700' };
+};
+
+const TAG_OPTIONS = [
+  { label: "Excellent / standout", tooltip: "Memorable, high-quality, clearly above average." },
+  { label: "Genuinely funny", tooltip: "Would repeat to friends or classmates." },
+  { label: "Made me smile", tooltip: "Some humor, mild positive reaction." },
+  { label: "Original idea", tooltip: "Fresh or creative concept, even if execution wasn’t perfect." },
+  { label: "Polite smile", tooltip: "Safe and understandable, but weak or forgettable." },
+  { label: "Didn't land", tooltip: "Clearly intended as a joke, but not funny." },
+  { label: "Not acceptable", tooltip: "Offensive, inappropriate, confusing, or unsafe." },
+  { label: "Other", tooltip: "Does not fit the categories above (requires written explanation)." }
+];
+
+const QualityControl: React.FC = () => {
+  const { user, roster, batches, rateBatch, config, qcQueue, teamSummary } = useGame();
+  
+  // API queue provides the next SUBMITTED batch; local state keeps rated history for this session.
+  const pendingBatches: Batch[] = qcQueue ? [{
+    batch_id: qcQueue.batch.batch_id,
+    round_id: qcQueue.batch.round_id,
+    team_id: qcQueue.batch.team_id,
+    status: 'SUBMITTED',
+    submitted_at: qcQueue.batch.submitted_at,
+    jokes: qcQueue.jokes.map(j => ({
+      joke_id: j.joke_id,
+      joke_text: j.joke_text,
+      id: String(j.joke_id),
+      content: j.joke_text,
+    })),
+    // UI aliases
+    id: String(qcQueue.batch.batch_id),
+    team: String(qcQueue.batch.team_id),
+    round: config.round,
+    submittedAt: Date.parse(qcQueue.batch.submitted_at),
+  }] : [];
+
+  const completedBatches = batches.filter(
+    b => b.team === user?.team && b.status === 'RATED' && b.round === config.round,
+  );
+  
+  const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
+  const [currentRatings, setCurrentRatings] = useState<{ [jokeId: string]: number }>({});
+  const [currentTags, setCurrentTags] = useState<{ [jokeId: string]: string[] }>({});
+  const [batchFeedback, setBatchFeedback] = useState("");
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [jokeTitles, setJokeTitles] = useState<Record<string, string>>({});
+  const jokeCardRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
+  const [dismissedTeamPopup, setDismissedTeamPopup] = useState(false);
+  const activeBatch = pendingBatches.find(b => b.id === activeBatchId) || pendingBatches[0];
+
+  // Stats (rated history + live summary)
+  const totalAccepted = completedBatches.reduce((sum, b) => sum + (b.acceptedCount || 0), 0);
+  const avgScore =
+    typeof (teamSummary as any)?.avg_score_overall === 'number' && Number.isFinite((teamSummary as any).avg_score_overall)
+      ? Number((teamSummary as any).avg_score_overall).toFixed(1)
+    : (completedBatches.length > 0 
+      ? (completedBatches.reduce((sum, b) => sum + (b.avgRating || 0), 0) / completedBatches.length).toFixed(1) 
+      : 'N/A');
+  const myRank = typeof (teamSummary as any)?.rank === 'number' ? String((teamSummary as any).rank) : '-';
+  const perfTag = performanceTagUi((teamSummary as any)?.performance_label);
+  const totalSales = typeof (teamSummary as any)?.total_sales === 'number' ? Number((teamSummary as any).total_sales) : 0;
+  const soldJokesCount = Number((teamSummary as any)?.sold_jokes_count ?? totalSales ?? 0);
+  const profitNum = typeof (teamSummary as any)?.profit === 'number' ? Number((teamSummary as any).profit) : null;
+  // Use config (from active round API) for market_price and cost_of_publishing
+  const marketPrice = typeof config.marketPrice === 'number' && config.marketPrice > 0 ? config.marketPrice : null;
+  const publishCost = typeof config.costOfPublishing === 'number' && config.costOfPublishing >= 0 ? config.costOfPublishing : null;
+  
+  // Track which batches have expanded published jokes list
+  const [expandedBatchIds, setExpandedBatchIds] = useState<Record<string, boolean>>({});
+  const profit =
+    profitNum !== null && Number.isFinite(profitNum)
+      ? `$${profitNum.toFixed(2)}`
+      : '—';
+  const profitValueColor =
+    profitNum !== null && Number.isFinite(profitNum)
+      ? (profitNum < 0 ? 'text-red-700' : 'text-emerald-700')
+      : 'text-slate-700';
+  const profitBoxColor =
+    profitNum !== null && Number.isFinite(profitNum)
+      ? (profitNum < 0
+        ? 'bg-red-50 text-red-800'
+        : 'bg-emerald-50 text-emerald-800')
+      : 'bg-slate-50 text-slate-700';
+  const pDisplay = marketPrice !== null && Number.isFinite(marketPrice) ? `$${marketPrice.toFixed(2)}` : '—';
+  const cDisplay = publishCost !== null && Number.isFinite(publishCost) ? `$${publishCost.toFixed(2)}` : '—';
+
+  const handleRate = (jokeId: string, rating: number) => {
+    setCurrentRatings(prev => ({ ...prev, [jokeId]: rating }));
+    if (submitError) setSubmitError(null);
+  };
+
+  const toggleTag = (jokeId: string, tagLabel: string) => {
+    setCurrentTags(prev => {
+      const current = prev[jokeId] || [];
+      // Only one tag allowed per joke: replace selection; clicking same tag clears.
+      const next = current.includes(tagLabel) ? [] : [tagLabel];
+      return { ...prev, [jokeId]: next };
+    });
+    if (submitError) setSubmitError(null);
+  };
+
+
+  const needsFeedback = Object.values(currentTags).flat().includes("Other");
+  const TITLE_MAX_CHARS = 120;
+  const TITLE_MAX_WORDS = 15;
+  const countWords = (s: string) => {
+    const trimmed = s.trim();
+    if (!trimmed) return 0;
+    return trimmed.split(/\s+/).filter(Boolean).length;
+  };
+  const validateTitle = (title: string): string | null => {
+    const trimmed = title.trim();
+    if (!trimmed) return 'Title required for submitting jokes.';
+    if (trimmed.length > TITLE_MAX_CHARS) return `Title too long (max ${TITLE_MAX_CHARS} chars).`;
+    const words = countWords(trimmed);
+    if (words > TITLE_MAX_WORDS) return `Title too long (max ${TITLE_MAX_WORDS} words).`;
+    return null;
+  };
+
+  const submitBatchRating = () => {
+    if (!activeBatch) return;
+    if (!isBatchFullyRated(activeBatch)) {
+      if (needsFeedback && batchFeedback.trim().length === 0) {
+        setSubmitError('Written feedback is required when you select "Other". Please add feedback before submitting.');
+        return;
+      }
+      const missingRating = activeBatch.jokes.find(j => currentRatings[j.id] === undefined);
+      const missingTag = activeBatch.jokes.find(j => !(currentTags[j.id] && currentTags[j.id].length > 0));
+      const missingTitle = activeBatch.jokes.find(j => {
+        if (currentRatings[j.id] !== 5) return false;
+        return Boolean(validateTitle(jokeTitles[j.id] ?? ''));
+      });
+      const target = missingRating ?? missingTag ?? null;
+      if (target) {
+        const targetIndex = activeBatch.jokes.findIndex(j => j.id === target.id);
+        const targetLabel = target ? `Joke ${targetIndex + 1}` : 'a joke';
+        const missingType = missingRating ? 'rating' : 'tag';
+        setSubmitError(`Missing ${missingType} for ${targetLabel}. Please complete it before submitting.`);
+        const el = target ? jokeCardRefs.current[target.id] : null;
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+      if (missingTitle) {
+        const targetIndex = activeBatch.jokes.findIndex(j => j.id === missingTitle.id);
+        const titleError = validateTitle(jokeTitles[missingTitle.id] ?? '') ?? 'Title required.';
+        setSubmitError(`Joke ${targetIndex + 1}: ${titleError}`);
+        const el = jokeCardRefs.current[missingTitle.id];
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+      return;
+    }
+    rateBatch(activeBatch.id, currentRatings, currentTags, batchFeedback, jokeTitles);
+    setCurrentRatings({});
+    setCurrentTags({});
+    setBatchFeedback("");
+    setJokeTitles({});
+    setSubmitError(null);
+    setActiveBatchId(null);
+  };
+
+  const isBatchFullyRated = (batch: Batch) => {
+    const allRated = batch.jokes.every(j => currentRatings[j.id] !== undefined);
+    const allTagged = batch.jokes.every(j => currentTags[j.id] && currentTags[j.id].length > 0);
+    const feedbackValid = !needsFeedback || (batchFeedback.trim().length > 0);
+    const titlesValid = batch.jokes.every(j => {
+      if (currentRatings[j.id] !== 5) return true;
+      // validateTitle returns non-null string if invalid
+      return !validateTitle(jokeTitles[j.id] ?? '');
+    });
+    return allRated && allTagged && feedbackValid && titlesValid;
+  };
+
+  useEffect(() => {
+    if (!config.showTeamPopup) setDismissedTeamPopup(false);
+  }, [config.showTeamPopup]);
+
+  return (
+    <RoleLayout>
+      {/* Round 2: Team popup (backend-controlled via is_popped_active) */}
+      <Modal
+        isOpen={config.round === 2 && config.showTeamPopup && !dismissedTeamPopup}
+        onClose={() => setDismissedTeamPopup(true)}
+        title="Meet Your Team"
+        showCloseButton={false}
+      >
+        <div className="space-y-2">
+          <p className="text-sm text-gray-600">
+            Great job! Go sit with your team members:
+          </p>
+          <div className="divide-y divide-gray-100 border border-gray-200 rounded">
+            {(roster.length ? roster : (user ? [user] : [])).map(m => (
+              <div key={m.id} className="flex items-center justify-between px-3 py-2">
+                <span className="font-medium text-gray-900">{m.name}</span>
+                <span className="text-xs font-bold text-gray-500">{m.role.replace('_', ' ')}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Modal>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* Left Column: Queue & Active Rating */}
+        <div className="lg:col-span-2 space-y-6">
+          <Card title="Inspection Station" className="border-t-4 border-t-purple-500">
+            {activeBatch ? (
+              <div className="space-y-6">
+                 <div className="flex justify-between items-center border-b pb-2">
+                    <h3 className="font-bold text-gray-700">Batch #{activeBatch.id.slice(-4)}</h3>
+                    <span className="text-sm text-gray-500">{activeBatch.jokes.length} items to inspect</span>
+                 </div>
+
+                 <div className="space-y-6">
+                   {activeBatch.jokes.map((joke, idx) => {
+                     const rating = currentRatings[joke.id];
+                     const requiresTitle = rating === 5;
+                     const titleValue = jokeTitles[joke.id] ?? '';
+                     const titleError = requiresTitle ? validateTitle(titleValue) : null;
+                     const wordCount = countWords(titleValue);
+                     return (
+                     <div
+                       key={joke.id}
+                       ref={(el) => {
+                         jokeCardRefs.current[joke.id] = el;
+                       }}
+                       className="bg-gray-50 p-4 rounded-lg border border-gray-200"
+                     >
+                       <p className="mb-3 text-gray-800 font-medium text-lg whitespace-pre-wrap">{joke.content}</p>
+                       
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                           {/* Rating Section */}
+                           <div>
+                               <span className="text-xs font-bold text-gray-400 uppercase block mb-1">Rating (1-5)</span>
+                               <div className="flex items-center space-x-2">
+                                   {[1, 2, 3, 4, 5].map((star) => (
+                                   <button
+                                       key={star}
+                                       onClick={() => handleRate(joke.id, star)}
+                                       className={`p-1 transition-transform hover:scale-110 ${
+                                       (currentRatings[joke.id] || 0) >= star ? 'text-yellow-400' : 'text-gray-300'
+                                       }`}
+                                   >
+                                       <Star size={24} fill="currentColor" />
+                                   </button>
+                                   ))}
+                               </div>
+                           </div>
+
+                           {/* Tagging Section */}
+                           <div>
+                                <span className="text-xs font-bold text-gray-400 uppercase block mb-1">Feedback Tags (Req.)</span>
+                                <div className="flex flex-wrap gap-2">
+                                    {TAG_OPTIONS.map(tag => {
+                                        const isSelected = (currentTags[joke.id] || []).includes(tag.label);
+                                        return (
+                                            <button
+                                                key={tag.label}
+                                                onClick={() => toggleTag(joke.id, tag.label)}
+                                                title={tag.tooltip}
+                                                className={`text-xs px-2 py-1 rounded border transition-colors ${
+                                                    isSelected 
+                                                    ? 'bg-purple-600 text-white border-purple-600' 
+                                                    : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100'
+                                                }`}
+                                            >
+                                                {tag.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                           </div>
+                       </div>
+                       {requiresTitle && (
+                         <div className="mt-3">
+                           <span className="text-xs font-bold text-gray-400 uppercase block mb-1">
+                             Title / Summary (Market View)
+                           </span>
+                           <input
+                             type="text"
+                             value={titleValue}
+                             onChange={(e) => {
+                               const val = e.target.value;
+                               // Prevent typing more than max words
+                               if (countWords(val) > TITLE_MAX_WORDS) return;
+                               setJokeTitles(prev => ({ ...prev, [joke.id]: val }));
+                               if (submitError) setSubmitError(null);
+                             }}
+                             maxLength={TITLE_MAX_CHARS}
+                             className={`w-full bg-white border rounded px-3 py-2 text-sm text-gray-900 focus:ring-2 outline-none ${
+                               titleError ? 'border-red-300 focus:ring-red-200' : 'border-gray-300 focus:ring-purple-200'
+                             }`}
+                             placeholder={`Joke ${idx + 1} title (max ${TITLE_MAX_WORDS} words)`}
+                           />
+                           <div className="mt-1 flex items-center justify-between text-[11px]">
+                             <span className={titleError ? 'text-red-600' : 'text-gray-500'}>
+                               {titleError ?? 'Required for accepted jokes shown in market.'}
+                             </span>
+                             <span className="text-gray-400">{wordCount}/{TITLE_MAX_WORDS} words</span>
+                           </div>
+                         </div>
+                       )}
+                     </div>
+                   );
+                   })}
+                 </div>
+
+                 {/* Conditional Feedback Area */}
+                 {needsFeedback && (
+                    <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200 animate-in fade-in">
+                        <div className="flex items-center gap-2 mb-2">
+                            <AlertTriangle size={18} className="text-yellow-600" />
+                            <span className="font-bold text-sm text-yellow-800">Written Feedback Required</span>
+                        </div>
+                        <p className="text-xs text-yellow-700 mb-2">You selected "Other" for one or more jokes. Please explain your feedback for this batch.</p>
+                        <textarea 
+                            value={batchFeedback}
+                            onChange={(e) => {
+                              setBatchFeedback(e.target.value);
+                              if (submitError) setSubmitError(null);
+                            }}
+                            className="w-full p-2 text-sm border border-yellow-300 rounded focus:ring-2 focus:ring-yellow-500 outline-none bg-white text-gray-900"
+                            rows={3}
+                            placeholder="Type your feedback here..."
+                        />
+                    </div>
+                 )}
+
+                 {submitError && (
+                   <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded px-3 py-2">
+                     {submitError}
+                   </div>
+                 )}
+                 <div className="flex justify-end pt-4 border-t">
+                   <Button 
+                     onClick={submitBatchRating}
+                     variant="success"
+                     className="w-full md:w-auto"
+                   >
+                     Submit Inspection Results
+                   </Button>
+                 </div>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <div className="bg-green-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle className="text-green-500" size={32} />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900">All Clear!</h3>
+                <p className="text-gray-500">Waiting for Joke Maker to submit new batches.</p>
+              </div>
+            )}
+          </Card>
+        </div>
+
+        {/* Right Column: Stats & Queue List */}
+        <div className="space-y-6">
+          <PerformanceToggle label={totalSales > 0 ? (teamSummary as any)?.performance_label : undefined} />
+          <div className="grid grid-cols-2 gap-4">
+            <StatBox label="Current Rank" value={myRank} color="bg-green-100 text-green-900 border-2 border-green-400 shadow-md" />
+            <StatBox
+              label="Sold / Accepted"
+              value={`${soldJokesCount} / ${teamSummary?.accepted_jokes ?? 0}`}
+              valueClassName="text-blue-900"
+              labelClassName="text-blue-900"
+            />
+            <StatBox label="Avg Score" value={avgScore} color="bg-indigo-50 text-indigo-700" />
+            <StatBox label="Queue" value={qcQueue?.queue_size ?? pendingBatches.length} color="bg-purple-50 text-purple-700" />
+            <StatBox label="Total Sales" value={totalSales} color="bg-amber-50 text-amber-700" />
+            <div className="flip-card h-full">
+              <div className="flip-card-inner">
+                <div className={`flip-card-face ${profitBoxColor} p-4 flex flex-col items-center justify-center shadow-sm relative`}>
+                  <Info size={16} className="text-gray-400 absolute top-2 right-2 opacity-80" />
+                  <span className={`text-3xl font-bold ${profitValueColor}`}>{profit}</span>
+                  <span className="text-sm uppercase tracking-wide opacity-80 mt-1">Profit</span>
+                  <span className="text-[11px] text-gray-600 mt-1">p={pDisplay} • c={cDisplay}</span>
+                </div>
+                <div
+                  className={`flip-card-face flip-card-back ${profitBoxColor} p-4 flex flex-col items-center justify-center shadow-sm`}
+                  title="Profit = p × Total Sales − n × Published"
+                >
+                  <div className="inline-flex flex-col items-start text-xs sm:text-sm font-semibold text-gray-900 leading-snug">
+                    <div>{pDisplay} × Total Sales</div>
+                    <div className="flex items-center gap-1 mt-1 ml-3">
+                      <span className="text-lg font-bold text-gray-800">−</span>
+                      <span>{cDisplay} × Published</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <Card title="Incoming Queue">
+             <div className="space-y-2 max-h-[250px] overflow-y-auto">
+               {pendingBatches.length === 0 && <p className="text-gray-400 text-sm text-center py-4">Queue is empty</p>}
+               {pendingBatches.map(b => (
+                 <div 
+                   key={b.id} 
+                   className={`p-3 rounded border cursor-pointer transition-colors flex justify-between items-center ${
+                     b.id === activeBatch?.id ? 'bg-purple-50 border-purple-300' : 'bg-white border-gray-200 hover:bg-gray-50'
+                   }`}
+                   onClick={() => setActiveBatchId(b.id)}
+                 >
+                   <span className="font-mono text-sm">Batch #{b.id.slice(-4)}</span>
+                   <span className="flex items-center text-xs text-gray-500">
+                     <Clock size={12} className="mr-1" />
+                     Waiting
+                   </span>
+                 </div>
+               ))}
+             </div>
+          </Card>
+          
+          <Card title="Inspection History">
+             <div className="space-y-3 max-h-[300px] overflow-y-auto">
+               {completedBatches.length === 0 && <p className="text-gray-400 text-sm text-center py-4">No batches rated yet</p>}
+               {[...completedBatches].reverse().map(b => {
+                 // Filter published jokes: check is_published flag OR sold_count > 0 (for backward compat)
+                 const published = (b.jokes || []).filter(j => {
+                   const isPublished = Boolean((j as any)?.is_published ?? (j as any)?.isPublished ?? false);
+                   const sold = Number((j as any)?.sold_count ?? (j as any)?.soldCount ?? 0);
+                   return isPublished || sold > 0;
+                 });
+                 const isExpanded = Boolean(expandedBatchIds[b.id]);
+                 const maxVisible = 2;
+                 const hasMore = published.length > maxVisible;
+                 const visibleJokes = isExpanded ? published : published.slice(0, maxVisible);
+                 
+                 return (
+                   <div key={b.id} className="p-3 bg-gray-50 rounded border border-gray-200">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="font-mono text-xs text-gray-500">#{b.id.slice(-4)}</span>
+                        <span className="text-xs text-green-600 font-bold flex items-center">
+                          <CheckCircle size={10} className="mr-1"/> 
+                          Rated
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div className="bg-white p-1 rounded text-center border">
+                          <span className="block text-gray-500 text-[10px] uppercase">Avg Score</span>
+                          <span className="font-bold text-blue-600">{b.avgRating?.toFixed(1)}</span>
+                        </div>
+                        <div className="bg-white p-1 rounded text-center border">
+                          <span className="block text-gray-500 text-[10px] uppercase">Accepted</span>
+                          <span className="font-bold text-green-600">{b.acceptedCount}</span>
+                        </div>
+                      </div>
+                      {/* Published jokes with sales - with fold/expand */}
+                      <div className="mt-3 bg-white border border-gray-200 rounded p-2">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[11px] font-semibold text-gray-500 uppercase">
+                            Published ({published.length})
+                          </span>
+                          {published.length > 0 && (
+                            <span className="text-[10px] text-emerald-700 font-bold">
+                              Total Sold: {published.reduce((sum, j) => sum + Number((j as any)?.sold_count ?? (j as any)?.soldCount ?? 0), 0)}
+                            </span>
+                          )}
+                        </div>
+                        {published.length === 0 ? (
+                          <span className="text-xs text-gray-400">None published yet</span>
+                        ) : (
+                          <>
+                            <ul className="space-y-1.5">
+                              {visibleJokes.map(j => {
+                                const sold = Number((j as any)?.sold_count ?? (j as any)?.soldCount ?? 0);
+                                return (
+                                  <li key={j.id} className="text-xs text-gray-800 flex justify-between gap-2 bg-gray-50 p-1.5 rounded">
+                                    <span className="line-clamp-2 flex-1">{j.content}</span>
+                                    <span className={`text-[11px] font-semibold shrink-0 px-1.5 py-0.5 rounded ${
+                                      sold > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600'
+                                    }`}>
+                                      {sold > 0 ? `🛒 ${sold}` : '—'}
+                                    </span>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                            {hasMore && (
+                              <button
+                                type="button"
+                                onClick={() => setExpandedBatchIds(prev => ({ ...prev, [b.id]: !prev[b.id] }))}
+                                className="mt-2 w-full flex items-center justify-center gap-1 text-[11px] font-semibold text-purple-600 hover:text-purple-800 transition-colors py-1 bg-purple-50 rounded"
+                              >
+                                {isExpanded ? (
+                                  <>
+                                    <ChevronUp size={12} />
+                                    Show Less
+                                  </>
+                                ) : (
+                                  <>
+                                    <ChevronDown size={12} />
+                                    Show All ({published.length - maxVisible} more)
+                                  </>
+                                )}
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                   </div>
+                 );
+               })}
+             </div>
+          </Card>
+        </div>
+      </div>
+    </RoleLayout>
+  );
+};
+
+export default QualityControl;
