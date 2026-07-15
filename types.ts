@@ -110,6 +110,7 @@ export interface GameConfig {
   round2BatchLimit: number;
   marketPrice: number;
   costOfPublishing: number;
+  costOfCreation: number;
 }
 
 // --- API shapes (schema-aligned) ---
@@ -201,6 +202,9 @@ export interface ApiTeamSummaryResponse {
   avg_score_overall: number;
   unrated_batches: number;
   unsold_jokes?: number;
+  jokes_created?: number;
+  jokes_published?: number;
+  cost_breakdown?: { revenue: number; production_cost: number; publish_cost: number; profit: number };
 }
 
 export interface ApiTeamBatchesResponse {
@@ -219,7 +223,10 @@ export interface ApiTeamBatchesResponse {
 
 export interface ApiCreateBatchRequest {
   team_id: TeamId;
-  jokes: string[];
+  // Legacy: pre-split jokes array. V2: JM submits a raw text blob instead and
+  // Marketing does the splitting. One of `jokes` / `raw_text` is required.
+  jokes?: string[];
+  raw_text?: string;
 }
 
 export interface ApiCreateBatchResponse {
@@ -234,9 +241,14 @@ export interface ApiCreateBatchResponse {
 }
 
 export interface ApiQcQueueNextResponse {
-  batch: { batch_id: BatchId; round_id: RoundId; team_id: TeamId; submitted_at: string };
+  batch: { batch_id: BatchId; round_id: RoundId; team_id: TeamId; submitted_at: string; raw_text?: string };
+  // Empty until Marketing splits the raw_text into individual jokes.
   jokes: Array<{ joke_id: JokeId; joke_text: string }>;
   queue_size: number;
+}
+
+export interface ApiSplitBatchRequest {
+  jokes: string[];
 }
 
 export interface ApiQcQueueCountResponse {

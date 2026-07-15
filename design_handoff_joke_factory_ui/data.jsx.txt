@@ -1,0 +1,118 @@
+/* data.jsx — sim data: 10 Topic categories, 11 joke dimensions, sample jokes, economics.
+   Mirrors config/simConfig.ts + config/dimensions.ts from the V2 plan. */
+
+/* ---- Economics (two-cost model, LOCKED in V2) ---- */
+const ECON = {
+  marketPrice: 1.00,      // revenue per sale
+  costOfCreation: 0.10,   // per joke created (charged at submit)
+  costOfPublishing: 0.10, // per joke published (charged at release)
+  buyerBudget: 3.00,
+  customers: 100,
+  tau: 7,                 // buy threshold (fit >= 7 / 11)
+  swapMargin: 0.5,
+  jitter: 0.3,
+  tickSeconds: 15,
+};
+
+/* ---- 10 Topic categories (Marketing assigns; rule-classified dim 2) ---- */
+const CATEGORIES = [
+  { id: 'workplace',    label: 'Workplace',    icon: 'Briefcase' },
+  { id: 'mba',          label: 'MBA Life',     icon: 'GraduationCap' },
+  { id: 'tech',         label: 'Tech',         icon: 'Cpu' },
+  { id: 'ai',           label: 'AI',           icon: 'Bot' },
+  { id: 'animals',      label: 'Animals',      icon: 'PawPrint' },
+  { id: 'sports',       label: 'Sports',       icon: 'Medal' },
+  { id: 'everyday',     label: 'Everyday',     icon: 'Coffee' },
+  { id: 'social_media', label: 'Social media', icon: 'Smartphone' },
+  { id: 'education',    label: 'Education',     icon: 'BookOpen' },
+  { id: 'random',       label: 'Random',       icon: 'Dices' },
+];
+const catById = (id) => CATEGORIES.find((c) => c.id === id);
+
+/* ---- 11 joke dimensions (classifier rubric) ---- */
+const DIMENSIONS = [
+  { id: 'length',       label: 'Length',       levels: ['Short', 'Medium', 'Long'] },
+  { id: 'topic',        label: 'Topic',        levels: ['Workplace', 'MBA Life', 'Tech', 'AI', 'Animals', 'Sports', 'Everyday', 'Social media', 'Education', 'Random'] },
+  { id: 'humor_style',  label: 'Humor Style',  levels: ['Pun', 'Observational', 'Irony', 'Absurdity', 'Exaggeration', 'Self-deprecating', 'Anti-joke', 'Callback'] },
+  { id: 'complexity',   label: 'Complexity',   levels: ['Very simple', 'Simple', 'Moderate', 'Thoughtful', 'Expert'] },
+  { id: 'edginess',     label: 'Edginess',     levels: ['Clean', 'Slightly edgy'] },
+  { id: 'structure',    label: 'Structure',    levels: ['One-liner', 'Setup-punchline', 'Q&A', 'Short story', 'Dialogue', 'List'] },
+  { id: 'wordplay',     label: 'Wordplay',     levels: ['None', 'Light', 'Moderate', 'Heavy'] },
+  { id: 'freshness',    label: 'Freshness',    levels: ['Timeless', 'Slightly current', 'Current', 'Very topical', 'Time-sensitive'] },
+  { id: 'setup_payoff', label: 'Setup→Payoff', levels: ['Immediate', 'Quick', 'Balanced', 'Long', 'Very long build'] },
+  { id: 'clarity',      label: 'Clarity',      levels: ['Crystal clear', 'Mostly clear', 'Slightly ambiguous', 'Ambiguous', 'Reinterpretation'] },
+  { id: 'energy',       label: 'Energy',       levels: ['Deadpan', 'Low', 'Conversational', 'Animated', 'High-energy'] },
+];
+const dimById = (id) => DIMENSIONS.find((d) => d.id === id);
+
+/* ---- Hidden ideal joke profile (instructor-set; used by AI customers) ---- */
+const IDEAL_PROFILE = {
+  length: 'Short', topic: 'Workplace', humor_style: 'Pun', complexity: 'Simple',
+  edginess: 'Clean', structure: 'Setup-punchline', wordplay: 'Heavy', freshness: 'Timeless',
+  setup_payoff: 'Quick', clarity: 'Crystal clear', energy: 'Conversational',
+};
+
+/* ---- Sample jokes (classroom-appropriate, MBA/workplace/tech flavored) ----
+   Each carries a market title, topic, fit (0..11), and per-dim levels for the feed. */
+const JOKES = [
+  { id: 101, team: 'Margin Call', title: 'Corporate Comedy',
+    text: 'I told my boss I needed a raise — he said be a self-starter, so I started napping.',
+    topic: 'workplace', fit: 10.08,
+    dims: { length: 'Short', topic: 'Workplace', humor_style: 'Pun', complexity: 'Simple', edginess: 'Clean', structure: 'Setup-punchline', wordplay: 'Light', freshness: 'Timeless', setup_payoff: 'Quick', clarity: 'Mostly clear', energy: 'Conversational' } },
+  { id: 102, team: 'Sunk Cost', title: 'Spreadsheet Soul',
+    text: 'My therapist said I should embrace my mistakes. So I gave my pivot table a hug.',
+    topic: 'workplace', fit: 8.50,
+    dims: { length: 'Short', topic: 'Workplace', humor_style: 'Absurdity', complexity: 'Simple', edginess: 'Clean', structure: 'Setup-punchline', wordplay: 'Moderate', freshness: 'Timeless', setup_payoff: 'Quick', clarity: 'Crystal clear', energy: 'Conversational' } },
+  { id: 103, team: 'Blue Ocean', title: 'Case in Point',
+    text: 'Why did the MBA bring a ladder to class? To reach the higher-level frameworks.',
+    topic: 'mba', fit: 7.25,
+    dims: { length: 'Short', topic: 'MBA Life', humor_style: 'Pun', complexity: 'Simple', edginess: 'Clean', structure: 'Q&A', wordplay: 'Heavy', freshness: 'Timeless', setup_payoff: 'Quick', clarity: 'Crystal clear', energy: 'Animated' } },
+  { id: 104, team: 'Margin Call', title: 'Machine Learning',
+    text: 'I asked the AI to write me a joke. It returned a 40-slide deck and a follow-up meeting.',
+    topic: 'ai', fit: 6.40,
+    dims: { length: 'Medium', topic: 'AI', humor_style: 'Observational', complexity: 'Moderate', edginess: 'Clean', structure: 'Setup-punchline', wordplay: 'Light', freshness: 'Current', setup_payoff: 'Balanced', clarity: 'Mostly clear', energy: 'Conversational' } },
+  { id: 105, team: 'Synergy', title: 'Standup Standup',
+    text: 'Our daily standup is just five people agreeing the meeting could have been an email.',
+    topic: 'workplace', fit: 9.10,
+    dims: { length: 'Short', topic: 'Workplace', humor_style: 'Observational', complexity: 'Simple', edginess: 'Clean', structure: 'One-liner', wordplay: 'None', freshness: 'Timeless', setup_payoff: 'Immediate', clarity: 'Crystal clear', energy: 'Conversational' } },
+  { id: 106, team: 'Sunk Cost', title: 'Tech Support',
+    text: 'Tech support said turn it off and on again. Now my career has a clean reboot too.',
+    topic: 'tech', fit: 5.80,
+    dims: { length: 'Short', topic: 'Tech', humor_style: 'Self-deprecating', complexity: 'Simple', edginess: 'Clean', structure: 'Setup-punchline', wordplay: 'Light', freshness: 'Slightly current', setup_payoff: 'Quick', clarity: 'Mostly clear', energy: 'Low' } },
+  { id: 107, team: 'Blue Ocean', title: 'Caffeine ROI',
+    text: 'Coffee is a renewable resource: I renew my entire personality with every cup.',
+    topic: 'everyday', fit: 7.90,
+    dims: { length: 'Short', topic: 'Everyday', humor_style: 'Exaggeration', complexity: 'Simple', edginess: 'Clean', structure: 'One-liner', wordplay: 'Light', freshness: 'Timeless', setup_payoff: 'Immediate', clarity: 'Crystal clear', energy: 'Animated' } },
+  { id: 108, team: 'Synergy', title: 'Network Effects',
+    text: 'I tried to network at the mixer but my Wi-Fi was the only thing that connected.',
+    topic: 'mba', fit: 8.75,
+    dims: { length: 'Short', topic: 'MBA Life', humor_style: 'Pun', complexity: 'Simple', edginess: 'Clean', structure: 'Setup-punchline', wordplay: 'Heavy', freshness: 'Slightly current', setup_payoff: 'Quick', clarity: 'Crystal clear', energy: 'Conversational' } },
+  { id: 109, team: 'Margin Call', title: 'Bear Market',
+    text: 'A bear walks into a brokerage. Honestly, the portfolio was already pretty grizzly.',
+    topic: 'animals', fit: 4.30,
+    dims: { length: 'Short', topic: 'Animals', humor_style: 'Pun', complexity: 'Simple', edginess: 'Clean', structure: 'Setup-punchline', wordplay: 'Heavy', freshness: 'Timeless', setup_payoff: 'Quick', clarity: 'Slightly ambiguous', energy: 'Low' } },
+  { id: 110, team: 'Sunk Cost', title: 'Deadline Dynamics',
+    text: 'My deadlines are like my houseplants — I keep them alive purely through panic.',
+    topic: 'everyday', fit: 6.95,
+    dims: { length: 'Short', topic: 'Everyday', humor_style: 'Self-deprecating', complexity: 'Simple', edginess: 'Clean', structure: 'One-liner', wordplay: 'Light', freshness: 'Timeless', setup_payoff: 'Immediate', clarity: 'Crystal clear', energy: 'Conversational' } },
+  { id: 111, team: 'Blue Ocean', title: 'Cloud Cover',
+    text: 'We moved everything to the cloud. Now when it rains, I assume it is a backup.',
+    topic: 'tech', fit: 5.10,
+    dims: { length: 'Short', topic: 'Tech', humor_style: 'Absurdity', complexity: 'Simple', edginess: 'Clean', structure: 'Setup-punchline', wordplay: 'Moderate', freshness: 'Current', setup_payoff: 'Quick', clarity: 'Slightly ambiguous', energy: 'Conversational' } },
+  { id: 112, team: 'Synergy', title: 'Office Hours',
+    text: 'I scheduled a meeting to discuss having fewer meetings. Attendance was, ironically, full.',
+    topic: 'workplace', fit: 9.55,
+    dims: { length: 'Medium', topic: 'Workplace', humor_style: 'Irony', complexity: 'Simple', edginess: 'Clean', structure: 'Setup-punchline', wordplay: 'Light', freshness: 'Timeless', setup_payoff: 'Balanced', clarity: 'Crystal clear', energy: 'Conversational' } },
+];
+
+const TEAMS = ['Margin Call', 'Sunk Cost', 'Blue Ocean', 'Synergy'];
+
+/* ---- Marketing feedback tags (1 per joke) ---- */
+const TAG_OPTIONS = [
+  'Excellent / standout', 'Genuinely funny', 'Made me smile', 'Original idea',
+  'Polite smile', "Didn't land", 'Not acceptable', 'Other',
+];
+
+Object.assign(window, {
+  ECON, CATEGORIES, catById, DIMENSIONS, dimById, IDEAL_PROFILE, JOKES, TEAMS, TAG_OPTIONS,
+});

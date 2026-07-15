@@ -1,0 +1,617 @@
+/* RoleScreens.jsx — V2 role screens: Joke Maker (batch-level value stream),
+   Marketing (Topic palette + force-release + live feed), Instructor (ideal-profile config). */
+
+/* ---- per-joke status (drives the status circle on each line) ---- */
+const JOKE_STATUS = {
+  reviewing: { label: 'In review', color: '#eab308' }, // yellow — at Marketing
+  market: { label: 'On market', color: '#94a3b8' }, // grey — published, awaiting buyers
+  sold: { label: 'Sold', color: '#059669' }, // green — bought
+  wasted: { label: 'Wasted', color: '#e11d48', faded: true } // red — rejected (faded text)
+};
+
+function StatusDot({ status, size = 11 }) {
+  const m = JOKE_STATUS[status];
+  return <span title={m.label} className="rounded-full inline-block shrink-0" style={{ width: size, height: size, background: m.color }} />;
+}
+
+/* ---- sample submitted batches (Round 1 — waste-heavy by design) ---- */
+const JM_BATCHES = [
+{ id: '8853', round: 1, feedback: '', tags: [], jokes: [
+  { t: 'I told my boss I needed a raise; he said be a self-starter, so I started napping.', s: 'reviewing' },
+  { t: 'My therapist said embrace your mistakes, so I hugged my pivot table.', s: 'reviewing' },
+  { t: 'Why did the MBA bring a ladder to class? To reach the higher-level frameworks.', s: 'reviewing' },
+  { t: 'I asked AI for a joke; it returned a 40-slide deck and a follow-up meeting.', s: 'reviewing' },
+  { t: 'Our standup is five people agreeing it could’ve been an email.', s: 'reviewing' }]
+},
+{ id: '8850', round: 1, feedback: 'Strong workplace angle — keep them short and punchy.', tags: ['Genuinely funny', 'Made me smile'], jokes: [
+  { t: 'I scheduled a meeting to discuss having fewer meetings. Attendance was full.', s: 'sold' },
+  { t: 'Coffee is renewable: I renew my entire personality every cup.', s: 'market' },
+  { t: 'My deadlines are houseplants — alive purely through panic.', s: 'sold' },
+  { t: 'A bear walks into a brokerage; the portfolio was already grizzly.', s: 'wasted' },
+  { t: 'We moved everything to the cloud; now rain feels like a backup.', s: 'wasted' }]
+},
+{ id: '8847', round: 1, feedback: 'Tech jokes underperformed — the market wants workplace.', tags: ['Polite smile'], jokes: [
+  { t: 'Tech support said turn it off and on again; my career rebooted too.', s: 'wasted' },
+  { t: 'My Wi-Fi was the only thing that connected at the networking mixer.', s: 'sold' },
+  { t: 'I named my startup “Synergy” so it would fail faster.', s: 'market' },
+  { t: 'Spreadsheets are just guilt with gridlines.', s: 'wasted' },
+  { t: 'The intern automated my job; honestly, we’re both relieved.', s: 'wasted' }]
+},
+{ id: '8844', round: 1, feedback: '', tags: [], jokes: [
+  { t: 'My KPIs and I have an understanding: we ignore each other.', s: 'sold' },
+  { t: 'I circled back so hard I got dizzy.', s: 'market' },
+  { t: 'The printer is the only thing here with real job security.', s: 'wasted' },
+  { t: 'I told HR I work best under pressure; they scheduled more.', s: 'wasted' },
+  { t: 'Our roadmap is a word cloud with ambition.', s: 'wasted' }]
+},
+{ id: '8841', round: 1, feedback: 'One keeper. Lean into workplace, drop the absurd ones.', tags: ['Excellent / standout', "Didn't land"], jokes: [
+  { t: 'My calendar is fiction I’m contractually forced to live in.', s: 'sold' },
+  { t: 'I disrupted the snack table and investors loved it.', s: 'wasted' },
+  { t: 'A penguin pitched me a SaaS; solid deck, honestly.', s: 'wasted' },
+  { t: 'I leveraged a nap into a genuine power move.', s: 'market' },
+  { t: 'Quarterly goal: survive the quarter.', s: 'wasted' }]
+},
+{ id: '8838', round: 1, feedback: '', tags: [], jokes: [
+  { t: 'My out-of-office is just hope with an autoreply.', s: 'sold' },
+  { t: 'I A/B tested my excuses; both lost.', s: 'wasted' },
+  { t: 'The whiteboard has more vision than leadership.', s: 'wasted' },
+  { t: 'I optimized my commute by simply not arriving.', s: 'wasted' },
+  { t: 'Standups should require standing; mine would end my career.', s: 'market' }]
+},
+{ id: '8835', round: 1, feedback: 'Rough start — too random for this market.', tags: ['Not acceptable', "Didn't land"], jokes: [
+  { t: 'A goose audited my taxes; owed nothing, feared everything.', s: 'wasted' },
+  { t: 'I gamified my inbox and I’m losing badly.', s: 'wasted' },
+  { t: 'My mentor is a fortune cookie with tenure.', s: 'sold' },
+  { t: 'I pivoted so hard I’m now just a circle.', s: 'wasted' },
+  { t: 'Synergy is teamwork with a markup.', s: 'wasted' }]
+}];
+
+
+function BatchCard({ batch, open, onToggle, onFeedback }) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white">
+      <div className="flex items-center gap-2 px-3 py-2">
+        <button onClick={onToggle} className="flex items-center gap-2.5 flex-1 min-w-0 text-left group">
+          <Icon name="ChevronRight" size={15} className="text-gray-400" style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }} />
+          <span className="font-mono text-xs text-gray-400">#{batch.id}</span>
+          <span className="flex items-center gap-1.5">
+            {batch.jokes.map((j, i) => <StatusDot key={i} status={j.s} size={10} />)}
+          </span>
+          <span className="text-[11px] text-gray-400 ml-auto pl-2 group-hover:text-gray-600">{batch.jokes.length} jokes</span>
+        </button>
+        <button onClick={onFeedback}
+        className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded hover:bg-blue-100 shrink-0">
+          <Icon name="MessageSquare" size={12} /> Feedback
+        </button>
+      </div>
+      {open &&
+      <div className="border-t border-gray-100 divide-y divide-gray-50">
+          {batch.jokes.map((j, i) =>
+        <div key={i} className="flex items-center gap-3 px-3 py-2">
+              <span className="text-gray-300 font-mono text-[11px] shrink-0">{i + 1}</span>
+              <span className="text-sm flex-1 text-gray-700">{j.t}</span>
+            </div>
+        )}
+        </div>
+      }
+    </div>);
+
+}
+
+function StageDots({ batches }) {
+  const all = batches.flatMap((b) => b.jokes);
+  const buckets = [['In review', 'reviewing'], ['On market', 'market'], ['Sold', 'sold'], ['Wasted', 'wasted']];
+  return (
+    <div className="space-y-2.5">
+      {buckets.map(([label, st]) => {
+        const items = all.filter((j) => j.s === st);
+        return (
+          <div key={st} className="flex items-center gap-3">
+            <span className="text-[11px] font-semibold text-gray-500 w-20 shrink-0">{label}</span>
+            <div className="flex flex-wrap gap-1 flex-1 min-h-[10px]">
+              {items.length === 0 ? <span className="text-[11px] text-gray-300">—</span> :
+              items.map((_, i) => <StatusDot key={i} status={st} size={9} />)}
+            </div>
+            <span className="text-sm font-bold tabular-nums text-gray-700 w-6 text-right">{items.length}</span>
+          </div>);
+
+      })}
+    </div>);
+
+}
+
+function JmFeedbackModal({ batch, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <h3 className="font-bold text-gray-800">Marketing feedback · <span className="font-mono text-gray-400">#{batch.id}</span></h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><Icon name="X" size={20} /></button>
+        </div>
+        <div className="p-4 space-y-4">
+          <div>
+            <SectionLabel className="mb-2">Tags</SectionLabel>
+            {batch.tags && batch.tags.length ?
+            <div className="flex flex-wrap gap-1.5">
+                {batch.tags.map((t) => <span key={t} className="px-2.5 py-1 rounded-full bg-gray-900 text-white text-xs font-medium">{t}</span>)}
+              </div> :
+            <p className="text-sm text-gray-400 italic">No tags yet.</p>}
+          </div>
+          <div>
+            <SectionLabel className="mb-2">Note</SectionLabel>
+            {batch.feedback ?
+            <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 text-sm text-gray-800">{batch.feedback}</div> :
+            <p className="text-sm text-gray-400 italic">Awaiting Marketing’s feedback — batch still in review.</p>}
+          </div>
+        </div>
+      </div>
+    </div>);
+
+}
+
+/* ============================ JOKE MAKER ============================ */
+function JokeMakerScreen() {
+  const [input, setInput] = useState('');
+  const [staged, setStaged] = useState([]);
+  const [certified, setCertified] = useState(false);
+  const [batches, setBatches] = useState(JM_BATCHES);
+  const [open, setOpen] = useState(() => new Set([JM_BATCHES[0].id, JM_BATCHES[1].id]));
+  const [fb, setFb] = useState(null);
+  const [toast, setToast] = useState(null);
+  const MAX = 5;
+
+  const addBatch = () => {
+    const text = input.trim();
+    if (!text) return;
+    // split on joke numbers like 1) 2) 3) or 1. 2. 3. ; fall back to line breaks
+    const numbered = /\d{1,2}[.)]\s+/.test(text);
+    const parts = (numbered ? text.split(/\s*\d{1,2}[.)]\s+/) : text.split('\n'))
+      .map((l) => l.trim()).filter(Boolean);
+    if (!parts.length) return;
+    setStaged((s) => [...s, ...parts].slice(0, MAX));
+    setInput('');
+  };
+  const toggle = (id) => setOpen((s) => {const n = new Set(s);n.has(id) ? n.delete(id) : n.add(id);return n;});
+  const submit = () => {
+    if (!staged.length || !certified) return;
+    const id = String(8854 + Math.floor(Math.random() * 40));
+    const jokes = staged.map((t) => ({ t, s: 'reviewing' }));
+    setBatches((b) => [{ id, round: 1, feedback: '', tags: [], jokes }, ...b]);
+    setOpen((s) => new Set([id, ...s]));
+    setToast(`Batch #${id} submitted · production cost −${fmt$(staged.length * ECON.costOfCreation)} (${staged.length} jokes)`);
+    setTimeout(() => setToast(null), 2600);
+    setStaged([]);setCertified(false);
+  };
+
+  const legend = [['In review', 'reviewing'], ['On market', 'market'], ['Sold', 'sold'], ['Wasted', 'wasted']];
+
+  return (
+    <>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* left: production line (above) + value stream (below) */}
+        <div className="lg:col-span-2 space-y-6">
+          <Card title="Production Line" accent={BRAND.production}>
+            <div className="space-y-4">
+              <div className="bg-blue-50 text-blue-800 rounded-lg px-3 py-2.5 text-sm flex items-start gap-2">
+                <Icon name="Info" size={16} className="mt-0.5 shrink-0" />
+                <span><b>Round 1:</b> exactly {MAX} jokes per batch. Generate with any AI tool, paste the batch — we split it into individual jokes automatically.</span>
+              </div>
+              <div>
+                <textarea value={input} onChange={(e) => setInput(e.target.value)} rows={4}
+                placeholder={`Paste your batch, numbered like:
+1) Joke one
+2) Joke two
+3) Joke three`}
+                className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500 resize-none placeholder-gray-400" data-comment-anchor="fb7472d28b-textarea-195-17" />
+                <div className="flex justify-between items-center mt-2">
+                  <p className="text-xs text-gray-400 italic">Stuck? Try: {CATEGORIES.slice(0, 6).map((c) => c.label).join(' · ')} · …</p>
+                  <Button variant="secondary" size="sm" onClick={addBatch} disabled={!input.trim()}>
+                    <Icon name="Plus" size={14} /> Split into batch
+                  </Button>
+                </div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3 border border-gray-200 min-h-[120px]">
+                <SectionLabel className="mb-2">Current batch ({staged.length}/{MAX})</SectionLabel>
+                {staged.length === 0 ?
+                <div className="text-center text-gray-400 py-6 italic text-sm">No jokes in production yet</div> :
+
+                <ul className="space-y-1.5">
+                    {staged.map((j, i) =>
+                  <li key={i} className="group bg-white border border-gray-200 rounded-md px-2.5 py-1.5 flex items-center justify-between gap-2">
+                        <span className="text-sm text-gray-800 truncate">{j}</span>
+                        <button onClick={() => setStaged((s) => s.filter((_, k) => k !== i))}
+                    className="text-gray-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition">
+                          <Icon name="Trash2" size={15} />
+                        </button>
+                      </li>
+                  )}
+                  </ul>
+                }
+              </div>
+              <div className="flex items-center justify-between pt-1">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox" checked={certified} onChange={(e) => setCertified(e.target.checked)} className="w-4 h-4 accent-blue-600" />
+                  <span className="text-sm text-gray-700">I certify these jokes are not offensive.</span>
+                </label>
+                <Button onClick={submit} disabled={!staged.length || !certified}>Submit batch <Icon name="Send" size={15} /></Button>
+              </div>
+            </div>
+          </Card>
+
+          <Card title="Value stream" subtitle="Your submitted batches — batch-level status"
+          accent={BRAND.production}>
+            <div className="space-y-2 max-h-[440px] overflow-y-auto pr-1">
+              {batches.map((b) =>
+              <BatchCard key={b.id} batch={b} open={open.has(b.id)} onToggle={() => toggle(b.id)} onFeedback={() => setFb(b)} />
+              )}
+            </div>
+          </Card>
+        </div>
+
+        {/* right: metrics (no profit) + stage dots */}
+        <div className="space-y-5">
+          <div className="grid grid-cols-2 gap-3">
+            <StatBox label="Current Rank" value="2" tone="rank" />
+            <StatBox label="Sold / Acc" value="11/14" tone="blue" />
+            <StatBox label="Avg Score" value="3.6" tone="indigo" />
+            <StatBox label="Lead Time" value="2:40" tone="violet" />
+            <StatBox label="Batches" value={batches.length} tone="slate" />
+            <StatBox label="Waste" value="29" tone="rose" />
+          </div>
+          <Card title="Jokes by stage" subtitle="Where your output sits right now">
+            <StageDots batches={batches} />
+          </Card>
+        </div>
+      </div>
+
+      {fb && <JmFeedbackModal batch={fb} onClose={() => setFb(null)} />}
+      {toast &&
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm px-4 py-2.5 rounded-lg shadow-xl flex items-center gap-2">
+          <Icon name="CheckCircle2" size={16} className="text-emerald-400" /> {toast}
+        </div>
+      }
+    </>);
+
+}
+
+/* ============================ MARKETING ============================ */
+/* deterministic 0..1 from an integer — keeps the revealed dim subset stable per joke */
+function mkSeed(n) {const x = Math.sin(n * 99.13) * 10000;return x - Math.floor(x);}
+function ordinal(n) {const s = ['th', 'st', 'nd', 'rd'],v = n % 100;return n + (s[(v - 20) % 10] || s[v] || s[0]);}
+/* dimensions with no inherent order — shown as a match/off check, not a scale */
+const CATEGORICAL_DIMS = new Set(['topic', 'humor_style', 'structure']);
+/* how close a joke's level on a dimension sits to the hidden ideal (1 = spot on) */
+function dimProx(dim, level) {
+  const lv = dim.levels.indexOf(level),il = dim.levels.indexOf(IDEAL_PROFILE[dim.id]);
+  if (lv < 0 || il < 0) return 0;
+  return 1 - Math.abs(lv - il) / Math.max(1, dim.levels.length - 1);
+}
+/* the dims a sale reveals: one of the top-3 closest + two others (seeded-random, stable) */
+function revealedDims(joke) {
+  const scored = DIMENSIONS.map((d) => ({ dim: d, level: joke.dims[d.id], prox: dimProx(d, joke.dims[d.id]) }));
+  const ranked = [...scored].sort((a, b) => b.prox - a.prox);
+  const top = ranked[Math.floor(mkSeed(joke.id) * 3) % 3];
+  const rest = scored.filter((s) => s.dim.id !== top.dim.id);
+  const r1 = rest[Math.floor(mkSeed(joke.id + 1) * rest.length)];
+  let r2 = rest[Math.floor(mkSeed(joke.id + 7) * rest.length)];
+  if (r2.dim.id === r1.dim.id) r2 = rest[(rest.indexOf(r1) + 1) % rest.length];
+  return [top, r1, r2];
+}
+
+function DimScale({ dim, level, prox }) {
+  const onTarget = prox >= 0.999;
+  // categorical dimension → simple match / off check (no meaningful axis)
+  if (CATEGORICAL_DIMS.has(dim.id)) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] font-semibold text-gray-500 w-12 shrink-0">{dim.label}</span>
+        <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded ${onTarget ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+          <Icon name={onTarget ? 'Check' : 'X'} size={11} /> {level}
+        </span>
+      </div>);
+  }
+  // scalar dimension → gray→green proximity scale on its own line (avoids label overlap)
+  const frac = Math.max(0, Math.min(1, prox));
+  const maxLevel = dim.levels[dim.levels.length - 1];
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2 mb-0.5">
+        <span className="text-[10px] font-semibold text-gray-500 truncate">{dim.label}</span>
+        <span className={`text-[10px] truncate ${onTarget ? 'text-emerald-700 font-semibold' : 'text-gray-500'}`}>{level}</span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="text-[9px] text-gray-400 truncate max-w-[58px]">{dim.levels[0]}</span>
+        <div className="relative flex-1 h-1.5 rounded-full" style={{ background: 'linear-gradient(90deg,#e5e7eb 0%,#d9f2e1 55%,#22c55e 100%)' }}>
+          <span className="absolute top-1/2 rounded-full bg-white" style={{ left: `calc(5px + (100% - 10px) * ${frac})`, width: 11, height: 11, transform: 'translate(-50%,-50%)', border: `2px solid ${onTarget ? '#16a34a' : '#94a3b8'}`, boxShadow: '0 1px 2px rgb(0 0 0 / .15)' }} />
+        </div>
+        <span className="text-[9px] text-gray-400 truncate max-w-[58px] text-right">{maxLevel}</span>
+      </div>
+    </div>);
+}
+
+function SoldSignal({ entry }) {
+  const dims = entry.dims;
+  const top2 = [...dims].sort((a, b) => b.prox - a.prox).slice(0, 2).map((s) => s.dim.label.toLowerCase());
+  return (
+    <div className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-3" style={{ animation: 'mkFade .4s ease both' }}>
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <Icon name="BadgeCheck" size={13} className="text-emerald-600 shrink-0" />
+        <span className="text-[11px] font-semibold text-emerald-700">Sold{entry.title ? ` · “${entry.title}”` : ''}</span>
+      </div>
+      <p className="text-[11px] text-gray-500 italic mb-2 line-clamp-2">{entry.text}</p>
+      <p className="text-[11px] text-gray-700 mb-2.5">Bought because the <b>{top2[0]}</b> and <b>{top2[1]}</b> were right.</p>
+      <div className="space-y-1.5" data-comment-anchor="bd04d5fe77-div-329-7">
+        {dims.map((s) => <DimScale key={s.dim.id} dim={s.dim} level={s.level} prox={s.prox} />)}
+      </div>
+    </div>);
+}
+
+function MarketingScreen() {
+  const [order, setOrder] = useState(() => JOKES.slice(2, 7));
+  const [topics, setTopics] = useState({});
+  const [titles, setTitles] = useState({});
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [batchFeedback, setBatchFeedback] = useState('');
+  const [dragIdx, setDragIdx] = useState(null);
+  // seed one already-sold joke so the signal pattern is visible from the start
+  const seed = JOKES[0];
+  const [sold, setSold] = useState(() => [{ id: seed.id, text: seed.text, title: seed.title, dims: revealedDims(seed) }]);
+  const [toast, setToast] = useState(null);
+
+  const move = (idx, dir) => setOrder((o) => {
+    const n = [...o],j = idx + dir;
+    if (j < 0 || j >= n.length) return o;
+    [n[idx], n[j]] = [n[j], n[idx]];
+    return n;
+  });
+  const endDrag = () => setDragIdx(null);
+  const onDragOver = (e, i) => {
+    e.preventDefault();
+    if (dragIdx === null || dragIdx === i) return;
+    setOrder((o) => {const n = [...o];const [m] = n.splice(dragIdx, 1);n.splice(i, 0, m);return n;});
+    setDragIdx(i);
+  };
+  const toggle = (id) => setSelectedIds((s) => {const n = new Set(s);n.has(id) ? n.delete(id) : n.add(id);return n;});
+
+  // none clicked → the top-ranked card publishes by default
+  const submitJokes = selectedIds.size ? order.filter((j) => selectedIds.has(j.id)) : order[0] ? [order[0]] : [];
+  const inSubmit = (j) => submitJokes.some((s) => s.id === j.id);
+  const canRelease = submitJokes.length > 0 && submitJokes.every((j) => topics[j.id] && (titles[j.id] || '').trim());
+
+  const release = () => {
+    if (!canRelease) return;
+    setSold((prev) => {
+      const add = submitJokes.
+      filter((j) => !prev.some((p) => p.id === j.id)).
+      map((j) => ({ id: j.id, text: j.text, title: (titles[j.id] || '').trim(), dims: revealedDims(j) }));
+      return [...add, ...prev];
+    });
+    const n = submitJokes.length;
+    const def = selectedIds.size ? '' : 'top-ranked (default) · ';
+    setToast(`Released ${n} joke${n > 1 ? 's' : ''} · ${def}feedback sent to Joke Maker · −${fmt$(n * ECON.costOfPublishing)}`);
+    setTimeout(() => setToast(null), 2800);
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* left: marketing desk */}
+      <div className="lg:col-span-2 space-y-6">
+        <Card title="Marketing Desk" subtitle="Rank the cards (best on top) · assign Topic · click to submit · title each · release" accent={BRAND.marketing}>
+          <div className="space-y-3">
+            {order.map((j, idx) => {
+              const selected = selectedIds.has(j.id);
+              const isDefault = !selectedIds.size && idx === 0;
+              const submitting = selected || isDefault;
+              const dragging = dragIdx === idx;
+              return (
+                <div key={j.id}
+                onClick={(e) => {if (e.target.closest('button, input, textarea')) return;toggle(j.id);}}
+                draggable
+                onDragStart={(e) => {if (e.target.closest('button, input, textarea')) {e.preventDefault();return;}setDragIdx(idx);}}
+                onDragOver={(e) => onDragOver(e, idx)} onDragEnd={endDrag} onDrop={endDrag}
+                className={`rounded-lg border p-4 cursor-pointer transition-colors ${dragging ? 'opacity-40' : ''} ${selected ? 'bg-green-50 border-green-400 ring-1 ring-green-400' : isDefault ? 'bg-amber-50/60 border-amber-300 border-dashed' : 'bg-gray-50 border-gray-200 hover:border-gray-300'}`}>
+                  {/* submit status — only on cards being submitted; the whole card is clickable */}
+                  {submitting &&
+                  <div className={`mb-3 flex items-center justify-center gap-1.5 text-xs font-semibold rounded-md px-3 py-2 ${selected ? 'bg-green-600 text-white' : 'bg-amber-100 text-amber-800'}`}>
+                    <Icon name={selected ? 'Check' : 'Star'} size={14} />
+                    {selected ? 'Selected to submit' : 'Top rank — submits by default'}
+                  </div>}
+
+                  {/* rank badge · styled joke · drag + reorder controls (top-right) */}
+                  <div className="flex items-start gap-3">
+                    <span className="shrink-0 flex flex-col items-center justify-center w-11 h-11 rounded-lg bg-gray-900 text-white leading-none">
+                      <span className="text-[8px] font-bold uppercase tracking-wider text-gray-400">Rank</span>
+                      <span className="text-base font-extrabold tabular-nums mt-0.5">{ordinal(idx + 1)}</span>
+                    </span>
+                    <blockquote className="flex-1 border-l-[3px] border-violet-300 pl-3 py-0.5">
+                      <p className="joke-font text-gray-900 text-[17px] leading-relaxed text-pretty">{j.text}</p>
+                    </blockquote>
+                    <div className="shrink-0 flex flex-col items-center gap-0.5">
+                      <Icon name="GripVertical" size={16} className="text-gray-300" title="Drag the card to rank" />
+                      <button onClick={() => move(idx, -1)} disabled={idx === 0} title="Rank higher"
+                      className="text-gray-400 hover:text-gray-700 disabled:opacity-25 disabled:cursor-not-allowed"><Icon name="ChevronUp" size={15} /></button>
+                      <button onClick={() => move(idx, 1)} disabled={idx === order.length - 1} title="Rank lower"
+                      className="text-gray-400 hover:text-gray-700 disabled:opacity-25 disabled:cursor-not-allowed"><Icon name="ChevronDown" size={15} /></button>
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    <SectionLabel className="mb-1.5">Topic {submitting && <span className="text-rose-500">· required</span>}</SectionLabel>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5">
+                      {CATEGORIES.map((c) => {
+                        const on = topics[j.id] === c.id;
+                        return (
+                          <button key={c.id} onClick={() => setTopics((t) => ({ ...t, [j.id]: c.id }))}
+                          className={`inline-flex items-center justify-center gap-1 text-[11px] px-2 py-1.5 rounded-md border transition-colors ${on ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100'}`}>
+                            <Icon name={c.icon} size={12} /> {c.label}
+                          </button>);
+                      })}
+                    </div>
+                  </div>
+
+                  {/* per-joke market title — only when this joke is being submitted */}
+                  {submitting &&
+                  <div className="mt-3">
+                    <SectionLabel className="mb-1.5">Market title <span className="text-gray-400">(this joke)</span></SectionLabel>
+                    <input value={titles[j.id] || ''} onChange={(e) => setTitles((t) => ({ ...t, [j.id]: e.target.value }))}
+                    placeholder={`e.g. “${j.title}”`} maxLength={120}
+                    className="w-full bg-white border border-gray-300 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-300" />
+                  </div>}
+                </div>);
+            })}
+
+            {/* batch-level feedback — sent back to the Joke Maker */}
+            <div className="rounded-lg border border-gray-200 bg-white p-4" data-comment-anchor="8663e692e6-div-343-13">
+              <SectionLabel className="mb-1.5">Batch feedback <span className="text-gray-400">(sent to Joke Maker)</span></SectionLabel>
+              <textarea value={batchFeedback} onChange={(e) => setBatchFeedback(e.target.value)} rows={3}
+              placeholder="Notes on the whole batch — what landed, what to drop next round…"
+              className="w-full bg-white border border-gray-300 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-300 resize-none placeholder-gray-400" />
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[11px] text-gray-500 flex items-center gap-1.5">
+                <Icon name="Zap" size={13} className="text-violet-500" />
+                Drag or use ▲▼ to rank best-to-worst. Top joke submits by default — select others to add. Topic + title each, then release.
+              </span>
+              <Button variant="purple" onClick={release} disabled={!canRelease}>
+                Release to market <Icon name="Send" size={15} />
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* right: stats + sold-signal learning panel */}
+      <div className="space-y-5">
+        <div className="grid grid-cols-2 gap-3">
+          <StatBox label="Current Rank" value="1" tone="rank" />
+          <StatBox label="Queue" value={order.length} tone="violet" />
+          <StatBox label="Avg Score" value="3.9" tone="indigo" />
+          <StatBox label="Total Sales" value={sold.length} tone="amber" />
+        </div>
+        <Card title="What's selling — and why" subtitle="Each sale is free market research: which attributes matched customer demand" accent={BRAND.sold}>
+          <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
+            {sold.length === 0 ?
+            <p className="text-sm text-gray-400 italic py-4 text-center">No sales yet — release jokes to start uncovering the target.</p> :
+            sold.map((e) => <SoldSignal key={e.id} entry={e} />)}
+          </div>
+        </Card>
+      </div>
+
+      {toast &&
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm px-4 py-2.5 rounded-lg shadow-xl flex items-center gap-2">
+          <Icon name="Zap" size={16} className="text-violet-400" /> {toast}
+        </div>
+      }
+    </div>);
+
+}
+
+/* ============================ INSTRUCTOR ============================ */
+function InstructorScreen() {
+  const [profile, setProfile] = useState(IDEAL_PROFILE);
+  const [active, setActive] = useState(false);
+
+  const leaderboard = [
+  { team: 'Synergy', sold: 31, profit: 18.6, fit: 8.9, waste: 7 },
+  { team: 'Margin Call', sold: 24, profit: 11.2, fit: 7.4, waste: 12 },
+  { team: 'Blue Ocean', sold: 14, profit: 3.1, fit: 6.1, waste: 19 },
+  { team: 'Sunk Cost', sold: 9, profit: -2.4, fit: 5.2, waste: 26 }];
+
+
+  return (
+    <div className="space-y-6">
+      {/* round control bar */}
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Badge tone="navy" icon="Radio">Round 1 · {active ? 'ACTIVE' : 'Configured'}</Badge>
+            <span className="text-sm text-gray-500">12-minute round · 4 teams · {ECON.customers} AI customers</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant={active ? 'danger' : 'success'} onClick={() => setActive((a) => !a)}>
+              <Icon name={active ? 'Square' : 'Play'} size={14} /> {active ? 'End round' : 'Start round'}
+            </Button>
+            <Button variant="outline"><Icon name="RotateCcw" size={14} /> Reset</Button>
+          </div>
+        </div>
+      </Card>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* ideal profile config */}
+        <Card title="Hidden ideal joke profile" subtitle="What the 100 AI customers secretly want · drives every sale">
+          <div className="space-y-2.5">
+            {DIMENSIONS.map((d) =>
+            <div key={d.id} className="flex items-center gap-3">
+                <span className="text-xs font-semibold text-gray-500 w-28 shrink-0">{d.label}</span>
+                <div className="flex flex-wrap gap-1 flex-1">
+                  {d.levels.map((lv) => {
+                  const on = profile[d.id] === lv;
+                  return (
+                    <button key={lv} onClick={() => setProfile((p) => ({ ...p, [d.id]: lv }))}
+                    className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${on ? 'text-white border-transparent' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}
+                    style={on ? { background: BRAND.bruinBlue } : undefined}>{lv}</button>);
+
+                })}
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
+
+        <div className="space-y-6">
+          {/* parameters */}
+          <Card title="Simulation parameters">
+            <div className="grid grid-cols-2 gap-3">
+              <Param label="Buy threshold τ" value={`${ECON.tau} / 11`} />
+              <Param label="Swap margin M" value={ECON.swapMargin} />
+              <Param label="Customers" value={ECON.customers} />
+              <Param label="Budget / customer" value={fmt$(ECON.buyerBudget)} />
+              <Param label="Perception jitter" value={`±${ECON.jitter}`} />
+              <Param label="Tick interval" value={`${ECON.tickSeconds}s`} />
+              <Param label="Production cost" value={fmt$(ECON.costOfCreation)} />
+              <Param label="Publish cost" value={fmt$(ECON.costOfPublishing)} />
+            </div>
+          </Card>
+
+          {/* leaderboard */}
+          <Card title="Live leaderboard" subtitle="Sorted by profit">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[10px] uppercase text-gray-400 border-b border-gray-100">
+                  <th className="py-1.5 font-semibold">Team</th>
+                  <th className="py-1.5 font-semibold text-right">Sold</th>
+                  <th className="py-1.5 font-semibold text-right">Avg fit</th>
+                  <th className="py-1.5 font-semibold text-right">Waste</th>
+                  <th className="py-1.5 font-semibold text-right">Profit</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {leaderboard.map((r, i) =>
+                <tr key={r.team}>
+                    <td className="py-2 font-semibold text-gray-800"><span className="text-gray-300 font-mono mr-2">{i + 1}</span>{r.team}</td>
+                    <td className="py-2 text-right tabular-nums text-gray-700">{r.sold}</td>
+                    <td className="py-2 text-right tabular-nums text-gray-700">{r.fit.toFixed(1)}</td>
+                    <td className="py-2 text-right tabular-nums text-gray-500">{r.waste}</td>
+                    <td className={`py-2 text-right tabular-nums font-bold ${r.profit < 0 ? 'text-rose-600' : 'text-emerald-700'}`}>{fmt$(r.profit)}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </Card>
+        </div>
+      </div>
+    </div>);
+
+}
+
+function Param({ label, value }) {
+  return (
+    <div className="rounded-lg bg-gray-50 px-3 py-2">
+      <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{label}</div>
+      <div className="text-base font-bold text-gray-800 tabular-nums mt-0.5">{value}</div>
+    </div>);
+
+}
+
+Object.assign(window, { JokeMakerScreen, MarketingScreen, InstructorScreen });

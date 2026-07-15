@@ -1,0 +1,270 @@
+/* FlowBoard.jsx — animated value-stream visualization (dot system).
+   Each joke is a single dot, colored by status, flowing Production → Marketing →
+   On Market → Sold, with a Waste tray. Scales to many jokes (Round 1 = 5/batch).
+   No economics ledger or customer pool here — just the clean flow + compact counts. */
+
+const STAGE_COLOR = {
+  producing: '#2563eb', marketing: '#7c3aed', market: '#d97706', sold: '#059669', wasted: '#e11d48',
+};
+
+function flowKeyframes() {
+  return `
+  @keyframes jf-pop { 0%{transform:translateY(0) scale(.6);opacity:0} 40%{opacity:1} 100%{transform:translateY(-24px) scale(1);opacity:0} }
+  @keyframes jf-dash { to { background-position: 240px 0; } }
+  @keyframes jf-blip { 0%,100%{opacity:.35} 50%{opacity:1} }
+  .jf-conveyor{ background-image:repeating-linear-gradient(90deg,#e2e8f0 0 10px,transparent 10px 22px); background-size:240px 2px; background-repeat:repeat-x; animation:jf-dash 7s linear infinite; }
+  .jf-dot{ transition: transform 720ms cubic-bezier(.22,1,.36,1), opacity 420ms ease, background-color 400ms ease; }
+  `;
+}
+
+function FlowStation({ label, role, icon, color, count }) {
+  return (
+    <div className="text-center">
+      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg" style={{ background: color + '14' }}>
+        <Icon name={icon} size={15} style={{ color }} />
+        <div className="text-left leading-none">
+          <div className="text-[12px] font-bold text-gray-800">{label}</div>
+          <div className="text-[9px] uppercase tracking-wide text-gray-400 mt-0.5">{role}</div>
+        </div>
+        <span className="ml-1 text-base font-bold tabular-nums" style={{ color }}>{count}</span>
+      </div>
+    </div>
+  );
+}
+
+function FlowBoard({ compact = false }) {
+  const [round, setRound] = useState(1);
+  const [playing, setPlaying] = useState(true);
+  const [speed, setSpeed] = useState(1);
+  const [W, setW] = useState(900);
+  const containerRef = useRef(null);
+
+  const [tokens, setTokens] = useState([]);
+  const [counters, setCounters] = useState({ produced: 0, published: 0, sold: 0, wasted: 0, unsold: 0 });
+  const [ledger, setLedger] = useState({ revenue: 0, prodCost: 0, pubCost: 0 });
+  const [pops, setPops] = useState([]);
+  const idRef = useRef(1);
+  const popRef = useRef(1);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((e) => setW(e[0].contentRect.width));
+    ro.observe(el);
+    setW(el.getBoundingClientRect().width);
+    return () => ro.disconnect();
+  }, []);
+
+  const reset = useCallback(() => {
+    setTokens([]); setCounters({ produced: 0, published: 0, sold: 0, wasted: 0, unsold: 0 });
+    setLedger({ revenue: 0, prodCost: 0, pubCost: 0 }); setPops([]);
+  }, []);
+  const switchRound = (r) => { setRound(r); reset(); };
+
+  useEffect(() => {
+    if (!playing) return;
+    const interval = setInterval(() => {
+      const R2 = round === 2;
+      setTokens((prev) => {
+        let next = prev.map((t) => ({ ...t, age: t.age + 1 }));
+        const dL = { revenue: 0, prodCost: 0, pubCost: 0 };
+        const dC = { produced: 0, published: 0, sold: 0, wasted: 0, unsold: 0 };
+        const newPops = [];
+
+        next = next.flatMap((t) => {
+          if (t.leaving && t.age - t.leftAt > 1) return [];
+          if (t.leaving) return [t];
+          if (t.stage === 'producing' && t.age >= 1) return [{ ...t, stage: 'marketing', age: 0 }];
+          if (t.stage === 'marketing' && t.age >= 2) {
+            const rejected = Math.random() < (R2 ? 0.12 : 0.42) || t.fit < 3.5;
+            if (rejected) { dC.wasted += 1; return [{ ...t, stage: 'wasted', age: 0 }]; }
+            dL.pubCost += ECON.costOfPublishing; dC.published += 1;
+            return [{ ...t, stage: 'market', age: 0 }];
+          }
+          if (t.stage === 'market') {
+            const clears = t.fit >= ECON.tau;
+            const saleP = R2 ? (clears ? 0.6 : 0.1) : (clears ? 0.3 : 0.05);
+            if (Math.random() < saleP) {
+              dL.revenue += ECON.marketPrice; dC.sold += 1;
+              newPops.push({ id: popRef.current++ });
+              return [{ ...t, stage: 'sold', age: 0 }];
+            }
+            if (t.age >= 11) { dC.unsold += 1; return [{ ...t, leaving: true, leftAt: t.age }]; }
+            return [t];
+          }
+          if (t.stage === 'sold' && t.age >= 3) return [{ ...t, leaving: true, leftAt: t.age }];
+          if (t.stage === 'wasted' && t.age >= 4) return [{ ...t, leaving: true, leftAt: t.age }];
+          return [t];
+        });
+
+        // spawn a batch (Round 1 = exactly 5; Round 2 produces to demand)
+        const active = next.filter((t) => ['producing', 'marketing', 'market'].includes(t.stage)).length;
+        const spawnP = R2 ? 0.45 : 0.7;
+        if (active < 26 && Math.random() < spawnP) {
+          const size = R2 ? 2 + Math.floor(Math.random() * 3) : 5;
+          for (let k = 0; k < size; k++) {
+            const j = JOKES[Math.floor(Math.random() * JOKES.length)];
+            const fit = R2 ? Math.min(11, 7 + Math.random() * 4) : 3 + Math.random() * 5.2;
+            next.push({ id: idRef.current++, topic: j.topic, fit, stage: 'producing', age: 0 });
+            dL.prodCost += ECON.costOfCreation; dC.produced += 1;
+          }
+        }
+
+        if (dL.revenue || dL.prodCost || dL.pubCost)
+          setLedger((l) => ({ revenue: l.revenue + dL.revenue, prodCost: l.prodCost + dL.prodCost, pubCost: l.pubCost + dL.pubCost }));
+        if (Object.values(dC).some(Boolean))
+          setCounters((c) => ({ produced: c.produced + dC.produced, published: c.published + dC.published, sold: c.sold + dC.sold, wasted: c.wasted + dC.wasted, unsold: c.unsold + dC.unsold }));
+        if (newPops.length) {
+          setPops((p) => [...p, ...newPops].slice(-6));
+          newPops.forEach((np) => setTimeout(() => setPops((p) => p.filter((x) => x.id !== np.id)), 950));
+        }
+        return next;
+      });
+    }, 880 / speed);
+    return () => clearInterval(interval);
+  }, [playing, speed, round]);
+
+  /* ---- layout: dot grids per stage ---- */
+  const H = compact ? 172 : 210;
+  const DOTS_TOP = 56, STEP = 16, PER = 5, DOT = 11;
+  const colX = (i) => (W * (i + 0.5)) / 4;
+  const idx = { producing: 0, marketing: 0, market: 0, sold: 0, wasted: 0 };
+  const wasteY = H - 30;
+
+  const positioned = tokens.map((t) => {
+    const st = t.stage;
+    const i = idx[st]++;
+    let x, y;
+    if (st === 'wasted') {
+      const per = Math.max(6, Math.floor(W / 22));
+      const gw = per * 18;
+      x = W * 0.5 - gw / 2 + (i % per) * 18 + 9;
+      y = wasteY + Math.floor(i / per) * 14;
+    } else {
+      const colIdx = { producing: 0, marketing: 1, market: 2, sold: 3 }[st];
+      const gw = PER * STEP;
+      x = colX(colIdx) - gw / 2 + (i % PER) * STEP + STEP / 2;
+      y = DOTS_TOP + Math.floor(i / PER) * STEP;
+    }
+    return { t, x, y };
+  });
+
+  const profit = ledger.revenue - ledger.prodCost - ledger.pubCost;
+  const inProd = tokens.filter((t) => t.stage === 'producing').length;
+  const inMkt = tokens.filter((t) => t.stage === 'marketing').length;
+  const onMkt = tokens.filter((t) => t.stage === 'market' && !t.leaving).length;
+
+  return (
+    <div>
+      <style>{flowKeyframes()}</style>
+
+      {/* control bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2">
+          <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5">
+            {[1, 2].map((r) => (
+              <button key={r} onClick={() => switchRound(r)}
+                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${round === r ? 'text-white' : 'text-gray-500 hover:text-gray-800'}`}
+                style={round === r ? { background: r === 1 ? STAGE_COLOR.wasted : STAGE_COLOR.sold } : undefined}>
+                Round {r}
+              </button>
+            ))}
+          </div>
+          {!compact && (
+            <span className="text-xs font-medium text-gray-500 hidden sm:inline">
+              {round === 1 ? 'Siloed · push — over-produces, no demand signal' : 'Co-located · pull — produces to the discovered ideal'}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setPlaying((p) => !p)}>
+            <Icon name={playing ? 'Pause' : 'Play'} size={14} /> {playing ? 'Pause' : 'Play'}
+          </Button>
+          <div className="inline-flex rounded-md border border-gray-200 bg-white">
+            {[0.5, 1, 2].map((s) => (
+              <button key={s} onClick={() => setSpeed(s)}
+                className={`px-2 py-1 text-[11px] font-semibold ${speed === s ? 'bg-gray-900 text-white' : 'text-gray-500'}`}>{s}×</button>
+            ))}
+          </div>
+          <Button variant="ghost" size="sm" onClick={reset}><Icon name="RotateCcw" size={14} /> Reset</Button>
+        </div>
+      </div>
+
+      {/* stage */}
+      <div ref={containerRef} className="relative rounded-xl border border-gray-200 bg-white overflow-hidden" style={{ height: H }}>
+        {/* zone backgrounds */}
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="absolute top-0 bottom-0" style={{ left: `${i * 25}%`, width: '25%', background: i % 2 ? 'transparent' : '#fafbfc', borderRight: i < 3 ? '1px dashed #eef2f7' : 'none' }} />
+        ))}
+        {/* conveyor */}
+        <div className="jf-conveyor absolute left-[6%] right-[6%]" style={{ top: DOTS_TOP - 18 }} />
+
+        {/* headers */}
+        <div className="absolute inset-x-0 flex justify-around px-2" style={{ top: 10 }}>
+          <FlowStation label="Production" role="Joke Maker" icon="PenTool" color={STAGE_COLOR.producing} count={inProd} />
+          <FlowStation label="Marketing" role="rate · tag" icon="ClipboardCheck" color={STAGE_COLOR.marketing} count={inMkt} />
+          <FlowStation label="On Market" role="published" icon="Store" color={STAGE_COLOR.market} count={onMkt} />
+          <FlowStation label="Sold" role="bought" icon="ShoppingBag" color={STAGE_COLOR.sold} count={counters.sold} />
+        </div>
+
+        {/* flow arrows */}
+        {[0.25, 0.5, 0.75].map((fx, i) => (
+          <div key={i} className="absolute text-gray-200" style={{ left: `calc(${fx * 100}% - 9px)`, top: DOTS_TOP - 24 }}>
+            <Icon name="ChevronRight" size={18} />
+          </div>
+        ))}
+
+        {/* waste label */}
+        <div className="absolute flex items-center gap-1.5 text-rose-400" style={{ left: 12, top: wasteY - 6 }}>
+          <Icon name="Trash2" size={12} />
+          <span className="text-[10px] font-bold uppercase tracking-wide">Wasted {counters.wasted + counters.unsold}</span>
+        </div>
+
+        {/* dots */}
+        {positioned.map(({ t, x, y }) => (
+          <span key={t.id} className="jf-dot absolute rounded-full"
+            style={{
+              left: 0, top: 0, width: DOT, height: DOT,
+              transform: `translate(${x - DOT / 2}px, ${y}px)`,
+              background: STAGE_COLOR[t.stage], opacity: t.leaving ? 0 : (t.stage === 'wasted' ? 0.6 : 1),
+              boxShadow: '0 1px 2px rgba(15,23,42,0.18)',
+            }} />
+        ))}
+
+        {/* sale pops */}
+        {pops.map((p) => (
+          <div key={p.id} className="absolute text-emerald-600 font-bold text-xs pointer-events-none"
+            style={{ left: `calc(87.5% - 8px)`, top: DOTS_TOP, animation: 'jf-pop .95s ease-out forwards' }}>+$1</div>
+        ))}
+      </div>
+
+      {/* legend + compact counts */}
+      <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2 mt-3">
+        <div className="flex flex-wrap items-center gap-3 text-[11px] text-gray-500">
+          {[['Production', 'producing'], ['Marketing', 'marketing'], ['On market', 'market'], ['Sold', 'sold'], ['Wasted', 'wasted']].map(([l, k]) => (
+            <span key={k} className="inline-flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full" style={{ background: STAGE_COLOR[k] }} />{l}
+            </span>
+          ))}
+        </div>
+        <div className="flex items-center gap-4 text-[11px]">
+          <Count label="Produced" value={counters.produced} />
+          <Count label="Sold" value={counters.sold} tone="text-emerald-700" />
+          <Count label="Waste" value={counters.wasted + counters.unsold} tone="text-rose-600" />
+          <Count label="Profit" value={fmt$(profit)} tone={profit < 0 ? 'text-rose-600' : 'text-emerald-700'} bold />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Count({ label, value, tone = 'text-gray-800', bold }) {
+  return (
+    <span className="inline-flex items-baseline gap-1.5">
+      <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{label}</span>
+      <span className={`tabular-nums ${bold ? 'text-sm font-extrabold' : 'font-bold'} ${tone}`}>{value}</span>
+    </span>
+  );
+}
+
+Object.assign(window, { FlowBoard });

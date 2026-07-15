@@ -1,0 +1,72 @@
+/* colors_and_type.css — design tokens for The Joke Factory (V2).
+   Derived from the live codebase (Tailwind utility classes) + restrained UCLA Bruin
+   brand accents. Tailwind is the source of truth in-product; these vars mirror it
+   so non-Tailwind contexts (slides, exports) stay on-brand. */
+
+:root {
+  /* ---- Brand ---- */
+  --bruin-blue: #2774AE;   /* UCLA Bruin blue — restrained brand accent */
+  --bruin-gold: #FFD100;   /* UCLA Bruin gold */
+  --navy:       #0f2747;   /* deep header / ticker background */
+
+  /* ---- Action / role colors ---- */
+  --action:      #2563eb;  /* blue-600 — primary buttons (faithful to codebase) */
+  --production:  #2563eb;  /* Joke Maker lane */
+  --marketing:   #7c3aed;  /* Marketing (was QC) lane — violet-600 */
+  --market:      #d97706;  /* On-market lane — amber-600 */
+  --sold:        #059669;  /* Sold / revenue — emerald-600 */
+  --waste:       #e11d48;  /* Rejected / loss — rose-600 */
+
+  /* ---- Neutrals (slate scale) ---- */
+  --bg:    #f8fafc;        /* app background — slate-50 */
+  --surface: #ffffff;
+  --border: #e5e7eb;       /* gray-200 */
+  --border-soft: #f1f5f9;  /* slate-100 */
+  --fg1:   #0f172a;        /* slate-900 — primary text */
+  --fg2:   #334155;        /* slate-700 — body */
+  --fg3:   #64748b;        /* slate-500 — secondary */
+  --fg4:   #94a3b8;        /* slate-400 — muted / labels */
+
+  /* ---- Semantic tints (stat boxes / badges) ---- */
+  --tint-blue:    #eff6ff; --tint-blue-fg:    #1d4ed8;
+  --tint-violet:  #f5f3ff; --tint-violet-fg:  #6d28d9;
+  --tint-amber:   #fffbeb; --tint-amber-fg:   #b45309;
+  --tint-emerald: #ecfdf5; --tint-emerald-fg: #047857;
+  --tint-rose:    #fff1f2; --tint-rose-fg:    #be123c;
+  --tint-indigo:  #eef2ff; --tint-indigo-fg:  #4338ca;
+
+  /* ---- Type ---- */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* ---- Radius / shadow / spacing ---- */
+  --r-sm: 6px;    /* chips, inputs */
+  --r-md: 8px;    /* buttons, tiles */
+  --r-lg: 12px;   /* cards */
+  --r-full: 9999px;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.12), 0 8px 10px -6px rgb(0 0 0 / 0.10);
+}
+
+/* ---- Type scale (px) ---- */
+/* display   34 / 800 / -0.02em   — page hero ("How a joke moves…")          */
+/* h1        24 / 700             — card / screen titles                      */
+/* h2        20 / 700             — sub-titles                                */
+/* stat      24 / 700 / tabular   — big-number stat boxes                     */
+/* body      15 / 400 / 1.6       — paragraphs                                */
+/* sm        13 / 500             — controls, table cells                     */
+/* label     10–11 / 700 / uppercase / 0.08em — section labels, stat captions */
+/* mono      12 / 500             — batch ids (#8841), tabular numbers         */
+
+.jf-display { font: 800 34px/1.1 var(--font-sans); letter-spacing: -0.02em; color: var(--fg1); text-wrap: balance; }
+.jf-h1      { font: 700 24px/1.2 var(--font-sans); color: var(--fg1); }
+.jf-h2      { font: 700 20px/1.25 var(--font-sans); color: var(--fg1); }
+.jf-body    { font: 400 15px/1.6 var(--font-sans); color: var(--fg2); }
+.jf-sm      { font: 500 13px/1.4 var(--font-sans); color: var(--fg2); }
+.jf-label   { font: 700 10px/1 var(--font-sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg4); }
+.jf-stat    { font: 700 24px/1 var(--font-sans); font-variant-numeric: tabular-nums; }
+.jf-mono    { font: 500 12px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* ---- Marketing sold-signal reveal ---- */
+@keyframes mkFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }

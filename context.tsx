@@ -36,6 +36,8 @@ const LS_QC_RATED_HISTORY = 'joke_factory_qc_rated_history_v1';
 const DEFAULT_ROUND2_BATCH_LIMIT = 10;
 const DEFAULT_MARKET_PRICE = 1;
 const DEFAULT_COST_OF_PUBLISHING = 0.1;
+const DEFAULT_COST_OF_CREATION = 0.1;
+const POLL_INTERVAL_MS = 2500;
 
 // Helper to init team names (fallback, will be replaced by /v1/teams where possible)
 const INITIAL_TEAM_NAMES: Record<string, string> = {};
@@ -131,7 +133,10 @@ function mapBatchFromTeamList(
         sold_count: (j as any)?.sold_count ?? (j as any)?.soldCount ?? undefined,
         is_bought: (j as any)?.is_bought ?? (j as any)?.isBought ?? undefined,
         is_published: (j as any)?.is_published ?? (j as any)?.isPublished ?? undefined,
-      }))
+        first_sold_at: (j as any)?.first_sold_at ?? (j as any)?.firstSoldAt ?? null,
+        published_at: (j as any)?.published_at ?? (j as any)?.publishedAt ?? null,
+        topic: (j as any)?.topic ?? (j as any)?.category ?? undefined,
+      } as any))
     : (jokeTexts || []).map((txt, idx) => {
         const fakeJokeId = Number(`${batch_id}${idx}`); // stable-ish per batch; only for UI rendering
         return {
@@ -354,12 +359,16 @@ interface GameContextType {
 
   batches: Batch[];
   addBatch: (jokes: string[]) => Promise<void>;
+  submitRawBatch: (rawText: string) => Promise<void>;
+  splitBatch: (batchId: string, jokes: string[]) => Promise<void>;
+  unsplitBatch: (batchId: string) => Promise<void>;
   rateBatch: (
     batchId: string,
     ratings: { [jokeId: string]: number },
     tags: { [jokeId: string]: string[] },
     feedback: string,
     jokeTitles: { [jokeId: string]: string },
+    topics?: { [jokeId: string]: string },
   ) => Promise<void>;
   
   sales: Record<string, number>; // jokeId -> count of purchases
@@ -427,6 +436,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     round2BatchLimit: DEFAULT_ROUND2_BATCH_LIMIT,
     marketPrice: DEFAULT_MARKET_PRICE,
     costOfPublishing: DEFAULT_COST_OF_PUBLISHING,
+    costOfCreation: DEFAULT_COST_OF_CREATION,
   });
 
   const [config, setConfig] = useState<GameConfig>(initialConfig());
@@ -583,6 +593,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   shouldUseBackendConfig && Number((selectedRound as any)?.cost_of_publishing) >= 0
                     ? Number((selectedRound as any)?.cost_of_publishing)
                     : prev.costOfPublishing ?? DEFAULT_COST_OF_PUBLISHING;
+                const nextCostOfCreation =
+                  shouldUseBackendConfig && Number((selectedRound as any)?.cost_of_creation) >= 0
+                    ? Number((selectedRound as any)?.cost_of_creation)
+                    : prev.costOfCreation ?? DEFAULT_COST_OF_CREATION;
                 return {
                   ...prev,
                   status: isActive ? 'PLAYING' : (round1Status === 'ENDED' ? 'PLAYING' : 'LOBBY'),
@@ -596,6 +610,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   round2BatchLimit: nextRound2BatchLimit,
                   marketPrice: nextMarketPrice,
                   costOfPublishing: nextCostOfPublishing,
+                  costOfCreation: nextCostOfCreation,
                 };
               });
             }
@@ -663,7 +678,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               // Only bother fetching stats when the round has started or ended (backend may 404/empty otherwise).
               if (!(s === 'ACTIVE' || s === 'ENDED')) return false;
               const last = lastInstructorStatsFetchRef.current[roundNum] ?? 0;
-              return now - last >= 1500; // align with poll interval
+              return now - last >= POLL_INTERVAL_MS; // align with poll interval
             };
 
             const fetches: Array<Promise<{ roundNum: 1 | 2; raw: any } | null>> = [
@@ -919,6 +934,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             shouldUseBackendConfig && Number((selectedRound as any)?.cost_of_publishing) >= 0
               ? Number((selectedRound as any)?.cost_of_publishing)
               : prev.costOfPublishing ?? DEFAULT_COST_OF_PUBLISHING;
+          const nextCostOfCreation =
+            shouldUseBackendConfig && Number((selectedRound as any)?.cost_of_creation) >= 0
+              ? Number((selectedRound as any)?.cost_of_creation)
+              : prev.costOfCreation ?? DEFAULT_COST_OF_CREATION;
           return {
             ...prev,
             status: isActive ? 'PLAYING' : (round1Status === 'ENDED' ? 'PLAYING' : 'LOBBY'),
@@ -932,6 +951,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             round2BatchLimit: nextRound2BatchLimit,
             marketPrice: nextMarketPrice,
             costOfPublishing: nextCostOfPublishing,
+            costOfCreation: nextCostOfCreation,
           };
         });
 
@@ -1348,15 +1368,33 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     poll();
-    pollTimerRef.current = setInterval(poll, 1500);
 
-    return () => {
-      cancelled = true;
-      pollAbortRef.current?.abort();
+    const startTimer = () => {
+      if (pollTimerRef.current) return;
+      pollTimerRef.current = setInterval(poll, POLL_INTERVAL_MS);
+    };
+    const stopTimer = () => {
       if (pollTimerRef.current) {
         clearInterval(pollTimerRef.current);
         pollTimerRef.current = null;
       }
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        poll();
+        startTimer();
+      } else {
+        stopTimer();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    if (document.visibilityState === 'visible') startTimer();
+
+    return () => {
+      cancelled = true;
+      pollAbortRef.current?.abort();
+      document.removeEventListener('visibilitychange', onVisibility);
+      stopTimer();
     };
   }, [user?.user_id, user?.role, roundId]);
 
@@ -1667,12 +1705,54 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // V2: JM submits a raw text blob; Marketing splits it later.
+  const submitRawBatch = async (rawText: string) => {
+    if (!user || !roundId || !user.team_id) return;
+    const text = rawText.trim();
+    if (!text) return;
+    try {
+      await jmService.createBatch(roundId, { team_id: user.team_id, raw_text: text });
+      // Rely on poll to surface the new batch; no optimistic joke list (unsplit).
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409 && e.code === 'ROUND_NOT_ACTIVE') {
+        alert('Round is not active. Please wait for the instructor to start.');
+        return;
+      }
+      alert('Failed to submit batch.');
+    }
+  };
+
+  // V2: Marketing splits a raw-text batch into individual jokes.
+  const splitBatch = async (batchId: string, jokes: string[]) => {
+    const clean = jokes.map(j => j.trim()).filter(Boolean);
+    if (clean.length === 0) return;
+    try {
+      const updated = await qcService.splitBatch(Number(batchId) as BatchId, { jokes: clean });
+      const q: any = (updated as any)?.data ?? updated;
+      if (q && q.batch) setQcQueue(q as ApiQcQueueNextResponse);
+    } catch (e) {
+      alert('Failed to split batch.');
+    }
+  };
+
+  // V2: Marketing re-opens a split batch back into the splitting phase.
+  const unsplitBatch = async (batchId: string) => {
+    try {
+      const updated = await qcService.unsplitBatch(Number(batchId) as BatchId);
+      const q: any = (updated as any)?.data ?? updated;
+      if (q && q.batch) setQcQueue(q as ApiQcQueueNextResponse);
+    } catch (e) {
+      alert('Failed to reopen batch for splitting.');
+    }
+  };
+
   const rateBatch = async (
     batchId: string,
     ratings: { [jokeId: string]: number },
     tags: { [jokeId: string]: string[] },
     feedback: string,
     jokeTitles: { [jokeId: string]: string },
+    topics: { [jokeId: string]: string } = {},
   ) => {
     if (!roundId) return;
     const bid = Number(batchId) as BatchId;
@@ -1684,19 +1764,21 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       joke_id: Number(jid) as JokeId,
       rating,
       tag: '',
-      joke_title: rating === 5 ? (jokeTitles[String(jid)] ?? '').trim() : undefined,
+      joke_title: rating >= 4 ? (jokeTitles[String(jid)] ?? '').trim() : undefined,
+      topic: topics[String(jid)] || undefined,
     }));
 
     try {
-      // Attach normalized tag per rating (single tag allowed).
+      // Attach a normalized tag per rating when provided; tolerate empty (rank-and-select
+      // model doesn't require tags).
       for (const entry of ratingList) {
         const selected = tags[String(entry.joke_id)]?.[0] ?? '';
-        const mapped = normalizeQcTag(selected);
-        if (!mapped) {
-          alert('One or more feedback tags are invalid. Please reselect tags.');
-          return;
+        if (selected) {
+          const mapped = normalizeQcTag(selected);
+          entry.tag = mapped || 'GENUINELY_FUNNY';
+        } else {
+          entry.tag = 'GENUINELY_FUNNY';
         }
-        entry.tag = mapped;
       }
 
       const tagSummaryCounts = ratingList.reduce<Record<string, number>>((acc, entry) => {
@@ -2057,7 +2139,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       config, updateConfig, setRound, setGameActive, endRound, resetGame, toggleTeamPopup,
       calculateValidCustomerOptions, formTeams, resetToLobby,
       teamNames, updateTeamName, updateUser, deleteUser,
-      batches, addBatch, rateBatch,
+      batches, addBatch, submitRawBatch, splitBatch, unsplitBatch, rateBatch,
       sales, buyJoke, returnJoke,
       roundId,
       marketItems,

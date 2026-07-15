@@ -1,0 +1,144 @@
+/* app.jsx — shell: header, nav, overview (hero flow viz), routing between role screens + tutorial. */
+
+const NAV = [
+  { id: 'overview', label: 'Flow', icon: 'Workflow' },
+  { id: 'tutorial', label: 'Tutorial', icon: 'GraduationCap' },
+  { id: 'joke_maker', label: 'Joke Maker', icon: 'PenTool' },
+  { id: 'marketing', label: 'Marketing', icon: 'ClipboardCheck' },
+  { id: 'instructor', label: 'Instructor', icon: 'SlidersHorizontal' },
+];
+
+function Header({ view, setView }) {
+  const meta = ROLE_META[view];
+  return (
+    <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
+      <div className="max-w-[1280px] mx-auto px-5 h-16 flex items-center justify-between gap-4">
+        <button onClick={() => setView('overview')} className="shrink-0"><FactoryMark /></button>
+        <nav className="hidden md:flex items-center gap-1 bg-gray-50 rounded-lg p-1">
+          {NAV.map((n) => (
+            <button key={n.id} onClick={() => setView(n.id)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold transition-colors ${view === n.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}>
+              <Icon name={n.icon} size={14} /> {n.label}
+            </button>
+          ))}
+        </nav>
+        <div className="flex items-center gap-4 shrink-0">
+          {meta && <Badge tone="navy" icon={meta.icon} className="hidden lg:inline-flex">{meta.label}</Badge>}
+          <div className="hidden sm:block pl-4 border-l border-gray-200"><AndersonLockup /></div>
+        </div>
+      </div>
+      {/* mobile nav */}
+      <div className="md:hidden border-t border-gray-100 overflow-x-auto">
+        <div className="flex gap-1 px-3 py-2">
+          {NAV.map((n) => (
+            <button key={n.id} onClick={() => setView(n.id)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap ${view === n.id ? 'bg-gray-900 text-white' : 'text-gray-500 bg-gray-50'}`}>
+              <Icon name={n.icon} size={13} /> {n.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function Overview({ setView }) {
+  return (
+    <div className="space-y-8">
+      {/* hero */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <Badge tone="amber" icon="Sparkles">V2 · Value-stream visualization</Badge>
+          <Badge tone="gray">Lean operations simulation</Badge>
+        </div>
+        <h1 className="text-3xl md:text-[34px] font-extrabold text-gray-900 tracking-tight leading-[1.1]" style={{ textWrap: 'balance' }}>
+          How a joke moves through the factory
+        </h1>
+        <p className="text-gray-600 mt-3 max-w-2xl text-[15px] leading-relaxed">
+          Every joke is created by <b className="text-gray-800">Production</b>, processed by <b className="text-gray-800">Marketing</b>,
+          published to the <b className="text-gray-800">market</b>, and bought by <b className="text-gray-800">100 AI customers</b> chasing a hidden ideal.
+          Watch the value stream run — and switch between rounds to see why information flow, not effort, is the bottleneck.
+        </p>
+      </div>
+
+      {/* the animated flow board */}
+      <FlowBoard />
+
+      {/* the lesson */}
+      <div className="grid md:grid-cols-2 gap-5">
+        <div className="rounded-xl border-2 p-5" style={{ borderColor: BRAND.waste + '55' }}>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-7 h-7 grid place-items-center rounded-lg text-white text-xs font-bold" style={{ background: BRAND.waste }}>R1</span>
+            <h3 className="font-bold text-gray-900">Round 1 — siloed & pushing</h3>
+          </div>
+          <p className="text-sm text-gray-600 leading-relaxed">
+            Production and Marketing sit apart. Production has no demand signal, so it over-produces.
+            Most jokes miss the ideal → low fit, lots of waste, creation cost piling up silently. The pain only shows at debrief.
+          </p>
+        </div>
+        <div className="rounded-xl border-2 p-5" style={{ borderColor: BRAND.sold + '55' }}>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-7 h-7 grid place-items-center rounded-lg text-white text-xs font-bold" style={{ background: BRAND.sold }}>R2</span>
+            <h3 className="font-bold text-gray-900">Round 2 — co-located & pulling</h3>
+          </div>
+          <p className="text-sm text-gray-600 leading-relaxed">
+            Marketing has been reading the live feed and now sits with Production, briefing them out loud.
+            Output targets the discovered ideal → fits rise, waste drops, profit climbs. Same people, better flow.
+          </p>
+        </div>
+      </div>
+      <blockquote className="rounded-xl bg-slate-900 text-slate-100 p-5 text-[15px] leading-relaxed">
+        <Icon name="Quote" size={18} className="text-slate-500 mb-1" />
+        The information needed to improve existed the whole time. The difference between rounds is whether it can
+        <b className="text-white"> flow to the people who need it.</b>
+      </blockquote>
+
+      {/* what's new in V2 */}
+      <div>
+        <SectionLabel className="mb-3">New in V2</SectionLabel>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {[
+            ['Coins', 'Two-cost profit', 'Production + publish cost, shown as a 4-line breakdown.', 'joke_maker'],
+            ['Zap', 'Force-release ≥1', 'Every rated batch publishes at least one joke.', 'marketing'],
+            ['Tags', '10-topic palette', 'Marketing tags each joke; it becomes a classifier dimension.', 'marketing'],
+            ['Radio', 'Class-wide live feed', 'Every sold joke + fit total + drip-fed attribute reveals.', 'marketing'],
+            ['Users', 'AI customer engine', '100 buyers, one hidden ideal, ±0.3 perception jitter.', 'instructor'],
+            ['Timer', 'Lead-time KPI', 'Idea → first sold, surfaced on the dashboard.', 'joke_maker'],
+          ].map(([ic, t, d, to]) => (
+            <button key={t} onClick={() => setView(to)} className="text-left rounded-xl border border-gray-200 bg-white p-4 hover:border-gray-300 hover:shadow-sm transition group">
+              <Icon name={ic} size={18} className="text-gray-400 group-hover:text-gray-700 transition" />
+              <div className="font-bold text-gray-900 text-sm mt-2">{t}</div>
+              <div className="text-xs text-gray-500 mt-1 leading-relaxed">{d}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [view, setView] = useState('overview');
+  useEffect(() => { window.scrollTo(0, 0); }, [view]);
+
+  return (
+    <div className="min-h-screen flex flex-col" style={{ background: '#f8fafc' }}>
+      <Header view={view} setView={setView} />
+      <main className="flex-1 max-w-[1280px] w-full mx-auto px-5 py-7">
+        {view === 'overview' && <Overview setView={setView} />}
+        {view === 'tutorial' && <Tutorial onLaunch={setView} />}
+        {view === 'joke_maker' && <JokeMakerScreen />}
+        {view === 'marketing' && <MarketingScreen />}
+        {view === 'instructor' && <InstructorScreen />}
+      </main>
+      <footer className="border-t border-gray-200 bg-white">
+        <div className="max-w-[1280px] mx-auto px-5 py-4 flex items-center justify-between text-xs text-gray-400">
+          <span>The Joke Factory · V2 · Educational use</span>
+          <span>© 2026 UCLA Anderson School of Management</span>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);

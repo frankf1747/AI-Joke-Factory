@@ -1,3 +1,5 @@
+import { computeProfit, selectPublishedJokeIds } from './economics';
+import { SIM_CONFIG } from '../config/simConfig';
 import type {
   ApiActiveRoundResponse,
   ApiCreateBatchRequest,
@@ -64,7 +66,9 @@ type MockBatch = {
   status: BatchStatus;
   submitted_at: string;
   rated_at?: string;
-  jokes: Array<{ joke_id: JokeId; joke_text: string; joke_title?: string }>;
+  // V2: JM submits a raw text blob; jokes stays empty until Marketing splits it.
+  raw_text?: string;
+  jokes: Array<{ joke_id: JokeId; joke_text: string; joke_title?: string; is_published?: boolean; topic?: string; first_sold_at?: string | null; published_at?: string | null }>;
   avg_score: number | null;
   passes_count: number | null;
 };
@@ -202,6 +206,42 @@ function isRoundActive(db: MockDb): boolean {
   return db.round.status === 'ACTIVE';
 }
 
+// Sample AI-style raw joke batches used to keep Marketing's queue stocked for testing.
+const SAMPLE_RAW_BATCHES: string[] = [
+  '1) A man walks into a library and asks the librarian, "Do you have any books on how to make really good decisions?"\n2) The librarian says, "Yes, but are you sure you want one?"\n3) The man thinks for a second and says, "Actually... maybe I should read it first before deciding."\n4) The librarian nods and says, "Perfect. You have come to the right section."\n5) A student tells his teacher, "I do not think I deserve a zero on this test."',
+  '1) I told my boss I needed a raise; he said be a self-starter, so I started napping.\n2) My therapist said embrace your mistakes, so I hugged my pivot table.\n3) Why did the MBA bring a ladder to class? To reach the higher-level frameworks.\n4) Our standup is five people agreeing it could have been an email.\n5) I asked AI for a joke; it returned a 40-slide deck and a follow-up meeting.',
+  '1) I scheduled a meeting to discuss having fewer meetings. Attendance was full.\n2) Coffee is renewable: I renew my entire personality every cup.\n3) My deadlines are houseplants — alive purely through panic.\n4) A bear walks into a brokerage; the portfolio was already grizzly.\n5) We moved everything to the cloud; now rain feels like a backup.',
+  '1) My Wi-Fi was the only thing that connected at the networking mixer.\n2) The printer is the only thing here with real job security.\n3) I circled back so hard I got dizzy.\n4) Our roadmap is a word cloud with ambition.\n5) My calendar is fiction I am contractually forced to live in.',
+];
+
+// Keep at least `min` SUBMITTED batches waiting so Marketing always has something to test.
+// Only fires when the simulated-buyer/dev-mode conditions apply (mock testing).
+function ensureQueueStock(db: MockDb, min = 1) {
+  if (!SIM_CONFIG.dev.simulatedBuyerInMock) return;
+  if (db.round.status !== 'ACTIVE') return;
+  const round_id = db.active_round_id;
+  const pending = Object.values(db.batches).filter(
+    b => b.round_id === round_id && b.status === 'SUBMITTED',
+  ).length;
+  if (pending >= min) return;
+  const team_id = (db.teams[0]?.id ?? 1) as TeamId;
+  const created = Object.values(db.batches).filter(b => b.round_id === round_id).length;
+  const raw = SAMPLE_RAW_BATCHES[created % SAMPLE_RAW_BATCHES.length];
+  const batch_id = (++db.seq.batch_id) as BatchId;
+  db.batches[String(batch_id)] = {
+    batch_id,
+    round_id,
+    team_id,
+    status: 'SUBMITTED',
+    submitted_at: isoNow(),
+    raw_text: raw,
+    jokes: [],
+    avg_score: null,
+    passes_count: null,
+  };
+  persistDb(db);
+}
+
 function requireRoundActive(db: MockDb): MockErr | null {
   if (!isRoundActive(db)) return err(409, 'ROUND_NOT_ACTIVE', 'Round is not active.');
   return null;
@@ -226,16 +266,7 @@ function getMarketItems(db: MockDb, round_id: RoundId, buyer_user_id: UserId): A
   const items = Object.values(db.batches)
     .filter(b => b.round_id === round_id && b.status === 'RATED')
     .flatMap(b => b.jokes.map(j => ({ batch: b, joke: j })))
-    .filter(({ batch, joke }) => {
-      // only accepted jokes are sellable (passes_count is per-batch; we approximate by rating threshold in submitRatings)
-      // Here we publish all jokes for simplicity, but keep it stable.
-      // If passes_count is 0, publish none.
-      const pc = batch.passes_count ?? 0;
-      if (pc <= 0) return false;
-      // publish only first `passes_count` jokes (stable order)
-      const idx = batch.jokes.findIndex(x => x.joke_id === joke.joke_id);
-      return idx >= 0 && idx < pc;
-    })
+    .filter(({ joke }) => Boolean(joke.is_published))
     .map(({ batch, joke }) => {
       const key = `${round_id}:${buyer_user_id}:${joke.joke_id}`;
       const purchaseId = db.purchaseIndex[key];
@@ -247,7 +278,8 @@ function getMarketItems(db: MockDb, round_id: RoundId, buyer_user_id: UserId): A
         joke_text: joke.joke_text,
         team,
         is_bought_by_me: !!purchase && !purchase.returned_at,
-      };
+        category: (joke as any).topic ?? undefined,
+      } as any;
     });
 
   return { items };
@@ -278,6 +310,14 @@ function computeTeamStats(db: MockDb, team_id: TeamId) {
   }, 0);
   const points = computeTeamPoints(db, team_id);
   const unrated_batches = teamBatches.filter(b => b.status !== 'RATED').length;
+  // Two-cost counts: every joke ever submitted by this team across rated + unrated batches.
+  const jokes_created = teamBatches.reduce((sum, b) => sum + b.jokes.length, 0);
+  const jokes_published = rated.reduce(
+    (sum, b) => sum + b.jokes.filter(j => j.is_published).length,
+    0,
+  );
+  // Unsold = published this team minus sales.
+  const unsold_jokes = Math.max(0, jokes_published - total_sales);
   return {
     points,
     total_sales,
@@ -286,6 +326,9 @@ function computeTeamStats(db: MockDb, team_id: TeamId) {
     accepted_jokes,
     avg_score_overall,
     unrated_batches,
+    jokes_created,
+    jokes_published,
+    unsold_jokes,
   };
 }
 
@@ -300,7 +343,19 @@ function listTeamBatches(db: MockDb, round_id: RoundId, team_id: TeamId): ApiTea
       rated_at: b.rated_at,
       avg_score: b.avg_score,
       passes_count: b.passes_count,
-    }));
+      jokes: b.jokes.map(j => ({
+        joke_id: j.joke_id,
+        joke_text: j.joke_text,
+        joke_title: j.joke_title,
+        is_published: !!j.is_published,
+        published_at: j.published_at ?? null,
+        first_sold_at: j.first_sold_at ?? null,
+        sold_count: Object.values(db.purchases).reduce(
+          (n, p) => (p.joke_id === j.joke_id && !p.returned_at ? n + 1 : n),
+          0,
+        ),
+      })),
+    })) as any;
   return { batches };
 }
 
@@ -727,6 +782,15 @@ function route(
       const team = db.teams.find(t => t.id === team_id) ?? { id: team_id, name: `Team ${team_id}` };
       const stats = computeTeamStats(db, team_id);
       const points = stats.points;
+      const rates = {
+        marketPrice: SIM_CONFIG.economics.marketPrice,
+        costOfCreation: SIM_CONFIG.economics.costOfCreation,
+        costOfPublishing: SIM_CONFIG.economics.costOfPublishing,
+      };
+      const profit = computeProfit(
+        { created: stats.jokes_created, published: stats.jokes_published, sold: stats.total_sales },
+        rates,
+      );
       const resp: ApiTeamSummaryResponse = {
         team,
         round_id,
@@ -738,6 +802,16 @@ function route(
         accepted_jokes: stats.accepted_jokes,
         avg_score_overall: stats.avg_score_overall,
         unrated_batches: stats.unrated_batches,
+        unsold_jokes: stats.unsold_jokes,
+        jokes_created: stats.jokes_created,
+        jokes_published: stats.jokes_published,
+        profit: Number(profit.toFixed(2)),
+        cost_breakdown: {
+          revenue: Number((stats.total_sales * rates.marketPrice).toFixed(2)),
+          production_cost: Number((stats.jokes_created * rates.costOfCreation).toFixed(2)),
+          publish_cost: Number((stats.jokes_published * rates.costOfPublishing).toFixed(2)),
+          profit: Number(profit.toFixed(2)),
+        },
       };
       return ok(resp, 200);
     }
@@ -762,19 +836,28 @@ function route(
 
       const body = (opts.body ?? {}) as ApiCreateBatchRequest;
       const team_id = Number(body.team_id) as TeamId;
+      const raw_text = typeof body.raw_text === 'string' ? body.raw_text : undefined;
       const jokes = Array.isArray(body.jokes) ? body.jokes.map(x => String(x)) : [];
 
-      if (!Number.isFinite(team_id) || jokes.length <= 0) {
-        return err(400, 'INVALID_REQUEST', 'team_id and jokes are required.');
+      if (!Number.isFinite(team_id)) {
+        return err(400, 'INVALID_REQUEST', 'team_id is required.');
       }
 
-      // Round 1 strict batch size
-      if (db.round.round_number === 1 && jokes.length !== db.round.batch_size) {
-        return err(400, 'INVALID_BATCH_SIZE', 'Invalid batch size for this round.');
-      }
-      // Round 2 max batch size
-      if (db.round.round_number === 2 && jokes.length > db.round.batch_size) {
-        return err(400, 'INVALID_BATCH_SIZE', 'Invalid batch size for this round.');
+      // V2: raw-text submit — JM sends a blob, Marketing splits later. No size check.
+      const isRawSubmit = !!(raw_text && raw_text.trim() && jokes.length === 0);
+
+      if (!isRawSubmit) {
+        if (jokes.length <= 0) {
+          return err(400, 'INVALID_REQUEST', 'jokes or raw_text is required.');
+        }
+        // Round 1 strict batch size (legacy pre-split path)
+        if (db.round.round_number === 1 && jokes.length !== db.round.batch_size) {
+          return err(400, 'INVALID_BATCH_SIZE', 'Invalid batch size for this round.');
+        }
+        // Round 2 max batch size
+        if (db.round.round_number === 2 && jokes.length > db.round.batch_size) {
+          return err(400, 'INVALID_BATCH_SIZE', 'Invalid batch size for this round.');
+        }
       }
 
       const batch_id = (++db.seq.batch_id) as BatchId;
@@ -790,6 +873,7 @@ function route(
         team_id,
         status: 'SUBMITTED',
         submitted_at,
+        raw_text: isRawSubmit ? raw_text : undefined,
         jokes: payloadJokes,
         avg_score: null,
         passes_count: null,
@@ -813,6 +897,7 @@ function route(
 
   // --- QC ---
   if (method === 'GET' && path === '/v1/qc/queue/count') {
+    ensureQueueStock(db);
     const round_id = Number(query.get('round_id') ?? db.active_round_id) as RoundId;
     const queue_size = Object.values(db.batches).filter(b => b.round_id === round_id && b.status === 'SUBMITTED').length;
     const resp: ApiQcQueueCountResponse = { queue_size };
@@ -820,6 +905,7 @@ function route(
   }
 
   if (method === 'GET' && path === '/v1/qc/queue/next') {
+    ensureQueueStock(db);
     const round_id = Number(query.get('round_id') ?? db.active_round_id) as RoundId;
     const next = Object.values(db.batches)
       .filter(b => b.round_id === round_id && b.status === 'SUBMITTED')
@@ -827,11 +913,72 @@ function route(
     const queue_size = Object.values(db.batches).filter(b => b.round_id === round_id && b.status === 'SUBMITTED').length;
     if (!next) return err(404, 'EMPTY_QUEUE', 'No batches in queue.');
     const resp: ApiQcQueueNextResponse = {
-      batch: { batch_id: next.batch_id, round_id: next.round_id, team_id: next.team_id, submitted_at: next.submitted_at },
+      batch: {
+        batch_id: next.batch_id,
+        round_id: next.round_id,
+        team_id: next.team_id,
+        submitted_at: next.submitted_at,
+        raw_text: next.raw_text,
+      },
       jokes: next.jokes,
       queue_size,
     };
     return ok(resp, 200);
+  }
+
+  // Marketing splits a raw-text batch into individual jokes.
+  {
+    const m = path.match(/^\/v1\/qc\/batches\/(\d+)\/split$/);
+    if (method === 'POST' && m) {
+      const batch_id = Number(m[1]) as BatchId;
+      const batch = db.batches[String(batch_id)];
+      if (!batch) return err(404, 'NOT_FOUND', 'Batch not found.');
+      if (batch.status === 'RATED') return err(409, 'BATCH_ALREADY_RATED', 'This batch was already rated.');
+
+      const body = (opts.body ?? {}) as { jokes?: unknown };
+      const jokes = Array.isArray(body.jokes) ? body.jokes.map(x => String(x)).map(s => s.trim()).filter(Boolean) : [];
+      if (jokes.length === 0) {
+        return err(400, 'INVALID_REQUEST', 'jokes array is required.');
+      }
+
+      batch.jokes = jokes.map((txt, idx) => {
+        const joke_id = Number(`${batch_id}${idx}`) as JokeId;
+        return { joke_id, joke_text: txt };
+      });
+      batch.raw_text = undefined; // consumed
+      persistDb(db);
+
+      const resp: ApiQcQueueNextResponse = {
+        batch: { batch_id: batch.batch_id, round_id: batch.round_id, team_id: batch.team_id, submitted_at: batch.submitted_at },
+        jokes: batch.jokes.map(j => ({ joke_id: j.joke_id, joke_text: j.joke_text })),
+        queue_size: Object.values(db.batches).filter(b => b.round_id === batch.round_id && b.status === 'SUBMITTED').length,
+      };
+      return ok(resp, 200);
+    }
+  }
+
+  // Marketing re-opens a split batch back into Phase 1 (restore raw_text, clear jokes).
+  {
+    const m = path.match(/^\/v1\/qc\/batches\/(\d+)\/unsplit$/);
+    if (method === 'POST' && m) {
+      const batch_id = Number(m[1]) as BatchId;
+      const batch = db.batches[String(batch_id)];
+      if (!batch) return err(404, 'NOT_FOUND', 'Batch not found.');
+      if (batch.status === 'RATED') return err(409, 'BATCH_ALREADY_RATED', 'This batch was already rated.');
+
+      // Rebuild the raw blob from the current jokes so the user can re-split.
+      const joined = batch.jokes.map(j => j.joke_text).filter(Boolean).join('\n');
+      batch.raw_text = joined || batch.raw_text || '(empty)';
+      batch.jokes = [];
+      persistDb(db);
+
+      const resp: ApiQcQueueNextResponse = {
+        batch: { batch_id: batch.batch_id, round_id: batch.round_id, team_id: batch.team_id, submitted_at: batch.submitted_at, raw_text: batch.raw_text },
+        jokes: [],
+        queue_size: Object.values(db.batches).filter(b => b.round_id === batch.round_id && b.status === 'SUBMITTED').length,
+      };
+      return ok(resp, 200);
+    }
   }
 
   {
@@ -848,9 +995,9 @@ function route(
       const body = (opts.body ?? {}) as ApiQcSubmitRatingsRequest;
       const ratings = Array.isArray(body.ratings) ? body.ratings : [];
 
-      // Compute avg + passes_count (>=3 accepted)
       const ratingByJoke: Record<string, number> = {};
       const titleByJoke: Record<string, string> = {};
+      const topicByJoke: Record<string, string> = {};
       for (const r of ratings) {
         const jid = Number((r as any).joke_id);
         const val = Number((r as any).rating);
@@ -858,27 +1005,37 @@ function route(
         ratingByJoke[String(jid)] = Math.max(1, Math.min(5, val));
         const title = String((r as any).joke_title ?? '').trim();
         if (title) titleByJoke[String(jid)] = title;
+        const topic = String((r as any).topic ?? (r as any).category ?? '').trim();
+        if (topic) topicByJoke[String(jid)] = topic;
       }
 
       const vals = batch.jokes.map(j => ratingByJoke[String(j.joke_id)] ?? 1);
       const avg = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
-      const passes = vals.filter(v => v >= 3).length;
+
+      // Force-release: all 5-rated jokes; if none, the highest-rated (ties → lowest joke_id).
+      const publishedIds = selectPublishedJokeIds(
+        batch.jokes.map(j => ({ joke_id: j.joke_id, rating: ratingByJoke[String(j.joke_id)] ?? 1 })),
+      );
+      const publishedSet = new Set(publishedIds);
+      const passes = publishedIds.length;
 
       batch.status = 'RATED';
       batch.rated_at = isoNow();
       batch.avg_score = Number(avg.toFixed(2));
       batch.passes_count = passes;
-      // Persist joke titles for accepted jokes (rating 5)
       batch.jokes = batch.jokes.map(j => {
-        const rating = ratingByJoke[String(j.joke_id)] ?? 1;
-        if (rating === 5 && titleByJoke[String(j.joke_id)]) {
-          return { ...j, joke_title: titleByJoke[String(j.joke_id)] };
-        }
-        return j;
+        const key = String(j.joke_id);
+        const isPub = publishedSet.has(j.joke_id);
+        return {
+          ...j,
+          is_published: isPub,
+          ...(isPub ? { published_at: batch.rated_at } : {}),
+          ...(topicByJoke[key] ? { topic: topicByJoke[key] } : {}),
+          ...(titleByJoke[key] ? { joke_title: titleByJoke[key] } : {}),
+        };
       });
       persistDb(db);
 
-      const publishedIds = batch.jokes.slice(0, passes).map(j => j.joke_id);
       const resp: ApiQcSubmitRatingsResponse = {
         batch: {
           batch_id: batch.batch_id,
@@ -942,13 +1099,19 @@ function route(
       if (!jokeBatch) return err(404, 'NOT_FOUND', 'Joke not found.');
 
       const purchase_id = (++db.seq.purchase_id) as number;
+      const purchaseTime = isoNow();
+      // Mark the joke's first_sold_at for the lead-time KPI.
+      const targetJoke = jokeBatch.jokes.find(j => j.joke_id === joke_id);
+      if (targetJoke && !targetJoke.first_sold_at) {
+        targetJoke.first_sold_at = purchaseTime;
+      }
       const purchase: MockPurchase = {
         purchase_id,
         round_id,
         buyer_user_id: me.user.user_id,
         joke_id,
         team_id: jokeBatch.team_id,
-        created_at: isoNow(),
+        created_at: purchaseTime,
         returned_at: null,
       };
       db.purchases[String(purchase_id)] = purchase;
@@ -998,12 +1161,50 @@ function route(
   return err(404, 'NOT_FOUND', `No mock route for ${method} ${path}`);
 }
 
+/**
+ * Dev-mode placeholder: buys one unsold published joke per GET so the flow-viz
+ * "Sold" lane animates without needing a human Customer login. The real AI
+ * Customer Engine (Phase 2B backend) replaces this.
+ */
+const SIM_BUYER_ID = -1 as UserId;
+function simulateBuyerTick(db: MockDb) {
+  if (db.round.status !== 'ACTIVE') return;
+  const round_id = db.active_round_id;
+  for (const b of Object.values(db.batches)) {
+    if (b.round_id !== round_id || b.status !== 'RATED') continue;
+    for (const j of b.jokes) {
+      if (!j.is_published) continue;
+      const key = `${round_id}:${SIM_BUYER_ID}:${j.joke_id}`;
+      if (db.purchaseIndex[key]) continue;
+      const purchase_id = (++db.seq.purchase_id) as number;
+      const now = isoNow();
+      if (!j.first_sold_at) j.first_sold_at = now;
+      db.purchases[String(purchase_id)] = {
+        purchase_id,
+        round_id,
+        buyer_user_id: SIM_BUYER_ID,
+        joke_id: j.joke_id,
+        team_id: b.team_id,
+        created_at: now,
+        returned_at: null,
+      };
+      db.purchaseIndex[key] = purchase_id;
+      persistDb(db);
+      return; // one buy per tick
+    }
+  }
+}
+
 export async function mockApiRequest<T>(
   path: string,
   opts: { method?: string; headers?: Record<string, string | undefined>; body?: unknown } = {},
 ): Promise<{ ok: true; status: number; data: T } | { ok: false; status: number; error: { code?: string; message: string; details?: unknown } }> {
   const db = loadDb();
   const method = (String(opts.method ?? 'GET').toUpperCase() as HttpMethod) || 'GET';
+
+  if (SIM_CONFIG.dev.simulatedBuyerInMock && method === 'GET') {
+    simulateBuyerTick(db);
+  }
 
   const resp = route(db, method, path, { headers: opts.headers, body: opts.body });
   if (resp.ok) return { ok: true, status: resp.status, data: resp.json as T };

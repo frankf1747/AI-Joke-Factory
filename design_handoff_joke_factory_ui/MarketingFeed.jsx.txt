@@ -1,0 +1,114 @@
+/* MarketingFeed.jsx — class-wide always-on market intelligence feed (Marketing only).
+   Every sale reveals ONE random attribute level for that joke. Marketing accumulates
+   reveals over many sales and triangulates the hidden ideal joke profile. */
+
+function MarketingFeed({ live = true }) {
+  const [rows, setRows] = useState({});   // joke_id -> { joke, fit, sales, revealed:{dim:level}, lastAt }
+  const [ticker, setTicker] = useState([]);
+  const [connected, setConnected] = useState(false);
+  const seq = useRef(1);
+
+  // seed with a couple of partially-revealed jokes so the panel reads instantly
+  useEffect(() => {
+    const seed = {};
+    [JOKES[0], JOKES[4], JOKES[11]].forEach((j) => {
+      seed[j.id] = { joke: j, fit: j.fit, sales: 3 + Math.floor(Math.random() * 6),
+        revealed: pickReveals(j, 3), lastAt: Date.now() };
+    });
+    setRows(seed);
+  }, []);
+
+  useEffect(() => {
+    if (!live) return;
+    setConnected(true);
+    const iv = setInterval(() => {
+      // a published, τ-clearing joke sells to a customer; one dim revealed
+      const sellable = JOKES.filter((j) => j.fit >= ECON.tau - 1);
+      const j = sellable[Math.floor(Math.random() * sellable.length)];
+      const dim = DIMENSIONS[Math.floor(Math.random() * DIMENSIONS.length)];
+      const level = j.dims[dim.id];
+      const id = seq.current++;
+      setRows((prev) => {
+        const ex = prev[j.id] || { joke: j, fit: j.fit, sales: 0, revealed: {}, lastAt: 0 };
+        return { ...prev, [j.id]: { ...ex, sales: ex.sales + 1, revealed: { ...ex.revealed, [dim.id]: level }, lastAt: Date.now() } };
+      });
+      setTicker((t) => [{ id, team: j.team, title: j.title, fit: j.fit, dim: dim.label, level }, ...t].slice(0, 5));
+    }, 1600);
+    return () => clearInterval(iv);
+  }, [live]);
+
+  const sorted = Object.values(rows).sort((a, b) => b.fit - a.fit);
+
+  return (
+    <Card title="Market Feed" subtitle="Class-wide · every sold joke + fit total + drip-fed reveals"
+      action={<span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-gray-500">
+        <span className="w-2 h-2 rounded-full" style={{ background: connected ? BRAND.sold : '#cbd5e1', animation: connected ? 'jf-blip 1.6s infinite' : undefined }} />
+        {connected ? 'Live' : 'Connecting…'}</span>}>
+
+      {/* ticker */}
+      <div className="mb-3 rounded-lg bg-slate-900 text-slate-100 px-3 py-2 overflow-hidden">
+        <div className="text-[9px] uppercase tracking-widest text-slate-400 mb-1">Latest sales</div>
+        <div className="space-y-1">
+          {ticker.length === 0 && <div className="text-[11px] text-slate-500 italic">Waiting for sales…</div>}
+          {ticker.map((t) => (
+            <div key={t.id} className="text-[11px] flex items-center gap-2">
+              <Icon name="TrendingUp" size={11} className="text-emerald-400 shrink-0" />
+              <span className="font-semibold text-white truncate">{t.title}</span>
+              <span className="text-slate-400">· {t.team}</span>
+              <span className="ml-auto flex items-center gap-2 shrink-0">
+                <span className="text-emerald-300 font-bold tabular-nums">{t.fit.toFixed(2)}/11</span>
+                <span className="px-1.5 py-0.5 rounded bg-slate-700 text-amber-200 text-[10px] font-semibold">{t.dim} = {t.level}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* aggregated per-joke rows */}
+      <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+        {sorted.map((r) => <FeedRow key={r.joke.id} row={r} />)}
+      </div>
+    </Card>
+  );
+}
+
+function FeedRow({ row }) {
+  const revealedCount = Object.keys(row.revealed).length;
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-3">
+      <div className="flex items-start justify-between mb-2">
+        <div className="min-w-0">
+          <div className="text-sm font-bold text-gray-900 truncate">{row.joke.title}</div>
+          <div className="text-[11px] text-gray-500">{row.joke.team} · {row.sales} sales · {revealedCount}/11 dims revealed</div>
+        </div>
+        <div className="text-right shrink-0 ml-3">
+          <div className="text-lg font-extrabold text-emerald-700 tabular-nums leading-none">{row.fit.toFixed(2)}</div>
+          <div className="text-[9px] uppercase text-gray-400">fit / 11</div>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+        {DIMENSIONS.map((d) => {
+          const level = row.revealed[d.id];
+          const on = !!level;
+          return (
+            <div key={d.id} className={`flex items-center justify-between text-[11px] ${on ? 'text-gray-800' : 'text-gray-300'}`}>
+              <span className={on ? 'font-medium' : ''}>{d.label}</span>
+              <span className="flex items-center gap-1">
+                {on ? <><span className="font-semibold">{level}</span><Icon name="Check" size={11} className="text-emerald-500" /></> : <span className="tracking-widest">— — —</span>}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function pickReveals(joke, n) {
+  const picks = [...DIMENSIONS].sort(() => Math.random() - 0.5).slice(0, n);
+  const out = {};
+  picks.forEach((d) => { out[d.id] = joke.dims[d.id]; });
+  return out;
+}
+
+Object.assign(window, { MarketingFeed });

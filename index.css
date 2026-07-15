@@ -1,6 +1,121 @@
-/* Intentionally left blank.
-   The app uses Tailwind via CDN in index.html.
-   This file exists to avoid /index.css 404s in dev/preview/build output. */
+/* The app uses Tailwind via CDN in index.html.
+   This file adds brand design tokens + shared CSS utilities not provided by Tailwind. */
+
+:root {
+  /* ---- Brand (official UCLA palette) ---- */
+  --navy:       #003b5c;   /* deep navy — headers / dark accents */
+  --bruin-blue: #005587;   /* UCLA Bruin blue — primary brand */
+  --light-blue: #8bb8e8;   /* light blue accent */
+  --bruin-gold: #ffb81c;   /* UCLA gold */
+  --bright-gold:#ffd100;   /* bright gold */
+
+  /* ---- Action / role colors ---- */
+  --action:      #005587;  /* primary buttons — Bruin blue */
+  --production:  #005587;  /* Joke Maker lane */
+  --marketing:   #003b5c;  /* Marketing (was QC) lane — navy */
+  --market:      #ffb81c;  /* On-market lane — gold */
+  --sold:        #059669;  /* Sold / revenue — kept green for meaning */
+  --waste:       #e11d48;  /* Rejected / loss — kept red for meaning */
+
+  /* ---- Neutrals (slate scale) ---- */
+  --bg:    #f8fafc;        /* app background — slate-50 */
+  --surface: #ffffff;
+  --border: #e5e7eb;       /* gray-200 */
+  --border-soft: #f1f5f9;  /* slate-100 */
+  --fg1:   #0f172a;        /* slate-900 — primary text */
+  --fg2:   #334155;        /* slate-700 — body */
+  --fg3:   #64748b;        /* slate-500 — secondary */
+  --fg4:   #94a3b8;        /* slate-400 — muted / labels */
+
+  /* ---- Radius / shadow / spacing ---- */
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-full: 9999px;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06);
+}
+
+/* ---- Marketing sold-signal reveal ---- */
+@keyframes mkFade {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.mk-fade-in { animation: mkFade 0.4s ease both; }
+
+@keyframes jf-rank-up-flash {
+  0% {
+    background-position: 0% 50%;
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.55);
+  }
+  35% {
+    background-position: 100% 50%;
+    box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.25);
+  }
+  100% {
+    background-position: 100% 50%;
+    box-shadow: 0 0 0 18px rgba(236, 72, 153, 0);
+  }
+}
+
+/* Applied to a <tr>. Keep it subtle but celebratory when a team moves up. */
+.jf-leaderboard-rankup {
+  background: linear-gradient(
+    90deg,
+    rgba(16, 185, 129, 0.18),
+    rgba(59, 130, 246, 0.16),
+    rgba(236, 72, 153, 0.14)
+  ) !important;
+  background-size: 200% 200% !important;
+  animation: jf-rank-up-flash 1400ms ease-out;
+}
+
+/* Light outline for colored text (improves contrast on light backgrounds). */
+.jf-text-outline {
+  text-shadow:
+    -1px -1px 0 rgba(255, 255, 255, 0.95),
+    1px -1px 0 rgba(255, 255, 255, 0.95),
+    -1px 1px 0 rgba(255, 255, 255, 0.95),
+    1px 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+/* Flip card helper for metric hover (legacy — kept for any remaining usage) */
+.flip-card {
+  perspective: 1200px;
+}
+
+.flip-card-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.6s ease;
+}
+
+.flip-card:hover .flip-card-inner {
+  transform: rotateY(180deg);
+}
+
+.flip-card-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  border-radius: 0.75rem;
+}
+
+.flip-card-back {
+  transform: rotateY(180deg);
+}
+
+/* Horizontal flip (top/bottom swap) */
+.flip-card-horizontal:hover .flip-card-inner {
+  transform: rotateX(180deg);
+}
+
+.flip-card-horizontal .flip-card-back {
+  transform: rotateX(180deg);
+}
+
 
 @keyframes jf-rank-up-flash {
   0% {

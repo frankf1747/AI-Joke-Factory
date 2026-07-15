@@ -6,6 +6,7 @@ import QualityControl from './views/QualityControl';
 import Customer from './views/Customer';
 import Instructor from './views/Instructor';
 import { Button } from './components';
+import DevRoleSwitcher from './components/DevRoleSwitcher';
 import { Loader2 } from 'lucide-react';
 
 const LoginScreen: React.FC = () => {
@@ -212,6 +213,7 @@ const App: React.FC = () => {
   return (
     <GameProvider>
       <GameRouter />
+      <DevRoleSwitcher />
     </GameProvider>
   );
 };

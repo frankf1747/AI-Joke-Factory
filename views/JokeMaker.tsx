@@ -1,136 +1,266 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useGame } from '../context';
-import { Button, Card, StatBox, RoleLayout, Modal, PerformanceToggle } from '../components';
-import { Plus, Trash2, Send, CheckCircle, AlertCircle, MessageSquare, Info } from 'lucide-react';
-import { Role, Batch } from '../types';
+import { Button, Card, StatBox, RoleLayout, Modal, SectionLabel, BRAND } from '../components';
+import {
+  Send, ChevronRight, MessageSquare, Info, CheckCircle2,
+} from 'lucide-react';
+import { Batch } from '../types';
+import { SIM_CONFIG } from '../config/simConfig';
+import { computeLeadTimeSeconds } from '../services/economics';
 
-const performanceTagUi = (raw: unknown): { text: string; boxColor: string } => {
-  const key = String(raw ?? '')
-    .trim()
-    .toUpperCase()
-    .replace(/[\s_]+/g, '_');
-  if (key === 'HIGH_PERFORMING' || key === 'HIGH') {
-    return { text: 'High Demand', boxColor: 'bg-emerald-50 text-emerald-800' };
-  }
-  if (key === 'AVG' || key === 'AVERAGE' || key === 'AVG_PERFORMING' || key === 'AVERAGE_PERFORMING') {
-    return { text: 'Regular Demand', boxColor: 'bg-amber-50 text-amber-800' };
-  }
-  if (key === 'LOW_PERFORMING' || key === 'LOW') {
-    return { text: 'Overstocked', boxColor: 'bg-red-50 text-red-800' };
-  }
-  return { text: '-', boxColor: 'bg-slate-50 text-slate-700' };
+/* ---- per-joke status drives the status dots ---- */
+type JokeStatus = 'reviewing' | 'market' | 'sold' | 'wasted';
+const JOKE_STATUS: Record<JokeStatus, { label: string; color: string }> = {
+  reviewing: { label: 'In review', color: '#eab308' },
+  market: { label: 'On market', color: '#94a3b8' },
+  sold: { label: 'Sold', color: '#059669' },
+  wasted: { label: 'Wasted', color: '#e11d48' },
 };
 
-const JokeMaker: React.FC = () => {
-  const { user, roster, batches, addBatch, config, teamSummary } = useGame();
-  
-  const [currentJokes, setCurrentJokes] = useState<string[]>([]);
-  const [jokeInput, setJokeInput] = useState('');
-  const [jokeAddError, setJokeAddError] = useState<string | null>(null);
-  const [complianceChecked, setComplianceChecked] = useState(false);
-  const [dismissedTeamPopup, setDismissedTeamPopup] = useState(false);
-  const [scratchpadText, setScratchpadText] = useState('');
-  
-  // Feedback Modal State
-  const [feedbackBatch, setFeedbackBatch] = useState<Batch | null>(null);
+const StatusDot: React.FC<{ status: JokeStatus; size?: number; opacity?: number }> = ({
+  status, size = 11, opacity,
+}) => {
+  const m = JOKE_STATUS[status];
+  return (
+    <span
+      title={m.label}
+      className="rounded-full inline-block shrink-0"
+      style={{ width: size, height: size, background: m.color, opacity }}
+    />
+  );
+};
 
-  // 1. Stats (API-driven)
-  const myBatches = batches.filter(b => b.team === user?.team);
-  const totalBatches = teamSummary?.batches_created ?? myBatches.length;
-  const avgScore = teamSummary ? teamSummary.avg_score_overall.toFixed(1) : 'N/A';
-  const mySales = teamSummary?.total_sales ?? 0;
-  const mySoldJokes = Number((teamSummary as any)?.sold_jokes_count ?? mySales ?? 0);
-  const myRank = teamSummary?.rank ?? '-';
-  const perfTag = performanceTagUi((teamSummary as any)?.performance_label);
-  const profitNum = typeof (teamSummary as any)?.profit === 'number' ? Number((teamSummary as any).profit) : null;
-  // Use config (from active round API) for market_price and cost_of_publishing
-  const marketPrice = typeof config.marketPrice === 'number' && config.marketPrice > 0 ? config.marketPrice : null;
-  const publishCost = typeof config.costOfPublishing === 'number' && config.costOfPublishing >= 0 ? config.costOfPublishing : null;
-  const profit =
-    profitNum !== null && Number.isFinite(profitNum)
-      ? `$${profitNum.toFixed(2)}`
-      : '—';
-  const profitValueColor =
-    profitNum !== null && Number.isFinite(profitNum)
-      ? (profitNum < 0 ? 'text-red-700' : 'text-emerald-700')
-      : 'text-slate-700';
-  const profitBoxColor =
-    profitNum !== null && Number.isFinite(profitNum)
-      ? (profitNum < 0
-        ? 'bg-red-50 text-red-800'
-        : 'bg-emerald-50 text-emerald-800')
-      : 'bg-slate-50 text-slate-700';
-  const pDisplay = marketPrice !== null && Number.isFinite(marketPrice) ? `$${marketPrice.toFixed(2)}` : '—';
-  const cDisplay = publishCost !== null && Number.isFinite(publishCost) ? `$${publishCost.toFixed(2)}` : '—';
+/** Derive each joke's display status from the batch + joke flags. */
+function jokeStatus(batch: Batch, joke: any): JokeStatus {
+  if (batch.status !== 'RATED') return 'reviewing';
+  const published = Boolean(joke.is_published);
+  const sold = Number(joke.sold_count ?? 0) > 0;
+  if (!published) return 'wasted';
+  if (sold) return 'sold';
+  return 'market';
+}
+
+/* ---- Format a duration in seconds → "Xm Ys" / "Ys" ---- */
+const fmtSeconds = (s: number | null) => {
+  if (s == null) return '—';
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}m ${r}s`;
+};
+
+/* ============================ Batch card (collapsible) ============================ */
+const BatchCard: React.FC<{
+  batch: Batch;
+  open: boolean;
+  onToggle: () => void;
+  onFeedback: () => void;
+}> = ({ batch, open, onToggle, onFeedback }) => {
+  const jokes = batch.jokes as any[];
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white">
+      <div className="flex items-center gap-2 px-3 py-2">
+        <button onClick={onToggle} className="flex items-center gap-2.5 flex-1 min-w-0 text-left group">
+          <ChevronRight
+            size={15}
+            className="text-gray-400"
+            style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }}
+          />
+          <span className="font-mono text-xs text-gray-400">#{batch.id.slice(-4)}</span>
+          <span className="flex items-center gap-1.5">
+            {jokes.map((j, i) => <StatusDot key={i} status={jokeStatus(batch, j)} size={10} />)}
+          </span>
+          <span className="text-[11px] text-gray-400 ml-auto pl-2 group-hover:text-gray-600">
+            {jokes.length} jokes
+          </span>
+        </button>
+        <button
+          onClick={onFeedback}
+          className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded hover:bg-blue-100 shrink-0"
+        >
+          <MessageSquare size={12} /> Feedback
+        </button>
+      </div>
+      {open && (
+        <div className="border-t border-gray-100 divide-y divide-gray-50">
+          {jokes.map((j, i) => (
+            <div key={i} className="flex items-center gap-3 px-3 py-2">
+              <span className="text-gray-300 font-mono text-[11px] shrink-0">{i + 1}</span>
+              <span className="text-sm flex-1 text-gray-700">{j.joke_text ?? j.content}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ============================ Jokes by stage (StageDots) ============================
+   Caps visible dots at 30 (15 per row × 2 rows). When the true count exceeds 30, the
+   last 5 rendered dots fade on a descending opacity ramp — signaling more are hidden.
+   The numeric total on the right is always the honest count. */
+const STAGE_MAX_DOTS = 30;
+const STAGE_FADE_TAIL = 5;
+
+const StageDots: React.FC<{ batches: Batch[] }> = ({ batches }) => {
+  const all = batches.flatMap(b => (b.jokes as any[]).map(j => ({ status: jokeStatus(b, j) })));
+  const buckets: Array<[string, JokeStatus]> = [
+    ['In review', 'reviewing'],
+    ['On market', 'market'],
+    ['Sold', 'sold'],
+    ['Wasted', 'wasted'],
+  ];
+  return (
+    <div className="space-y-2.5">
+      {buckets.map(([label, st]) => {
+        const items = all.filter(j => j.status === st);
+        const total = items.length;
+        const overflow = total > STAGE_MAX_DOTS;
+        const shown = overflow ? STAGE_MAX_DOTS : total;
+        return (
+          <div key={st} className="flex items-center gap-3">
+            <span className="text-[11px] font-semibold text-gray-500 w-20 shrink-0">{label}</span>
+            <div
+              className="flex flex-wrap flex-1 min-h-[10px]"
+              style={{ gap: 4, maxWidth: 192 }}
+            >
+              {total === 0 ? (
+                <span className="text-[11px] text-gray-300">—</span>
+              ) : (
+                Array.from({ length: shown }).map((_, i) => {
+                  // Fade the last STAGE_FADE_TAIL dots when overflowing.
+                  let opacity: number | undefined;
+                  if (overflow) {
+                    const tailIdx = i - (shown - STAGE_FADE_TAIL);
+                    if (tailIdx >= 0) {
+                      opacity = 1 - (tailIdx + 1) * (0.85 / STAGE_FADE_TAIL);
+                    }
+                  }
+                  return <StatusDot key={i} status={st} size={9} opacity={opacity} />;
+                })
+              )}
+            </div>
+            <span className="text-sm font-bold tabular-nums text-gray-700 w-6 text-right">
+              {total}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+/* ============================ Feedback modal ============================ */
+const JmFeedbackModal: React.FC<{ batch: Batch; onClose: () => void }> = ({ batch, onClose }) => {
+  return (
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title={`Marketing feedback · #${batch.id.slice(-4)}`}
+    >
+      <div>
+        <SectionLabel className="mb-2">Note from Marketing</SectionLabel>
+        {batch.feedback ? (
+          <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 text-sm text-gray-800">
+            {batch.feedback}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400 italic">Awaiting Marketing's feedback — batch still in review.</p>
+        )}
+      </div>
+    </Modal>
+  );
+};
+
+/* ============================ Joke Maker screen ============================ */
+const MIN_RAW_CHARS = 20;
+
+const JokeMaker: React.FC = () => {
+  const { user, roster, batches, submitRawBatch, config, teamSummary } = useGame();
+
+  const [input, setInput] = useState('');
+  const [certified, setCertified] = useState(false);
+  const [openSet, setOpenSet] = useState<Set<string>>(() => new Set());
+  const [fb, setFb] = useState<Batch | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [dismissedTeamPopup, setDismissedTeamPopup] = useState(false);
 
   const isRound1 = config.round === 1;
-  // Before Round 1 starts, backend may still report a placeholder batch size (often 1).
-  // For JM UX, show a sensible default (5) while paused, then switch to the real config once active.
   const defaultRound1BatchSize = 5;
   const round1BatchSizeForUi = (isRound1 && !config.isActive) ? defaultRound1BatchSize : config.round1BatchSize;
   const targetBatchSize = isRound1 ? round1BatchSizeForUi : null;
-  const maxBatchSize = isRound1 ? round1BatchSizeForUi : config.round2BatchLimit;
-  const isInputDisabled = currentJokes.length >= maxBatchSize || !config.isActive;
 
-  const normalizeJoke = (s: string) =>
-    s.trim().replace(/\s+/g, ' ').toLowerCase();
+  const myBatches: Batch[] = useMemo(
+    () => batches.filter(b => b.team === user?.team),
+    [batches, user?.team],
+  );
 
-  const handleAddJoke = () => {
-    const trimmed = jokeInput.trim();
-    if (!trimmed) return;
-    if (currentJokes.length >= maxBatchSize) return;
-    const nextNorm = normalizeJoke(trimmed);
-    const isDuplicate = currentJokes.some(j => normalizeJoke(j) === nextNorm);
-    if (isDuplicate) {
-      setJokeAddError('That joke is already in this batch. Please add a different one.');
-      return;
+  const trimmedLen = input.trim().length;
+  const canSubmit = config.isActive && certified && trimmedLen >= MIN_RAW_CHARS;
+
+  /* V2: JM pastes the raw AI output as one blob and hands it off to Marketing,
+     who reads through and splits it into individual jokes. */
+  const submit = async () => {
+    if (!canSubmit) return;
+    await submitRawBatch(input);
+    setInput('');
+    setCertified(false);
+    setToast('Batch sent to Marketing — they will split & rate it.');
+    window.setTimeout(() => setToast(null), 2600);
+  };
+
+  const toggleBatch = (id: string) => setOpenSet(s => {
+    const next = new Set(s);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
+  /* Stats — no Profit (it lives only on Instructor in V2) */
+  const teamSummaryAny = teamSummary as any;
+  const myRank = teamSummary?.rank ?? '—';
+  const accepted = teamSummary?.accepted_jokes ?? 0;
+  const totalSales = teamSummary?.total_sales ?? 0;
+  const avgScore = teamSummary?.avg_score_overall != null
+    ? Number(teamSummary.avg_score_overall).toFixed(1)
+    : '—';
+  const batchesCreated = teamSummary?.batches_created ?? myBatches.length;
+  // Waste = jokes that failed to reach market (rated but not published) + published-but-unsold.
+  // Compute directly from batches so it matches the "Wasted" row in StageDots exactly.
+  const waste = useMemo(() => {
+    let count = 0;
+    for (const b of myBatches) {
+      for (const j of (b.jokes as any[])) {
+        const st = jokeStatus(b, j);
+        if (st === 'wasted') count += 1;
+      }
     }
-    setJokeAddError(null);
-    setCurrentJokes([...currentJokes, trimmed]);
-    setJokeInput('');
-  };
+    // Include published-but-unsold (i.e. still "On market" but stale) — leave out to match
+    // the stage dot semantics. The design's Wasted bucket == rejected only.
+    return count;
+  }, [myBatches]);
 
-  const handleSubmitBatch = () => {
-    if (isRound1 && currentJokes.length !== targetBatchSize) return;
-    if (!complianceChecked) return;
-    addBatch(currentJokes);
-    setCurrentJokes([]);
-    setComplianceChecked(false);
-  };
-
-  const removeJoke = (index: number) => {
-    const newJokes = [...currentJokes];
-    newJokes.splice(index, 1);
-    setCurrentJokes(newJokes);
-  };
-
-  // Helper to aggregate tags
-  const getBatchTags = (batch: Batch) => {
-    if (batch.tagSummary && batch.tagSummary.length > 0) {
-      return [...batch.tagSummary].sort((a, b) => b.count - a.count).map(ts => [ts.tag, ts.count] as const);
+  /* Lead time: average across this team's jokes that have first_sold_at set. */
+  const leadTimes = useMemo(() => {
+    const out: number[] = [];
+    for (const b of myBatches) {
+      for (const j of (b.jokes as any[])) {
+        const t = computeLeadTimeSeconds(b.submitted_at, j.first_sold_at);
+        if (t != null) out.push(t);
+      }
     }
-    const counts: Record<string, number> = {};
-    batch.jokes.forEach(j => {
-      (j.tags || []).forEach(t => {
-        counts[t] = (counts[t] || 0) + 1;
-      });
-    });
-    return Object.entries(counts).sort(([, a], [, b]) => b - a);
-  };
+    return out;
+  }, [myBatches]);
+  const avgLeadSec = leadTimes.length
+    ? Math.round(leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length)
+    : null;
 
-  const formatTagLabel = (tag: string) => {
-    const normalized = tag.replace(/_/g, ' ').toLowerCase();
-    return normalized.replace(/\b\w/g, c => c.toUpperCase());
-  };
-
-  useEffect(() => {
-    // If instructor closes popups server-side, allow it to show again next time it opens.
+  React.useEffect(() => {
     if (!config.showTeamPopup) setDismissedTeamPopup(false);
   }, [config.showTeamPopup]);
 
   return (
     <RoleLayout>
-      {/* Round 2: Team popup (backend-controlled via is_popped_active) */}
+      {/* Round 2: Team popup */}
       <Modal
         isOpen={config.round === 2 && config.showTeamPopup && !dismissedTeamPopup}
         onClose={() => setDismissedTeamPopup(true)}
@@ -138,9 +268,7 @@ const JokeMaker: React.FC = () => {
         showCloseButton={false}
       >
         <div className="space-y-2">
-          <p className="text-sm text-gray-600">
-            Great job! Go sit with your team members:
-          </p>
+          <p className="text-sm text-gray-600">Great job! Go sit with your team members:</p>
           <div className="divide-y divide-gray-100 border border-gray-200 rounded">
             {(roster.length ? roster : (user ? [user] : [])).map(m => (
               <div key={m.id} className="flex items-center justify-between px-3 py-2">
@@ -149,244 +277,106 @@ const JokeMaker: React.FC = () => {
               </div>
             ))}
           </div>
-
         </div>
       </Modal>
 
-      {/* QC Feedback Modal */}
-      <Modal 
-        isOpen={!!feedbackBatch} 
-        onClose={() => setFeedbackBatch(null)} 
-        title={`QC Feedback: Batch #${feedbackBatch?.id.slice(-4)}`}
-      >
-         <div className="space-y-4">
-            {feedbackBatch && (
-                <>
-                    <div>
-                        <h4 className="text-sm font-bold text-gray-500 uppercase mb-2">Tag Summary</h4>
-                        <div className="flex flex-wrap gap-2">
-                            {getBatchTags(feedbackBatch).length > 0 ? (
-                                getBatchTags(feedbackBatch).map(([tag, count]) => (
-                                    <span key={tag} className="px-3 py-1 bg-gray-900 text-white rounded-full text-sm border border-gray-700">
-                                        {formatTagLabel(tag)} <span className="font-bold text-gray-300 ml-1">x{count}</span>
-                                    </span>
-                                ))
-                            ) : (
-                                <span className="text-sm text-gray-400 italic">No tags provided.</span>
-                            )}
-                        </div>
-                    </div>
-                    
-                    {feedbackBatch.feedback && (
-                        <div className="bg-yellow-50 border border-yellow-100 p-4 rounded-lg">
-                            <h4 className="text-sm font-bold text-yellow-800 uppercase mb-1">Written Feedback</h4>
-                            <p className="text-gray-800 text-sm whitespace-pre-wrap">{feedbackBatch.feedback}</p>
-                        </div>
-                    )}
-                     {!feedbackBatch.feedback && (
-                        <p className="text-sm text-gray-400 italic border-t pt-2">No written feedback for this batch.</p>
-                    )}
-                </>
-            )}
-         </div>
-      </Modal>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left Column: Input Area */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* LEFT: Production Line + Value stream */}
         <div className="lg:col-span-2 space-y-6">
-          <Card title="Production Line" className="border-t-4 border-t-blue-500">
+          <Card title="Production Line" accent={BRAND.production}>
             <div className="space-y-4">
               {!config.isActive && (
                 <div className="bg-yellow-50 text-yellow-800 p-3 rounded text-sm font-medium border border-yellow-200">
                   Game is currently paused. Wait for instructor to start.
                 </div>
               )}
-              
-              <div className="bg-blue-50 p-4 rounded-md text-sm text-blue-800 flex items-start">
-                <AlertCircle className="w-5 h-5 mr-2 shrink-0" />
-                <div>
-                  <strong>Instructions:</strong> 
-                  {isRound1 
-                    ? ` Round 1 requires exactly ${targetBatchSize} jokes per batch.` 
-                    : ` Round 2 allows flexible batches up to ${maxBatchSize} jokes.`}
+
+              <div className="bg-blue-50 text-blue-800 rounded-lg px-3 py-2.5 text-sm flex items-start gap-2">
+                <Info size={16} className="mt-0.5 shrink-0" />
+                <span>
+                  <b>{isRound1 ? `Round 1:` : `Round 2:`}</b>{' '}
+                  Generate {isRound1 ? `${targetBatchSize} jokes` : `your jokes`} with any AI tool and paste
+                  the whole response below. Marketing will split the batch into individual jokes.
+                </span>
+              </div>
+
+              <div>
+                <textarea
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  rows={8}
+                  placeholder={`Paste the full AI output here — exactly as you copied it.\n\ne.g.\n1) Why did the... \n2) I told my boss...\n3) ...`}
+                  className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500 resize-y placeholder-gray-400"
+                  disabled={!config.isActive}
+                />
+                <div className="flex justify-between items-center mt-2">
+                  <p className="text-xs text-gray-400 italic">
+                    Stuck? Try: {SIM_CONFIG.categories.slice(0, 6).map(c => c.label).join(' · ')} · …
+                  </p>
+                  <span className="text-[11px] text-gray-400 tabular-nums">
+                    {trimmedLen} chars{trimmedLen > 0 && trimmedLen < MIN_RAW_CHARS ? ` · min ${MIN_RAW_CHARS}` : ''}
+                  </span>
                 </div>
               </div>
 
-              {/* Joke Input - Converted to Textarea */}
-              <div className="flex flex-col gap-2">
-                <textarea
-                  value={jokeInput}
-                  onChange={(e) => {
-                    setJokeInput(e.target.value);
-                    if (jokeAddError) setJokeAddError(null);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleAddJoke();
-                    }
-                  }}
-                  placeholder="Paste or type a joke here..."
-                  className="w-full bg-white border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none resize-none placeholder-gray-400"
-                  rows={3}
-                  disabled={isInputDisabled}
-                />
-                {jokeAddError && (
-                  <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
-                    {jokeAddError}
-                  </div>
-                )}
-                <Button 
-                  onClick={handleAddJoke} 
-                  disabled={!jokeInput.trim() || isInputDisabled}
-                  variant="secondary"
-                  className="self-end"
-                >
-                  <span className="flex items-center gap-1"><Plus size={16} /> Add to Batch</span>
-                </Button>
-              </div>
-
-              {/* Current Batch Staging */}
-              <div className="bg-gray-50 rounded-md p-4 min-h-[200px] border border-gray-200">
-                <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">Current Batch ({currentJokes.length}/{maxBatchSize})</h4>
-                {currentJokes.length === 0 ? (
-                  <div className="text-center text-gray-400 py-8 italic">No jokes in production yet</div>
-                ) : (
-                  <ul className="space-y-2">
-                    {currentJokes.map((joke, idx) => (
-                      <li key={idx} className="bg-white p-2 rounded border border-gray-200 flex justify-between items-center group">
-                        <span className="truncate max-w-[80%] whitespace-pre-wrap text-gray-900">{joke}</span>
-                        <button onClick={() => removeJoke(idx)} className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Trash2 size={16} />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              {/* Compliance & Submit */}
-              <div className="flex items-center justify-between pt-2">
-                <label className="flex items-center space-x-2 cursor-pointer select-none">
-                  <input 
-                    type="checkbox" 
-                    checked={complianceChecked}
-                    onChange={e => setComplianceChecked(e.target.checked)}
-                    className="w-4 h-4 text-blue-600 rounded"
+              <div className="flex items-center justify-between pt-1">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={certified}
+                    onChange={(e) => setCertified(e.target.checked)}
+                    className="w-4 h-4 accent-blue-600"
                     disabled={!config.isActive}
                   />
                   <span className="text-sm text-gray-700">I certify these jokes are not offensive.</span>
                 </label>
-                
-                <Button 
-                  onClick={handleSubmitBatch}
-                  disabled={
-                    !config.isActive ||
-                    !complianceChecked || 
-                    (isRound1 && currentJokes.length !== targetBatchSize) ||
-                    currentJokes.length === 0
-                  }
-                  className="flex items-center space-x-2"
-                >
-                  <span className="font-bold">Submit Batch</span>
-                  <Send size={16} />
+                <Button variant="success" onClick={submit} disabled={!canSubmit}>
+                  <span className="flex items-center gap-1"><span className="font-bold">Send to Marketing</span><Send size={15} /></span>
                 </Button>
               </div>
             </div>
           </Card>
+
+          <Card title="Value stream" subtitle="Your submitted batches — batch-level status" accent={BRAND.production}>
+            <div className="space-y-2 max-h-[440px] overflow-y-auto pr-1">
+              {myBatches.length === 0 && (
+                <p className="text-center text-gray-400 text-sm py-4">No batches yet.</p>
+              )}
+              {[...myBatches].reverse().map(b => (
+                <BatchCard
+                  key={b.id}
+                  batch={b}
+                  open={openSet.has(b.id)}
+                  onToggle={() => toggleBatch(b.id)}
+                  onFeedback={() => setFb(b)}
+                />
+              ))}
+            </div>
+          </Card>
         </div>
 
-        {/* Right Column: Dashboard & History */}
-        <div className="space-y-6">
-          <PerformanceToggle label={mySales > 0 ? (teamSummary as any)?.performance_label : undefined} />
-          <div className="grid grid-cols-2 gap-4">
-            <StatBox label="Current Rank" value={myRank} color="bg-green-100 text-green-900 border-2 border-green-400 shadow-md" />
-            <StatBox
-              label="Sold / Accepted"
-              value={`${mySoldJokes} / ${teamSummary?.accepted_jokes ?? 0}`}
-              valueClassName="text-blue-900"
-              labelClassName="text-blue-900"
-            />
-            <StatBox label="Avg Score" value={avgScore} color="bg-indigo-50 text-indigo-700" />
-            <StatBox label="Batches Created" value={totalBatches} />
-            <StatBox label="Total Sales" value={mySales} color="bg-amber-50 text-amber-700" />
-            <div className="flip-card h-full">
-              <div className="flip-card-inner">
-                <div className={`flip-card-face ${profitBoxColor} p-4 flex flex-col items-center justify-center shadow-sm relative`}>
-                  <Info size={16} className="text-gray-400 absolute top-2 right-2 opacity-80" />
-                  <span className={`text-3xl font-bold ${profitValueColor}`}>{profit}</span>
-                  <span className="text-sm uppercase tracking-wide opacity-80 mt-1">Profit</span>
-                  <span className="text-[11px] text-gray-600 mt-1">p={pDisplay} • c={cDisplay}</span>
-                </div>
-                <div
-                  className={`flip-card-face flip-card-back ${profitBoxColor} p-4 flex flex-col items-center justify-center shadow-sm`}
-                  title="Profit = p × Total Sales − n × Published"
-                >
-                  <div className="inline-flex flex-col items-start text-xs sm:text-sm font-semibold text-gray-900 leading-snug">
-                    <div>{pDisplay} × Total Sales</div>
-                    <div className="flex items-center gap-1 mt-1 ml-3">
-                      <span className="text-lg font-bold text-gray-800">−</span>
-                      <span>{cDisplay} × Published</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+        {/* RIGHT: stat tiles + Jokes by stage */}
+        <div className="space-y-5">
+          <div className="grid grid-cols-2 gap-3">
+            <StatBox label="Current Rank" value={String(myRank)} tone="rank" />
+            <StatBox label="Sold / Acc" value={`${totalSales}/${accepted}`} tone="blue" />
+            <StatBox label="Avg Score" value={avgScore} tone="sky" />
+            <StatBox label="Lead Time" value={fmtSeconds(avgLeadSec)} tone="sky" />
+            <StatBox label="Batches" value={batchesCreated} tone="slate" />
+            <StatBox label="Waste" value={waste} tone="rose" />
           </div>
-
-          <Card title="Joke Clipboard">
-            <textarea
-              value={scratchpadText}
-              onChange={(e) => setScratchpadText(e.target.value)}
-              placeholder="Paste your AI-generated jokes here, then copy them into the batch input one by one."
-              className="w-full h-[300px] bg-white border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none resize-y placeholder-gray-400"
-              rows={12}
-            />
-          </Card>
-
-          <Card title="Submitted Batches">
-            <div className="space-y-4 max-h-[400px] overflow-y-auto">
-              {[...myBatches].reverse().map(batch => (
-                <div key={batch.id} className="border-b border-gray-100 pb-3 last:border-0">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-xs font-mono text-gray-500">#{batch.id.slice(-4)}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                      batch.status === 'RATED' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {batch.status === 'RATED' ? 'Completed' : 'Processing'}
-                    </span>
-                  </div>
-                  <div className="my-2 bg-gray-50 p-2 rounded border border-gray-200">
-                    {batch.jokes.map(joke => (
-                      <p key={joke.id} className="text-xs text-gray-700 mb-1 last:mb-0 line-clamp-2">
-                        • {joke.content}
-                      </p>
-                    ))}
-                  </div>
-                  {batch.status === 'RATED' && (
-                    <div className="flex items-center justify-between mt-2">
-                        <div className="flex text-xs space-x-3">
-                            <span className="flex items-center text-green-600 font-bold">
-                                <CheckCircle size={12} className="mr-1" />
-                                {batch.acceptedCount} Passed
-                            </span>
-                            <span className="text-gray-600 font-medium">Avg: {batch.avgRating?.toFixed(1)}/5</span>
-                        </div>
-                        <button 
-                            onClick={() => setFeedbackBatch(batch)}
-                            className="text-xs flex items-center bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 transition-colors"
-                        >
-                            <MessageSquare size={12} className="mr-1" /> Show Feedback
-                        </button>
-                    </div>
-                  )}
-                </div>
-              ))}
-              {myBatches.length === 0 && <p className="text-center text-gray-400 text-sm py-4">No batches yet.</p>}
-            </div>
+          <Card title="Jokes by stage" subtitle="Where your output sits right now">
+            <StageDots batches={myBatches} />
           </Card>
         </div>
       </div>
+
+      {fb && <JmFeedbackModal batch={fb} onClose={() => setFb(null)} />}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm px-4 py-2.5 rounded-lg shadow-xl flex items-center gap-2">
+          <CheckCircle2 size={16} className="text-emerald-400" /> {toast}
+        </div>
+      )}
     </RoleLayout>
   );
 };

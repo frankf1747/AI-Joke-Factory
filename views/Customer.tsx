@@ -1,207 +1,324 @@
-import React, { useState } from 'react';
-import { useGame } from '../context';
-import { Button, Card, RoleLayout } from '../components';
-import { ShoppingBag, RotateCcw, DollarSign, TrendingUp } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Card, RoleLayout, BRAND } from '../components';
+import {
+  Play, Pause, SkipForward, RotateCcw, ShoppingBag, X, Repeat, DollarSign,
+  Factory, ClipboardCheck, Bot, ChevronRight, Info, Cpu, Sparkles, Eye,
+} from 'lucide-react';
+import {
+  simulateCustomer, DEMO_JOKES, DEMO_CONFIG,
+  type DecisionStep, type Verdict, type DimScore,
+} from '../services/aiCustomerDemo';
 
-const performanceBadge = (raw: unknown): { label: string; className: string } | null => {
-  const key = String(raw ?? '')
-    .trim()
-    .toUpperCase()
-    .replace(/[\s_]+/g, '_');
+/* ---- verdict styling ---- */
+const VERDICT: Record<Verdict, { label: string; color: string; bg: string; border: string; icon: React.ReactNode }> = {
+  BUY:       { label: 'Bought',                 color: '#059669', bg: '#ecfdf5', border: '#a7f3d0', icon: <ShoppingBag size={14} /> },
+  SWAP:      { label: 'Swapped in',             color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe', icon: <Repeat size={14} /> },
+  SKIP_LOW:  { label: 'Skipped · below bar',    color: '#b45309', bg: '#fffbeb', border: '#fde68a', icon: <X size={14} /> },
+  SKIP_FULL: { label: 'Skipped · budget full',  color: '#64748b', bg: '#f8fafc', border: '#e2e8f0', icon: <X size={14} /> },
+};
 
-  // Backend variants: HIGH_PERFORMING / HIGH PERFORMING, AVG/AVERAGE, LOW_PERFORMING, etc.
-  if (key === 'HIGH_PERFORMING' || key === 'HIGH') {
-    return {
-      label: 'Best Seller',
-      className: 'bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-900 ring-1 ring-emerald-200',
-    };
-  }
-  if (
-    key === 'AVERAGE_PERFORMING' ||
-    key === 'AVG_PERFORMING' ||
-    key === 'AVERAGE' ||
-    key === 'AVG'
-  ) {
-    return {
-      label: 'Trending',
-      className: 'bg-gradient-to-r from-blue-50 to-indigo-50 text-indigo-900 ring-1 ring-indigo-200/50',
-    };
-  }
-  if (key === 'LOW_PERFORMING' || key === 'LOW') {
-    return null;
-  }
-  return {
-    label: 'Standard',
-    className: 'bg-gradient-to-r from-slate-50 to-slate-100 text-slate-900 ring-1 ring-slate-200',
-  };
+const pct = (n: number) => `${Math.round(n * 100)}%`;
+
+/* ---- Pipeline breadcrumb: where this stage sits in the game ---- */
+const Pipeline: React.FC = () => {
+  const stages = [
+    { label: 'Production', sub: 'Joke Makers create', icon: <Factory size={15} />, active: false },
+    { label: 'Quality Control', sub: 'rate & publish', icon: <ClipboardCheck size={15} />, active: false },
+    { label: 'AI Customer', sub: 'Sales — buying', icon: <Bot size={15} />, active: true },
+  ];
+  return (
+    <div className="flex items-center gap-1 flex-wrap">
+      {stages.map((s, i) => (
+        <React.Fragment key={s.label}>
+          <div
+            className={`flex items-center gap-2 rounded-lg px-3 py-1.5 border ${
+              s.active ? 'bg-indigo-50 border-indigo-200 text-indigo-800' : 'bg-white border-gray-200 text-gray-400'
+            }`}
+          >
+            <span className={s.active ? 'text-indigo-600' : 'text-gray-300'}>{s.icon}</span>
+            <span className="leading-tight">
+              <span className="block text-xs font-bold">{s.label}</span>
+              <span className="block text-[10px] opacity-80">{s.sub}</span>
+            </span>
+          </div>
+          {i < stages.length - 1 && <ChevronRight size={16} className="text-gray-300" />}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+};
+
+/* ---- A single dimension row in the scorecard ---- */
+const DimRow: React.FC<{ d: DimScore }> = ({ d }) => (
+  <div className="flex items-center gap-2 py-1">
+    <span className="w-24 shrink-0 text-[11px] font-semibold text-gray-600 truncate" title={d.label}>{d.label}</span>
+    <span
+      className={`shrink-0 inline-flex items-center gap-0.5 text-[9px] font-bold px-1 py-0.5 rounded ${
+        d.source === 'rule' ? 'bg-sky-100 text-sky-700' : 'bg-violet-100 text-violet-700'
+      }`}
+      title={d.source === 'rule' ? 'Rule-based (deterministic / QC-classifiable)' : 'LLM-inferred'}
+    >
+      {d.source === 'rule' ? <Cpu size={9} /> : <Sparkles size={9} />}
+      {d.source === 'rule' ? 'Rule' : 'LLM'}
+    </span>
+    <span className="w-32 shrink-0 text-[11px] text-gray-500 truncate" title={`joke: ${d.level} · ideal: ${d.ideal}`}>
+      {d.level}
+      {d.level !== d.ideal && <span className="text-gray-300"> → {d.ideal}</span>}
+    </span>
+    <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
+      <div
+        className="h-full rounded-full transition-all duration-500"
+        style={{ width: `${Math.round(d.fit * 100)}%`, background: d.pass ? '#10b981' : '#f59e0b' }}
+      />
+    </div>
+    <span className={`w-9 shrink-0 text-right text-[11px] font-bold tabular-nums ${d.pass ? 'text-emerald-600' : 'text-amber-600'}`}>
+      {pct(d.fit)}
+    </span>
+  </div>
+);
+
+/* ---- Scorecard for the currently-processing joke ---- */
+const Scorecard: React.FC<{ step: DecisionStep }> = ({ step }) => {
+  const v = VERDICT[step.verdict];
+  const { overall } = step.score;
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="min-w-0">
+          <div className="text-[11px] font-mono text-gray-400">JOKE #{step.joke.id}</div>
+          <div className="font-bold text-gray-900 truncate">{step.joke.title}</div>
+          <div className="text-sm text-gray-500 italic mt-0.5 line-clamp-2">"{step.joke.text}"</div>
+        </div>
+        <span
+          className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border"
+          style={{ color: v.color, background: v.bg, borderColor: v.border }}
+        >
+          {v.icon} {v.label}
+        </span>
+      </div>
+
+      {/* Overall score gauge with threshold marker */}
+      <div className="mb-3">
+        <div className="flex justify-between text-[11px] font-semibold text-gray-500 mb-1">
+          <span>Overall fit</span>
+          <span className="tabular-nums text-gray-800">{pct(overall)}</span>
+        </div>
+        <div className="relative h-3 rounded-full bg-gray-100 overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{ width: `${Math.round(overall * 100)}%`, background: overall >= DEMO_CONFIG.threshold ? '#10b981' : '#f59e0b' }}
+          />
+          {/* threshold line */}
+          <div
+            className="absolute top-[-2px] bottom-[-2px] w-0.5 bg-gray-800"
+            style={{ left: `${Math.round(DEMO_CONFIG.threshold * 100)}%` }}
+            title={`Buy threshold ${pct(DEMO_CONFIG.threshold)}`}
+          />
+        </div>
+        <div className="text-[10px] text-gray-400 mt-1">
+          Buy threshold = {pct(DEMO_CONFIG.threshold)} · {step.score.passedCount}/{step.score.dims.length} dimensions pass
+        </div>
+      </div>
+
+      {/* Per-dimension breakdown */}
+      <div className="divide-y divide-gray-50">
+        {step.score.dims.map(d => <DimRow key={d.id} d={d} />)}
+      </div>
+
+      {/* Decision narration */}
+      <div
+        className="mt-3 rounded-lg px-3 py-2 text-xs font-medium border"
+        style={{ color: v.color, background: v.bg, borderColor: v.border }}
+      >
+        {step.note}
+      </div>
+    </div>
+  );
 };
 
 const Customer: React.FC = () => {
-  const { user, buyJoke, returnJoke, config, marketItems } = useGame();
-  const [expandedJokeIds, setExpandedJokeIds] = useState<Record<string, boolean>>({});
-  
-  if (!user) return null;
+  const steps = useMemo(() => simulateCustomer(DEMO_JOKES, DEMO_CONFIG), []);
+  const [idx, setIdx] = useState(0);
+  const [playing, setPlaying] = useState(false);
 
-  // API-driven market order (preserve backend ordering)
-  const marketJokes = marketItems.map(item => ({
-    id: String(item.joke_id),
-      title: String((item as any).joke_title ?? '').trim(),
-    content: item.joke_text,
-    teamName: item.team?.name ? String(item.team.name) : `Team ${String(item.team?.id ?? '')}`,
-    teamPerfLabel: (item.team as any)?.performance_label ?? null,
-    soldCount: Number((item.team as any)?.sold_jokes_count ?? 0),
-    acceptedCount: Number((item.team as any)?.accepted_jokes ?? 0),
-    batchId: String(item.joke_id), // placeholder to preserve UI (API does not include batch_id)
-    isBoughtByMe: item.is_bought_by_me,
-  }));
+  const last = steps.length - 1;
+  const atEnd = idx >= last;
 
-  const purchasedSet = new Set(user.purchasedJokes);
-  const marketPrice = Number.isFinite(config.marketPrice) && config.marketPrice > 0 ? config.marketPrice : 1;
-  const priceDisplay = `$${marketPrice.toFixed(2)}`;
+  // Auto-advance while playing.
+  useEffect(() => {
+    if (!playing) return;
+    if (atEnd) { setPlaying(false); return; }
+    const t = window.setTimeout(() => setIdx(i => Math.min(i + 1, last)), 1600);
+    return () => window.clearTimeout(t);
+  }, [playing, idx, atEnd, last]);
 
-  const handleBuy = (jokeId: string) => {
-    // Purchase => fold (collapse) all expanded jokes immediately.
-    setExpandedJokeIds({});
-    buyJoke(jokeId, marketPrice);
-  };
+  const current = steps[idx];
+  const budget = current.budgetAfter;
+  const basket = current.basket;
 
-  const handleReturn = (jokeId: string) => {
-    returnJoke(jokeId, marketPrice);
-  };
+  // Jokes returned by a swap in any revealed step.
+  const returnedSet = useMemo(() => {
+    const s = new Set<string>();
+    for (let i = 0; i <= idx; i++) if (steps[i].returnedJokeId) s.add(steps[i].returnedJokeId!);
+    return s;
+  }, [idx, steps]);
+
+  const restart = () => { setIdx(0); setPlaying(false); };
+
+  // Summary tallies over revealed steps.
+  const revealed = steps.slice(0, idx + 1);
+  const bought = revealed.filter(s => (s.verdict === 'BUY' || s.verdict === 'SWAP') && !returnedSet.has(s.joke.id)).length;
 
   return (
     <RoleLayout>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        {/* Wallet Widget */}
-        <div className="md:col-span-1">
-          <div className="sticky top-24 space-y-4">
-             <Card className="bg-gradient-to-br from-gray-900 to-gray-800 text-white border-none shadow-lg">
-                <div className="flex flex-col items-center py-4">
-                   <div className="p-3 bg-white/10 rounded-full mb-3">
-                     <DollarSign size={24} className="text-green-400" />
-                   </div>
-                   <h2 className="text-sm uppercase tracking-wider opacity-70">Budget Remaining</h2>
-                   <div className="text-4xl font-bold mt-1">${user.wallet}</div>
-                </div>
-             </Card>
-             
-             <Card title="My Purchases">
-               <div className="max-h-[300px] overflow-y-auto space-y-3">
-                 {marketJokes.filter(j => purchasedSet.has(j.id)).length === 0 && (
-                   <p className="text-gray-400 text-sm text-center">No purchases yet.</p>
-                 )}
-                 {marketJokes.filter(j => purchasedSet.has(j.id)).map(j => (
-                   <div key={j.id} className="text-sm bg-gray-50 p-2 rounded border flex justify-between items-center text-gray-900">
-                     <span className="truncate w-2/3 font-medium">{j.content}</span>
-                     <button 
-                       onClick={() => handleReturn(j.id)}
-                       className="text-red-500 hover:text-red-700 text-xs font-bold underline"
-                     >
-                       Return
-                     </button>
-                   </div>
-                 ))}
-               </div>
-             </Card>
+      <div className="space-y-5">
+        {/* Header + context */}
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <Bot size={20} className="text-indigo-600" /> AI Customer Engine — how the backend buys
+              </h1>
+              <p className="text-sm text-gray-500">
+                A self-contained illustration of one customer processing a batch of 5 published jokes.
+              </p>
+            </div>
+            <Pipeline />
+          </div>
+
+          <div className="bg-amber-50 text-amber-800 border border-amber-200 rounded-lg px-3 py-2 text-xs flex items-start gap-2">
+            <Eye size={14} className="mt-0.5 shrink-0" />
+            <span>
+              <b>Instructor-only view.</b> This shows the engine's internal per-dimension scoring.
+              Marketing never sees this — they only get obscured class-level sales trends.
+            </span>
           </div>
         </div>
 
-        {/* Market Feed */}
-        <div className="md:col-span-3">
-           <div className="mb-6">
-             <h1 className="text-2xl font-bold text-gray-800">Joke Market</h1>
-             <p className="text-gray-600">Buy what makes you laugh. You can always return it.</p>
-           </div>
-           
-           <div className="grid grid-cols-1 gap-4">
-             {marketJokes.length === 0 ? (
-               <div className="text-center py-20 bg-white rounded-lg border border-dashed border-gray-300">
-                 <p className="text-gray-500 text-lg">The market is currently empty.</p>
-                 <p className="text-sm text-gray-400">Waiting for teams to produce high-quality content.</p>
-               </div>
-             ) : (
-               marketJokes.map(joke => {
-                 const isOwned = purchasedSet.has(joke.id);
-                 const isExpanded = Boolean(expandedJokeIds[joke.id]);
-                 const isLongJoke = joke.content.trim().length > 180;
-                 const perf = joke.soldCount > 0 ? performanceBadge(joke.teamPerfLabel) : null;
-                 const teamBadgeText = perf ? `${joke.teamName} – ${perf.label}` : joke.teamName;
-                return (
-                  <Card key={joke.id} className="rounded-xl border border-slate-200 hover:shadow-md transition-shadow">
-                    <div className="-m-4 flex flex-col h-full">
-                      <div className="px-5 py-4 flex flex-col gap-3 flex-grow">
-                        <div className="relative pr-36">
-                          <div className="flex items-center gap-3">
-                            <span
-                              className={
-                                `inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-extrabold tracking-wide ` +
-                                (perf ? perf.className : 'bg-gray-100 text-gray-700 border border-gray-200')
-                              }
-                              title={String(joke.teamPerfLabel ?? '')}
-                            >
-                              {teamBadgeText}
-                            </span>
-                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500" title="Team sold / published">
-                              <TrendingUp size={12} className="text-slate-400" />
-                              {joke.soldCount} sold / {joke.acceptedCount} published
-                            </span>
-                          </div>
-                          <div className="absolute right-0 top-0 flex items-center gap-2">
-                            {isOwned ? (
-                              <Button
-                                onClick={() => handleReturn(joke.id)}
-                                variant="danger"
-                                className="h-11 w-36 text-base flex items-center justify-center space-x-2 bg-red-600 hover:bg-red-700"
-                              >
-                                <RotateCcw size={16} />
-                                <span>Return</span>
-                              </Button>
-                            ) : (
-                              <Button
-                                onClick={() => handleBuy(joke.id)}
-                                disabled={user.wallet <= 0 || !config.isActive}
-                                className="h-11 w-36 text-base flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700"
-                              >
-                                <ShoppingBag size={16} />
-                                <span>Buy {priceDisplay}</span>
-                              </Button>
-                            )}
-                          </div>
-                        </div>
+        {/* Controls */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => (atEnd ? restart() : setPlaying(p => !p))}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700"
+          >
+            {atEnd ? <><RotateCcw size={15} /> Replay</> : playing ? <><Pause size={15} /> Pause</> : <><Play size={15} /> Play</>}
+          </button>
+          <button
+            onClick={() => { setPlaying(false); setIdx(i => Math.min(i + 1, last)); }}
+            disabled={atEnd}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+          >
+            <SkipForward size={15} /> Step
+          </button>
+          <button
+            onClick={restart}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+          >
+            <RotateCcw size={15} /> Restart
+          </button>
+          <span className="text-xs text-gray-500 ml-1">Joke {idx + 1} of {steps.length}</span>
+        </div>
 
-                        <div>
-                          <div className="text-[17px] font-extrabold text-blue-900 tracking-tight">
-                            {joke.title || 'Untitled Joke'}
-                          </div>
-                          <div
-                            className={
-                              `mt-2 border-l-2 border-blue-200 pl-3 text-base text-slate-700 italic leading-relaxed whitespace-pre-wrap ` +
-                              (isExpanded ? '' : 'line-clamp-3')
-                            }
-                          >
-                            "{joke.content}"
-                          </div>
-                          {isLongJoke && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setExpandedJokeIds(prev => ({ ...prev, [joke.id]: !Boolean(prev[joke.id]) }))
-                              }
-                              className="mt-2 text-sm font-bold text-blue-600 underline hover:text-blue-700"
-                            >
-                              {isExpanded ? 'Read Less' : 'Read More'}
-                            </button>
-                          )}
-                        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          {/* LEFT: customer wallet + basket + legend */}
+          <div className="space-y-4">
+            <Card className="bg-gradient-to-br from-gray-900 to-gray-800 text-white border-none">
+              <div className="py-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs uppercase tracking-wider opacity-70 flex items-center gap-1.5">
+                    <DollarSign size={14} className="text-emerald-400" /> Budget remaining
+                  </span>
+                  <span className="text-2xl font-bold tabular-nums">${budget.toFixed(2)}</span>
+                </div>
+                <div className="mt-2 h-2 rounded-full bg-white/15 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-emerald-400 transition-all duration-500"
+                    style={{ width: `${Math.round((budget / DEMO_CONFIG.budget) * 100)}%` }}
+                  />
+                </div>
+                <div className="mt-1.5 text-[11px] opacity-60">
+                  ${DEMO_CONFIG.budget.toFixed(2)} start · ${DEMO_CONFIG.price.toFixed(2)} per joke
+                </div>
+              </div>
+            </Card>
+
+            <Card title="Basket" subtitle={`${bought} held`} accent={BRAND.production}>
+              <div className="space-y-1.5 min-h-[60px]">
+                {basket.length === 0 ? (
+                  <p className="text-sm text-gray-400 italic text-center py-3">Nothing bought yet</p>
+                ) : (
+                  basket.map(id => {
+                    const jk = DEMO_JOKES.find(j => j.id === id)!;
+                    return (
+                      <div key={id} className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-md px-2.5 py-1.5">
+                        <ShoppingBag size={13} className="text-emerald-600 shrink-0" />
+                        <span className="text-xs font-medium text-gray-800 truncate">#{id} {jk.title}</span>
                       </div>
+                    );
+                  })
+                )}
+              </div>
+            </Card>
 
-                      {/* Footer removed: keep card clean under content */}
-                    </div>
-                  </Card>
-                );
-               })
-             )}
-           </div>
+            <Card title="How to read this">
+              <ul className="text-[11px] text-gray-600 space-y-2">
+                <li className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1 py-0.5 rounded bg-sky-100 text-sky-700"><Cpu size={9} /> Rule</span>
+                  Length &amp; topic — scored deterministically.
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1 py-0.5 rounded bg-violet-100 text-violet-700"><Sparkles size={9} /> LLM</span>
+                  The other 9 dimensions — inferred by the model.
+                </li>
+                <li className="flex items-start gap-2 pt-1 border-t border-gray-100">
+                  <Info size={12} className="mt-0.5 shrink-0 text-gray-400" />
+                  Each joke buys if overall fit clears the threshold and budget allows; a better joke can swap out a weaker held one.
+                </li>
+              </ul>
+            </Card>
+          </div>
+
+          {/* RIGHT: batch queue + active scorecard */}
+          <div className="lg:col-span-2 space-y-4">
+            <Card title="Batch of 5" subtitle="published jokes entering the market" accent={BRAND.production}>
+              <div className="space-y-1.5">
+                {steps.map((s, i) => {
+                  const revealedStep = i <= idx;
+                  const isActive = i === idx;
+                  const v = VERDICT[s.verdict];
+                  const returned = returnedSet.has(s.joke.id);
+                  return (
+                    <button
+                      key={s.joke.id}
+                      onClick={() => { setPlaying(false); setIdx(i); }}
+                      className={`w-full text-left flex items-center gap-3 rounded-lg border px-3 py-2 transition ${
+                        isActive ? 'border-indigo-300 bg-indigo-50/60 ring-1 ring-indigo-200' : 'border-gray-200 bg-white hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className="font-mono text-[11px] text-gray-400 w-5 shrink-0">#{s.joke.id}</span>
+                      <span className="text-sm text-gray-800 flex-1 truncate">{s.joke.title}</span>
+                      {!revealedStep ? (
+                        <span className="text-[11px] text-gray-400 italic shrink-0">Queued</span>
+                      ) : returned ? (
+                        <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full text-slate-500 bg-slate-100 border border-slate-200">
+                          <RotateCcw size={11} /> Returned
+                        </span>
+                      ) : (
+                        <span
+                          className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border"
+                          style={{ color: v.color, background: v.bg, borderColor: v.border }}
+                        >
+                          {v.icon} {v.label}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </Card>
+
+            <Scorecard step={current} />
+          </div>
         </div>
       </div>
     </RoleLayout>

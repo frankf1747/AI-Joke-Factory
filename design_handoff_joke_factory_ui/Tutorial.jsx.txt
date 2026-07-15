@@ -1,0 +1,309 @@
+/* Tutorial.jsx — hands-on onboarding for each role. Short (1–2 min), no logic dump;
+   a couple of genuinely interactive steps so the learning is hands-on. */
+
+const ROLE_META = {
+  joke_maker: { label: 'Joke Maker', tag: 'Production', icon: 'PenTool', color: BRAND.production },
+  marketing:  { label: 'Marketing', tag: 'was Quality Control', icon: 'ClipboardCheck', color: BRAND.marketing },
+  customers:  { label: 'AI Customers', tag: '100 automated buyers', icon: 'Users', color: BRAND.market },
+  instructor: { label: 'Instructor', tag: 'Master control', icon: 'SlidersHorizontal', color: BRAND.bruinBlue },
+};
+
+/* ---- interactive bits ---- */
+function PasteSplitDemo() {
+  const [v, setV] = useState('1) Our standup could’ve been an email.\n2) I hugged my pivot table.\n3) The AI sent a 40-slide deck.');
+  const numbered = /\d{1,2}[.)]\s+/.test(v.trim());
+  const lines = (numbered ? v.trim().split(/\s*\d{1,2}[.)]\s+/) : v.split('\n')).map((l) => l.trim()).filter(Boolean);
+  return (
+    <div>
+      <textarea value={v} onChange={(e) => setV(e.target.value)} rows={3}
+        className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400 resize-none" />
+      <div className="flex items-center gap-2 my-2 text-gray-400 text-xs"><Icon name="ArrowDown" size={13} /> splits into {lines.length} jokes</div>
+      <div className="space-y-1.5">
+        {lines.map((l, i) => (
+          <div key={i} className="bg-white border border-blue-100 border-l-[3px] border-l-blue-400 rounded-md px-2.5 py-1.5 text-sm text-gray-700">{l}</div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RankSubmitDemo() {
+  const [cards, setCards] = useState([
+    { id: 1, t: '“I scheduled a meeting to discuss having fewer meetings. Attendance was full.”' },
+    { id: 2, t: '“Coffee is renewable: I renew my entire personality every cup.”' }]);
+  const [selected, setSelected] = useState(() => new Set());
+  const [dragIdx, setDragIdx] = useState(null);
+  const move = (i, d) => setCards((c) => { const n = [...c], j = i + d; if (j < 0 || j >= n.length) return c; [n[i], n[j]] = [n[j], n[i]]; return n; });
+  const endDrag = () => setDragIdx(null);
+  const onDragOver = (e, i) => { e.preventDefault(); if (dragIdx === null || dragIdx === i) return; setCards((c) => { const n = [...c]; const [m] = n.splice(dragIdx, 1); n.splice(i, 0, m); return n; }); setDragIdx(i); };
+  const toggle = (id) => setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  return (
+    <div className="space-y-2">
+      {cards.map((c, i) => {
+        const sel = selected.has(c.id);
+        const isDefault = !selected.size && i === 0;
+        return (
+          <div key={c.id}
+            onClick={(e) => { if (e.target.closest('button')) return; toggle(c.id); }}
+            draggable
+            onDragStart={(e) => { if (e.target.closest('button')) { e.preventDefault(); return; } setDragIdx(i); }}
+            onDragOver={(e) => onDragOver(e, i)} onDragEnd={endDrag} onDrop={endDrag}
+            className={`rounded-lg border p-3 cursor-pointer transition-colors ${dragIdx === i ? 'opacity-40' : ''} ${sel ? 'bg-green-50 border-green-400 ring-1 ring-green-400' : isDefault ? 'bg-amber-50/60 border-amber-300 border-dashed' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
+            <div className="flex items-start gap-2">
+              <span className="shrink-0 flex flex-col items-center justify-center w-8 h-8 rounded-md bg-gray-900 text-white leading-none">
+                <span className="text-[6px] font-bold uppercase tracking-wider text-gray-400">Rank</span>
+                <span className="text-xs font-extrabold tabular-nums">{i + 1}</span>
+              </span>
+              <p className="joke-font flex-1 text-[13px] text-gray-800 leading-snug">{c.t}</p>
+              <div className="shrink-0 flex flex-col items-center gap-0.5">
+                <Icon name="GripVertical" size={13} className="text-gray-300" />
+                <button onClick={() => move(i, -1)} disabled={i === 0} className="text-gray-400 hover:text-gray-700 disabled:opacity-25"><Icon name="ChevronUp" size={13} /></button>
+                <button onClick={() => move(i, 1)} disabled={i === cards.length - 1} className="text-gray-400 hover:text-gray-700 disabled:opacity-25"><Icon name="ChevronDown" size={13} /></button>
+              </div>
+            </div>
+            <div className="mt-2 text-[10px] font-semibold flex items-center gap-1" style={{ color: sel ? '#16a34a' : isDefault ? '#b45309' : '#94a3b8' }}>
+              <Icon name={sel ? 'Check' : isDefault ? 'Star' : 'MousePointerClick'} size={11} />
+              {sel ? 'Selected to submit' : isDefault ? 'Top rank — submits by default' : 'Click to submit'}
+            </div>
+          </div>);
+      })}
+      <div className="text-[11px] text-gray-400 flex items-center gap-1.5"><Icon name="GripVertical" size={12} /> Drag a card or use the arrows to rank · click a card to submit it.</div>
+    </div>);
+}
+
+function SoldSignalMini() {
+  const rows = [
+    { l: 'Topic', cat: true, v: 'Workplace' },
+    { l: 'Length', cat: false, v: 'Short', min: 'Short', max: 'Long', prox: 0.97 },
+    { l: 'Energy', cat: false, v: 'Conversational', min: 'Deadpan', max: 'High-energy', prox: 0.55 }];
+  return (
+    <div className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-3">
+      <div className="flex items-center gap-1.5 mb-1.5"><Icon name="BadgeCheck" size={13} className="text-emerald-600" /><span className="text-[11px] font-semibold text-emerald-700">Sold · “Corporate Comedy”</span></div>
+      <p className="text-[11px] text-gray-700 mb-2.5">Bought because the <b>topic</b> and <b>length</b> were right.</p>
+      <div className="space-y-1.5">
+        {rows.map((r) => r.cat ? (
+          <div key={r.l} className="flex items-center gap-2">
+            <span className="text-[10px] font-semibold text-gray-500 w-14 shrink-0">{r.l}</span>
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700"><Icon name="Check" size={11} /> {r.v}</span>
+          </div>
+        ) : (
+          <div key={r.l}>
+            <div className="flex items-center justify-between gap-2 mb-0.5">
+              <span className="text-[10px] font-semibold text-gray-500 truncate">{r.l}</span>
+              <span className="text-[10px] truncate text-gray-500">{r.v}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[9px] text-gray-400 truncate max-w-[58px]">{r.min}</span>
+              <div className="relative flex-1 h-1.5 rounded-full" style={{ background: 'linear-gradient(90deg,#e5e7eb 0%,#d9f2e1 55%,#22c55e 100%)' }}>
+                <span className="absolute top-1/2 rounded-full bg-white" style={{ left: `calc(5px + (100% - 10px) * ${r.prox})`, width: 11, height: 11, transform: 'translate(-50%,-50%)', border: `2px solid ${r.prox >= 0.999 ? '#16a34a' : '#94a3b8'}`, boxShadow: '0 1px 2px rgb(0 0 0 / .15)' }} />
+              </div>
+              <span className="text-[9px] text-gray-400 truncate max-w-[58px] text-right">{r.max}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>);
+}
+
+function CustomerDemo() {
+  const [bought, setBought] = useState(false);
+  useEffect(() => { const t = setInterval(() => setBought((b) => !b), 1800); return () => clearInterval(t); }, []);
+  return (
+    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+      <div className="grid gap-1 mb-2" style={{ gridTemplateColumns: 'repeat(12,1fr)' }}>
+        {Array.from({ length: 36 }).map((_, i) => (
+          <div key={i} className="rounded-full aspect-square" style={{ background: bought && i % 3 === 0 ? BRAND.sold : '#e2e8f0', transition: 'background .4s' }} />
+        ))}
+      </div>
+      <div className="text-[11px] text-gray-500">Perceived fit ≥ τ=7 → buy. Every {ECON.tickSeconds}s each customer re-evaluates the market.</div>
+    </div>
+  );
+}
+
+/* ---- steps per role ---- */
+function buildSteps() {
+  return {
+    joke_maker: [
+      { t: 'You run Production', b: 'Your team is the Joke Maker. You use any external AI tool to generate jokes, then feed them into the factory in batches.', v: () => <FlowMini active="producing" /> },
+      { t: 'Paste a batch — we split it', b: 'No clipboard friction. Paste a block of jokes numbered 1) 2) 3)… and the app splits it into individual cards on those numbers. Edit below and watch it re-split.', v: () => <PasteSplitDemo /> },
+      { t: 'Certify, then submit', b: 'Self-check that nothing is offensive — scrap bad drafts before submit (those cost nothing). On submit the batch locks and production cost is charged: $0.10 per joke.', v: () => <CostChip lines={[['Submit 5 jokes', '−$0.50 production']]} /> },
+      { t: 'Then Marketing takes over', b: 'Your batch lands on Marketing’s desk: they rank the jokes, title the best ones, and publish them to the market — where the AI customers decide what to buy. Over-produce and jokes pile up in Marketing’s lane while creation cost silently accrues.', v: () => <FlowMini active="market" /> },
+      { t: 'Read your scoreboard', b: 'You get a full readout — your rank, jokes sold vs. accepted, average score, lead time, and waste. Each batch can also carry written feedback from Marketing: open it to see what landed and what to drop next round.', v: () => <ScoreboardMini /> },
+      { t: 'Who you’re selling to', b: 'Your buyers are 100 AI customers who share one hidden “ideal joke.” Each buys any joke whose fit to that taste clears the bar — so the game is matching their taste, not just being funny. Every sale leaks a small clue about what they want.', v: () => <CustomerDemo /> },
+    ],
+    marketing: [
+      { t: 'You are Marketing', b: 'Formerly Quality Control. You’re the natural bottleneck: every joke passes through your desk before it can reach the market.', v: () => <FlowMini active="marketing" /> },
+      { t: 'Rank, then submit', b: 'Drag the cards into best-to-worst order and assign each a Topic. Click a card to choose what to submit — the top-ranked card publishes by default — and give every joke you send its own market title. Try it:', v: () => <RankSubmitDemo /> },
+      { t: 'Release to market', b: 'Submit your picks and they publish — $0.10 each. If you click nothing, the top-ranked joke ships automatically, so at least one joke always reaches the market.', v: () => <CostChip lines={[['Release 2 jokes', '−$0.20 publish']]} /> },
+      { t: 'Learn from every sale', b: 'When a joke sells, the right panel shows how a few of its attributes scored against what customers want — a gray→green scale for scalar dimensions, a ✓ match for categorical ones. Stack these signals to infer the hidden ideal, and send batch feedback back to the Joke Maker.', v: () => <SoldSignalMini /> },
+      { t: 'Who you’re selling to', b: 'Your buyers are 100 AI customers who share one hidden “ideal joke.” Each buys any joke whose fit to that taste clears the bar — so success is matching their taste, not just being funny. Every sale you read is a clue toward that target.', v: () => <CustomerDemo /> },
+    ],
+    customers: [
+      { t: '100 AI customers', b: 'Customers are fully automated. They share one hidden ideal joke set by the instructor, and each perceives every joke slightly differently.', v: () => <CustomerDemo /> },
+      { t: 'Perceive with jitter', b: 'Each customer’s perceived fit = the joke’s true fit ± a small deterministic jitter (±0.3). Same taste, slightly different eyes — so demand spreads across the top jokes.', v: () => <FitBar /> },
+      { t: 'Buy / swap logic', b: `A customer buys any unowned joke whose perceived fit ≥ τ=${ECON.tau}. With a $${ECON.buyerBudget} budget they hold up to 3, swapping a weak one only if a new joke beats it by more than ${ECON.swapMargin}.`, v: () => <CustomerDemo /> },
+      { t: 'Every sale leaks a clue', b: 'Each purchase reveals how a few of that joke’s attributes scored against the hidden ideal into Marketing’s panel — the drip-feed that slowly exposes the target.', v: () => <SoldSignalMini /> },
+    ],
+    instructor: [
+      { t: 'Build the room', b: 'Create teams, assign Joke Maker / Marketing roles, and watch the live distribution as students join the lobby.', v: () => <CostChip lines={[['4 teams', '8 students'], ['AI customers', '100']]} /> },
+      { t: 'Set the hidden ideal', b: 'Choose one level on each of the 11 dimensions — the secret target the AI customers reward. Tune τ, swap margin, budget, jitter, tick, and the two costs.', v: () => <ProfileMini /> },
+      { t: 'Run the rounds', b: 'Start, end, and reset rounds. Between rounds reveal teammates so Round 2 can co-locate Production and Marketing — the intervention that fixes the information flow.', v: () => <RoundMini /> },
+      { t: 'Watch it land', b: 'Your dashboard tracks leaderboard, sales over time, average fit, waste, and lead time — so the chaos-to-kaizen story is visible in the numbers.', v: () => <RoundMini /> },
+    ],
+  };
+}
+
+/* tiny visuals */
+function FlowMini({ active }) {
+  const stages = [['producing', 'Production', BRAND.production], ['marketing', 'Marketing', BRAND.marketing], ['market', 'On Market', BRAND.market], ['sold', 'Sold', BRAND.sold]];
+  return (
+    <div className="flex items-center gap-1.5">
+      {stages.map(([k, l, c], i) => (
+        <React.Fragment key={k}>
+          <div className="flex-1 text-center rounded-lg py-3 border" style={{ background: active === k ? c + '18' : '#f8fafc', borderColor: active === k ? c : '#e5e7eb' }}>
+            <Icon name={['PenTool', 'ClipboardCheck', 'Store', 'ShoppingBag'][i]} size={16} style={{ color: active === k ? c : '#94a3b8' }} className="mx-auto" />
+            <div className="text-[10px] font-semibold mt-1" style={{ color: active === k ? c : '#94a3b8' }}>{l}</div>
+          </div>
+          {i < 3 && <Icon name="ChevronRight" size={14} className="text-gray-300" />}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+function CostChip({ lines }) {
+  return (
+    <div className="space-y-2">
+      {lines.map((l, i) => (
+        <div key={i} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5">
+          <span className="text-sm text-gray-700">{l[0]}</span>
+          <span className="text-sm font-bold tabular-nums text-gray-900">{l[1]}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+function ScoreboardMini() {
+  return (
+    <div className="space-y-2.5">
+      <div className="grid grid-cols-3 gap-2">
+        {[['Rank', '2', 'rank'], ['Sold / Acc', '11/14', 'blue'], ['Avg score', '3.6', 'indigo'], ['Lead time', '2:40', 'violet'], ['Batches', '7', 'slate'], ['Waste', '29', 'rose']].map(([l, v, t]) => <StatBox key={l} label={l} value={v} tone={t} />)}
+      </div>
+      <div className="rounded-lg bg-amber-50 border border-amber-100 p-2.5 flex items-start gap-2">
+        <Icon name="MessageSquare" size={13} className="text-amber-600 mt-0.5 shrink-0" />
+        <p className="text-[11px] text-gray-700">Marketing feedback · <span className="font-mono text-gray-400">#8841</span> — <span className="italic">“One keeper. Lean into workplace, drop the absurd ones.”</span></p>
+      </div>
+    </div>);
+}
+function FitBar() {
+  return (
+    <div className="space-y-2">
+      {[['True fit', 8.25, BRAND.navy], ['C1 perceives', 8.43, BRAND.sold], ['C2 perceives', 8.05, BRAND.market]].map(([l, v, c]) => (
+        <div key={l} className="flex items-center gap-2">
+          <span className="text-[11px] text-gray-500 w-24 shrink-0">{l}</span>
+          <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${(v / 11) * 100}%`, background: c }} /></div>
+          <span className="text-[11px] font-bold tabular-nums text-gray-700 w-10 text-right">{v}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+function ProfileMini() {
+  return (
+    <div className="space-y-1.5">
+      {Object.entries(IDEAL_PROFILE).slice(0, 5).map(([k, v]) => (
+        <div key={k} className="flex items-center justify-between text-[12px]">
+          <span className="text-gray-500 capitalize">{k.replace('_', ' ')}</span>
+          <span className="px-2 py-0.5 rounded text-white text-[11px] font-semibold" style={{ background: BRAND.bruinBlue }}>{v}</span>
+        </div>
+      ))}
+      <div className="text-[11px] text-gray-400 pt-1">+ 6 more dimensions…</div>
+    </div>
+  );
+}
+function RoundMini() {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex-1 rounded-lg border-2 p-3 text-center" style={{ borderColor: BRAND.waste }}>
+        <div className="text-xs font-bold" style={{ color: BRAND.waste }}>Round 1</div>
+        <div className="text-[10px] text-gray-500 mt-0.5">Siloed · push</div>
+      </div>
+      <Icon name="ArrowRight" size={16} className="text-gray-300" />
+      <div className="flex-1 rounded-lg border-2 p-3 text-center" style={{ borderColor: BRAND.sold }}>
+        <div className="text-xs font-bold" style={{ color: BRAND.sold }}>Round 2</div>
+        <div className="text-[10px] text-gray-500 mt-0.5">Co-located · pull</div>
+      </div>
+    </div>
+  );
+}
+
+/* ---- main tutorial component ---- */
+function Tutorial({ initialRole = 'joke_maker', onLaunch }) {
+  const STEPS = useMemo(buildSteps, []);
+  const [role, setRole] = useState(initialRole);
+  const [step, setStep] = useState(0);
+  const steps = STEPS[role];
+  const meta = ROLE_META[role];
+  const last = step === steps.length - 1;
+
+  const go = (r) => { setRole(r); setStep(0); };
+
+  return (
+    <div className="max-w-5xl mx-auto">
+      {/* role tabs */}
+      <div className="flex flex-wrap gap-2 mb-5">
+        {Object.entries(ROLE_META).map(([k, m]) => (
+          <button key={k} onClick={() => go(k)}
+            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border text-sm font-semibold transition-colors ${role === k ? 'text-white border-transparent' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}
+            style={role === k ? { background: m.color } : undefined}>
+            <Icon name={m.icon} size={15} /> {m.label}
+          </button>
+        ))}
+      </div>
+
+      <Card className="overflow-hidden">
+        <div className="grid md:grid-cols-2 gap-0 -m-4">
+          {/* left: copy + steps */}
+          <div className="p-6 md:p-8 flex flex-col">
+            <div className="flex items-center gap-2 mb-1">
+              <Badge tone="gray" icon={meta.icon}>{meta.label}</Badge>
+              <span className="text-[11px] text-gray-400">{meta.tag}</span>
+            </div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-gray-300 mt-4 mb-1">Step {step + 1} of {steps.length}</div>
+            <h2 className="text-2xl font-bold text-gray-900 leading-tight" style={{ textWrap: 'balance' }}>{steps[step].t}</h2>
+            <p className="text-[15px] text-gray-600 mt-3 leading-relaxed flex-1">{steps[step].b}</p>
+
+            {/* progress + nav */}
+            <div className="mt-6">
+              <div className="flex gap-1.5 mb-4">
+                {steps.map((_, i) => (
+                  <button key={i} onClick={() => setStep(i)} className="h-1.5 rounded-full transition-all"
+                    style={{ width: i === step ? 28 : 14, background: i <= step ? meta.color : '#e5e7eb' }} />
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0}>
+                  <Icon name="ArrowLeft" size={14} /> Back
+                </Button>
+                {!last ? (
+                  <Button size="sm" onClick={() => setStep((s) => s + 1)} className="ml-auto">Next <Icon name="ArrowRight" size={14} /></Button>
+                ) : (
+                  <Button size="sm" onClick={() => onLaunch && onLaunch(role)} className="ml-auto"
+                    style={{ background: meta.color }}>
+                    Open the {meta.label} screen <Icon name="ArrowUpRight" size={14} />
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* right: live visual */}
+          <div className="p-6 md:p-8 bg-slate-50 border-l border-gray-100 flex items-center">
+            <div className="w-full">{steps[step].v()}</div>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+Object.assign(window, { Tutorial, ROLE_META });

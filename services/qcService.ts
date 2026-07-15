@@ -4,6 +4,7 @@ import type {
   ApiQcQueueNextResponse,
   ApiQcSubmitRatingsRequest,
   ApiQcSubmitRatingsResponse,
+  ApiSplitBatchRequest,
   BatchId,
   RoundId,
 } from '../types';
@@ -21,6 +22,14 @@ export const qcService = {
 
   submitRatings(batch_id: BatchId, body: ApiQcSubmitRatingsRequest): Promise<ApiQcSubmitRatingsResponse> {
     return apiRequest<ApiQcSubmitRatingsResponse>(`/v1/qc/batches/${batch_id}/ratings`, { method: 'POST', body });
+  },
+
+  splitBatch(batch_id: BatchId, body: ApiSplitBatchRequest): Promise<ApiQcQueueNextResponse> {
+    return apiRequest<ApiQcQueueNextResponse>(`/v1/qc/batches/${batch_id}/split`, { method: 'POST', body });
+  },
+
+  unsplitBatch(batch_id: BatchId): Promise<ApiQcQueueNextResponse> {
+    return apiRequest<ApiQcQueueNextResponse>(`/v1/qc/batches/${batch_id}/unsplit`, { method: 'POST' });
   },
 };
 
