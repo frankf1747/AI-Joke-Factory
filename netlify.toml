@@ -1,4 +1,7 @@
 [build]
+  # Build from the repo root (where package.json + Vite live), NOT the stale
+  # frontend/ folder. This overrides any "Base directory" set in the Netlify UI.
+  base = "."
   command = "npm run build"
   publish = "dist"
 
