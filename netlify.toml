@@ -4,6 +4,12 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  # ---- MOCK-MODE DEPLOY ----
+  # The app runs entirely on the in-browser localStorage mock — no backend needed.
+  # The DEV role-switcher (bottom-right) is visible so reviewers can jump between
+  # Joke Maker / Marketing / Customer / Instructor and see the whole flow.
+  # To deploy against the real backend later: set VITE_USE_MOCK_API = "false".
+  VITE_USE_MOCK_API = "true"
   VITE_API_BASE_URL = "https://jokefactory-be.onrender.com"
 
 [[redirects]]
