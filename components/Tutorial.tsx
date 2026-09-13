@@ -388,8 +388,8 @@ interface Step { t: string; b: string; v: () => React.ReactNode }
 
 function buildSteps(): Record<TutorialRole, Step[]> {
   const criteriaStep: Step = {
-    t: 'The 12 criteria',
-    b: 'Every published joke is judged on 12 criteria against a hidden "ideal joke" the instructor sets before the round. The more criteria a joke matches outright, the more customers buy it.',
+    t: `The ${MAX_FIT} criteria`,
+    b: `Every published joke is judged on ${MAX_FIT} criteria. ${IDEAL_DIMENSIONS.length} of them are matched against a hidden "ideal joke" the instructor sets before the round; Title Fit grades itself. The more criteria a joke matches outright, the more customers buy it.`,
     v: () => <CriteriaGrid />,
   };
 
@@ -407,14 +407,14 @@ function buildSteps(): Record<TutorialRole, Step[]> {
       { t: 'Split the batch into jokes', b: 'The Joke Maker sends one block of text. Click between two jokes to place a cut, then press Enter to split them into separate jokes.', v: () => <SplitMini /> },
       { t: 'Rank, title & publish', b: 'Put the best joke on top and give each a Topic and a market title. The Rank 1 joke always ships — click any lower card to send it too. To ship only one, drag it to the top.', v: () => <RankSubmitDemo /> },
       { t: 'Every joke costs the team', b: `Publishing a joke costs ${fmt$(ECON.costOfPublishing)}; throwing one away costs ${fmt$(ECON.costOfDiscard)}. Each sale earns ${fmt$(ECON.marketPrice)}. Publish what will actually sell — and don’t sit on the batch.`, v: () => <CostChip lines={[['Publish 2 jokes', `−${fmt$(2 * ECON.costOfPublishing)}`], ['Discard 3 jokes', `−${fmt$(3 * ECON.costOfDiscard)}`], ['Each sale earns', `+${fmt$(ECON.marketPrice)}`]]} /> },
-      { t: 'What customers judge', b: 'Customers score every joke on 12 criteria against a hidden ideal. You can’t see the scores, but knowing the criteria tells you what to coach the Joke Maker on — and Title Fit is one you control directly.', v: () => <CriteriaGrid /> },
-      { t: 'Who you’re selling to', b: `Your buyers are ${CFG.customerCount} AI customers who all share one hidden ideal joke. A joke that fits sells to most of them; one that half-fits sells to some. Your job is to read the market and figure out what they want.`, v: () => <CustomerDemo /> },
+      { t: 'What customers judge', b: `Customers score every joke on ${MAX_FIT} criteria, ${IDEAL_DIMENSIONS.length} of them against a hidden ideal. You can’t see the scores, but knowing the criteria tells you what to coach the Joke Maker on — and Title Fit is the one you control directly.`, v: () => <CriteriaGrid /> },
+      { t: 'Who you’re selling to', b: `Your buyers are ${CFG.customerCount} AI customers who all share one hidden ideal joke. A joke well clear of their bars sells to all of them; one that lands right around the bar sells to some. Your job is to read the market and figure out what they want.`, v: () => <CustomerDemo /> },
       { t: 'Coach the Joke Maker', b: 'Every sale tells you which criteria the joke did well on and which to improve — names only, never the scores. Send that back so the next batch lands closer to what customers want.', v: () => <SoldSignalMini /> },
     ],
     customers: [
       { t: `${CFG.customerCount} AI customers`, b: 'Customers are fully automated. They share one hidden ideal joke set by the instructor, and every joke scores the same for all of them — what differs is the bar each one holds.', v: () => <CustomerDemo /> },
       criteriaStep,
-      { t: 'One score per joke', b: `Each criterion scores 1 when the joke matches the ideal exactly, 0.5 when it is one step away on a scale, and 0 beyond that — so being close only half counts, and two steps off scores the same as being completely wrong. Add them up for the joke's true fit, from 0 to ${MAX_FIT}. Clear a customer's bar (around τ = ${CFG.tau}) and they buy.`, v: () => <FitBar /> },
+      { t: 'One score per joke', b: `Criteria that run on a scale score 1 for an exact match, 0.5 one step away, 0 beyond — being close only half counts, and two steps off scores the same as being completely wrong. The rest are all-or-nothing. Add them up for the joke's true fit, from 0 to ${MAX_FIT}. Clear a customer's bar (around τ = ${CFG.tau}) and they buy.`, v: () => <FitBar /> },
       { t: 'Everyone’s bar is a little different', b: `Bars are spread evenly across τ = ${CFG.tau} ± ${CFG.jitter} rather than clustering at the centre. A joke above the top of that band clears every bar; one sitting inside it clears only some. That's why demand is partial, not all-or-nothing.`, v: () => <CustomerDemo bought={52} /> },
       { t: 'Buy, then swap', b: `With ${fmt$(CFG.budget)} at ${fmt$(CFG.marketPrice)} a joke, each customer holds ${CFG.budget / CFG.marketPrice}. Once full, a new joke only gets in if it beats the weakest one they hold by more than ${CFG.swapMargin} — otherwise they keep what they have.`, v: () => <FitBar /> },
     ],
