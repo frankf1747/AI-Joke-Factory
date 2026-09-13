@@ -85,7 +85,11 @@ const DimScale: React.FC<{ dim: ReturnType<typeof dimById>; level: string; prox:
 }) => {
   if (!dim) return null;
   const onTarget = prox >= 0.999;
-  if (dim.scoring === 'categorical') {
+  /* Only ordinal dims are a distance along a scale, so only they get the bar.
+     Categorical dims have no order, and graded ones (Title Fit) grade themselves
+     against no ideal — plotting either on the bar would put a top score at the
+     end labelled with the worst category. Both render as a badge instead. */
+  if (dim.scoring !== 'ordinal') {
     return (
       <div className="flex items-center gap-2">
         <span className="text-[10px] font-semibold text-gray-500 w-14 shrink-0">{dim.label}</span>
