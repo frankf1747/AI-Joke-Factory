@@ -15,7 +15,9 @@ import {
 // imports THIS file, so going back through it would create a cycle.
 import { BRAND, fmt$ } from '../config/brand';
 import { Button, Card, StatBox } from './ui';
-import { DIMENSIONS, IDEAL_DIMENSIONS, MAX_FIT, DEFAULT_IDEAL_PROFILE, dimById } from '../config/dimensions';
+import {
+  DIMENSIONS, IDEAL_DIMENSIONS, MAX_FIT, DEFAULT_IDEAL_PROFILE, TITLE_FIT_GRADES, dimById,
+} from '../config/dimensions';
 import { SIM_CONFIG } from '../config/simConfig';
 import { DEMO_CONFIG } from '../services/aiCustomerDemo';
 
@@ -75,6 +77,12 @@ const CostChip: React.FC<{ lines: Array<[string, string]> }> = ({ lines }) => (
   </div>
 );
 
+/** "Perfect 1, Strong 0.75, …" — read off the shared map so the prose can't
+    drift from the scale the engine actually applies. */
+const TITLE_FIT_SCALE = Object.entries(TITLE_FIT_GRADES)
+  .map(([grade, value]) => `${grade} ${value}`)
+  .join(', ');
+
 /** The 12 judging criteria, with the one Marketing owns called out. */
 const CriteriaGrid: React.FC = () => (
   <div>
@@ -97,8 +105,9 @@ const CriteriaGrid: React.FC = () => (
       })}
     </div>
     <p className="text-[11px] text-gray-600 leading-relaxed">
-      <b className="text-amber-800">Title Fit</b> is the one criterion Marketing owns outright — it grades
-      whether the title they wrote actually matches the joke's theme, so a random title costs the team.
+      <b className="text-amber-800">Title Fit</b> is the one criterion Marketing owns outright, and the only
+      one graded on a scale of its own: it rates how well their title matches the joke — {TITLE_FIT_SCALE} —
+      so a vague title costs the team a fraction of a point and a random one costs the whole mark.
     </p>
   </div>
 );
