@@ -153,6 +153,27 @@ Verify traffic:
 - **`npm run dev`**: start Vite dev server
 - **`npm run build`**: production build to `dist/`
 - **`npm run preview`**: serve `dist/` locally
+- **`npm test`**: run the Vitest suite
+- **`npm run typecheck`**: `tsc --noEmit` over the whole repo
+
+### `npm run typecheck` is not green — known baseline
+
+It exits with **exactly 5 pre-existing errors**. Do not wire it into CI
+expecting a clean run, and do not treat these as something you broke:
+
+| Count | Location | Status |
+|---|---|---|
+| 3 | `services/apiClient.ts:95` | Cleared by the Phase 2 transport rewrite |
+| 2 | `services/mockApi.ts:657`, `:1216` | Out of scope — the mock is untouched until phase 7 |
+
+Treat the count, not the exit code, as the signal: **5 is the baseline, more
+than 5 means a regression.**
+
+Worth knowing: `npx tsc --noEmit --strictNullChecks` reports only **1** error
+(`mockApi.ts:657`) — the flag *fixes* 4 of the 5 above and introduces none. It
+is not enabled because that is a repo-wide behavioural change, but it is a
+cheap win whenever someone wants it, and it is what would make the `| null`
+unions in `types/api.ts` actually enforced rather than advisory.
 
 ---
 

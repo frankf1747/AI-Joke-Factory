@@ -40,6 +40,8 @@ import {
   DEFAULT_IDEAL_PROFILE,
   type Classification,
   type IdealProfile,
+  type Dimension,
+  type IdealDimension,
 } from './dimensions';
 
 /* -- fit_test.go:10  TestDimFitOrdinal ------------------------------------ */
@@ -381,5 +383,70 @@ describe('go: TestAllDimensionsHaveSpecs (dimensions_test.go:84)', () => {
     expect(spec, `missing spec entry for ${id}`).toBeDefined();
     expect(spec!.categories.length, `${id} has empty categories`).toBeGreaterThan(0);
     expect(spec!.id, `${id} spec id mismatch`).toBe(id);
+  });
+});
+
+/* -- LOCAL TYPE-LINKAGE GUARD (not a ported Go test) ---------------------- *
+ *
+ * Everything above is the backend's own assertions. This last block is ours,
+ * and it exists because the dimension vocabulary now has THREE copies that
+ * must agree: the Go enum (core/domain/enums.go:76-103), the DIMENSIONS
+ * catalog below it, and the `Dimension` union that types/api.ts re-exports and
+ * sends in `ideal_profile` payloads.
+ *
+ * The union is the copy a test cannot see directly, and the drift that matters
+ * is silent: `IdealDimension = Exclude<Dimension, 'TITLE_FIT'>` quietly becomes
+ * a no-op if TITLE_FIT is ever renamed out of `Dimension`, widening the ideal
+ * profile back to all 12 and re-admitting the one dimension the backend 400s
+ * on (scoring.ValidateIdealProfile, dimensions.go:201-205).
+ *
+ * The two Record<> literals below are the bridge: they are exhaustive over the
+ * union at COMPILE time (a renamed member makes them fail to type-check), and
+ * their keys are compared to the runtime catalog here, so a break surfaces in
+ * `npx tsc` and in this suite rather than in a classroom.
+ */
+
+describe('local: dimension union <-> catalog linkage', () => {
+  // Exhaustive over Dimension: TS requires every member as a key, and rejects
+  // any key that is not one. Renaming a union member breaks this literal.
+  const DIMENSION_MEMBERS: Record<Dimension, true> = {
+    LENGTH: true, TOPIC: true, HUMOR_STYLE: true, COMPLEXITY: true,
+    EDGINESS: true, STRUCTURE: true, WORDPLAY: true, FRESHNESS: true,
+    SETUP_PAYOFF: true, CLARITY: true, ENERGY: true, TITLE_FIT: true,
+  };
+
+  // Exhaustive over IdealDimension — the 11 an ideal_profile must cover.
+  const IDEAL_MEMBERS: Record<IdealDimension, true> = {
+    LENGTH: true, TOPIC: true, HUMOR_STYLE: true, COMPLEXITY: true,
+    EDGINESS: true, STRUCTURE: true, WORDPLAY: true, FRESHNESS: true,
+    SETUP_PAYOFF: true, CLARITY: true, ENERGY: true,
+  };
+
+  it('every member of the Dimension union appears in DIMENSIONS', () => {
+    expect(Object.keys(DIMENSION_MEMBERS).sort()).toEqual(DIMENSIONS.map(d => d.id).sort());
+  });
+
+  it('TITLE_FIT is a member of Dimension', () => {
+    expect(Object.keys(DIMENSION_MEMBERS)).toContain('TITLE_FIT');
+  });
+
+  it('IdealDimension is exactly Dimension minus TITLE_FIT', () => {
+    expect(Object.keys(IDEAL_MEMBERS).sort()).toEqual(
+      Object.keys(DIMENSION_MEMBERS).filter(d => d !== 'TITLE_FIT').sort(),
+    );
+  });
+
+  it('every member of IdealDimension appears in IDEAL_DIMENSIONS', () => {
+    expect(Object.keys(IDEAL_MEMBERS).sort()).toEqual(IDEAL_DIMENSIONS.map(d => d.id).sort());
+  });
+
+  it('DEFAULT_IDEAL_PROFILE is total over IdealDimension', () => {
+    // The cast in dimensions.ts is unverifiable at compile time; this is what
+    // actually guarantees the payload the instructor config path sends.
+    expect(Object.keys(DEFAULT_IDEAL_PROFILE).sort()).toEqual(Object.keys(IDEAL_MEMBERS).sort());
+  });
+
+  it('DEFAULT_IDEAL_PROFILE never carries TITLE_FIT', () => {
+    expect(Object.keys(DEFAULT_IDEAL_PROFILE)).not.toContain('TITLE_FIT');
   });
 });

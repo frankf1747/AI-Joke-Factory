@@ -14,12 +14,50 @@
 
 export type ScoringType = 'ordinal' | 'categorical' | 'graded';
 
+/**
+ * The 12 dimension ids, mirroring domain.Dimension
+ * (core/domain/enums.go:76-103). This module owns the vocabulary; types/api.ts
+ * imports this union rather than keeping a second copy of the same 12 strings.
+ *
+ * DIMENSIONS below is typed by it, so adding, renaming or dropping a member
+ * here without updating the catalog is a compile error — and
+ * dimensions.backend-parity.test.ts pins the reverse direction (every member
+ * of this union actually appears in DIMENSIONS).
+ */
+export type Dimension =
+  | 'LENGTH'
+  | 'TOPIC'
+  | 'HUMOR_STYLE'
+  | 'COMPLEXITY'
+  | 'EDGINESS'
+  | 'STRUCTURE'
+  | 'WORDPLAY'
+  | 'FRESHNESS'
+  | 'SETUP_PAYOFF'
+  | 'CLARITY'
+  | 'ENERGY'
+  | 'TITLE_FIT';
+
+/**
+ * The 11 dimensions an instructor picks an ideal category for.
+ *
+ * TITLE_FIT is excluded because it is self-scoring — it grades how well a
+ * title matches its own joke, so there is no class-wide ideal to compare
+ * against. It is the only spec with HasIdeal:false
+ * (core/domain/scoring/dimensions.go:133-138).
+ *
+ * This is the type an `ideal_profile` payload must satisfy: the backend's
+ * scoring.ValidateIdealProfile demands a category for every one of the 11 and
+ * rejects TITLE_FIT outright (dimensions.go:182-207).
+ */
+export type IdealDimension = Exclude<Dimension, 'TITLE_FIT'>;
+
 /** The classifier's escape hatch when a joke fits no listed category. */
 export const CATCH_ALL = 'None of the above';
 
 export interface DimensionSpec {
   /** Backend enum value, e.g. 'HUMOR_STYLE'. */
-  id: string;
+  id: Dimension;
   label: string;
   scoring: ScoringType;
   /** Ordered — ordinal adjacency is defined by this order. */
@@ -110,7 +148,10 @@ export const MAX_FIT = DIMENSIONS.length;
 /** The 11 the instructor picks an ideal for. Title Fit is graded intrinsically. */
 export const IDEAL_DIMENSIONS: DimensionSpec[] = DIMENSIONS.filter(d => d.hasIdeal);
 
-const byId = new Map(DIMENSIONS.map(d => [d.id, d]));
+/* Keyed by plain string, not Dimension, so dimById/categoryIndex can keep
+   taking arbitrary input and returning undefined/-1 on a miss — several
+   callers look up ids that came from data rather than from this union. */
+const byId = new Map<string, DimensionSpec>(DIMENSIONS.map(d => [d.id, d]));
 
 export function dimById(id: string): DimensionSpec | undefined {
   return byId.get(id);
@@ -125,10 +166,22 @@ export function isCatchAll(category: string): boolean {
   return category === CATCH_ALL;
 }
 
-/** The sandbox's starting profile — a sensible default for any picker. */
-export const DEFAULT_IDEAL_PROFILE: Record<string, string> = Object.fromEntries(
+/**
+ * The sandbox's starting profile — a sensible default for any picker, and the
+ * payload the instructor config path actually sends.
+ *
+ * Typed as total over IdealDimension so consumers get the backend's real rule
+ * (see IdealDimension above) instead of an unchecked Record<string, string>,
+ * which silently satisfies any required key set.
+ *
+ * The cast is load-bearing and deliberate: this is built by filtering
+ * DIMENSIONS at runtime, and no compiler can prove a filter yields all 11
+ * keys. dimensions.backend-parity.test.ts asserts the constructed key set
+ * against IdealDimension, which is what actually holds this honest.
+ */
+export const DEFAULT_IDEAL_PROFILE = Object.fromEntries(
   IDEAL_DIMENSIONS.map(d => [d.id, d.defaultIdeal ?? d.categories[0]]),
-);
+) as Record<IdealDimension, string>;
 
 /** Title Fit's intrinsic grade → score map (backend: titleFitGrades). */
 export const TITLE_FIT_GRADES: Record<string, number> = {
