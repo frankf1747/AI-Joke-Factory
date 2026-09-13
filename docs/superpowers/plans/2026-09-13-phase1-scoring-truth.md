@@ -17,6 +17,40 @@
 
 ---
 
+## Execution log — deviations from this plan
+
+Recorded during execution so the document stays honest about what actually happened.
+
+**Tasks 5, 6 and 7 were merged into a single Task 5.** Splitting them was a planning
+error. `services/aiCustomerDemo.ts` evaluates `MAX_FIT = SCORED_DIMENSIONS.length` at
+module load against an export Task 1 removes, so the module throws on import and its
+entire test file fails to collect. None of the three sub-steps could end green on its
+own, which makes them uncommittable separately. They were executed as one task and one
+commit. Remaining tasks renumber accordingly: 8→6, 9→7, 10→8, 11→9 (nine tasks, not
+eleven).
+
+**Fixes applied during review that this plan got wrong:**
+
+- Task 1's test rewrite dropped a pre-existing assertion that `dimById` returns
+  undefined for an unknown id. Restored.
+- Task 2's `dimFit` shared one empty-input guard placed below the graded branch. That
+  ordering was load-bearing — Title Fit always passes `ideal === ''` — so a natural
+  "validate first" cleanup would have silently zeroed every Title Fit score. Split into
+  `gradedFit` / `categoricalFit` / `ordinalFit` mirroring the Go source, each owning its
+  own guard, making the trap structurally impossible.
+- Task 3's `wordCount` used `text.trim().split(/\s+/)`. JavaScript's `\s` matches
+  U+00A0 and other Unicode spaces; Go's `isWhitespace` recognises only six ASCII
+  characters. Jokes pasted from chat windows and docs carry non-breaking spaces, so a
+  joke near the 15/16-word boundary could be bucketed Medium by the frontend and Short
+  by the backend. Narrowed to Go's exact set.
+- Task 5's threshold-spread test asserted each third of the band holds >20% of
+  customers, claiming to catch a normal distribution. It does not: a gaussian with
+  sd = jitter scores 30/27/32 and passes. Tightened to 0.28, and the comment now says
+  the band test is the real guard.
+- `RULE_DIMS` and `JokeScore.joke` were specified but have no readers. Deleted.
+
+---
+
 ## Why this phase is first
 
 It is pure logic with no backend dependency, it is fully testable, and it corrects numbers that are **currently wrong on screen**. Four defects it fixes:
