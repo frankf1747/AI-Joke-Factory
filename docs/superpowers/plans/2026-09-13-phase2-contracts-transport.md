@@ -460,7 +460,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 import { apiRequest } from '../apiClient';
 import type {
   SessionJoinRequest, SessionJoinResponse, SessionMeResponse,
-  InstructorLoginResponse, RoundsActiveResponse,
+  InstructorLoginRequest, InstructorLoginResponse, RoundsActiveResponse,
 } from '../../types/api';
 
 export const sessionApi = {
@@ -475,7 +475,7 @@ export const sessionApi = {
   },
 
   /** RAW. handler/admin.go:41 */
-  instructorLogin(body: { display_name: string; password: string }) {
+  instructorLogin(body: InstructorLoginRequest) {
     return apiRequest<InstructorLoginResponse>('/v1/instructor/login', { method: 'POST', body });
   },
 
@@ -555,18 +555,21 @@ export const teamApi = {
 
 ```typescript
 import { apiRequest } from '../apiClient';
-import type { MarketingQueueResponse, PublishRequest, PublishResponse } from '../../types/api';
+import type {
+  MarketingQueueNextResponse, MarketingQueueCountResponse,
+  PublishRequest, PublishResponse,
+} from '../../types/api';
 
 export const marketingApi = {
   /** Claims AND locks the next submitted batch for this marketer's team.
    *  `batch` is null when the queue is empty. Locks expire after 15 minutes
    *  (repo/postgres/marketing_repo.go:53). */
   queueNext(roundId: number) {
-    return apiRequest<MarketingQueueResponse>(`/v1/marketing/queue/next?round_id=${roundId}`);
+    return apiRequest<MarketingQueueNextResponse>(`/v1/marketing/queue/next?round_id=${roundId}`);
   },
 
   queueCount(roundId: number) {
-    return apiRequest<{ queue_size: number }>(`/v1/marketing/queue/count?round_id=${roundId}`);
+    return apiRequest<MarketingQueueCountResponse>(`/v1/marketing/queue/count?round_id=${roundId}`);
   },
 
   /** One decision per joke. Publishing is final for the batch.
@@ -612,8 +615,13 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 import { apiRequest } from '../apiClient';
 import type {
   LobbyResponse, ConfigRequest, InstructorRoundResponse, PublicRoundResponse,
-  PatchUserRequest, RoundStatsResponse,
+  PatchUserRequest, DeleteUserResponse, RoundStatsResponse, AdminResetResponse,
 } from '../../types/api';
+
+/* AssignRequest and PopupStateRequest are built inline below rather than taken
+   as parameters — the call sites take plain arguments, which is friendlier than
+   making every caller construct a body object. The types still exist in
+   types/api.ts and the literals below must satisfy them. */
 
 export const instructorApi = {
   /** NOTE: this response is PascalCase, unlike every other endpoint — the Go
@@ -642,7 +650,7 @@ export const instructorApi = {
   },
 
   deleteUser(roundId: number, userId: number) {
-    return apiRequest<{ deleted_user_id: number }>(`/v1/instructor/rounds/${roundId}/users/${userId}`, { method: 'DELETE' });
+    return apiRequest<DeleteUserResponse>(`/v1/instructor/rounds/${roundId}/users/${userId}`, { method: 'DELETE' });
   },
 
   /** Locks the config and the ideal profile, then generates the AI customers. */
@@ -677,7 +685,7 @@ export const instructorApi = {
 
   /** Wipes all game data. Instructor-guarded. */
   resetGame() {
-    return apiRequest<{ status: string; message: string }>('/v1/admin/reset', { method: 'POST' });
+    return apiRequest<AdminResetResponse>('/v1/admin/reset', { method: 'POST' });
   },
 };
 ```
@@ -703,6 +711,27 @@ Every service call is asserted against a payload transcribed from the Go handler
 
 **Files:**
 - Create: `services/api/contract.test.ts`
+
+**Type the fixtures.** The payloads in Step 1 are written below as untyped object
+literals, which means a fixture can drift from `types/api.ts` without anyone
+noticing — and then the test passes while asserting a shape the client does not
+actually declare. Annotate each one, so the compiler checks the fixture against
+the wire types:
+
+```typescript
+import type { Wrapped, MarketingQueueNextResponse, SessionMeResponse } from '../../types/api';
+
+const queueBody: Wrapped<MarketingQueueNextResponse> = { data: { /* … */ } };
+const meBody: SessionMeResponse = { /* … raw, no envelope … */ };
+```
+
+Use `Wrapped<T>` for the wrapped endpoints and the bare type for the three raw
+ones — which also makes each fixture state, in its own type, which kind it is.
+This is what `Wrapped<T>` exists for; nothing else in the codebase uses it.
+
+If annotating a fixture produces a type error, **that is a finding, not a
+nuisance**: either the payload was transcribed wrong or the type was. Stop and
+work out which, then report it — do not loosen the annotation to make it pass.
 
 - [ ] **Step 1: Write the tests**
 
