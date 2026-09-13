@@ -1,90 +1,131 @@
-// 12-dimension joke rubric (the professor's joke universe).
-// Each dim has an ordered list of levels. CATEGORICAL_DIMS have no inherent
-// order (match-or-not); the rest are ordinal (distance-based scoring).
-// See REFACTOR_PLAN.md §1–§2 for the authoritative backend spec.
+/* ============================================================================
+   The 12-dimension joke rubric.
 
-export interface DimensionDef {
+   This module is a direct mirror of the Go backend's scoring package:
+     jokefactory_be/src/core/domain/scoring/{dimensions,fit,length}.go
+   and of the classifier sandbox that the instructor uses to explore it.
+
+   Keep it in lockstep with that package. If the two ever disagree, the Go code
+   wins — it is what actually decides whether a joke sells.
+
+   Ids are the backend's enum values (UPPER_SNAKE) so they can be sent straight
+   back in an `ideal_profile` payload with no translation.
+============================================================================ */
+
+export type ScoringType = 'ordinal' | 'categorical' | 'graded';
+
+/** The classifier's escape hatch when a joke fits no listed category. */
+export const CATCH_ALL = 'None of the above';
+
+export interface DimensionSpec {
+  /** Backend enum value, e.g. 'HUMOR_STYLE'. */
   id: string;
   label: string;
-  levels: string[];
+  scoring: ScoringType;
+  /** Ordered — ordinal adjacency is defined by this order. */
+  categories: string[];
+  /** False only for Title Fit, which is graded against itself. */
+  hasIdeal: boolean;
+  classifiedBy: 'code' | 'llm';
+  /** The instructor's default pick, matching the sandbox. */
+  defaultIdeal?: string;
 }
 
-export const DIMENSIONS: DimensionDef[] = [
-  { id: 'length',       label: 'Length',       levels: ['Short', 'Medium', 'Long'] },
-  { id: 'topic',        label: 'Topic',        levels: ['Workplace', 'MBA Life', 'Tech', 'AI', 'Animals', 'Sports', 'Everyday', 'Social media', 'Education', 'Random'] },
-  { id: 'humor_style',  label: 'Humor Style',  levels: ['Pun', 'Observational', 'Irony', 'Absurdity', 'Exaggeration', 'Self-deprecating', 'Anti-joke', 'Callback'] },
-  { id: 'complexity',   label: 'Complexity',   levels: ['Very simple', 'Simple', 'Moderate', 'Thoughtful', 'Expert'] },
-  { id: 'edginess',     label: 'Edginess',     levels: ['Clean', 'Slightly edgy'] },
-  { id: 'structure',    label: 'Structure',    levels: ['One-liner', 'Setup-punchline', 'Q&A', 'Short story', 'Dialogue', 'List'] },
-  { id: 'wordplay',     label: 'Wordplay',     levels: ['None', 'Light', 'Moderate', 'Heavy'] },
-  { id: 'freshness',    label: 'Freshness',    levels: ['Timeless', 'Slightly current', 'Current', 'Very topical', 'Time-sensitive'] },
-  { id: 'setup_payoff', label: 'Setup→Payoff', levels: ['Immediate', 'Quick', 'Balanced', 'Long', 'Very long build'] },
-  { id: 'clarity',      label: 'Clarity',      levels: ['Crystal clear', 'Mostly clear', 'Slightly ambiguous', 'Ambiguous', 'Reinterpretation'] },
-  { id: 'energy',       label: 'Energy',       levels: ['Deadpan', 'Low', 'Conversational', 'Animated', 'High-energy'] },
-  // 12th dim. Levels run best → worst: how well Marketing's title suits the joke.
-  { id: 'title_fit',    label: 'Title Fit',    levels: ['Perfect', 'Strong', 'Moderate', 'Weak', 'Mismatch'] },
+export const DIMENSIONS: DimensionSpec[] = [
+  {
+    id: 'LENGTH', label: 'Length', scoring: 'ordinal', classifiedBy: 'code',
+    categories: ['Short', 'Medium', 'Long'],
+    hasIdeal: true, defaultIdeal: 'Medium',
+  },
+  {
+    id: 'TOPIC', label: 'Topic', scoring: 'categorical', classifiedBy: 'llm',
+    categories: [
+      'Work', 'Relationships', 'Family', 'Food', 'Technology',
+      'Animals', 'School', 'Money', 'Travel', 'Health',
+      'Sports', 'Politics', 'Everyday', 'Language', 'Other',
+    ],
+    hasIdeal: true, defaultIdeal: 'Work',
+  },
+  {
+    id: 'HUMOR_STYLE', label: 'Humor Style', scoring: 'categorical', classifiedBy: 'llm',
+    categories: [
+      'Pun', 'Observational', 'Irony', 'Absurdity', 'Exaggeration',
+      'Self-deprecating', 'Anti-joke', 'Callback', CATCH_ALL,
+    ],
+    hasIdeal: true, defaultIdeal: 'Observational',
+  },
+  {
+    id: 'COMPLEXITY', label: 'Complexity', scoring: 'ordinal', classifiedBy: 'llm',
+    categories: ['Very simple', 'Simple', 'Moderate', 'Thoughtful', 'Expert'],
+    hasIdeal: true, defaultIdeal: 'Moderate',
+  },
+  {
+    id: 'EDGINESS', label: 'Edginess', scoring: 'categorical', classifiedBy: 'llm',
+    categories: ['Clean', 'Slightly edgy', CATCH_ALL],
+    hasIdeal: true, defaultIdeal: 'Clean',
+  },
+  {
+    id: 'STRUCTURE', label: 'Structure', scoring: 'categorical', classifiedBy: 'llm',
+    categories: [
+      'One-liner', 'Setup–punchline', 'Question–answer', 'Short story',
+      'Dialogue/conversation', 'List/build-up', CATCH_ALL,
+    ],
+    hasIdeal: true, defaultIdeal: 'Setup–punchline',
+  },
+  {
+    id: 'WORDPLAY', label: 'Wordplay', scoring: 'ordinal', classifiedBy: 'llm',
+    categories: ['None', 'Light', 'Moderate', 'Heavy'],
+    hasIdeal: true, defaultIdeal: 'Light',
+  },
+  {
+    id: 'FRESHNESS', label: 'Freshness', scoring: 'ordinal', classifiedBy: 'llm',
+    categories: ['Timeless', 'Slightly current', 'Current', 'Very topical', 'Time-sensitive'],
+    hasIdeal: true, defaultIdeal: 'Timeless',
+  },
+  {
+    id: 'SETUP_PAYOFF', label: 'Setup→Payoff', scoring: 'ordinal', classifiedBy: 'llm',
+    categories: ['Immediate', 'Quick', 'Balanced', 'Long', 'Very long build'],
+    hasIdeal: true, defaultIdeal: 'Balanced',
+  },
+  {
+    id: 'CLARITY', label: 'Clarity', scoring: 'ordinal', classifiedBy: 'llm',
+    categories: ['Crystal clear', 'Mostly clear', 'Slightly ambiguous', 'Ambiguous', 'Reinterpretation'],
+    hasIdeal: true, defaultIdeal: 'Crystal clear',
+  },
+  {
+    id: 'ENERGY', label: 'Energy', scoring: 'ordinal', classifiedBy: 'llm',
+    categories: ['Deadpan', 'Low', 'Conversational', 'Animated', 'High-energy', CATCH_ALL],
+    hasIdeal: true, defaultIdeal: 'Conversational',
+  },
+  {
+    id: 'TITLE_FIT', label: 'Title Fit', scoring: 'graded', classifiedBy: 'llm',
+    categories: ['Perfect', 'Strong', 'Moderate', 'Weak', 'Mismatch'],
+    hasIdeal: false,
+  },
 ];
 
-/** Dimensions with no inherent order — shown as a match/off check, not a scale. */
-export const CATEGORICAL_DIMS = new Set<string>(['topic', 'humor_style', 'structure']);
+/** Every dimension contributes to true_fit, so the ceiling is 12. */
+export const MAX_FIT = DIMENSIONS.length;
 
-/**
- * Intrinsic dims are graded on their own scale and are NEVER compared to the
- * instructor's ideal — they measure execution, not taste. Title Fit is the only
- * one: it asks "does Marketing's title match this joke?", which has no ideal.
- */
-export const INTRINSIC_DIMS = new Set<string>(['title_fit']);
-
-/**
- * Defined-but-unscored placeholders (REFACTOR_PLAN §2.3). Structure has no agreed
- * categories yet, so it contributes 0 and is excluded from scoring and feedback —
- * otherwise it would read as a permanent failure on every joke.
- */
-export const PLACEHOLDER_DIMS = new Set<string>(['structure']);
-
-/** The dims that actually contribute to true_fit: 11 of 12 → true_fit ∈ [0, 11]. */
-export const SCORED_DIMENSIONS: DimensionDef[] = DIMENSIONS.filter(
-  d => !PLACEHOLDER_DIMS.has(d.id),
-);
+/** The 11 the instructor picks an ideal for. Title Fit is graded intrinsically. */
+export const IDEAL_DIMENSIONS: DimensionSpec[] = DIMENSIONS.filter(d => d.hasIdeal);
 
 const byId = new Map(DIMENSIONS.map(d => [d.id, d]));
-export function dimById(id: string): DimensionDef | undefined {
+
+export function dimById(id: string): DimensionSpec | undefined {
   return byId.get(id);
 }
 
-/** Hidden ideal joke profile (instructor-set in production; default for Phase 1 mock). */
-export const IDEAL_PROFILE: Record<string, string> = {
-  length: 'Short',
-  topic: 'Workplace',
-  humor_style: 'Pun',
-  complexity: 'Simple',
-  edginess: 'Clean',
-  structure: 'Setup-punchline',
-  wordplay: 'Heavy',
-  freshness: 'Timeless',
-  setup_payoff: 'Quick',
-  clarity: 'Crystal clear',
-  energy: 'Conversational',
-  // Intrinsic: the "ideal" is simply a title that fits its joke perfectly.
-  title_fit: 'Perfect',
-};
-
-/**
- * Proximity of a joke's level on a dim to the ideal level on that dim.
- * 1.0 = exact match, 0 = furthest apart.
- * Categorical dims: 1 if exact else 0.
- * Ordinal dims: 1 - |levelIdx - idealIdx| / (levels.length - 1)
- */
-export function dimProx(dim: DimensionDef, level: string): number {
-  const lv = dim.levels.indexOf(level);
-  if (lv < 0) return 0;
-  // Intrinsic dims grade on their own best→worst scale, with no ideal lookup:
-  // Perfect 1 · Strong 0.75 · Moderate 0.5 · Weak 0.25 · Mismatch 0.
-  if (INTRINSIC_DIMS.has(dim.id)) {
-    return 1 - lv / Math.max(1, dim.levels.length - 1);
-  }
-  const il = dim.levels.indexOf(IDEAL_PROFILE[dim.id]);
-  if (il < 0) return 0;
-  if (CATEGORICAL_DIMS.has(dim.id)) return lv === il ? 1 : 0;
-  return 1 - Math.abs(lv - il) / Math.max(1, dim.levels.length - 1);
+/** Position of `category` in a dimension's ordered list, or -1 if unknown. */
+export function categoryIndex(dimId: string, category: string): number {
+  return byId.get(dimId)?.categories.indexOf(category) ?? -1;
 }
+
+export function isCatchAll(category: string): boolean {
+  return category === CATCH_ALL;
+}
+
+/** The sandbox's starting profile — a sensible default for any picker. */
+export const DEFAULT_IDEAL_PROFILE: Record<string, string> = Object.fromEntries(
+  IDEAL_DIMENSIONS.map(d => [d.id, d.defaultIdeal ?? d.categories[0]]),
+);

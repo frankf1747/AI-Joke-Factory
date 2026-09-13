@@ -1,28 +1,51 @@
 import { describe, it, expect } from 'vitest';
 import {
   DIMENSIONS,
-  SCORED_DIMENSIONS,
-  PLACEHOLDER_DIMS,
-  INTRINSIC_DIMS,
+  IDEAL_DIMENSIONS,
+  MAX_FIT,
+  CATCH_ALL,
   dimById,
-  dimProx,
-  CATEGORICAL_DIMS,
+  categoryIndex,
+  isCatchAll,
 } from './dimensions';
 
-describe('DIMENSIONS', () => {
-  it('has exactly 12 entries', () => {
-    expect(DIMENSIONS).toHaveLength(12);
+describe('DIMENSIONS catalog', () => {
+  it('has all 12 dimensions in backend order', () => {
+    expect(DIMENSIONS.map(d => d.id)).toEqual([
+      'LENGTH', 'TOPIC', 'HUMOR_STYLE', 'COMPLEXITY', 'EDGINESS', 'STRUCTURE',
+      'WORDPLAY', 'FRESHNESS', 'SETUP_PAYOFF', 'CLARITY', 'ENERGY', 'TITLE_FIT',
+    ]);
   });
 
-  it('scores 11 of them — Structure is a placeholder and is excluded', () => {
-    expect(PLACEHOLDER_DIMS.has('structure')).toBe(true);
-    expect(SCORED_DIMENSIONS).toHaveLength(11);
-    expect(SCORED_DIMENSIONS.map(d => d.id)).not.toContain('structure');
+  it('scores all 12 — Structure is a real dimension, not a placeholder', () => {
+    expect(MAX_FIT).toBe(12);
+    expect(dimById('STRUCTURE')?.scoring).toBe('categorical');
   });
 
-  it('marks title_fit as intrinsic (graded on its own scale, no ideal)', () => {
-    expect(INTRINSIC_DIMS.has('title_fit')).toBe(true);
-    expect(dimById('title_fit')?.label).toBe('Title Fit');
+  it('offers an ideal for 11 dimensions — Title Fit is intrinsic', () => {
+    expect(IDEAL_DIMENSIONS).toHaveLength(11);
+    expect(IDEAL_DIMENSIONS.map(d => d.id)).not.toContain('TITLE_FIT');
+    expect(dimById('TITLE_FIT')?.hasIdeal).toBe(false);
+  });
+
+  it('uses the backend Topic list, which includes Politics', () => {
+    expect(dimById('TOPIC')?.categories).toEqual([
+      'Work', 'Relationships', 'Family', 'Food', 'Technology',
+      'Animals', 'School', 'Money', 'Travel', 'Health',
+      'Sports', 'Politics', 'Everyday', 'Language', 'Other',
+    ]);
+  });
+
+  it('carries the catch-all on exactly the four dimensions that have one', () => {
+    const withCatchAll = DIMENSIONS
+      .filter(d => d.categories.includes(CATCH_ALL))
+      .map(d => d.id);
+    expect(withCatchAll).toEqual(['HUMOR_STYLE', 'EDGINESS', 'STRUCTURE', 'ENERGY']);
+  });
+
+  it('marks which dimensions the code classifies rather than the LLM', () => {
+    expect(dimById('LENGTH')?.classifiedBy).toBe('code');
+    expect(dimById('TOPIC')?.classifiedBy).toBe('llm');
   });
 
   it('every id is unique', () => {
@@ -30,44 +53,15 @@ describe('DIMENSIONS', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('dimById returns the right dim or undefined', () => {
-    expect(dimById('length')?.label).toBe('Length');
-    expect(dimById('bogus')).toBeUndefined();
+  it('resolves a category to its index, and -1 when absent', () => {
+    expect(categoryIndex('COMPLEXITY', 'Very simple')).toBe(0);
+    expect(categoryIndex('COMPLEXITY', 'Expert')).toBe(4);
+    expect(categoryIndex('COMPLEXITY', 'Nonsense')).toBe(-1);
+    expect(categoryIndex('NOT_A_DIM', 'Expert')).toBe(-1);
   });
 
-  it('marks topic, humor_style, structure as categorical', () => {
-    expect(CATEGORICAL_DIMS.has('topic')).toBe(true);
-    expect(CATEGORICAL_DIMS.has('humor_style')).toBe(true);
-    expect(CATEGORICAL_DIMS.has('structure')).toBe(true);
-    expect(CATEGORICAL_DIMS.has('length')).toBe(false);
-  });
-});
-
-describe('dimProx', () => {
-  it('returns 1 for exact match on ordinal', () => {
-    const dim = dimById('length')!;
-    expect(dimProx(dim, 'Short')).toBe(1);
-  });
-
-  it('returns scaled distance for ordinal', () => {
-    const dim = dimById('length')!;
-    // ideal = Short (idx 0). Medium (idx 1) → 1 - 1/2 = 0.5. Long (idx 2) → 1 - 2/2 = 0.
-    expect(dimProx(dim, 'Medium')).toBe(0.5);
-    expect(dimProx(dim, 'Long')).toBe(0);
-  });
-
-  it('returns 1 / 0 for categorical', () => {
-    const dim = dimById('humor_style')!;
-    expect(dimProx(dim, 'Pun')).toBe(1);      // ideal = Pun
-    expect(dimProx(dim, 'Irony')).toBe(0);    // different category
-  });
-
-  it('grades title_fit intrinsically, best → worst', () => {
-    const dim = dimById('title_fit')!;
-    expect(dimProx(dim, 'Perfect')).toBeCloseTo(1, 6);
-    expect(dimProx(dim, 'Strong')).toBeCloseTo(0.75, 6);
-    expect(dimProx(dim, 'Moderate')).toBeCloseTo(0.5, 6);
-    expect(dimProx(dim, 'Weak')).toBeCloseTo(0.25, 6);
-    expect(dimProx(dim, 'Mismatch')).toBeCloseTo(0, 6);
+  it('recognises the catch-all string', () => {
+    expect(isCatchAll(CATCH_ALL)).toBe(true);
+    expect(isCatchAll('Clean')).toBe(false);
   });
 });
