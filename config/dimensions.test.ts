@@ -116,6 +116,14 @@ describe('dimFit — categorical is all or nothing', () => {
     // Relationships sits next to Work, but categorical has no notion of near.
     expect(dimFit('TOPIC', 'Work', 'Relationships')).toBe(0);
   });
+
+  it('matches the catch-all only against itself on categorical dims', () => {
+    // Three of the four catch-all dimensions are categorical, so they never
+    // reach the ordinal short-circuit — plain equality has to carry them.
+    expect(dimFit('EDGINESS', CATCH_ALL, CATCH_ALL)).toBe(1);
+    expect(dimFit('HUMOR_STYLE', 'Pun', CATCH_ALL)).toBe(0);
+    expect(dimFit('STRUCTURE', CATCH_ALL, 'One-liner')).toBe(0);
+  });
 });
 
 describe('dimFit — Title Fit is graded against itself', () => {

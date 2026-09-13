@@ -157,19 +157,36 @@ export function dimFit(dimId: string, ideal: string, joke: string): number {
   const spec = byId.get(dimId);
   if (!spec) return 0;
 
-  if (spec.scoring === 'graded') {
-    return TITLE_FIT_GRADES[joke] ?? 0;
+  switch (spec.scoring) {
+    case 'graded':
+      return gradedFit(joke);
+    case 'categorical':
+      return categoricalFit(ideal, joke);
+    case 'ordinal':
+      return ordinalFit(spec, ideal, joke);
+    default:
+      return 0;
   }
+}
+
+/** Title Fit grades itself — there is no ideal to compare against. */
+function gradedFit(joke: string): number {
+  return TITLE_FIT_GRADES[joke] ?? 0;
+}
+
+function categoricalFit(ideal: string, joke: string): number {
+  if (!joke || !ideal) return 0;
+  return joke === ideal ? 1 : 0;
+}
+
+function ordinalFit(spec: DimensionSpec, ideal: string, joke: string): number {
   if (!joke || !ideal) return 0;
 
-  if (spec.scoring === 'categorical') {
-    return joke === ideal ? 1 : 0;
-  }
-
-  // Ordinal.
+  // "None of the above" is not near anything — it only matches itself.
   if (isCatchAll(joke) || isCatchAll(ideal)) {
     return joke === ideal ? 1 : 0;
   }
+
   const ji = spec.categories.indexOf(joke);
   const ii = spec.categories.indexOf(ideal);
   if (ji < 0 || ii < 0) return 0;
