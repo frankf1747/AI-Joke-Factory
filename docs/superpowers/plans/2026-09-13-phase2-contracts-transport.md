@@ -20,7 +20,9 @@ last view migrates off it, in phase 7.
 2. `/Users/frankfu/Documents/GitHub/jokefactory_be/src/app/http/dto/models.go` — the request shapes
 3. `/Users/frankfu/Documents/GitHub/jokefactory_be/src/app/http/response/response.go` — the envelope
 4. `/Users/frankfu/Documents/GitHub/jokefactory_be/src/app/server/server.go` — the route table
-5. `FRONTEND_PLAN.md` — the backend developer's hand-off, useful but **already shown to lag the code**
+5. `REFACTOR_PLAN.md` and `Backend Change Requests (V2).md` (both in the backend repo) — design intent, useful but **not the implementation**; the backend diverged from both.
+
+**Correction (found during Task 1):** earlier drafts of this plan cited a `FRONTEND_PLAN.md` hand-off document. That file does not exist in either repo and never has — `git log --all -- '*PLAN*'` in `jokefactory_be` shows only `REFACTOR_PLAN.md` and `CLASSIFIER_SANDBOX_PLAN.md`. It reached this session as pasted content and is not re-checkable. Every "FRONTEND_PLAN.md lags the code" remark below should be read as "the design documents lag the code", which remains true and is demonstrable against `REFACTOR_PLAN.md`.
 
 ---
 
@@ -73,7 +75,7 @@ Plus three transport-level defects:
   - `GET /v1/session/me` (`handler/session.go:87`)
   - `POST /v1/instructor/login` (`handler/admin.go:41` — note it lives in `AdminHandler`, not `InstructorHandler`)
 - **Health** (`/health`, `/health/detailed`) is raw and sits **outside `/v1`**.
-- **Errors**, at every status: `{ "error": { "code", "message", "field"?, "request_id"? } }` (`response/response.go:20-36`). Note `field` — `FRONTEND_PLAN.md` omits it.
+- **Errors**, at every status: `{ "error": { "code", "message", "field"?, "request_id"? } }` (`response/response.go:20-36`). Note `field` — the hand-off document omitted it.
 
 ---
 
@@ -107,7 +109,7 @@ Read every file in `/Users/frankfu/Documents/GitHub/jokefactory_be/src/app/http/
 
 - [ ] **Step 2: Write the file**
 
-Create `types/api.ts`. Every exported type carries a comment naming the Go `file:line` it was transcribed from. Start from this skeleton and complete it from the handlers — **do not invent fields, and do not copy them from `FRONTEND_PLAN.md`, which is known to lag the code**:
+Create `types/api.ts`. Every exported type carries a comment naming the Go `file:line` it was transcribed from. Start from this skeleton and complete it from the handlers — **do not invent fields, and do not copy them from any design document, all of which are known to lag the code**:
 
 ```typescript
 /* ============================================================================
@@ -1025,4 +1027,4 @@ Migrating any view or `context.tsx` onto the new layer; deleting the legacy serv
 VITE_API_BASE_URL=https://<your-app>.azurecontainerapps.io npm run smoke:api
 ```
 
-Expect failures. The types were transcribed by hand from handler code that has no compiler enforcing its own shape, and `FRONTEND_PLAN.md` already disagreed with the implementation in at least one place before we started. Fix `types/api.ts` against what the server actually returns, then re-run the contract tests — those payloads are the record of what we believed, and updating them is how the belief gets corrected.
+Expect failures. The types were transcribed by hand from handler code that has no compiler enforcing its own shape, and the design documents already disagreed with the implementation in several places before we started. Fix `types/api.ts` against what the server actually returns, then re-run the contract tests — those payloads are the record of what we believed, and updating them is how the belief gets corrected.
