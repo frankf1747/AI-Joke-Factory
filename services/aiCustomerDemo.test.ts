@@ -15,7 +15,7 @@ import { DEFAULT_IDEAL_PROFILE, DIMENSIONS, trueFit } from '../config/dimensions
 
 const CFG: EngineConfig = { ...DEMO_CONFIG };
 
-/** A joke that matches the ideal on all 11 scored dims and nails its title. */
+/** A joke that matches the ideal on all 11 ideal-bearing dims and nails its title. */
 const mk = (id: string, overrides: Record<string, string> = {}): DemoJoke => ({
   id,
   title: `Joke ${id}`,
@@ -113,16 +113,19 @@ describe('makeCustomers — uniform thresholds', () => {
     }
   });
 
-  it('spreads thresholds across the band rather than clustering at the centre', () => {
-    // Uniform: roughly a third in each third of the band. A normal curve would
-    // pile up in the middle third, which is the bug this test exists to catch.
+  it('spreads thresholds evenly rather than clustering at the centre', () => {
+    // The band test above is the real guard against a normal draw — a bell
+    // curve puts samples outside [τ−jitter, τ+jitter] and fails it outright.
+    // This one rules out a centre-heavy draw that still respects the bounds.
+    // The 0.28 threshold is deliberate: at >0.20 a gaussian with sd = jitter
+    // passes, so a looser bar here would be decorative.
     const thirds = [0, 0, 0];
     for (const c of makeCustomers(DEMO_CONFIG, 1)) {
       const pos = (c.threshold - (DEMO_CONFIG.tau - DEMO_CONFIG.jitter)) / (2 * DEMO_CONFIG.jitter);
-      thirds[Math.min(2, Math.floor(pos * 3))] += 1;
+      thirds[Math.min(2, Math.max(0, Math.floor(pos * 3)))] += 1;
     }
     for (const count of thirds) {
-      expect(count).toBeGreaterThan(DEMO_CONFIG.customerCount * 0.2);
+      expect(count).toBeGreaterThan(DEMO_CONFIG.customerCount * 0.28);
     }
   });
 });

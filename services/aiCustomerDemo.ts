@@ -35,9 +35,6 @@ import {
 
 export { MAX_FIT };
 
-/** Dims the backend scores with code instead of an LLM. */
-export const RULE_DIMS = new Set<string>(['LENGTH']);
-
 export interface DemoJoke {
   id: string;
   text: string;
@@ -73,7 +70,6 @@ export interface DimScore {
 }
 
 export interface JokeScore {
-  joke: DemoJoke;
   dims: DimScore[];
   /** Sum of dim fits, 0..maxFit. */
   trueFit: number;
@@ -159,7 +155,6 @@ export function scoreJoke(joke: DemoJoke, cfg: EngineConfig): JokeScore {
   const sum = dims.reduce((acc, d) => acc + d.fit, 0);
 
   return {
-    joke,
     dims,
     trueFit: Math.round(sum * 100) / 100,
     maxFit: MAX_FIT,
@@ -293,7 +288,9 @@ export const DEMO_CONFIG: EngineConfig = {
   perDimBar: 0.75,
   budget: 3,
   marketPrice: 1,
-  ideal: DEFAULT_IDEAL_PROFILE,
+  // Copied, not aliased: an ideal picker mutating DEMO_CONFIG.ideal must not
+  // corrupt the shared default that config/dimensions hands to everyone else.
+  ideal: { ...DEFAULT_IDEAL_PROFILE },
 };
 
 /* The batch is tuned to show the whole range under the 3-tier rule:
