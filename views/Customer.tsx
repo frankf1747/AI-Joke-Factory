@@ -2,10 +2,10 @@ import React, { useMemo, useState } from 'react';
 import { Card, RoleLayout, BRAND } from '../components';
 import {
   ShoppingBag, X, Repeat, DollarSign,
-  Factory, ClipboardCheck, Bot, ChevronRight, Info, Cpu, Sparkles, Eye, Ban,
+  Factory, ClipboardCheck, Bot, ChevronRight, Info, Cpu, Sparkles, Eye,
 } from 'lucide-react';
 import {
-  simulateCustomer, simulateMarket, normalPdf, DEMO_JOKES, DEMO_CONFIG,
+  simulateCustomer, simulateMarket, buyFraction, DEMO_JOKES, DEMO_CONFIG,
   type DecisionStep, type Verdict, type DimScore, type JokeMarketResult,
 } from '../services/aiCustomerDemo';
 
@@ -51,26 +51,20 @@ const Pipeline: React.FC = () => {
 
 /* ---- A single dimension row in the scorecard ---- */
 const DimRow: React.FC<{ d: DimScore }> = ({ d }) => (
-  <div className={`flex items-center gap-2 py-1 ${d.placeholder ? 'opacity-45' : ''}`}>
+  <div className="flex items-center gap-2 py-1">
     <span className="w-24 shrink-0 text-[11px] font-semibold text-gray-600 truncate" title={d.label}>{d.label}</span>
-    {d.placeholder ? (
-      <span className="shrink-0 inline-flex items-center gap-0.5 text-[9px] font-bold px-1 py-0.5 rounded bg-gray-100 text-gray-500" title="Categories not defined yet — contributes 0">
-        <Ban size={9} /> N/A
-      </span>
-    ) : (
-      <span
-        className={`shrink-0 inline-flex items-center gap-0.5 text-[9px] font-bold px-1 py-0.5 rounded ${
-          d.source === 'rule' ? 'bg-sky-100 text-sky-700' : 'bg-violet-100 text-violet-700'
-        }`}
-        title={d.source === 'rule' ? 'Scored in code from the word count' : 'Classified by the LLM'}
-      >
-        {d.source === 'rule' ? <Cpu size={9} /> : <Sparkles size={9} />}
-        {d.source === 'rule' ? 'Rule' : 'LLM'}
-      </span>
-    )}
+    <span
+      className={`shrink-0 inline-flex items-center gap-0.5 text-[9px] font-bold px-1 py-0.5 rounded ${
+        d.source === 'rule' ? 'bg-sky-100 text-sky-700' : 'bg-violet-100 text-violet-700'
+      }`}
+      title={d.source === 'rule' ? 'Scored in code from the word count' : 'Classified by the LLM'}
+    >
+      {d.source === 'rule' ? <Cpu size={9} /> : <Sparkles size={9} />}
+      {d.source === 'rule' ? 'Rule' : 'LLM'}
+    </span>
     <span className="w-32 shrink-0 text-[11px] text-gray-500 truncate" title={`joke: ${d.level} · ideal: ${d.ideal}`}>
-      {d.placeholder ? '—' : d.level}
-      {!d.placeholder && d.level !== d.ideal && <span className="text-gray-300"> → {d.ideal}</span>}
+      {d.level}
+      {d.level !== d.ideal && <span className="text-gray-300"> → {d.ideal}</span>}
     </span>
     <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
       <div
@@ -79,67 +73,41 @@ const DimRow: React.FC<{ d: DimScore }> = ({ d }) => (
       />
     </div>
     <span className={`w-11 shrink-0 text-right text-[11px] font-bold tabular-nums ${d.pass ? 'text-emerald-600' : 'text-gray-400'}`}>
-      {d.placeholder ? '0' : `+${d.fit.toFixed(2)}`}
+      +{d.fit.toFixed(2)}
     </span>
   </div>
 );
 
-/* ---- The threshold distribution: customers' bars are normal(τ, jitter).
-   A customer buys when their bar ≤ the joke's fit, i.e. the area to the LEFT
-   of the fit line. That shaded area is the share of the market that buys. ---- */
-const ThresholdCurve: React.FC<{ result: JokeMarketResult }> = ({ result }) => {
+/* ---- The threshold band: every customer's personal bar is drawn uniformly
+        from [τ − jitter, τ + jitter], so the honest picture is a flat band,
+        not a bell. The shaded part is the share whose bar this joke clears. */
+const ThresholdBand: React.FC<{ result: JokeMarketResult }> = ({ result }) => {
   const W = 300;
-  const H = 108;
-  const mean = CFG.tau;
-  const sd = CFG.jitter;
-  // Plot ±3.2 sd around τ so the whole bell fits.
-  const lo = mean - 3.2 * sd;
-  const hi = mean + 3.2 * sd;
-  const x2px = (x: number) => ((x - lo) / (hi - lo)) * W;
-  const peak = normalPdf(mean, mean, sd);
-  const y2px = (y: number) => H - (y / peak) * (H - 10);
-
-  const N = 80;
-  const pts = Array.from({ length: N + 1 }, (_, i) => {
-    const x = lo + (i / N) * (hi - lo);
-    return { x, px: x2px(x), py: y2px(normalPdf(x, mean, sd)) };
-  });
-  const line = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.px.toFixed(1)},${p.py.toFixed(1)}`).join(' ');
-
-  // Shaded "buys" region: everything with a bar ≤ the joke's fit.
-  const fitClamped = Math.max(lo, Math.min(hi, result.trueFit));
-  const fillPts = pts.filter(p => p.x <= fitClamped);
-  const fitPx = x2px(fitClamped);
-  const area =
-    fillPts.length > 0
-      ? `M${fillPts[0].px.toFixed(1)},${H} ` +
-        fillPts.map(p => `L${p.px.toFixed(1)},${p.py.toFixed(1)}`).join(' ') +
-        ` L${fitPx.toFixed(1)},${y2px(normalPdf(fitClamped, mean, sd)).toFixed(1)} L${fitPx.toFixed(1)},${H} Z`
-      : '';
-
-  const tauPx = x2px(mean);
-  const buysRight = result.trueFit >= mean;
+  const H = 64;
+  const lo = CFG.tau - CFG.jitter;
+  const hi = CFG.tau + CFG.jitter;
+  const share = buyFraction(result.trueFit, CFG.tau, CFG.jitter);
+  const fitPx = share * W;
+  const tauPx = W / 2;
 
   return (
     <div>
-      <svg viewBox={`0 0 ${W} ${H + 18}`} className="w-full" role="img" aria-label="Customer threshold distribution">
-        {area && <path d={area} fill={BRAND.sold} fillOpacity={0.22} />}
-        <path d={line} fill="none" stroke="#94a3b8" strokeWidth={1.5} />
-        {/* τ (the mean bar) */}
-        <line x1={tauPx} y1={4} x2={tauPx} y2={H} stroke="#334155" strokeWidth={1} strokeDasharray="3 2" />
-        <text x={tauPx} y={H + 13} textAnchor="middle" fontSize="9" fill="#334155">τ {CFG.tau}</text>
-        {/* the joke's fit */}
-        <line x1={fitPx} y1={0} x2={fitPx} y2={H} stroke={BRAND.sold} strokeWidth={2} />
-        <text x={fitPx} y={H + 13} textAnchor={buysRight ? 'end' : 'start'} fontSize="9" fontWeight="700" fill={BRAND.sold}>
-          fit {fit2(result.trueFit)}
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} role="img"
+           aria-label={`${Math.round(share * 100)}% of customers have a bar this joke clears`}>
+        <rect x={0} y={12} width={W} height={H - 28} rx={3} fill="#e2e8f0" />
+        <rect x={0} y={12} width={fitPx} height={H - 28} rx={3} fill="#86efac" />
+        <line x1={tauPx} y1={6} x2={tauPx} y2={H - 10} stroke="#475569"
+              strokeWidth={1} strokeDasharray="3 3" />
+        <text x={tauPx} y={H - 1} textAnchor="middle" fontSize={9} fill="#64748b">
+          τ {CFG.tau}
         </text>
+        <text x={2} y={9} fontSize={9} fill="#94a3b8">{fit2(lo)}</text>
+        <text x={W - 2} y={9} textAnchor="end" fontSize={9} fill="#94a3b8">{fit2(hi)}</text>
       </svg>
-      <div className="text-sm font-bold text-gray-900 mt-1">
-        {result.bought} of {CFG.customerCount} bought
-      </div>
-      <div className="text-[11px] text-gray-500">
-        Everyone whose bar (normal, centered on τ) falls at or below the joke's fit buys — the green area.
-      </div>
+      <p className="text-[11px] text-gray-500 mt-1">
+        Bars are spread evenly across the band. This joke clears{' '}
+        <b>{result.bought} of {CFG.customerCount}</b>.
+      </p>
     </div>
   );
 };
@@ -188,7 +156,7 @@ const Scorecard: React.FC<{ step: DecisionStep; result: JokeMarketResult }> = ({
         </div>
         <div className="text-[10px] text-gray-400 mt-1">
           τ = {CFG.tau} of {maxFit} (the average bar) · see the spread of bars in the market panel ·
-          {' '}{step.score.passedCount}/{step.score.dims.length - 1} dimensions at or above {CFG.perDimBar}
+          {' '}{step.score.passedCount}/{step.score.dims.length} dimensions at or above {CFG.perDimBar}
         </div>
       </div>
 
@@ -268,20 +236,24 @@ const Customer: React.FC = () => {
           <Card title="1 · Score" subtitle="once per joke">
             <p className="text-[12px] text-gray-600 leading-relaxed">
               Each joke is classified on <b>12 dimensions</b> and compared to the instructor's hidden ideal.
-              Add up the {steps[0].score.maxFit} scored fits → <b>true fit</b>, from 0 to {steps[0].score.maxFit}.
-              <span className="block mt-1 text-gray-400">Structure has no agreed categories yet, so it scores 0 and sits out.</span>
+              Add up all {steps[0].score.maxFit} fits → <b>true fit</b>, from 0 to {steps[0].score.maxFit}.
+              <span className="block mt-1 text-gray-400">
+                Every dimension counts, Structure included — it matches one of seven shapes, exactly like any
+                other categorical dimension.
+              </span>
             </p>
           </Card>
           <Card title="2 · Jitter" subtitle="why demand is partial">
             <p className="text-[12px] text-gray-600 leading-relaxed">
-              Every customer wants the same thing, but holds a slightly different bar. The bars
-              form a <b>bell curve around τ</b> (jitter = its spread). A joke well above τ sells
-              to everyone; one sitting near τ sells to <b>some but not all</b>.
+              Every customer wants the same thing, but holds a slightly different bar. The bars are
+              spread <b>evenly across τ ± {CFG.jitter}</b> (jitter = the half-width of that band). A joke
+              above the top of the band sells to everyone; one sitting inside it sells to{' '}
+              <b>some but not all</b>.
             </p>
           </Card>
           <Card title="3 · Buy or swap" subtitle="budget makes it competitive">
             <p className="text-[12px] text-gray-600 leading-relaxed">
-              Buy while budget lasts (${CFG.budget.toFixed(2)} at ${CFG.price.toFixed(2)} each → {CFG.budget / CFG.price} jokes).
+              Buy while budget lasts (${CFG.budget.toFixed(2)} at ${CFG.marketPrice.toFixed(2)} each → {CFG.budget / CFG.marketPrice} jokes).
               Once full, a new joke only gets in if it beats the weakest one held by more
               than <b>M = {CFG.swapMargin}</b> — otherwise the customer holds.
             </p>
@@ -292,7 +264,7 @@ const Customer: React.FC = () => {
           {/* LEFT: the market, then one customer close-up */}
           <div className="space-y-4">
             <Card title="Customer bars" subtitle={`joke #${current.joke.id} · ${CFG.customerCount} customers`} accent={BRAND.sold}>
-              <ThresholdCurve result={currentResult} />
+              <ThresholdBand result={currentResult} />
             </Card>
 
             <Card title="One customer, close up" subtitle="bar set exactly at τ" accent={BRAND.production}>
@@ -334,10 +306,6 @@ const Customer: React.FC = () => {
                 <li className="flex items-center gap-2">
                   <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1 py-0.5 rounded bg-violet-100 text-violet-700"><Sparkles size={9} /> LLM</span>
                   The other 11 — one model call per batch.
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1 py-0.5 rounded bg-gray-100 text-gray-500"><Ban size={9} /> N/A</span>
-                  Structure — placeholder, contributes 0.
                 </li>
                 <li className="flex items-start gap-2 pt-1 border-t border-gray-100">
                   <Info size={12} className="mt-0.5 shrink-0 text-gray-400" />
