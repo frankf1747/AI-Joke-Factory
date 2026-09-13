@@ -1,5 +1,10 @@
 # Phase 1 — Scoring Truth Implementation Plan
 
+> **STATUS: COMPLETE** (2026-09-13). 19 commits, `8409eb5`..`HEAD`, on `main`.
+> 217 tests across 7 files. `npx tsc` reports 5 errors, all pre-existing in
+> `services/apiClient.ts` / `services/mockApi.ts`.
+> See "Closeout" at the end of this document for what was and was not achieved.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make the frontend's joke-scoring logic byte-for-byte agree with the Go backend's `src/core/domain/scoring/` package, so every fit number the UI shows is the number the real market will produce.
@@ -1512,3 +1517,73 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ## Deliberately not in this phase
 
 Network calls, the `data` envelope, role renames, the splitting move, the Topic picker removal, the feedback rebuild, and the instructor config form. Each is its own plan.
+
+
+---
+
+## Closeout
+
+### The goal was met
+
+Frontend scoring agrees with `jokefactory_be/src/core/domain/scoring/`. All four
+target defects are fixed and verified in code, not just asserted:
+
+| Defect | Fix |
+|---|---|
+| `dimProx` linear ramp `1 − Δ/(n−1)` | 3-tier `dimFit`: 1.0 exact, 0.5 adjacent, 0 beyond |
+| `MAX_FIT = 11`, Structure an unscored placeholder | 12, Structure a scored categorical dimension |
+| Thresholds from a normal distribution | Uniform across `[τ−jitter, τ+jitter]` |
+| 10 invented Topic categories | The backend's fixed 15 (in the rubric — see caveat) |
+
+The load-bearing artifact is `config/dimensions.backend-parity.test.ts`: 93 cases
+lifted from the backend's own Go test files and asserted against our TypeScript.
+Zero divergences, with nothing adjusted on either side. It was mutation-tested —
+breaking ordinal adjacency, the catch-all, and a length threshold each produce
+failures — so it can go red.
+
+### Substituted verification
+
+The plan's Task 9 called for cross-checking three jokes against the live
+classifier sandbox. The sandbox is password-gated and could not be driven, so the
+check was replaced by the parity port above. The sandbox mirrors the Go package;
+the Go package is the authority, and its own tests are a stronger oracle than
+three hand-picked jokes. Recorded as a substitution, not a completion.
+
+### Known gaps carried forward
+
+1. **The Marketing Topic picker still shows the legacy 10 categories.**
+   `views/QualityControl.tsx` renders `SIM_CONFIG.categories`, and
+   `views/JokeMaker.tsx` suggests them as prompts. The rubric is correct; the UI
+   is not. Topic is LLM-classified and the publish endpoint has no field for it,
+   so the picker is removed when the Marketing screen is rebuilt (phase 5), not
+   patched now. `config/simConfig.ts` and its test now state plainly that the
+   palette is legacy and asserts nothing about scoring.
+
+2. **The three views have no tests.** Both Important findings in the final review
+   — the Tutorial contradicting itself, and the ordinal track plotting a fit value
+   against category labels — were invisible to a green suite. The scoring engine
+   is proven; the UI layer is covered only by manual browser passes. View tests
+   are better written against the real API in phase 2 than against the mock now.
+
+3. **Marketing's "What's selling" panel scores against `DEFAULT_IDEAL_PROFILE`**,
+   a module constant, rather than the round's actual instructor-chosen ideal, so
+   its stated reasons are decorative. Pre-existing; the panel is replaced in
+   phase 6 against the Good/Improve contract.
+
+4. **The demo batch never produces a `SKIP_FULL`.** Measured verdicts: j1 100 BUY,
+   j2 92 BUY / 8 SKIP_LOW, j3 100 BUY, j4 100 SKIP_LOW, j5 8 BUY / 92 SWAP. The
+   Customer page teaches "otherwise the customer holds" with a batch that never
+   demonstrates it. Adding a sixth joke would shift every "N/100 sold" figure on
+   the page, so it belongs with whoever owns that fixture set.
+
+### Closeout changes (after the final review)
+
+- Deleted `classifyLength` and `SIM_CONFIG.length` from `config/simConfig.ts`.
+  A second length classifier with 25/61-word thresholds and the `split(/\s+/)`
+  Unicode bug we had just fixed was sitting two files from the correct one, with
+  no callers. `config/` no longer contains two functions of the same name
+  disagreeing about the answer.
+- Reworded `config/simConfig.test.ts` so it stops reading as a claim about the
+  rubric. It previously asserted "10 approved Topic categories" while
+  `dimensions.backend-parity.test.ts` asserted `Workplace is not in the locked
+  Topic list` — both green, in the same directory.

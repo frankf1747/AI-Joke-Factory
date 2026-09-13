@@ -1,13 +1,17 @@
-// Single source of truth for the AI Joke Factory Phase 1 simulation.
-// Edit these values freely to retune. Phase 2 will extend this module with
-// the customer engine config (ideal joke profile, tau, M, jitter, tick) when
-// those land in the real backend.
+// UI-facing simulation settings: the Marketing Topic palette and the local
+// economics used by the mock backend.
+//
+// This is NOT the joke rubric. Every scoring concern — the 12 dimensions, their
+// real categories, dim_fit, true_fit, and Length classification — lives in
+// config/dimensions.ts, which mirrors the Go backend. A second length
+// classifier used to live here with different thresholds (25/61 vs the
+// backend's 15/40); it had no callers and was deleted rather than left as a
+// trap for the next grep.
 
 export type CategoryId =
   | 'workplace' | 'mba' | 'tech' | 'ai' | 'animals' | 'sports'
   | 'everyday' | 'social_media' | 'education' | 'random';
 
-export type LengthClass = 'short' | 'medium' | 'long';
 
 export interface CategoryDef {
   id: CategoryId;
@@ -42,9 +46,6 @@ export const SIM_CONFIG = {
     buyerBudget:      3.00,
   },
 
-  // ---- Length classification (3 buckets; used by Phase 2 classifier later) ----
-  length: { shortMaxWords: 25, longMinWords: 61 },
-
   // ---- Dev-mode toggles ----
   dev: {
     // When true (mock mode), the mock backend's simulateBuyerTick auto-buys
@@ -56,11 +57,4 @@ export const SIM_CONFIG = {
 
 export function categoryById(id: string): CategoryDef | undefined {
   return SIM_CONFIG.categories.find(c => c.id === id);
-}
-
-export function classifyLength(text: string): LengthClass {
-  const words = text.trim().split(/\s+/).filter(Boolean).length;
-  if (words <= SIM_CONFIG.length.shortMaxWords) return 'short';
-  if (words >= SIM_CONFIG.length.longMinWords) return 'long';
-  return 'medium';
 }
