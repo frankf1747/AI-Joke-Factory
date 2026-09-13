@@ -6,8 +6,8 @@ import {
   Send, ChevronRight, MessageSquare, Info, CheckCircle2,
 } from 'lucide-react';
 import { Batch } from '../types';
-import { SIM_CONFIG } from '../config/simConfig';
 import { computeAvgCreatedToPublishSeconds } from '../services/economics';
+import { dimById } from '../config/dimensions';
 
 /* ---- per-joke status drives the status dots ---- */
 type JokeStatus = 'reviewing' | 'market' | 'sold' | 'wasted';
@@ -309,7 +309,7 @@ const JokeMaker: React.FC = () => {
                 />
                 <div className="flex justify-between items-center mt-2">
                   <p className="text-xs text-gray-400 italic">
-                    Stuck? Try: {SIM_CONFIG.categories.slice(0, 6).map(c => c.label).join(' · ')} · …
+                    Stuck? Try: {(dimById('TOPIC')?.categories ?? []).slice(0, 6).join(' · ')} · …
                   </p>
                   <span className="text-[11px] text-gray-400 tabular-nums">
                     {trimmedLen} chars{trimmedLen > 0 && trimmedLen < MIN_RAW_CHARS ? ` · min ${MIN_RAW_CHARS}` : ''}

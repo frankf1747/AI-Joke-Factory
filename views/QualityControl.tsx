@@ -6,10 +6,10 @@ import {
   Send, Zap, GripVertical, ChevronUp, ChevronDown, Check, X as XIcon,
   Star, BadgeCheck, CheckCircle2, Minus, MousePointerClick,
   Scissors, CornerDownLeft, Trash2,
-  Briefcase, GraduationCap, Cpu, Bot, PawPrint, Medal, Coffee,
-  Smartphone, BookOpen, Pencil, type LucideIcon,
+  Briefcase, Heart, Users, Utensils, Cpu, PawPrint, GraduationCap,
+  DollarSign, Plane, HeartPulse, Medal, Landmark, Coffee, Languages,
+  Pencil, type LucideIcon,
 } from 'lucide-react';
-import { SIM_CONFIG } from '../config/simConfig';
 import { computeAvgCreatedToPublishSeconds } from '../services/economics';
 import {
   INITIAL_NUDGE_STATE, nudgeReducer, isNudgeOpen,
@@ -17,10 +17,25 @@ import {
 } from '../services/marketingNudge';
 import { DIMENSIONS, dimById, dimFit, DEFAULT_IDEAL_PROFILE } from '../config/dimensions';
 
-/* ---- Icon lookup for the 10 Topic palette ---- */
+/* ---- Icons for the backend's Topic categories. Keyed by the category string
+   itself so the picker stays in step with config/dimensions automatically: add
+   a Topic upstream and it renders here, iconless, rather than disappearing. ---- */
 const TOPIC_ICONS: Record<string, LucideIcon> = {
-  Briefcase, GraduationCap, Cpu, Bot, PawPrint, Medal,
-  Coffee, Smartphone, BookOpen, Pencil,
+  Work: Briefcase,
+  Relationships: Heart,
+  Family: Users,
+  Food: Utensils,
+  Technology: Cpu,
+  Animals: PawPrint,
+  School: GraduationCap,
+  Money: DollarSign,
+  Travel: Plane,
+  Health: HeartPulse,
+  Sports: Medal,
+  Politics: Landmark,
+  Everyday: Coffee,
+  Language: Languages,
+  Other: Pencil,
 };
 
 /* ---- Helpers ---- */
@@ -140,42 +155,33 @@ const DimScale: React.FC<{ dim: ReturnType<typeof dimById>; level: string; prox:
    then making them close the popup to type a title would be a dead end. So both
    fields live here and are rendered identically on the card and in the dialog. */
 
+const TOPIC_CATEGORIES = dimById('TOPIC')?.categories ?? [];
+
 const TopicPicker: React.FC<{
   value?: string;
-  otherValue?: string;
-  onPick: (topicId: string) => void;
-  onOther: (text: string) => void;
-}> = ({ value, otherValue, onPick, onOther }) => (
+  onPick: (topic: string) => void;
+}> = ({ value, onPick }) => (
   <div>
     <SectionLabel className="mb-1.5">
       Topic <span className="text-rose-500">· required</span>
     </SectionLabel>
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5">
-      {SIM_CONFIG.categories.map(c => {
-        const on = value === c.id;
-        const Ic = TOPIC_ICONS[c.icon];
+      {TOPIC_CATEGORIES.map(topic => {
+        const on = value === topic;
+        const Ic = TOPIC_ICONS[topic];
         return (
           <button
-            key={c.id}
-            onClick={() => onPick(c.id)}
+            key={topic}
+            onClick={() => onPick(topic)}
             className={`inline-flex items-center justify-center gap-1 text-[11px] px-2 py-1.5 rounded-md border transition-colors ${
               on ? 'bg-[#005587] text-white border-[#005587]' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100'
             }`}
           >
-            {Ic && <Ic size={12} />} {c.label}
+            {Ic && <Ic size={12} />} {topic}
           </button>
         );
       })}
     </div>
-    {value === 'other' && (
-      <input
-        value={otherValue || ''}
-        onChange={(e) => onOther(e.target.value)}
-        placeholder="Type a custom topic…"
-        maxLength={30}
-        className="mt-2 w-full bg-white border border-[#8bb8e8] rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#8bb8e8]"
-      />
-    )}
   </div>
 );
 
@@ -431,7 +437,6 @@ const QualityControl: React.FC = () => {
   /* Local rank order — initialize from incoming */
   const [orderIds, setOrderIds] = useState<number[]>([]);
   const [topics, setTopics] = useState<Record<number, string>>({});
-  const [otherText, setOtherText] = useState<Record<number, string>>({});
   const [titles, setTitles] = useState<Record<number, string>>({});
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
   const [batchFeedback, setBatchFeedback] = useState('');
@@ -467,7 +472,6 @@ const QualityControl: React.FC = () => {
       prevSig.current = queueSig;
       setOrderIds(incomingJokes.map(j => j.id));
       setTopics({});
-      setOtherText({});
       setTitles({});
       setSelectedIds(new Set());
       setBatchFeedback('');
@@ -556,7 +560,6 @@ const QualityControl: React.FC = () => {
   const canRelease = (submittingIds.length > 0 || mayPublishNothing) && submittingIds.every(
     id =>
       topics[id] &&
-      (topics[id] !== 'other' || (otherText[id] || '').trim().length > 0) &&
       (titles[id] || '').trim().length > 0,
   );
 
@@ -571,9 +574,7 @@ const QualityControl: React.FC = () => {
       const submit = submittingIds.includes(id);
       ratings[String(id)] = submit ? 5 : 1;
       if (submit) {
-        topicsOut[String(id)] = topics[id] === 'other'
-          ? (otherText[id] || '').trim() || 'other'
-          : topics[id];
+        topicsOut[String(id)] = topics[id];
         titlesOut[String(id)] = titles[id];
       }
       tagsOut[String(id)] = []; // rank-and-select model doesn't require tags
@@ -836,9 +837,7 @@ const QualityControl: React.FC = () => {
                         <div className="mt-3 space-y-3">
                           <TopicPicker
                             value={topics[id]}
-                            otherValue={otherText[id]}
-                            onPick={(topicId) => setTopics(t => ({ ...t, [id]: topicId }))}
-                            onOther={(v) => setOtherText(t => ({ ...t, [id]: v }))}
+                            onPick={(topic) => setTopics(t => ({ ...t, [id]: topic }))}
                           />
                           <TitleField
                             value={titles[id]}
@@ -1016,9 +1015,7 @@ const QualityControl: React.FC = () => {
                 </blockquote>
                 <TopicPicker
                   value={topics[id]}
-                  otherValue={otherText[id]}
-                  onPick={(topicId) => setTopics(t => ({ ...t, [id]: topicId }))}
-                  onOther={(v) => setOtherText(t => ({ ...t, [id]: v }))}
+                  onPick={(topic) => setTopics(t => ({ ...t, [id]: topic }))}
                 />
                 <TitleField
                   value={titles[id]}
