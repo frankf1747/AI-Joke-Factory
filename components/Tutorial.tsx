@@ -9,13 +9,13 @@ import React, { useMemo, useState } from 'react';
 import {
   PenTool, ClipboardCheck, Users, SlidersHorizontal, ArrowLeft, ArrowRight, ArrowDown,
   GripVertical, ChevronUp, ChevronDown, Check, Star, MousePointerClick, BadgeCheck,
-  Store, ShoppingBag, MessageSquare, Scissors, CornerDownLeft, Sparkles, Cpu, Ban,
+  Store, ShoppingBag, MessageSquare, Scissors, CornerDownLeft, Sparkles,
 } from 'lucide-react';
 // Import the leaf modules directly, never the components barrel — the barrel
 // imports THIS file, so going back through it would create a cycle.
 import { BRAND, fmt$ } from '../config/brand';
 import { Button, Card, StatBox } from './ui';
-import { DIMENSIONS, IDEAL_PROFILE, PLACEHOLDER_DIMS, INTRINSIC_DIMS } from '../config/dimensions';
+import { DIMENSIONS, IDEAL_DIMENSIONS, MAX_FIT, DEFAULT_IDEAL_PROFILE, dimById } from '../config/dimensions';
 import { SIM_CONFIG } from '../config/simConfig';
 import { DEMO_CONFIG } from '../services/aiCustomerDemo';
 
@@ -80,21 +80,17 @@ const CriteriaGrid: React.FC = () => (
   <div>
     <div className="flex flex-wrap gap-1.5 mb-3">
       {DIMENSIONS.map(d => {
-        const placeholder = PLACEHOLDER_DIMS.has(d.id);
-        const intrinsic = INTRINSIC_DIMS.has(d.id);
+        const intrinsic = !d.hasIdeal;
         return (
           <span
             key={d.id}
             className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border ${
-              placeholder
-                ? 'bg-gray-50 text-gray-400 border-gray-200'
-                : intrinsic
+              intrinsic
                 ? 'bg-amber-50 text-amber-800 border-amber-300'
                 : 'bg-white text-gray-700 border-gray-200'
             }`}
-            title={placeholder ? 'Categories not defined yet — contributes 0' : undefined}
           >
-            {placeholder ? <Ban size={10} /> : intrinsic ? <Star size={10} /> : <Sparkles size={10} className="opacity-40" />}
+            {intrinsic ? <Star size={10} /> : <Sparkles size={10} className="opacity-40" />}
             {d.label}
           </span>
         );
@@ -103,9 +99,6 @@ const CriteriaGrid: React.FC = () => (
     <p className="text-[11px] text-gray-600 leading-relaxed">
       <b className="text-amber-800">Title Fit</b> is the one criterion Marketing owns outright — it grades
       whether the title they wrote actually matches the joke's theme, so a random title costs the team.
-      <span className="block mt-1 text-gray-400">
-        Structure is greyed out: its categories aren't defined yet, so it always contributes 0.
-      </span>
     </p>
   </div>
 );
@@ -303,10 +296,13 @@ const CustomerDemo: React.FC<{ bought?: number; caption?: React.ReactNode }> = (
 );
 
 const FitBar: React.FC = () => {
+  // Fit is a sum of 0 / .25 / .5 / .75 / 1 per criterion, so it always lands on
+  // a quarter — 7.25 is the demo batch's borderline joke. Bars are drawn from a
+  // continuous band, so they need not be quarters.
   const rows: Array<[string, number, string]> = [
-    ['Joke’s true fit', 7.08, BRAND.navy],
+    ['Joke’s true fit', 7.25, BRAND.navy],
     ['C1’s bar — buys', 6.78, BRAND.sold],
-    ['C2’s bar — skips', 7.24, BRAND.waste],
+    ['C2’s bar — skips', 7.28, BRAND.waste],
   ];
   return (
     <div className="space-y-2">
@@ -314,14 +310,14 @@ const FitBar: React.FC = () => {
         <div key={l} className="flex items-center gap-2">
           <span className="text-[11px] text-gray-500 w-28 shrink-0">{l}</span>
           <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
-            <div className="h-full rounded-full" style={{ width: `${(v / 11) * 100}%`, background: c }} />
+            <div className="h-full rounded-full" style={{ width: `${(v / MAX_FIT) * 100}%`, background: c }} />
           </div>
           <span className="text-[11px] font-bold tabular-nums text-gray-700 w-10 text-right">{v}</span>
         </div>
       ))}
       <p className="text-[11px] text-gray-500 pt-1">
-        Same joke, same taste — but C1&rsquo;s bar sits below {CFG.tau} and C2&rsquo;s above it. Bars vary
-        around τ on a bell curve (jitter = its spread).
+        Same joke, same taste — but C1&rsquo;s bar sits below {CFG.tau} and C2&rsquo;s above it, because bars
+        are spread evenly across τ ± {CFG.jitter} (jitter = the band&rsquo;s half-width).
       </p>
     </div>
   );
@@ -347,17 +343,17 @@ const ScoreboardMini: React.FC = () => (
 );
 
 const ProfileMini: React.FC = () => {
-  const shown = Object.entries(IDEAL_PROFILE).slice(0, 5);
+  const shown = Object.entries(DEFAULT_IDEAL_PROFILE).slice(0, 5);
   return (
     <div className="space-y-1.5">
       {shown.map(([k, v]) => (
         <div key={k} className="flex items-center justify-between text-[12px]">
-          <span className="text-gray-500 capitalize">{k.replace(/_/g, ' ')}</span>
+          <span className="text-gray-500">{dimById(k)?.label ?? k}</span>
           <span className="px-2 py-0.5 rounded text-white text-[11px] font-semibold" style={{ background: BRAND.bruinBlue }}>{v}</span>
         </div>
       ))}
       <div className="text-[11px] text-gray-400 pt-1">
-        + {Object.keys(IDEAL_PROFILE).length - shown.length} more criteria — hidden from every team.
+        + {Object.keys(DEFAULT_IDEAL_PROFILE).length - shown.length} more criteria — hidden from every team.
       </div>
     </div>
   );
@@ -384,7 +380,7 @@ interface Step { t: string; b: string; v: () => React.ReactNode }
 function buildSteps(): Record<TutorialRole, Step[]> {
   const criteriaStep: Step = {
     t: 'The 12 criteria',
-    b: 'Every published joke is judged on 12 criteria against a hidden "ideal joke" the instructor sets before the round. The closer a joke lands on each one, the more customers buy it.',
+    b: 'Every published joke is judged on 12 criteria against a hidden "ideal joke" the instructor sets before the round. The more criteria a joke matches outright, the more customers buy it.',
     v: () => <CriteriaGrid />,
   };
 
@@ -407,15 +403,15 @@ function buildSteps(): Record<TutorialRole, Step[]> {
       { t: 'Coach the Joke Maker', b: 'Every sale tells you which criteria the joke did well on and which to improve — names only, never the scores. Send that back so the next batch lands closer to what customers want.', v: () => <SoldSignalMini /> },
     ],
     customers: [
-      { t: `${CFG.customerCount} AI customers`, b: 'Customers are fully automated. They share one hidden ideal joke set by the instructor, and each perceives every joke slightly differently.', v: () => <CustomerDemo /> },
+      { t: `${CFG.customerCount} AI customers`, b: 'Customers are fully automated. They share one hidden ideal joke set by the instructor, and every joke scores the same for all of them — what differs is the bar each one holds.', v: () => <CustomerDemo /> },
       criteriaStep,
-      { t: 'One score per joke', b: `Each criterion scores 0 to 1 depending on how close the joke lands to the ideal. Add them up and you get the joke's true fit, from 0 to 11. Clear a customer's bar (around τ = ${CFG.tau}) and they buy.`, v: () => <FitBar /> },
-      { t: 'Everyone’s bar is a little different', b: `Bars form a bell curve centered on τ = ${CFG.tau} (jitter = ${CFG.jitter} is its spread). A joke well above τ clears almost every bar; one sitting right at τ clears about half. That's why demand is partial, not all-or-nothing.`, v: () => <CustomerDemo bought={52} /> },
-      { t: 'Buy, then swap', b: `With ${fmt$(CFG.budget)} at ${fmt$(CFG.price)} a joke, each customer holds ${CFG.budget / CFG.price}. Once full, a new joke only gets in if it beats the weakest one they hold by more than ${CFG.swapMargin} — otherwise they keep what they have.`, v: () => <FitBar /> },
+      { t: 'One score per joke', b: `Each criterion scores 1 when the joke matches the ideal exactly, 0.5 when it is one step away on a scale, and 0 beyond that — so being close only half counts, and two steps off scores the same as being completely wrong. Add them up for the joke's true fit, from 0 to ${MAX_FIT}. Clear a customer's bar (around τ = ${CFG.tau}) and they buy.`, v: () => <FitBar /> },
+      { t: 'Everyone’s bar is a little different', b: `Bars are spread evenly across τ = ${CFG.tau} ± ${CFG.jitter} rather than clustering at the centre. A joke above the top of that band clears every bar; one sitting inside it clears only some. That's why demand is partial, not all-or-nothing.`, v: () => <CustomerDemo bought={52} /> },
+      { t: 'Buy, then swap', b: `With ${fmt$(CFG.budget)} at ${fmt$(CFG.marketPrice)} a joke, each customer holds ${CFG.budget / CFG.marketPrice}. Once full, a new joke only gets in if it beats the weakest one they hold by more than ${CFG.swapMargin} — otherwise they keep what they have.`, v: () => <FitBar /> },
     ],
     instructor: [
       { t: 'Build the room', b: 'Create teams, assign Joke Maker / Marketing roles, and watch the live distribution as students join the lobby.', v: () => <CostChip lines={[['4 teams', '8 students'], ['AI customers', String(CFG.customerCount)]]} /> },
-      { t: 'Set the hidden ideal', b: 'Choose one level on each of the 12 criteria — the secret target the AI customers reward. Then tune τ, jitter, swap margin, budget, and the two costs.', v: () => <ProfileMini /> },
+      { t: 'Set the hidden ideal', b: `Choose one level on each of the ${IDEAL_DIMENSIONS.length} criteria that have a target — the secret ideal the AI customers reward. Title Fit is the twelfth: it grades itself, so there is nothing to set. Then tune τ, jitter, swap margin, budget, and the two costs.`, v: () => <ProfileMini /> },
       criteriaStep,
       { t: 'Run the rounds', b: 'Start, end, and reset rounds. Between rounds reveal teammates so Round 2 can co-locate Production and Marketing — the intervention that fixes the information flow.', v: () => <RoundMini /> },
       { t: 'Watch it land', b: 'Your dashboard tracks the leaderboard, sales over time, average fit, waste and lead time — so the chaos-to-kaizen story is visible in the numbers.', v: () => <RoundMini /> },
