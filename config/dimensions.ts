@@ -129,3 +129,53 @@ export function isCatchAll(category: string): boolean {
 export const DEFAULT_IDEAL_PROFILE: Record<string, string> = Object.fromEntries(
   IDEAL_DIMENSIONS.map(d => [d.id, d.defaultIdeal ?? d.categories[0]]),
 );
+
+/** Title Fit's intrinsic grade → score map (backend: titleFitGrades). */
+export const TITLE_FIT_GRADES: Record<string, number> = {
+  Perfect: 1,
+  Strong: 0.75,
+  Moderate: 0.5,
+  Weak: 0.25,
+  Mismatch: 0,
+};
+
+/**
+ * Per-dimension fit in [0, 1], matching scoring.DimFit in the Go backend.
+ *
+ *   ordinal     → 1 exact, 0.5 one step away, 0 beyond. A cliff, not a ramp:
+ *                 two steps off is worth exactly as much as being wrong.
+ *   categorical → 1 on an exact match, else 0.
+ *   graded      → Title Fit's own scale; the ideal is ignored.
+ *
+ * The catch-all short-circuits ordinal adjacency: "None of the above" is not
+ * near anything, so it only ever matches itself.
+ *
+ * Unknown dimensions, unknown categories and empty strings score 0 rather than
+ * throwing — a mis-classified joke should cost points, not crash the page.
+ */
+export function dimFit(dimId: string, ideal: string, joke: string): number {
+  const spec = byId.get(dimId);
+  if (!spec) return 0;
+
+  if (spec.scoring === 'graded') {
+    return TITLE_FIT_GRADES[joke] ?? 0;
+  }
+  if (!joke || !ideal) return 0;
+
+  if (spec.scoring === 'categorical') {
+    return joke === ideal ? 1 : 0;
+  }
+
+  // Ordinal.
+  if (isCatchAll(joke) || isCatchAll(ideal)) {
+    return joke === ideal ? 1 : 0;
+  }
+  const ji = spec.categories.indexOf(joke);
+  const ii = spec.categories.indexOf(ideal);
+  if (ji < 0 || ii < 0) return 0;
+
+  const gap = Math.abs(ji - ii);
+  if (gap === 0) return 1;
+  if (gap === 1) return 0.5;
+  return 0;
+}

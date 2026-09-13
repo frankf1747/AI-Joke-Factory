@@ -7,6 +7,8 @@ import {
   dimById,
   categoryIndex,
   isCatchAll,
+  dimFit,
+  TITLE_FIT_GRADES,
 } from './dimensions';
 
 describe('DIMENSIONS catalog', () => {
@@ -67,5 +69,70 @@ describe('DIMENSIONS catalog', () => {
 
   it('returns undefined for an unknown dimension id', () => {
     expect(dimById('BOGUS')).toBeUndefined();
+  });
+});
+
+describe('dimFit — ordinal is a cliff, not a ramp', () => {
+  it('scores an exact match 1', () => {
+    expect(dimFit('COMPLEXITY', 'Moderate', 'Moderate')).toBe(1);
+  });
+
+  it('scores one step away 0.5', () => {
+    expect(dimFit('COMPLEXITY', 'Moderate', 'Simple')).toBe(0.5);
+    expect(dimFit('COMPLEXITY', 'Moderate', 'Thoughtful')).toBe(0.5);
+  });
+
+  it('scores two or more steps away 0 — the same as being completely wrong', () => {
+    expect(dimFit('COMPLEXITY', 'Moderate', 'Very simple')).toBe(0);
+    expect(dimFit('COMPLEXITY', 'Moderate', 'Expert')).toBe(0);
+    expect(dimFit('FRESHNESS', 'Timeless', 'Time-sensitive')).toBe(0);
+  });
+
+  it('treats the catch-all as binary, bypassing adjacency', () => {
+    // ENERGY is ordinal and has a catch-all.
+    expect(dimFit('ENERGY', 'Conversational', CATCH_ALL)).toBe(0);
+    expect(dimFit('ENERGY', CATCH_ALL, CATCH_ALL)).toBe(1);
+  });
+
+  it('scores unknown categories 0 rather than throwing', () => {
+    expect(dimFit('COMPLEXITY', 'Moderate', 'Banana')).toBe(0);
+    expect(dimFit('COMPLEXITY', 'Banana', 'Moderate')).toBe(0);
+    expect(dimFit('NOT_A_DIM', 'a', 'b')).toBe(0);
+  });
+
+  it('scores an empty classification 0', () => {
+    expect(dimFit('COMPLEXITY', 'Moderate', '')).toBe(0);
+    expect(dimFit('COMPLEXITY', '', 'Moderate')).toBe(0);
+  });
+});
+
+describe('dimFit — categorical is all or nothing', () => {
+  it('scores an exact match 1 and anything else 0', () => {
+    expect(dimFit('TOPIC', 'Work', 'Work')).toBe(1);
+    expect(dimFit('TOPIC', 'Work', 'Money')).toBe(0);
+  });
+
+  it('does not reward adjacency in the list', () => {
+    // Relationships sits next to Work, but categorical has no notion of near.
+    expect(dimFit('TOPIC', 'Work', 'Relationships')).toBe(0);
+  });
+});
+
+describe('dimFit — Title Fit is graded against itself', () => {
+  it('maps each grade to its score, ignoring the ideal', () => {
+    expect(dimFit('TITLE_FIT', '', 'Perfect')).toBe(1);
+    expect(dimFit('TITLE_FIT', '', 'Strong')).toBe(0.75);
+    expect(dimFit('TITLE_FIT', '', 'Moderate')).toBe(0.5);
+    expect(dimFit('TITLE_FIT', '', 'Weak')).toBe(0.25);
+    expect(dimFit('TITLE_FIT', '', 'Mismatch')).toBe(0);
+  });
+
+  it('scores an unknown grade 0', () => {
+    expect(dimFit('TITLE_FIT', '', 'Sublime')).toBe(0);
+  });
+
+  it('exposes the grade table', () => {
+    expect(TITLE_FIT_GRADES.Perfect).toBe(1);
+    expect(TITLE_FIT_GRADES.Mismatch).toBe(0);
   });
 });
