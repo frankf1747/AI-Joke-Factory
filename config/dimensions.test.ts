@@ -8,6 +8,8 @@ import {
   categoryIndex,
   isCatchAll,
   dimFit,
+  trueFit,
+  DEFAULT_IDEAL_PROFILE,
   TITLE_FIT_GRADES,
   wordCount,
   classifyLength,
@@ -200,5 +202,50 @@ describe('classifyLength', () => {
 
   it('calls empty text Short', () => {
     expect(classifyLength('')).toBe('Short');
+  });
+});
+
+describe('trueFit', () => {
+  /** A classification that matches DEFAULT_IDEAL_PROFILE on all 11, plus a grade. */
+  const perfect = (): Record<string, string> => ({
+    ...DEFAULT_IDEAL_PROFILE,
+    TITLE_FIT: 'Perfect',
+  });
+
+  it('scores a flawless joke the full 12', () => {
+    expect(trueFit(perfect(), DEFAULT_IDEAL_PROFILE)).toBe(12);
+  });
+
+  it('docks half a point for a single adjacent ordinal miss', () => {
+    const c = { ...perfect(), COMPLEXITY: 'Thoughtful' };
+    expect(trueFit(c, DEFAULT_IDEAL_PROFILE)).toBe(11.5);
+  });
+
+  it('docks a whole point for a categorical miss', () => {
+    const c = { ...perfect(), TOPIC: 'Money' };
+    expect(trueFit(c, DEFAULT_IDEAL_PROFILE)).toBe(11);
+  });
+
+  it('docks a whole point for an ordinal miss of two or more steps', () => {
+    const c = { ...perfect(), COMPLEXITY: 'Expert' };
+    expect(trueFit(c, DEFAULT_IDEAL_PROFILE)).toBe(11);
+  });
+
+  it('scores an empty classification 0', () => {
+    expect(trueFit({}, DEFAULT_IDEAL_PROFILE)).toBe(0);
+  });
+
+  it('rounds to two decimals so sums of 0.5s stay exact', () => {
+    const c = {
+      ...perfect(),
+      COMPLEXITY: 'Thoughtful',
+      WORDPLAY: 'Moderate',
+      CLARITY: 'Mostly clear',
+    };
+    expect(trueFit(c, DEFAULT_IDEAL_PROFILE)).toBe(10.5);
+  });
+
+  it('never exceeds MAX_FIT', () => {
+    expect(trueFit(perfect(), DEFAULT_IDEAL_PROFILE)).toBeLessThanOrEqual(MAX_FIT);
   });
 });

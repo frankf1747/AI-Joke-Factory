@@ -222,3 +222,21 @@ export function classifyLength(text: string): 'Short' | 'Medium' | 'Long' {
   if (n <= LENGTH_MEDIUM_MAX) return 'Medium';
   return 'Long';
 }
+
+/** A joke's classified category per dimension, keyed by dimension id. */
+export type Classification = Record<string, string>;
+/** The instructor's hidden ideal, keyed by dimension id. No TITLE_FIT. */
+export type IdealProfile = Record<string, string>;
+
+/**
+ * Sum of dim_fit across all 12 dimensions — the number the market buys on.
+ * Range [0, 12]. Rounded to 2dp so a run of 0.5s doesn't drift in float.
+ * Mirrors scoring.TrueFit.
+ */
+export function trueFit(classification: Classification, profile: IdealProfile): number {
+  let sum = 0;
+  for (const dim of DIMENSIONS) {
+    sum += dimFit(dim.id, profile[dim.id] ?? '', classification[dim.id] ?? '');
+  }
+  return Math.round(sum * 100) / 100;
+}
