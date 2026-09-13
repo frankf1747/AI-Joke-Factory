@@ -166,6 +166,14 @@ describe('wordCount', () => {
     expect(wordCount('')).toBe(0);
     expect(wordCount('   \n\t ')).toBe(0);
   });
+
+  it('does not split on non-breaking spaces, matching Go', () => {
+    // JS \s matches U+00A0; Go's isWhitespace does not. Text pasted from a
+    // chat window or Google Docs carries NBSPs, so this must agree with the
+    // backend or a joke can land in a different Length bucket on each side.
+    expect(wordCount('one two three')).toBe(2);
+    expect(wordCount('em space')).toBe(1);
+  });
 });
 
 describe('classifyLength', () => {

@@ -204,10 +204,16 @@ function ordinalFit(spec: DimensionSpec, ideal: string, joke: string): number {
 export const LENGTH_SHORT_MAX = 15;   // Short:  ≤ 15 words
 export const LENGTH_MEDIUM_MAX = 40;  // Medium: 16–40 words; Long: 41+
 
-/** Whitespace-separated token count. Empty / whitespace-only text yields 0. */
+/* Go's isWhitespace recognises exactly these six. JavaScript's \s is wider —
+   it also matches U+00A0 and friends — so splitting on \s would count
+   "one two" as two words where the backend counts one. Text pasted from
+   Google Docs or a chat window is full of non-breaking spaces, so this is a
+   real divergence near the Short/Medium boundary, not a theoretical one. */
+const GO_WHITESPACE = /[ \t\n\r\v\f]+/;
+
+/** Whitespace-separated token count, matching scoring.WordCount exactly. */
 export function wordCount(text: string): number {
-  const trimmed = text.trim();
-  return trimmed === '' ? 0 : trimmed.split(/\s+/).length;
+  return text.split(GO_WHITESPACE).filter(token => token !== '').length;
 }
 
 export function classifyLength(text: string): 'Short' | 'Medium' | 'Long' {
