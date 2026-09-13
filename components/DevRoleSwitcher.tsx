@@ -3,6 +3,7 @@
    localStorage session keys, then reloads. */
 import React, { useState } from 'react';
 import { useGame } from '../context';
+import { TUTORIAL_SEEN_PREFIX } from '../components';
 import { RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 
 const LS_DB = 'joke_factory_mock_db_v1';
@@ -118,6 +119,10 @@ function resetSession() {
   localStorage.removeItem(LS_DISPLAY_NAME);
   localStorage.removeItem(LS_ROLE);
   localStorage.removeItem(LS_ROUND_ID);
+  // Re-arm the per-role tutorial auto-open, otherwise Reset won't bring it back.
+  for (const k of Object.keys(localStorage)) {
+    if (k.startsWith(TUTORIAL_SEEN_PREFIX)) localStorage.removeItem(k);
+  }
   location.reload();
 }
 

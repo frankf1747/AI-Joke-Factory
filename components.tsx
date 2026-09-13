@@ -1,133 +1,18 @@
 import React from 'react';
-import { LogOut, User as UserIcon, X, Trophy, TrendingUp, Tag, Info } from 'lucide-react';
+import { LogOut, User as UserIcon, X, Trophy, TrendingUp, Tag, Info, HelpCircle } from 'lucide-react';
 import { useGame } from './context';
 import { Role } from './types';
+import Tutorial, { type TutorialRole } from './components/Tutorial';
+// Presentational primitives live in components/ui.tsx so leaf modules can import
+// them without cycling back through this barrel. Re-exported for existing callers.
+export { Button, Card, StatBox, SectionLabel } from './components/ui';
+export type { StatBoxTone } from './components/ui';
 
-export const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'danger' | 'success' | 'purple' | 'outline' | 'gold' | 'navy' }> = ({
-  children, variant = 'primary', className = '', ...props
-}) => {
-  const variants = {
-    // GOLD is the hero CTA — navy text on UCLA gold for maximum blue-on-gold contrast.
-    primary: 'bg-[#ffd100] hover:bg-[#f5c400] text-[#003b5c] shadow-sm shadow-[#ffd100]/40',
-    gold: 'bg-[#ffd100] hover:bg-[#f5c400] text-[#003b5c] shadow-sm shadow-[#ffd100]/40',
-    navy: 'bg-[#003b5c] hover:bg-[#002b44] text-white',
-    secondary: 'bg-gray-200 hover:bg-gray-300 text-gray-800',
-    danger: 'bg-red-500 hover:bg-red-600 text-white',
-    success: 'bg-green-600 hover:bg-green-700 text-white',
-    purple: 'bg-[#003b5c] hover:bg-[#002b44] text-white',    // legacy alias → navy
-    outline: 'bg-white hover:bg-gray-50 text-gray-800 border border-gray-300',
-  };
-  return (
-    <button 
-      className={`px-4 py-2 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${className}`}
-      {...props}
-    >
-      {children}
-    </button>
-  );
-};
 
-export const Card: React.FC<{
-  children: React.ReactNode;
-  className?: string;
-  title?: string;
-  subtitle?: string;
-  action?: React.ReactNode;
-  accent?: string;
-}> = ({ children, className = '', title, subtitle, action, accent }) => (
-  <div
-    className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden ${className}`}
-    style={accent ? { borderTop: `3px solid ${accent}` } : undefined}
-  >
-    {(title || action) && (
-      <div className="px-4 py-3 bg-gray-50/70 border-b border-gray-100 flex justify-between items-center">
-        <div>
-          <div className="font-semibold text-gray-800 text-sm">{title}</div>
-          {subtitle && <div className="text-xs text-gray-400 mt-0.5">{subtitle}</div>}
-        </div>
-        {action && <div>{action}</div>}
-      </div>
-    )}
-    <div className="p-4">{children}</div>
-  </div>
-);
-
-export type StatBoxTone =
-  | 'slate' | 'blue' | 'indigo' | 'emerald' | 'amber' | 'violet' | 'rose' | 'rank'
-  | 'gold' | 'navy' | 'sky';
-
-// UCLA blue-and-gold discipline with a smooth hierarchy:
-//   HERO   → gold (one saturated tile leads the eye)
-//   MID    → navy / bruin-blue solid, white text (key stats, on-brand)
-//   SOFT   → navy-tinted fills (supporting stats recede, but not washed-out)
-//   ACCENT → green / red kept muted + on-palette so they read semantically
-//            without shouting louder than the positive metrics.
-const STAT_TONES: Record<StatBoxTone, string> = {
-  // ---- HERO (near-black navy text for crisp contrast on bright gold) ----
-  gold:    'bg-[#ffd100] text-[#00263a] shadow-md shadow-[#ffd100]/40',
-  rank:    'bg-[#ffd100] text-[#00263a] shadow-md shadow-[#ffd100]/40',
-  // ---- MID (solid, on-brand blues) ----
-  blue:    'bg-[#2774AE] text-white shadow-sm',
-  navy:    'bg-[#003b5c] text-white shadow-sm',
-  // ---- SOFT supporting (navy-tinted, not pale) ----
-  sky:     'bg-[#003b5c]/[0.07] text-[#003b5c]',
-  slate:   'bg-[#003b5c]/[0.07] text-[#334155]',
-  indigo:  'bg-[#003b5c]/[0.07] text-[#003b5c]',
-  violet:  'bg-[#003b5c]/[0.07] text-[#003b5c]',
-  // ---- SEMANTIC accents (muted, outlined — present but never the loudest) ----
-  emerald: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
-  rose:    'bg-[#fdecec] text-[#b23b3b] ring-1 ring-[#e8b7b7]',
-  amber:   'bg-[#fff5da] text-[#8a6d00] ring-1 ring-[#ffe08a]',
-};
-
-export const StatBox: React.FC<{
-  label: string;
-  value: string | number;
-  tone?: StatBoxTone;
-  sub?: string;
-  /** @deprecated use `tone` */
-  color?: string;
-  className?: string;
-  valueClassName?: string;
-  labelClassName?: string;
-}> = ({ label, value, tone, sub, color, className = '', valueClassName = '', labelClassName = '' }) => {
-  // Back-compat: legacy `color` prop (raw className) takes precedence if provided.
-  const toneClass = color ?? STAT_TONES[tone ?? 'slate'];
-  return (
-    <div className={`px-3 py-3 rounded-lg flex flex-col items-center justify-center text-center ${toneClass} ${className}`}>
-      <span className={`text-2xl font-bold tabular-nums leading-none ${valueClassName}`}>{value}</span>
-      <span className={`text-[10px] font-bold uppercase tracking-wide opacity-85 mt-1.5 ${labelClassName}`}>{label}</span>
-      {sub && <span className="text-[10px] opacity-60 mt-0.5">{sub}</span>}
-    </div>
-  );
-};
-
-export const SectionLabel: React.FC<{ children: React.ReactNode; className?: string }> = ({
-  children, className = '',
-}) => (
-  <div className={`text-[11px] font-bold text-gray-400 uppercase tracking-wider ${className}`}>
-    {children}
-  </div>
-);
-
-// Official UCLA palette (see UCLA Slack theme): Navy #003b5c, Bruin Blue #005587,
-// Light Blue #8bb8e8, Gold #ffb81c, Bright Gold #ffd100.
-export const BRAND = {
-  navy: '#003b5c',        // deep navy — headers / dark accents
-  bruinBlue: '#005587',   // UCLA Bruin blue — primary brand
-  lightBlue: '#8bb8e8',   // light blue accent
-  bruinGold: '#ffb81c',   // UCLA gold
-  brightGold: '#ffd100',  // bright gold
-  action: '#005587',      // primary action = Bruin blue
-  production: '#005587',  // Joke Maker lane
-  marketing: '#003b5c',   // Marketing lane — navy (distinct from production)
-  market: '#ffb81c',      // on-market lane — gold
-  sold: '#059669',        // sold / revenue — kept green for meaning
-  waste: '#e11d48',       // wasted / loss — kept red for meaning
-} as const;
-
-export const fmt$ = (n: number): string =>
-  n < 0 ? `-$${Math.abs(n).toFixed(2)}` : `$${n.toFixed(2)}`;
+// BRAND and fmt$ live in config/brand.ts so leaf components can import them
+// without pulling in this barrel (which would create a cycle). Re-exported here
+// so the many existing `from '../components'` imports keep working.
+export { BRAND, fmt$ } from './config/brand';
 
 export const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: string; children: React.ReactNode; maxWidth?: string; showCloseButton?: boolean }> = ({ isOpen, onClose, title, children, maxWidth = 'max-w-lg', showCloseButton = true }) => {
   if (!isOpen) return null;
@@ -150,9 +35,68 @@ export const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: stri
   );
 };
 
+/** localStorage key for "this role has already seen the tutorial". Versioned so a
+ *  future copy revision can force it to show again. */
+export const TUTORIAL_SEEN_PREFIX = 'jf_tutorial_seen_v1:';
+
+const ROLE_TO_TUTORIAL_TAB: Record<string, TutorialRole> = {
+  [Role.JOKE_MAKER]: 'joke_maker',
+  [Role.QUALITY_CONTROL]: 'marketing',
+  [Role.CUSTOMER]: 'customers',
+  [Role.INSTRUCTOR]: 'instructor',
+};
+
+/**
+ * Tutorial button + auto-open-once. Kept as its own component because RoleLayout
+ * early-returns before its JSX — adding hooks there would make them conditional.
+ */
+const TutorialLauncher: React.FC<{ role: Role }> = ({ role }) => {
+  const tab = ROLE_TO_TUTORIAL_TAB[role];
+
+  // Decide during the first render, not in an effect. StrictMode mounts twice in
+  // dev; writing the "seen" flag from an effect would mark it seen on mount #1 and
+  // then suppress the modal on mount #2, so the tutorial would never appear.
+  // Instead we mark it seen when the user actually dismisses it.
+  const [open, setOpen] = React.useState(() => {
+    if (!tab) return false;
+    try {
+      return !localStorage.getItem(`${TUTORIAL_SEEN_PREFIX}${role}`);
+    } catch {
+      return false; // private mode / storage disabled — don't auto-open
+    }
+  });
+
+  const dismiss = () => {
+    setOpen(false);
+    try {
+      localStorage.setItem(`${TUTORIAL_SEEN_PREFIX}${role}`, '1');
+    } catch {
+      // ignore — worst case it opens again next time
+    }
+  };
+
+  if (!tab) return null;
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="text-gray-400 hover:text-blue-600 transition-colors"
+        title="How this works"
+        aria-label="Open the tutorial"
+      >
+        <HelpCircle size={18} />
+      </button>
+      <Modal isOpen={open} onClose={dismiss} title="How this works" maxWidth="max-w-5xl">
+        <Tutorial initialRole={tab} onClose={dismiss} />
+      </Modal>
+    </>
+  );
+};
+
 export const RoleLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, logout, config, teamNames } = useGame();
-  
+
   if (!user) return null;
 
   const showTeamBadge = user.role !== Role.CUSTOMER && user.role !== Role.INSTRUCTOR;
@@ -189,6 +133,7 @@ export const RoleLayout: React.FC<{ children: React.ReactNode }> = ({ children }
                 <UserIcon size={16} className="text-gray-400" />
                 <span className="text-sm font-medium">{user.name} ({user.role.replace('_', ' ')})</span>
              </div>
+             <TutorialLauncher role={user.role} />
              <button onClick={logout} className="text-gray-400 hover:text-red-500 transition-colors" title="Logout">
                <LogOut size={18} />
              </button>

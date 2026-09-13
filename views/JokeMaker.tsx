@@ -1,12 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { useGame } from '../context';
-import { Button, Card, StatBox, RoleLayout, Modal, SectionLabel, BRAND } from '../components';
+import { Button, Card, StatBox, RoleLayout, Modal, SectionLabel, BRAND, fmt$ } from '../components';
+import type { StatBoxTone } from '../components';
 import {
   Send, ChevronRight, MessageSquare, Info, CheckCircle2,
 } from 'lucide-react';
 import { Batch } from '../types';
 import { SIM_CONFIG } from '../config/simConfig';
-import { computeLeadTimeSeconds } from '../services/economics';
+import { computeAvgCreatedToPublishSeconds } from '../services/economics';
 
 /* ---- per-joke status drives the status dots ---- */
 type JokeStatus = 'reviewing' | 'market' | 'sold' | 'wasted';
@@ -215,14 +216,18 @@ const JokeMaker: React.FC = () => {
     return next;
   });
 
-  /* Stats — no Profit (it lives only on Instructor in V2) */
-  const teamSummaryAny = teamSummary as any;
+  /* Stats. Profit is shown here so the team feels the cost of low-quality jokes —
+     it can and should go negative. Costs are Marketing's ($0.10 published /
+     $0.01 discarded); creating jokes is free. */
   const myRank = teamSummary?.rank ?? '—';
-  const accepted = teamSummary?.accepted_jokes ?? 0;
+  // "Total" = every joke this team has put into the factory. Note jokes only
+  // become records once Marketing splits the batch, so this reads 0 until then.
+  const totalJokes = teamSummary?.jokes_created ?? 0;
   const totalSales = teamSummary?.total_sales ?? 0;
-  const avgScore = teamSummary?.avg_score_overall != null
-    ? Number(teamSummary.avg_score_overall).toFixed(1)
-    : '—';
+  const profitRaw = teamSummary?.profit;
+  const profitLabel = profitRaw == null ? '—' : fmt$(profitRaw);
+  const profitTone: StatBoxTone =
+    profitRaw == null ? 'slate' : profitRaw < 0 ? 'rose' : 'emerald';
   const batchesCreated = teamSummary?.batches_created ?? myBatches.length;
   // Waste = jokes that failed to reach market (rated but not published) + published-but-unsold.
   // Compute directly from batches so it matches the "Wasted" row in StageDots exactly.
@@ -239,20 +244,13 @@ const JokeMaker: React.FC = () => {
     return count;
   }, [myBatches]);
 
-  /* Lead time: average across this team's jokes that have first_sold_at set. */
-  const leadTimes = useMemo(() => {
-    const out: number[] = [];
-    for (const b of myBatches) {
-      for (const j of (b.jokes as any[])) {
-        const t = computeLeadTimeSeconds(b.submitted_at, j.first_sold_at);
-        if (t != null) out.push(t);
-      }
-    }
-    return out;
-  }, [myBatches]);
-  const avgLeadSec = leadTimes.length
-    ? Math.round(leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length)
-    : null;
+  /* Created → Publish: average time this team's batches wait between submission
+     and Marketing releasing them. Was created-to-first-sale, which mixed in
+     customer demand the team can't control. */
+  const avgLeadSec = useMemo(
+    () => computeAvgCreatedToPublishSeconds(myBatches),
+    [myBatches],
+  );
 
   React.useEffect(() => {
     if (!config.showTeamPopup) setDismissedTeamPopup(false);
@@ -358,12 +356,12 @@ const JokeMaker: React.FC = () => {
         {/* RIGHT: stat tiles + Jokes by stage */}
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3">
-            <StatBox label="Current Rank" value={String(myRank)} tone="rank" />
-            <StatBox label="Sold / Acc" value={`${totalSales}/${accepted}`} tone="blue" />
-            <StatBox label="Avg Score" value={avgScore} tone="sky" />
-            <StatBox label="Lead Time" value={fmtSeconds(avgLeadSec)} tone="sky" />
+            <StatBox label="Current Team Rank" value={String(myRank)} tone="rank" />
+            <StatBox label="Sold / Total" value={`${totalSales}/${totalJokes}`} tone="blue" />
+            <StatBox label="Profit" value={profitLabel} tone={profitTone} valueClassName="text-xl" />
+            <StatBox label="Created to Publish" value={fmtSeconds(avgLeadSec)} tone="sky" />
             <StatBox label="Batches" value={batchesCreated} tone="slate" />
-            <StatBox label="Waste" value={waste} tone="rose" />
+            <StatBox label="Content Waste" value={waste} tone="rose" />
           </div>
           <Card title="Jokes by stage" subtitle="Where your output sits right now">
             <StageDots batches={myBatches} />

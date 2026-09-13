@@ -1,15 +1,21 @@
 import React, { useMemo, useState } from 'react';
 import { useGame } from '../context';
 import { Button, Card, StatBox, RoleLayout, Modal, SectionLabel, BRAND, fmt$ } from '../components';
+import type { StatBoxTone } from '../components';
 import {
   Send, Zap, GripVertical, ChevronUp, ChevronDown, Check, X as XIcon,
   Star, BadgeCheck, CheckCircle2, Minus, MousePointerClick,
-  Scissors, CornerDownLeft,
+  Scissors, CornerDownLeft, Trash2,
   Briefcase, GraduationCap, Cpu, Bot, PawPrint, Medal, Coffee,
   Smartphone, BookOpen, Pencil, type LucideIcon,
 } from 'lucide-react';
 import { SIM_CONFIG } from '../config/simConfig';
-import { DIMENSIONS, CATEGORICAL_DIMS, IDEAL_PROFILE, dimById, dimProx } from '../config/dimensions';
+import { computeAvgCreatedToPublishSeconds } from '../services/economics';
+import {
+  INITIAL_NUDGE_STATE, nudgeReducer, isNudgeOpen,
+  type NudgeEvent,
+} from '../services/marketingNudge';
+import { DIMENSIONS, SCORED_DIMENSIONS, CATEGORICAL_DIMS, PLACEHOLDER_DIMS, INTRINSIC_DIMS, IDEAL_PROFILE, dimById, dimProx } from '../config/dimensions';
 
 /* ---- Icon lookup for the 10 Topic palette ---- */
 const TOPIC_ICONS: Record<string, LucideIcon> = {
@@ -18,6 +24,13 @@ const TOPIC_ICONS: Record<string, LucideIcon> = {
 };
 
 /* ---- Helpers ---- */
+const fmtSeconds = (s: number | null) => {
+  if (s == null) return '—';
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}m ${r}s`;
+};
 const ordinal = (n: number) => {
   const s = ['th', 'st', 'nd', 'rd'];
   const v = n % 100;
@@ -43,9 +56,11 @@ function defaultDims(): Record<string, string> {
   return { ...IDEAL_PROFILE };
 }
 
-/* The dims a sale reveals: one of the top-3 closest + two seeded-random others. */
+/* The dims a sale reveals: one of the top-3 closest + two seeded-random others.
+   Placeholder dims (Structure) are excluded — they score 0 forever and would
+   otherwise dominate the bottom of the ranking (REFACTOR_PLAN §7.2). */
 function revealedDimsFor(jokeId: number, dims: Record<string, string>): RevealedDim[] {
-  const scored: RevealedDim[] = DIMENSIONS.map(d => ({
+  const scored: RevealedDim[] = SCORED_DIMENSIONS.map(d => ({
     dim: d,
     level: dims[d.id] ?? d.levels[0],
     prox: dimProx(d, dims[d.id] ?? d.levels[0]),
@@ -108,6 +123,70 @@ const DimScale: React.FC<{ dim: ReturnType<typeof dimById>; level: string; prox:
   );
 };
 
+/* ============================ Shared release fields ============================
+   A joke can't go to market without a Topic and a title. The second decision
+   nudge has to collect both inside its dialog — telling a team "publish now" and
+   then making them close the popup to type a title would be a dead end. So both
+   fields live here and are rendered identically on the card and in the dialog. */
+
+const TopicPicker: React.FC<{
+  value?: string;
+  otherValue?: string;
+  onPick: (topicId: string) => void;
+  onOther: (text: string) => void;
+}> = ({ value, otherValue, onPick, onOther }) => (
+  <div>
+    <SectionLabel className="mb-1.5">
+      Topic <span className="text-rose-500">· required</span>
+    </SectionLabel>
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5">
+      {SIM_CONFIG.categories.map(c => {
+        const on = value === c.id;
+        const Ic = TOPIC_ICONS[c.icon];
+        return (
+          <button
+            key={c.id}
+            onClick={() => onPick(c.id)}
+            className={`inline-flex items-center justify-center gap-1 text-[11px] px-2 py-1.5 rounded-md border transition-colors ${
+              on ? 'bg-[#005587] text-white border-[#005587]' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100'
+            }`}
+          >
+            {Ic && <Ic size={12} />} {c.label}
+          </button>
+        );
+      })}
+    </div>
+    {value === 'other' && (
+      <input
+        value={otherValue || ''}
+        onChange={(e) => onOther(e.target.value)}
+        placeholder="Type a custom topic…"
+        maxLength={30}
+        className="mt-2 w-full bg-white border border-[#8bb8e8] rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#8bb8e8]"
+      />
+    )}
+  </div>
+);
+
+const TitleField: React.FC<{
+  value?: string;
+  onChange: (text: string) => void;
+  hint?: string;
+}> = ({ value, onChange, hint = '(this joke)' }) => (
+  <div>
+    <SectionLabel className="mb-1.5">
+      Market title <span className="text-gray-400">{hint}</span>
+    </SectionLabel>
+    <input
+      value={value || ''}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder="A short market title for this joke…"
+      maxLength={120}
+      className="w-full bg-white border border-gray-300 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#8bb8e8]"
+    />
+  </div>
+);
+
 /* ============================ Sold signal ============================ */
 const SoldSignal: React.FC<{ entry: { id: number; text: string; title: string; dims: RevealedDim[] } }> = ({ entry }) => {
   const top2 = [...entry.dims].sort((a, b) => b.prox - a.prox).slice(0, 2).map(s => s.dim!.label.toLowerCase());
@@ -138,39 +217,17 @@ const SoldSignal: React.FC<{ entry: { id: number; text: string; title: string; d
    "Split Above?" button carves it off as the next joke. Auto-finalizes at targetCount
    (Round 1). Removing a split card re-opens everything from that point. */
 
-/** Compute the character offset within `container` for a click at (x, y). */
-function offsetFromPoint(container: HTMLElement, x: number, y: number): number | null {
-  let range: Range | null = null;
-  const doc = document as any;
-  if (doc.caretRangeFromPoint) {
-    range = doc.caretRangeFromPoint(x, y);
-  } else if (doc.caretPositionFromPoint) {
-    const pos = doc.caretPositionFromPoint(x, y);
-    if (pos) {
-      range = document.createRange();
-      range.setStart(pos.offsetNode, pos.offset);
-    }
-  }
-  if (!range) return null;
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-  let offset = 0;
-  let node: Node | null;
-  while ((node = walker.nextNode())) {
-    if (node === range.startContainer) return offset + range.startOffset;
-    offset += (node.textContent || '').length;
-  }
-  return null;
-}
-
 const BatchSplitter: React.FC<{
   rawText: string;
   targetCount: number | null; // R1 = 5 (soft hint only — no auto-advance)
   onComplete: (jokes: string[]) => void;
 }> = ({ rawText, targetCount, onComplete }) => {
-  // Offset model: one immutable-ish `text` + a sorted list of cut offsets. Cards are the
-  // segments before the last cut; `working` is the tail (editable). Removing a cut is
-  // lossless — it never inserts a separator, so undo restores the original format exactly.
-  const [text, setText] = useState(rawText.trim());
+  // Offset model: one immutable `text` + a sorted list of cut offsets. Cards are the
+  // segments before the last cut; `working` is the tail. Removing a cut is lossless —
+  // it never inserts a separator, so undo restores the original format exactly.
+  // The text is READ-ONLY: Marketing decides where the cuts go, never what the jokes say.
+  // (The component is keyed on batch_id by the caller, so a new batch remounts it.)
+  const text = useMemo(() => rawText.trim(), [rawText]);
   const [cuts, setCuts] = useState<number[]>([]);
   const [caret, setCaret] = useState<number>(0);
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -230,14 +287,13 @@ const BatchSplitter: React.FC<{
     setCaret(0);
   };
 
-  /** Edit only the working tail; cuts (all before lastCut) stay valid. */
-  const editWorking = (newVal: string) => {
-    setText(text.slice(0, lastCut) + newVal);
-  };
-
-  /** Explicit commit — the ONLY way to leave Phase 1 (box must be empty). */
+  /** Explicit commit — the ONLY way to leave Phase 1 (box must be empty).
+   *  Strips the AI's leading list markers ("1) ", "2." …) so they don't reach the
+   *  market or the classifier — Marketing can no longer delete them by hand. */
   const confirm = () => {
-    const jokes = splits.map(s => s.trim()).filter(Boolean);
+    const jokes = splits
+      .map(s => s.trim().replace(/^\d{1,2}\s*[.)]\s*/, '').trim())
+      .filter(Boolean);
     if (jokes.length) onComplete(jokes);
   };
 
@@ -251,7 +307,7 @@ const BatchSplitter: React.FC<{
         <Scissors size={16} className="mt-0.5 shrink-0" />
         <span>
           <b>Split the batch.</b> Put the cursor between two jokes and press <b>Enter</b> (or click
-          <b> Split</b>). 
+          <b> Split</b>). You can't change the wording — only where the text is cut.
         </span>
       </div>
 
@@ -297,21 +353,23 @@ const BatchSplitter: React.FC<{
             {'​'}
           </div>
 
-          {/* editable textarea on top */}
+          {/* read-only textarea on top — caret still moves, but the text can't change.
+              readOnly (not disabled) keeps focus, caret, selection and key handling,
+              which the mirror highlight and the floating Split button both depend on. */}
           <textarea
             ref={taRef}
             value={working}
-            onChange={(e) => { editWorking(e.target.value); requestAnimationFrame(syncCaret); }}
+            readOnly
             onClick={syncCaret}
             onKeyUp={syncCaret}
             onSelect={syncCaret}
             onKeyDown={(e) => {
-              // Enter splits at the caret; Shift+Enter inserts a line break (for editing).
-              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSplit(); }
+              // Enter splits at the caret. The text itself is not editable.
+              if (e.key === 'Enter') { e.preventDefault(); doSplit(); }
             }}
             spellCheck={false}
             placeholder="All text split — review your jokes above, then confirm."
-            className={`${boxClass} relative bg-transparent text-gray-900 border-gray-300 resize-y outline-none focus:ring-2 focus:ring-[#8bb8e8]`}
+            className={`${boxClass} relative bg-transparent text-gray-900 border-gray-300 resize-y outline-none cursor-text focus:ring-2 focus:ring-[#8bb8e8]`}
             style={{ caretColor: '#005587' }}
           />
 
@@ -369,6 +427,22 @@ const QualityControl: React.FC = () => {
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [dismissedTeamPopup, setDismissedTeamPopup] = useState(false);
+
+  /* Decision clock. The reducer needs the instructor's durations, which live in
+     `config`, so this is a useState + wrapper rather than a bare useReducer. */
+  const [nudge, setNudge] = useState(INITIAL_NUDGE_STATE);
+  const nudgeCfg = {
+    nudge1Seconds: config.marketingNudge1Seconds,
+    nudge2Seconds: config.marketingNudge2Seconds,
+  };
+  const nudgeCfgRef = React.useRef(nudgeCfg);
+  nudgeCfgRef.current = nudgeCfg;
+  // Reads the durations from a ref so the callback stays stable — otherwise every
+  // config render would restart the pending timer and the clock would never finish.
+  const dispatchNudge = React.useCallback(
+    (event: NudgeEvent) => setNudge(prev => nudgeReducer(prev, event, nudgeCfgRef.current)),
+    [],
+  );
 
   /* Sync orderIds when a new batch arrives OR the current batch gets split
      (jokes go from empty → populated for the same batch_id). Keying on a
@@ -434,19 +508,41 @@ const QualityControl: React.FC = () => {
   };
   const endDrag = () => setDragIdx(null);
 
-  const toggle = (id: number) => setSelectedIds(s => {
-    const n = new Set(s);
-    n.has(id) ? n.delete(id) : n.add(id);
-    return n;
-  });
+  const toggle = (id: number) => {
+    // TEMP (ranking disabled): the top card used to be undeselectable, because
+    // Rank 1 always shipped. Selection is now entirely the team's call — the
+    // decision timer in services/marketingNudge.ts supplies the pressure instead.
+    // if (orderIds[0] === id) return;
+    setSelectedIds(s => {
+      const n = new Set(s);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+  };
 
   const jokeById = (id: number) => incomingJokes.find(j => j.id === id);
-  const submittingIds = selectedIds.size
-    ? orderIds.filter(id => selectedIds.has(id))
-    : orderIds[0] != null ? [orderIds[0]] : [];
+  // TEMP (ranking disabled): was `(id, idx) => idx === 0 || selectedIds.has(id)`,
+  // which force-shipped the top card. Nothing ships unless it's chosen now.
+  // Filtering over orderIds (not selectedIds) keeps the list in card order.
+  const submittingIds = orderIds.filter(id => selectedIds.has(id));
   const isSubmitting = (id: number) => submittingIds.includes(id);
 
-  const canRelease = submittingIds.length > 0 && submittingIds.every(
+  /* Round 2 batches can be a single joke, so Marketing must be able to reject the
+     lot — the batch is discarded and charged as waste. Round 1 still demands at
+     least one joke, which is what keeps the market stocked from a 5-joke batch. */
+  const mayPublishNothing = config.round === 2;
+  const discardingAll = mayPublishNothing && submittingIds.length === 0;
+  /* What this batch already costs as waste. NOT a marginal cost of clicking
+     discard: computeProfit derives `discarded = created − published`, so a joke
+     is charged the moment it becomes a record at split time. Passing on the batch
+     doesn't add a charge — it just settles the decision. The copy says "count as
+     waste" rather than "costs you" for exactly that reason. */
+  const discardAllCost = orderIds.length * config.costOfDiscard;
+
+  // Every submitted joke needs a topic + title, so none can be silently dropped
+  // from the payload. `every` over an empty basket is vacuously true, which is
+  // exactly what lets a Round 2 discard-all through.
+  const canRelease = (submittingIds.length > 0 || mayPublishNothing) && submittingIds.every(
     id =>
       topics[id] &&
       (topics[id] !== 'other' || (otherText[id] || '').trim().length > 0) &&
@@ -474,6 +570,7 @@ const QualityControl: React.FC = () => {
 
     const batchId = String(qcQueue.batch.batch_id);
     const count = submittingIds.length;
+    dispatchNudge({ type: 'RELEASED' });   // no popup may ambush a team that shipped
     await rateBatch(batchId, ratings, tagsOut, batchFeedback, titlesOut, topicsOut);
 
     /* Append SoldSignal entries for the released jokes (using IDEAL_PROFILE-derived dims). */
@@ -490,8 +587,12 @@ const QualityControl: React.FC = () => {
       return [...additions, ...prev];
     });
 
-    const def = selectedIds.size ? '' : 'top-ranked (default) · ';
-    setToast(`Released ${count} joke${count > 1 ? 's' : ''} · ${def}feedback sent to Joke Maker · −${fmt$(count * config.costOfPublishing)}`);
+    // TEMP (ranking disabled): used to read "Rank 1 + N selected".
+    setToast(
+      count === 0
+        ? `Passed on this batch · ${orderIds.length} joke${orderIds.length > 1 ? 's' : ''} discarded · feedback sent to Joke Maker · −${fmt$(orderIds.length * config.costOfDiscard)}`
+        : `Released ${count} joke${count > 1 ? 's' : ''} · feedback sent to Joke Maker · −${fmt$(count * config.costOfPublishing)}`,
+    );
     window.setTimeout(() => setToast(null), 2800);
   };
 
@@ -504,13 +605,74 @@ const QualityControl: React.FC = () => {
   const needsSplit = !!(rawText && rawText.trim()) && incomingJokes.length === 0;
   const splitTarget = config.round === 1 ? config.round1BatchSize : null;
 
-  /* Stats */
+  /* ---- Marketing's decision clock ----------------------------------------
+     Ranking no longer force-ships the top card, so nothing reaches the market
+     unless the team chooses it. Two nudges supply the pressure that the forced
+     Rank 1 used to. The state machine is in services/marketingNudge.ts; this
+     block only translates it to and from React. */
+
+  // Arm on arrival at the selection view; disarm if the batch goes away.
+  const batchReady = !needsSplit && orderIds.length > 0;
+  React.useEffect(() => {
+    dispatchNudge(batchReady ? { type: 'BATCH_READY' } : { type: 'BATCH_CLEARED' });
+    // queueSig, not orderIds — reordering cards must not restart the clock.
+  }, [batchReady, queueSig, dispatchNudge]);
+
+  // The single timer. `dueInMs` is null whenever nothing is pending.
+  React.useEffect(() => {
+    if (nudge.dueInMs == null) return;
+    const t = window.setTimeout(() => dispatchNudge({ type: 'TIMEOUT' }), nudge.dueInMs);
+    return () => window.clearTimeout(t);
+  }, [nudge.dueInMs, nudge.phase, dispatchNudge]);
+
+  /* Round 1's popups open with a joke already in hand, so neither is a dead end:
+     the first nudge's copy says we picked their top card, and the second needs a
+     subject to publish. Only ever fills an EMPTY basket — a team that has already
+     chosen keeps its own picks.
+
+     Round 2 does NOT auto-pick. Rejecting the batch is a legitimate answer there,
+     so pre-selecting a joke would quietly argue against the choice we're offering. */
+  const autoPickTop = React.useCallback(() => {
+    if (mayPublishNothing) return;
+    setSelectedIds(prev => {
+      if (prev.size > 0) return prev;
+      const top = orderIds[0];
+      return top == null ? prev : new Set([top]);
+    });
+  }, [orderIds, mayPublishNothing]);
+
+  // Whether the basket was empty when the popup opened — decides which wording
+  // popup 1 uses, since "we've selected your top joke" is a lie if they'd picked.
+  const [nudge1AutoPicked, setNudge1AutoPicked] = useState(false);
+  React.useEffect(() => {
+    if (nudge.phase === 'nudge1') {
+      setNudge1AutoPicked(submittingIds.length === 0);
+      autoPickTop();
+    }
+    if (nudge.phase === 'nudge2') autoPickTop();
+    // submittingIds is read as an opening snapshot, so it must not retrigger this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nudge.phase, autoPickTop]);
+
+  /* Stats. Profit replaces avg-score — Marketing bears the cost, so it can go
+     negative. Waste = jokes the team discarded (created but never published). */
   const myRank = teamSummary?.rank ?? '—';
   const queueSize = qcQueue?.queue_size ?? incomingJokes.length;
-  const avgScore = teamSummary?.avg_score_overall != null
-    ? Number(teamSummary.avg_score_overall).toFixed(1)
-    : '—';
   const totalSales = teamSummary?.total_sales ?? 0;
+  const jokesCreated = teamSummary?.jokes_created ?? 0;
+  const jokesPublished = teamSummary?.jokes_published ?? 0;
+  const waste = Math.max(0, jokesCreated - jokesPublished);
+  const profitRaw = teamSummary?.profit;
+  const profitLabel = profitRaw == null ? '—' : fmt$(profitRaw);
+  const profitTone: StatBoxTone =
+    profitRaw == null ? 'slate' : profitRaw < 0 ? 'rose' : 'emerald';
+  // Created → Publish: avg seconds this team's batches spend between the Joke
+  // Maker submitting them and Marketing releasing them — the same measure the
+  // Joke Maker sees. It's Marketing's own turnaround, so it's theirs to improve.
+  const avgLeadSec = useMemo(
+    () => computeAvgCreatedToPublishSeconds(batches.filter(b => b.team === user?.team)),
+    [batches, user?.team],
+  );
 
   return (
     <RoleLayout>
@@ -541,7 +703,9 @@ const QualityControl: React.FC = () => {
             title="Marketing Desk"
             subtitle={needsSplit
               ? 'Read the batch · click to place a cut · split into individual jokes'
-              : 'Rank the cards (best on top) · assign Topic · click to submit · title each · release'}
+              : mayPublishNothing
+              ? 'Pick the jokes worth selling — or none · assign a Topic + title to each · release · drag to reorder'
+              : 'Pick at least one joke to sell · assign a Topic + title to each · release · drag to reorder'}
             accent={BRAND.marketing}
           >
             {needsSplit ? (
@@ -576,9 +740,11 @@ const QualityControl: React.FC = () => {
                 {orderIds.map((id, idx) => {
                   const j = jokeById(id);
                   if (!j) return null;
+                  // TEMP (ranking disabled): `isRankOne` used to override the
+                  // selected state on the top card. Every card is now equal —
+                  // position is just where it sits in the list.
                   const selected = selectedIds.has(id);
-                  const isDefault = !selectedIds.size && idx === 0;
-                  const submitting = selected || isDefault;
+                  const submitting = selected;
                   const dragging = dragIdx === idx;
                   return (
                     <div
@@ -603,39 +769,34 @@ const QualityControl: React.FC = () => {
                       } ${
                         selected
                           ? 'bg-green-50 border-green-400 ring-2 ring-green-200'
-                          : isDefault
-                          ? 'bg-white border-amber-300 border-dashed'
                           : 'bg-white border-gray-200 hover:border-[#8bb8e8]'
                       }`}
                     >
-                      {submitting ? (
-                        <div className={`mb-3 flex items-center justify-center gap-1.5 text-xs font-semibold rounded-md px-3 py-2 ${
-                          selected ? 'bg-green-600 text-white' : 'bg-amber-100 text-amber-800'
-                        }`}>
-                          {selected ? <Check size={14} /> : <Star size={14} />}
-                          {selected ? 'Selected to submit' : 'Top rank — submits by default'}
+                      {/* TEMP (ranking disabled): the top card used to show an
+                          amber "Rank 1 — always submits" banner here. */}
+                      {selected ? (
+                        <div className="mb-3 flex items-center justify-center gap-1.5 text-xs font-semibold rounded-md px-3 py-2 bg-green-600 text-white">
+                          <Check size={14} />
+                          Selected to submit
                         </div>
                       ) : (
                         <div className="mb-3 flex items-center justify-center gap-1.5 text-xs font-medium rounded-md px-3 py-2 bg-white border border-dashed border-gray-300 text-gray-500">
                           <MousePointerClick size={13} />
-                          Click to submit
+                          Click to add
                         </div>
                       )}
 
                       <div className="flex items-start gap-3">
-                        {idx < 3 ? (
-                          <span className="shrink-0 flex flex-col items-center justify-center w-11 h-11 rounded-lg bg-gray-900 text-white leading-none">
-                            <span className="text-[8px] font-bold uppercase tracking-wider text-gray-400">Rank</span>
-                            <span className="text-base font-extrabold tabular-nums mt-0.5">{ordinal(idx + 1)}</span>
-                          </span>
-                        ) : (
-                          <span
-                            className="shrink-0 flex items-center justify-center w-11 h-11 rounded-lg bg-gray-100 text-gray-400 leading-none"
-                            title="Unranked"
-                          >
-                            <Minus size={18} />
-                          </span>
-                        )}
+                        {/* TEMP (ranking disabled): this was a 44px black "RANK 1st"
+                            tile for the top three and a grey "Unranked" dash below.
+                            It's now a quiet position count — the cards can still be
+                            ordered, but the number no longer passes judgement. */}
+                        <span
+                          className="shrink-0 flex items-center justify-center w-[18px] h-[18px] mt-1 rounded-full bg-gray-100 text-gray-400 text-[10px] font-semibold tabular-nums leading-none"
+                          title={`Card ${idx + 1} of ${orderIds.length}`}
+                        >
+                          {idx + 1}
+                        </span>
                         <blockquote className="flex-1 border-l-[3px] border-[#8bb8e8] pl-3 py-0.5">
                           <p className="joke-font text-gray-900 text-[17px] leading-relaxed text-pretty">{j.text}</p>
                         </blockquote>
@@ -644,7 +805,7 @@ const QualityControl: React.FC = () => {
                           <button
                             onClick={() => move(idx, -1)}
                             disabled={idx === 0}
-                            title="Rank higher"
+                            title="Move up"
                             className="text-gray-400 hover:text-gray-700 disabled:opacity-25 disabled:cursor-not-allowed"
                           >
                             <ChevronUp size={15} />
@@ -652,7 +813,7 @@ const QualityControl: React.FC = () => {
                           <button
                             onClick={() => move(idx, 1)}
                             disabled={idx === orderIds.length - 1}
-                            title="Rank lower"
+                            title="Move down"
                             className="text-gray-400 hover:text-gray-700 disabled:opacity-25 disabled:cursor-not-allowed"
                           >
                             <ChevronDown size={15} />
@@ -661,50 +822,16 @@ const QualityControl: React.FC = () => {
                       </div>
 
                       {submitting && (
-                        <div className="mt-3">
-                          <SectionLabel className="mb-1.5">
-                            Topic <span className="text-rose-500">· required</span>
-                          </SectionLabel>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5">
-                            {SIM_CONFIG.categories.map(c => {
-                              const on = topics[id] === c.id;
-                              const Ic = TOPIC_ICONS[c.icon];
-                              return (
-                                <button
-                                  key={c.id}
-                                  onClick={() => setTopics(t => ({ ...t, [id]: c.id }))}
-                                  className={`inline-flex items-center justify-center gap-1 text-[11px] px-2 py-1.5 rounded-md border transition-colors ${
-                                    on ? 'bg-[#005587] text-white border-[#005587]' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100'
-                                  }`}
-                                >
-                                  {Ic && <Ic size={12} />} {c.label}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          {topics[id] === 'other' && (
-                            <input
-                              value={otherText[id] || ''}
-                              onChange={(e) => setOtherText(t => ({ ...t, [id]: e.target.value }))}
-                              placeholder="Type a custom topic…"
-                              maxLength={30}
-                              className="mt-2 w-full bg-white border border-[#8bb8e8] rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#8bb8e8]"
-                            />
-                          )}
-                        </div>
-                      )}
-
-                      {submitting && (
-                        <div className="mt-3">
-                          <SectionLabel className="mb-1.5">
-                            Market title <span className="text-gray-400">(this joke)</span>
-                          </SectionLabel>
-                          <input
-                            value={titles[id] || ''}
-                            onChange={(e) => setTitles(t => ({ ...t, [id]: e.target.value }))}
-                            placeholder="A short market title for this joke…"
-                            maxLength={120}
-                            className="w-full bg-white border border-gray-300 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#8bb8e8]"
+                        <div className="mt-3 space-y-3">
+                          <TopicPicker
+                            value={topics[id]}
+                            otherValue={otherText[id]}
+                            onPick={(topicId) => setTopics(t => ({ ...t, [id]: topicId }))}
+                            onOther={(v) => setOtherText(t => ({ ...t, [id]: v }))}
+                          />
+                          <TitleField
+                            value={titles[id]}
+                            onChange={(v) => setTitles(t => ({ ...t, [id]: v }))}
                           />
                         </div>
                       )}
@@ -726,8 +853,19 @@ const QualityControl: React.FC = () => {
                 </div>
 
                 <div className="flex items-center justify-end pt-1">
-                  <Button variant={canRelease ? 'success' : 'secondary'} onClick={release} disabled={!canRelease}>
-                    <span className="flex items-center gap-1">Release to market <Send size={15} /></span>
+                  <Button
+                    variant={!canRelease ? 'secondary' : discardingAll ? 'danger' : 'success'}
+                    onClick={release}
+                    disabled={!canRelease}
+                  >
+                    {discardingAll ? (
+                      <span className="flex items-center gap-1">
+                        Discard batch · {orderIds.length} joke{orderIds.length > 1 ? 's' : ''}{' '}
+                        <Trash2 size={15} />
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1">Release to market <Send size={15} /></span>
+                    )}
                   </Button>
                 </div>
               </div>
@@ -738,11 +876,48 @@ const QualityControl: React.FC = () => {
         {/* RIGHT: stats + sold-signal learning panel */}
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3">
-            <StatBox label="Current Rank" value={String(myRank)} tone="rank" />
-            <StatBox label="Queue" value={queueSize} tone="blue" />
-            <StatBox label="Avg Score" value={avgScore} tone="sky" />
-            <StatBox label="Total Sales" value={totalSales} tone="emerald" />
+            <StatBox label="Current Team Rank" value={String(myRank)} tone="rank" />
+            {/* TODO(backend): queue_size from the mock API counts every SUBMITTED
+                batch in the round across ALL teams, and counts batches rather than
+                jokes. Point this at the real per-team backlog endpoint when it lands. */}
+            <StatBox label="Content Backlog" value={queueSize} tone="blue" />
+            <StatBox label="Profit" value={profitLabel} tone={profitTone} valueClassName="text-xl" />
+            <StatBox label="Sold / Total" value={`${totalSales}/${jokesCreated}`} tone="sky" />
+            <StatBox label="Created to Publish" value={fmtSeconds(avgLeadSec)} tone="sky" />
+            <StatBox label="Content Waste" value={waste} tone="rose" />
           </div>
+
+          {/* The 12 criteria — so Marketing knows what to coach the Joke Maker on. */}
+          <Card title="The 12 criteria customers judge">
+            <div className="flex flex-wrap gap-1.5">
+              {DIMENSIONS.map(d => {
+                const placeholder = PLACEHOLDER_DIMS.has(d.id);
+                const intrinsic = INTRINSIC_DIMS.has(d.id);
+                return (
+                  <span
+                    key={d.id}
+                    className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border ${
+                      placeholder
+                        ? 'bg-gray-50 text-gray-400 border-gray-200'
+                        : intrinsic
+                        ? 'bg-amber-50 text-amber-800 border-amber-300'
+                        : 'bg-white text-gray-700 border-gray-200'
+                    }`}
+                    title={
+                      placeholder
+                        ? 'Structure — categories not defined yet, so it doesn’t count'
+                        : intrinsic
+                        ? 'Title Fit — does your title match the joke? This one is yours to control.'
+                        : undefined
+                    }
+                  >
+                    {intrinsic && <Star size={10} />}
+                    {d.label}
+                  </span>
+                );
+              })}
+            </div>
+          </Card>
           <Card
             title="What's selling — and why"
             subtitle="Each sale is free market research: which attributes matched customer demand"
@@ -760,6 +935,113 @@ const QualityControl: React.FC = () => {
           </Card>
         </div>
       </div>
+
+      {/* ---- Decision nudge 1: the gentle one ---- */}
+      <Modal
+        isOpen={nudge.phase === 'nudge1'}
+        onClose={() => dispatchNudge({ type: 'DISMISS' })}
+        title={mayPublishNothing ? 'Time to make a call' : 'Time to ship something'}
+        maxWidth="max-w-md"
+      >
+        <p className="text-sm text-gray-700 leading-relaxed">
+          {/* Round 2 never auto-picks, so it can't claim we chose anything for them —
+              and passing on the batch is one of the two answers we're asking for. */}
+          {mayPublishNothing ? (
+            <>
+              You&apos;ve been deliberating a while. Publish what&apos;s worth selling — or
+              pass on this batch if none of it is.
+            </>
+          ) : nudge1AutoPicked ? (
+            <>
+              You&apos;ve been deliberating a while. We&apos;ve selected your top joke to get
+              you started — change it if you disagree.
+            </>
+          ) : (
+            <>
+              You&apos;ve been deliberating a while. You&apos;ve picked{' '}
+              <b>{submittingIds.length} joke{submittingIds.length > 1 ? 's' : ''}</b> — give{' '}
+              {submittingIds.length > 1 ? 'them' : 'it'} a Topic and a title, then release to market.
+            </>
+          )}
+        </p>
+        <p className="text-xs text-gray-500 mt-2">
+          An unsold joke earns nothing. An unpublished one can&apos;t earn at all.
+        </p>
+        <div className="flex justify-end mt-5">
+          <Button variant="primary" onClick={() => dispatchNudge({ type: 'DISMISS' })}>
+            Keep choosing
+          </Button>
+        </div>
+      </Modal>
+
+      {/* ---- Decision nudge 2: the last one. Carries the release fields so
+              "publish now" is never a dead end. ---- */}
+      <Modal
+        isOpen={nudge.phase === 'nudge2'}
+        onClose={() => dispatchNudge({ type: 'DISMISS' })}
+        title={
+          discardingAll
+            ? 'Publish or pass?'
+            : submittingIds.length > 1
+            ? 'Ready to publish these?'
+            : 'Ready to publish this one?'
+        }
+        maxWidth="max-w-xl"
+      >
+        {/* Round 2 with an empty basket: there are no jokes to show fields for, so
+            the dialog states both options instead and lets them pick one. */}
+        {discardingAll && (
+          <p className="text-sm text-gray-700 leading-relaxed">
+            Nothing is selected. You can pass on this batch — the{' '}
+            {orderIds.length > 1
+              ? `${orderIds.length} jokes stay unpublished and count as waste`
+              : 'joke stays unpublished and counts as waste'}{' '}
+            (<b>{fmt$(discardAllCost)}</b>) — or keep looking for something worth selling.
+          </p>
+        )}
+        <div className="space-y-4">
+          {submittingIds.map(id => {
+            const j = jokeById(id);
+            if (!j) return null;
+            return (
+              <div key={id} className="rounded-lg border border-gray-200 p-3 space-y-3">
+                <blockquote className="border-l-[3px] border-[#8bb8e8] pl-3 py-0.5">
+                  <p className="joke-font text-gray-900 text-[15px] leading-relaxed">{j.text}</p>
+                </blockquote>
+                <TopicPicker
+                  value={topics[id]}
+                  otherValue={otherText[id]}
+                  onPick={(topicId) => setTopics(t => ({ ...t, [id]: topicId }))}
+                  onOther={(v) => setOtherText(t => ({ ...t, [id]: v }))}
+                />
+                <TitleField
+                  value={titles[id]}
+                  onChange={(v) => setTitles(t => ({ ...t, [id]: v }))}
+                />
+              </div>
+            );
+          })}
+        </div>
+        {!canRelease && (
+          <p className="text-xs text-amber-700 mt-3">
+            Add a Topic and a title to publish.
+          </p>
+        )}
+        <div className="flex justify-end gap-2 mt-5">
+          <Button variant="secondary" onClick={() => dispatchNudge({ type: 'DISMISS' })}>
+            {discardingAll ? 'Keep choosing' : 'Not yet'}
+          </Button>
+          {discardingAll ? (
+            <Button variant="danger" onClick={release}>
+              <span className="flex items-center gap-1">Publish nothing <Trash2 size={15} /></span>
+            </Button>
+          ) : (
+            <Button variant="success" onClick={release} disabled={!canRelease}>
+              <span className="flex items-center gap-1">Publish <Send size={15} /></span>
+            </Button>
+          )}
+        </div>
+      </Modal>
 
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm px-4 py-2.5 rounded-lg shadow-xl flex items-center gap-2">

@@ -110,7 +110,11 @@ export interface GameConfig {
   round2BatchLimit: number;
   marketPrice: number;
   costOfPublishing: number;
-  costOfCreation: number;
+  costOfDiscard: number;
+  /** Seconds Marketing may deliberate on a split batch before the first nudge. */
+  marketingNudge1Seconds: number;
+  /** Seconds after that nudge is dismissed before the second (and last) one. */
+  marketingNudge2Seconds: number;
 }
 
 // --- API shapes (schema-aligned) ---
@@ -204,7 +208,7 @@ export interface ApiTeamSummaryResponse {
   unsold_jokes?: number;
   jokes_created?: number;
   jokes_published?: number;
-  cost_breakdown?: { revenue: number; production_cost: number; publish_cost: number; profit: number };
+  cost_breakdown?: { revenue: number; publish_cost: number; discard_cost: number; profit: number };
 }
 
 export interface ApiTeamBatchesResponse {

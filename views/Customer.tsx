@@ -1,12 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Card, RoleLayout, BRAND } from '../components';
 import {
-  Play, Pause, SkipForward, RotateCcw, ShoppingBag, X, Repeat, DollarSign,
-  Factory, ClipboardCheck, Bot, ChevronRight, Info, Cpu, Sparkles, Eye,
+  ShoppingBag, X, Repeat, DollarSign,
+  Factory, ClipboardCheck, Bot, ChevronRight, Info, Cpu, Sparkles, Eye, Ban,
 } from 'lucide-react';
 import {
-  simulateCustomer, DEMO_JOKES, DEMO_CONFIG,
-  type DecisionStep, type Verdict, type DimScore,
+  simulateCustomer, simulateMarket, normalPdf, DEMO_JOKES, DEMO_CONFIG,
+  type DecisionStep, type Verdict, type DimScore, type JokeMarketResult,
 } from '../services/aiCustomerDemo';
 
 /* ---- verdict styling ---- */
@@ -17,14 +17,15 @@ const VERDICT: Record<Verdict, { label: string; color: string; bg: string; borde
   SKIP_FULL: { label: 'Skipped · budget full',  color: '#64748b', bg: '#f8fafc', border: '#e2e8f0', icon: <X size={14} /> },
 };
 
-const pct = (n: number) => `${Math.round(n * 100)}%`;
+const CFG = DEMO_CONFIG;
+const fit2 = (n: number) => n.toFixed(2);
 
 /* ---- Pipeline breadcrumb: where this stage sits in the game ---- */
 const Pipeline: React.FC = () => {
   const stages = [
     { label: 'Production', sub: 'Joke Makers create', icon: <Factory size={15} />, active: false },
-    { label: 'Quality Control', sub: 'rate & publish', icon: <ClipboardCheck size={15} />, active: false },
-    { label: 'AI Customer', sub: 'Sales — buying', icon: <Bot size={15} />, active: true },
+    { label: 'Marketing', sub: 'title & publish', icon: <ClipboardCheck size={15} />, active: false },
+    { label: 'AI Customers', sub: `${CFG.customerCount} automated buyers`, icon: <Bot size={15} />, active: true },
   ];
   return (
     <div className="flex items-center gap-1 flex-wrap">
@@ -50,37 +51,106 @@ const Pipeline: React.FC = () => {
 
 /* ---- A single dimension row in the scorecard ---- */
 const DimRow: React.FC<{ d: DimScore }> = ({ d }) => (
-  <div className="flex items-center gap-2 py-1">
+  <div className={`flex items-center gap-2 py-1 ${d.placeholder ? 'opacity-45' : ''}`}>
     <span className="w-24 shrink-0 text-[11px] font-semibold text-gray-600 truncate" title={d.label}>{d.label}</span>
-    <span
-      className={`shrink-0 inline-flex items-center gap-0.5 text-[9px] font-bold px-1 py-0.5 rounded ${
-        d.source === 'rule' ? 'bg-sky-100 text-sky-700' : 'bg-violet-100 text-violet-700'
-      }`}
-      title={d.source === 'rule' ? 'Rule-based (deterministic / QC-classifiable)' : 'LLM-inferred'}
-    >
-      {d.source === 'rule' ? <Cpu size={9} /> : <Sparkles size={9} />}
-      {d.source === 'rule' ? 'Rule' : 'LLM'}
-    </span>
+    {d.placeholder ? (
+      <span className="shrink-0 inline-flex items-center gap-0.5 text-[9px] font-bold px-1 py-0.5 rounded bg-gray-100 text-gray-500" title="Categories not defined yet — contributes 0">
+        <Ban size={9} /> N/A
+      </span>
+    ) : (
+      <span
+        className={`shrink-0 inline-flex items-center gap-0.5 text-[9px] font-bold px-1 py-0.5 rounded ${
+          d.source === 'rule' ? 'bg-sky-100 text-sky-700' : 'bg-violet-100 text-violet-700'
+        }`}
+        title={d.source === 'rule' ? 'Scored in code from the word count' : 'Classified by the LLM'}
+      >
+        {d.source === 'rule' ? <Cpu size={9} /> : <Sparkles size={9} />}
+        {d.source === 'rule' ? 'Rule' : 'LLM'}
+      </span>
+    )}
     <span className="w-32 shrink-0 text-[11px] text-gray-500 truncate" title={`joke: ${d.level} · ideal: ${d.ideal}`}>
-      {d.level}
-      {d.level !== d.ideal && <span className="text-gray-300"> → {d.ideal}</span>}
+      {d.placeholder ? '—' : d.level}
+      {!d.placeholder && d.level !== d.ideal && <span className="text-gray-300"> → {d.ideal}</span>}
     </span>
     <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
       <div
-        className="h-full rounded-full transition-all duration-500"
+        className="h-full rounded-full"
         style={{ width: `${Math.round(d.fit * 100)}%`, background: d.pass ? '#10b981' : '#f59e0b' }}
       />
     </div>
-    <span className={`w-9 shrink-0 text-right text-[11px] font-bold tabular-nums ${d.pass ? 'text-emerald-600' : 'text-amber-600'}`}>
-      {pct(d.fit)}
+    <span className={`w-11 shrink-0 text-right text-[11px] font-bold tabular-nums ${d.pass ? 'text-emerald-600' : 'text-gray-400'}`}>
+      {d.placeholder ? '0' : `+${d.fit.toFixed(2)}`}
     </span>
   </div>
 );
 
-/* ---- Scorecard for the currently-processing joke ---- */
-const Scorecard: React.FC<{ step: DecisionStep }> = ({ step }) => {
+/* ---- The threshold distribution: customers' bars are normal(τ, jitter).
+   A customer buys when their bar ≤ the joke's fit, i.e. the area to the LEFT
+   of the fit line. That shaded area is the share of the market that buys. ---- */
+const ThresholdCurve: React.FC<{ result: JokeMarketResult }> = ({ result }) => {
+  const W = 300;
+  const H = 108;
+  const mean = CFG.tau;
+  const sd = CFG.jitter;
+  // Plot ±3.2 sd around τ so the whole bell fits.
+  const lo = mean - 3.2 * sd;
+  const hi = mean + 3.2 * sd;
+  const x2px = (x: number) => ((x - lo) / (hi - lo)) * W;
+  const peak = normalPdf(mean, mean, sd);
+  const y2px = (y: number) => H - (y / peak) * (H - 10);
+
+  const N = 80;
+  const pts = Array.from({ length: N + 1 }, (_, i) => {
+    const x = lo + (i / N) * (hi - lo);
+    return { x, px: x2px(x), py: y2px(normalPdf(x, mean, sd)) };
+  });
+  const line = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.px.toFixed(1)},${p.py.toFixed(1)}`).join(' ');
+
+  // Shaded "buys" region: everything with a bar ≤ the joke's fit.
+  const fitClamped = Math.max(lo, Math.min(hi, result.trueFit));
+  const fillPts = pts.filter(p => p.x <= fitClamped);
+  const fitPx = x2px(fitClamped);
+  const area =
+    fillPts.length > 0
+      ? `M${fillPts[0].px.toFixed(1)},${H} ` +
+        fillPts.map(p => `L${p.px.toFixed(1)},${p.py.toFixed(1)}`).join(' ') +
+        ` L${fitPx.toFixed(1)},${y2px(normalPdf(fitClamped, mean, sd)).toFixed(1)} L${fitPx.toFixed(1)},${H} Z`
+      : '';
+
+  const tauPx = x2px(mean);
+  const buysRight = result.trueFit >= mean;
+
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${H + 18}`} className="w-full" role="img" aria-label="Customer threshold distribution">
+        {area && <path d={area} fill={BRAND.sold} fillOpacity={0.22} />}
+        <path d={line} fill="none" stroke="#94a3b8" strokeWidth={1.5} />
+        {/* τ (the mean bar) */}
+        <line x1={tauPx} y1={4} x2={tauPx} y2={H} stroke="#334155" strokeWidth={1} strokeDasharray="3 2" />
+        <text x={tauPx} y={H + 13} textAnchor="middle" fontSize="9" fill="#334155">τ {CFG.tau}</text>
+        {/* the joke's fit */}
+        <line x1={fitPx} y1={0} x2={fitPx} y2={H} stroke={BRAND.sold} strokeWidth={2} />
+        <text x={fitPx} y={H + 13} textAnchor={buysRight ? 'end' : 'start'} fontSize="9" fontWeight="700" fill={BRAND.sold}>
+          fit {fit2(result.trueFit)}
+        </text>
+      </svg>
+      <div className="text-sm font-bold text-gray-900 mt-1">
+        {result.bought} of {CFG.customerCount} bought
+      </div>
+      <div className="text-[11px] text-gray-500">
+        Everyone whose bar (normal, centered on τ) falls at or below the joke's fit buys — the green area.
+      </div>
+    </div>
+  );
+};
+
+/* ---- Scorecard for the selected joke ---- */
+const Scorecard: React.FC<{ step: DecisionStep; result: JokeMarketResult }> = ({ step, result }) => {
   const v = VERDICT[step.verdict];
-  const { overall } = step.score;
+  const { trueFit, maxFit } = step.score;
+  const leftPct = (n: number) => `${(n / maxFit) * 100}%`;
+  const cleared = trueFit >= CFG.tau;
+
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
       <div className="flex items-start justify-between gap-3 mb-3">
@@ -92,31 +162,33 @@ const Scorecard: React.FC<{ step: DecisionStep }> = ({ step }) => {
         <span
           className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border"
           style={{ color: v.color, background: v.bg, borderColor: v.border }}
+          title="What the representative customer did"
         >
           {v.icon} {v.label}
         </span>
       </div>
 
-      {/* Overall score gauge with threshold marker */}
+      {/* true_fit gauge: 0..maxFit, with the τ marker */}
       <div className="mb-3">
         <div className="flex justify-between text-[11px] font-semibold text-gray-500 mb-1">
-          <span>Overall fit</span>
-          <span className="tabular-nums text-gray-800">{pct(overall)}</span>
+          <span>True fit — the sum of all dimension fits</span>
+          <span className="tabular-nums text-gray-800">{fit2(trueFit)} / {maxFit}</span>
         </div>
         <div className="relative h-3 rounded-full bg-gray-100 overflow-hidden">
           <div
-            className="h-full rounded-full transition-all duration-500"
-            style={{ width: `${Math.round(overall * 100)}%`, background: overall >= DEMO_CONFIG.threshold ? '#10b981' : '#f59e0b' }}
+            className="h-full rounded-full"
+            style={{ width: leftPct(trueFit), background: cleared ? '#10b981' : '#f59e0b' }}
           />
-          {/* threshold line */}
+          {/* τ line — the average customer bar */}
           <div
             className="absolute top-[-2px] bottom-[-2px] w-0.5 bg-gray-800"
-            style={{ left: `${Math.round(DEMO_CONFIG.threshold * 100)}%` }}
-            title={`Buy threshold ${pct(DEMO_CONFIG.threshold)}`}
+            style={{ left: leftPct(CFG.tau) }}
+            title={`Average buy threshold τ = ${CFG.tau}`}
           />
         </div>
         <div className="text-[10px] text-gray-400 mt-1">
-          Buy threshold = {pct(DEMO_CONFIG.threshold)} · {step.score.passedCount}/{step.score.dims.length} dimensions pass
+          τ = {CFG.tau} of {maxFit} (the average bar) · see the spread of bars in the market panel ·
+          {' '}{step.score.passedCount}/{step.score.dims.length - 1} dimensions at or above {CFG.perDimBar}
         </div>
       </div>
 
@@ -125,49 +197,43 @@ const Scorecard: React.FC<{ step: DecisionStep }> = ({ step }) => {
         {step.score.dims.map(d => <DimRow key={d.id} d={d} />)}
       </div>
 
-      {/* Decision narration */}
+      <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200 text-xs">
+        <span className="font-semibold text-gray-500">Sum</span>
+        <span className="font-bold tabular-nums text-gray-900">{fit2(trueFit)} / {maxFit}</span>
+      </div>
+
+      {/* Decision narration for the representative customer */}
       <div
         className="mt-3 rounded-lg px-3 py-2 text-xs font-medium border"
         style={{ color: v.color, background: v.bg, borderColor: v.border }}
       >
         {step.note}
       </div>
+
+      {/* What the whole market did */}
+      <div className="mt-2 rounded-lg px-3 py-2 text-xs bg-gray-50 border border-gray-200 text-gray-600">
+        Across all {CFG.customerCount} customers:{' '}
+        <b className="text-emerald-700">{result.counts.BUY} bought</b>
+        {result.counts.SWAP > 0 && <> · <b className="text-violet-700">{result.counts.SWAP} swapped in</b></>}
+        {result.counts.SKIP_LOW > 0 && <> · <b className="text-amber-700">{result.counts.SKIP_LOW} below their bar</b></>}
+        {result.counts.SKIP_FULL > 0 && <> · <b className="text-slate-600">{result.counts.SKIP_FULL} out of budget</b></>}
+        {result.held !== result.bought && (
+          <> · only <b>{result.held}</b> still hold it at the end (the rest swapped it out)</>
+        )}
+      </div>
     </div>
   );
 };
 
 const Customer: React.FC = () => {
-  const steps = useMemo(() => simulateCustomer(DEMO_JOKES, DEMO_CONFIG), []);
+  // One representative customer (bar = τ) drives the walkthrough; the market run
+  // gives the per-joke totals. Both are pure, so this computes once.
+  const steps = useMemo(() => simulateCustomer(DEMO_JOKES, CFG, CFG.tau), []);
+  const market = useMemo(() => simulateMarket(DEMO_JOKES, CFG, 1), []);
   const [idx, setIdx] = useState(0);
-  const [playing, setPlaying] = useState(false);
-
-  const last = steps.length - 1;
-  const atEnd = idx >= last;
-
-  // Auto-advance while playing.
-  useEffect(() => {
-    if (!playing) return;
-    if (atEnd) { setPlaying(false); return; }
-    const t = window.setTimeout(() => setIdx(i => Math.min(i + 1, last)), 1600);
-    return () => window.clearTimeout(t);
-  }, [playing, idx, atEnd, last]);
 
   const current = steps[idx];
-  const budget = current.budgetAfter;
-  const basket = current.basket;
-
-  // Jokes returned by a swap in any revealed step.
-  const returnedSet = useMemo(() => {
-    const s = new Set<string>();
-    for (let i = 0; i <= idx; i++) if (steps[i].returnedJokeId) s.add(steps[i].returnedJokeId!);
-    return s;
-  }, [idx, steps]);
-
-  const restart = () => { setIdx(0); setPlaying(false); };
-
-  // Summary tallies over revealed steps.
-  const revealed = steps.slice(0, idx + 1);
-  const bought = revealed.filter(s => (s.verdict === 'BUY' || s.verdict === 'SWAP') && !returnedSet.has(s.joke.id)).length;
+  const currentResult = market[current.joke.id];
 
   return (
     <RoleLayout>
@@ -180,7 +246,8 @@ const Customer: React.FC = () => {
                 <Bot size={20} className="text-indigo-600" /> AI Customer Engine — how the backend buys
               </h1>
               <p className="text-sm text-gray-500">
-                A self-contained illustration of one customer processing a batch of 5 published jokes.
+                {CFG.customerCount} AI customers deciding on a batch of {DEMO_JOKES.length} published jokes.
+                Click any joke to see its scoring.
               </p>
             </div>
             <Pipeline />
@@ -189,65 +256,63 @@ const Customer: React.FC = () => {
           <div className="bg-amber-50 text-amber-800 border border-amber-200 rounded-lg px-3 py-2 text-xs flex items-start gap-2">
             <Eye size={14} className="mt-0.5 shrink-0" />
             <span>
-              <b>Instructor-only view.</b> This shows the engine's internal per-dimension scoring.
-              Marketing never sees this — they only get obscured class-level sales trends.
+              <b>Instructor-only view.</b> This shows the engine's internal per-dimension scoring and the
+              hidden ideal. Marketing only ever sees which dimensions were good or need work — never the
+              numbers, the levels, or the target itself.
             </span>
           </div>
         </div>
 
-        {/* Controls */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={() => (atEnd ? restart() : setPlaying(p => !p))}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700"
-          >
-            {atEnd ? <><RotateCcw size={15} /> Replay</> : playing ? <><Pause size={15} /> Pause</> : <><Play size={15} /> Play</>}
-          </button>
-          <button
-            onClick={() => { setPlaying(false); setIdx(i => Math.min(i + 1, last)); }}
-            disabled={atEnd}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
-          >
-            <SkipForward size={15} /> Step
-          </button>
-          <button
-            onClick={restart}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-          >
-            <RotateCcw size={15} /> Restart
-          </button>
-          <span className="text-xs text-gray-500 ml-1">Joke {idx + 1} of {steps.length}</span>
+        {/* The three rules, stated plainly */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <Card title="1 · Score" subtitle="once per joke">
+            <p className="text-[12px] text-gray-600 leading-relaxed">
+              Each joke is classified on <b>12 dimensions</b> and compared to the instructor's hidden ideal.
+              Add up the {steps[0].score.maxFit} scored fits → <b>true fit</b>, from 0 to {steps[0].score.maxFit}.
+              <span className="block mt-1 text-gray-400">Structure has no agreed categories yet, so it scores 0 and sits out.</span>
+            </p>
+          </Card>
+          <Card title="2 · Jitter" subtitle="why demand is partial">
+            <p className="text-[12px] text-gray-600 leading-relaxed">
+              Every customer wants the same thing, but holds a slightly different bar. The bars
+              form a <b>bell curve around τ</b> (jitter = its spread). A joke well above τ sells
+              to everyone; one sitting near τ sells to <b>some but not all</b>.
+            </p>
+          </Card>
+          <Card title="3 · Buy or swap" subtitle="budget makes it competitive">
+            <p className="text-[12px] text-gray-600 leading-relaxed">
+              Buy while budget lasts (${CFG.budget.toFixed(2)} at ${CFG.price.toFixed(2)} each → {CFG.budget / CFG.price} jokes).
+              Once full, a new joke only gets in if it beats the weakest one held by more
+              than <b>M = {CFG.swapMargin}</b> — otherwise the customer holds.
+            </p>
+          </Card>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          {/* LEFT: customer wallet + basket + legend */}
+          {/* LEFT: the market, then one customer close-up */}
           <div className="space-y-4">
-            <Card className="bg-gradient-to-br from-gray-900 to-gray-800 text-white border-none">
-              <div className="py-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs uppercase tracking-wider opacity-70 flex items-center gap-1.5">
-                    <DollarSign size={14} className="text-emerald-400" /> Budget remaining
-                  </span>
-                  <span className="text-2xl font-bold tabular-nums">${budget.toFixed(2)}</span>
-                </div>
-                <div className="mt-2 h-2 rounded-full bg-white/15 overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-emerald-400 transition-all duration-500"
-                    style={{ width: `${Math.round((budget / DEMO_CONFIG.budget) * 100)}%` }}
-                  />
-                </div>
-                <div className="mt-1.5 text-[11px] opacity-60">
-                  ${DEMO_CONFIG.budget.toFixed(2)} start · ${DEMO_CONFIG.price.toFixed(2)} per joke
-                </div>
-              </div>
+            <Card title="Customer bars" subtitle={`joke #${current.joke.id} · ${CFG.customerCount} customers`} accent={BRAND.sold}>
+              <ThresholdCurve result={currentResult} />
             </Card>
 
-            <Card title="Basket" subtitle={`${bought} held`} accent={BRAND.production}>
-              <div className="space-y-1.5 min-h-[60px]">
-                {basket.length === 0 ? (
-                  <p className="text-sm text-gray-400 italic text-center py-3">Nothing bought yet</p>
+            <Card title="One customer, close up" subtitle="bar set exactly at τ" accent={BRAND.production}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-gray-500 flex items-center gap-1.5">
+                  <DollarSign size={13} className="text-emerald-600" /> Budget left
+                </span>
+                <span className="text-lg font-bold tabular-nums text-gray-900">${current.budgetAfter.toFixed(2)}</span>
+              </div>
+              <div className="h-2 rounded-full bg-gray-100 overflow-hidden mb-3">
+                <div
+                  className="h-full rounded-full bg-emerald-500"
+                  style={{ width: `${Math.round((current.budgetAfter / CFG.budget) * 100)}%` }}
+                />
+              </div>
+              <div className="space-y-1.5 min-h-[54px]">
+                {current.basket.length === 0 ? (
+                  <p className="text-sm text-gray-400 italic text-center py-3">Holding nothing yet</p>
                 ) : (
-                  basket.map(id => {
+                  current.basket.map(id => {
                     const jk = DEMO_JOKES.find(j => j.id === id)!;
                     return (
                       <div key={id} className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-md px-2.5 py-1.5">
@@ -264,60 +329,64 @@ const Customer: React.FC = () => {
               <ul className="text-[11px] text-gray-600 space-y-2">
                 <li className="flex items-center gap-2">
                   <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1 py-0.5 rounded bg-sky-100 text-sky-700"><Cpu size={9} /> Rule</span>
-                  Length &amp; topic — scored deterministically.
+                  Length — scored in code from the word count.
                 </li>
                 <li className="flex items-center gap-2">
                   <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1 py-0.5 rounded bg-violet-100 text-violet-700"><Sparkles size={9} /> LLM</span>
-                  The other 9 dimensions — inferred by the model.
+                  The other 11 — one model call per batch.
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1 py-0.5 rounded bg-gray-100 text-gray-500"><Ban size={9} /> N/A</span>
+                  Structure — placeholder, contributes 0.
                 </li>
                 <li className="flex items-start gap-2 pt-1 border-t border-gray-100">
                   <Info size={12} className="mt-0.5 shrink-0 text-gray-400" />
-                  Each joke buys if overall fit clears the threshold and budget allows; a better joke can swap out a weaker held one.
+                  <span>
+                    <b>Title Fit</b> is the one dimension Marketing owns outright — it grades their title
+                    against the joke itself, so it has no ideal to match.
+                  </span>
                 </li>
               </ul>
             </Card>
           </div>
 
-          {/* RIGHT: batch queue + active scorecard */}
+          {/* RIGHT: batch queue + scorecard */}
           <div className="lg:col-span-2 space-y-4">
-            <Card title="Batch of 5" subtitle="published jokes entering the market" accent={BRAND.production}>
+            <Card title={`Batch of ${DEMO_JOKES.length}`} subtitle="published jokes entering the market" accent={BRAND.production}>
               <div className="space-y-1.5">
                 {steps.map((s, i) => {
-                  const revealedStep = i <= idx;
                   const isActive = i === idx;
-                  const v = VERDICT[s.verdict];
-                  const returned = returnedSet.has(s.joke.id);
+                  const r = market[s.joke.id];
                   return (
                     <button
                       key={s.joke.id}
-                      onClick={() => { setPlaying(false); setIdx(i); }}
+                      onClick={() => setIdx(i)}
                       className={`w-full text-left flex items-center gap-3 rounded-lg border px-3 py-2 transition ${
                         isActive ? 'border-indigo-300 bg-indigo-50/60 ring-1 ring-indigo-200' : 'border-gray-200 bg-white hover:bg-gray-50'
                       }`}
                     >
                       <span className="font-mono text-[11px] text-gray-400 w-5 shrink-0">#{s.joke.id}</span>
                       <span className="text-sm text-gray-800 flex-1 truncate">{s.joke.title}</span>
-                      {!revealedStep ? (
-                        <span className="text-[11px] text-gray-400 italic shrink-0">Queued</span>
-                      ) : returned ? (
-                        <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full text-slate-500 bg-slate-100 border border-slate-200">
-                          <RotateCcw size={11} /> Returned
-                        </span>
-                      ) : (
-                        <span
-                          className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border"
-                          style={{ color: v.color, background: v.bg, borderColor: v.border }}
-                        >
-                          {v.icon} {v.label}
-                        </span>
-                      )}
+                      <span className="shrink-0 text-[11px] tabular-nums text-gray-500 w-16 text-right">
+                        fit {fit2(r.trueFit)}
+                      </span>
+                      <span
+                        className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border w-24 justify-center"
+                        style={
+                          r.bought === 0
+                            ? { color: VERDICT.SKIP_LOW.color, background: VERDICT.SKIP_LOW.bg, borderColor: VERDICT.SKIP_LOW.border }
+                            : { color: VERDICT.BUY.color, background: VERDICT.BUY.bg, borderColor: VERDICT.BUY.border }
+                        }
+                      >
+                        {r.bought}/{CFG.customerCount} sold
+                      </span>
                     </button>
                   );
                 })}
               </div>
             </Card>
 
-            <Scorecard step={current} />
+            <Scorecard step={current} result={currentResult} />
           </div>
         </div>
       </div>

@@ -36,7 +36,10 @@ const LS_QC_RATED_HISTORY = 'joke_factory_qc_rated_history_v1';
 const DEFAULT_ROUND2_BATCH_LIMIT = 10;
 const DEFAULT_MARKET_PRICE = 1;
 const DEFAULT_COST_OF_PUBLISHING = 0.1;
-const DEFAULT_COST_OF_CREATION = 0.1;
+const DEFAULT_COST_OF_DISCARD = 0.01;
+// Marketing's decision clock (see services/marketingNudge.ts). Instructor-tunable.
+const DEFAULT_MARKETING_NUDGE_1_SECONDS = 60;
+const DEFAULT_MARKETING_NUDGE_2_SECONDS = 45;
 const POLL_INTERVAL_MS = 2500;
 
 // Helper to init team names (fallback, will be replaced by /v1/teams where possible)
@@ -436,7 +439,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     round2BatchLimit: DEFAULT_ROUND2_BATCH_LIMIT,
     marketPrice: DEFAULT_MARKET_PRICE,
     costOfPublishing: DEFAULT_COST_OF_PUBLISHING,
-    costOfCreation: DEFAULT_COST_OF_CREATION,
+    costOfDiscard: DEFAULT_COST_OF_DISCARD,
+    marketingNudge1Seconds: DEFAULT_MARKETING_NUDGE_1_SECONDS,
+    marketingNudge2Seconds: DEFAULT_MARKETING_NUDGE_2_SECONDS,
   });
 
   const [config, setConfig] = useState<GameConfig>(initialConfig());
@@ -593,10 +598,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   shouldUseBackendConfig && Number((selectedRound as any)?.cost_of_publishing) >= 0
                     ? Number((selectedRound as any)?.cost_of_publishing)
                     : prev.costOfPublishing ?? DEFAULT_COST_OF_PUBLISHING;
-                const nextCostOfCreation =
-                  shouldUseBackendConfig && Number((selectedRound as any)?.cost_of_creation) >= 0
-                    ? Number((selectedRound as any)?.cost_of_creation)
-                    : prev.costOfCreation ?? DEFAULT_COST_OF_CREATION;
+                const nextCostOfDiscard =
+                  shouldUseBackendConfig && Number((selectedRound as any)?.cost_of_discard) >= 0
+                    ? Number((selectedRound as any)?.cost_of_discard)
+                    : prev.costOfDiscard ?? DEFAULT_COST_OF_DISCARD;
                 return {
                   ...prev,
                   status: isActive ? 'PLAYING' : (round1Status === 'ENDED' ? 'PLAYING' : 'LOBBY'),
@@ -610,7 +615,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   round2BatchLimit: nextRound2BatchLimit,
                   marketPrice: nextMarketPrice,
                   costOfPublishing: nextCostOfPublishing,
-                  costOfCreation: nextCostOfCreation,
+                  costOfDiscard: nextCostOfDiscard,
                 };
               });
             }
@@ -934,10 +939,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             shouldUseBackendConfig && Number((selectedRound as any)?.cost_of_publishing) >= 0
               ? Number((selectedRound as any)?.cost_of_publishing)
               : prev.costOfPublishing ?? DEFAULT_COST_OF_PUBLISHING;
-          const nextCostOfCreation =
-            shouldUseBackendConfig && Number((selectedRound as any)?.cost_of_creation) >= 0
-              ? Number((selectedRound as any)?.cost_of_creation)
-              : prev.costOfCreation ?? DEFAULT_COST_OF_CREATION;
+          const nextCostOfDiscard =
+            shouldUseBackendConfig && Number((selectedRound as any)?.cost_of_discard) >= 0
+              ? Number((selectedRound as any)?.cost_of_discard)
+              : prev.costOfDiscard ?? DEFAULT_COST_OF_DISCARD;
           return {
             ...prev,
             status: isActive ? 'PLAYING' : (round1Status === 'ENDED' ? 'PLAYING' : 'LOBBY'),
@@ -951,7 +956,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             round2BatchLimit: nextRound2BatchLimit,
             marketPrice: nextMarketPrice,
             costOfPublishing: nextCostOfPublishing,
-            costOfCreation: nextCostOfCreation,
+            costOfDiscard: nextCostOfDiscard,
           };
         });
 

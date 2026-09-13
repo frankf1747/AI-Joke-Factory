@@ -1,9 +1,28 @@
 import { describe, it, expect } from 'vitest';
-import { DIMENSIONS, dimById, dimProx, CATEGORICAL_DIMS } from './dimensions';
+import {
+  DIMENSIONS,
+  SCORED_DIMENSIONS,
+  PLACEHOLDER_DIMS,
+  INTRINSIC_DIMS,
+  dimById,
+  dimProx,
+  CATEGORICAL_DIMS,
+} from './dimensions';
 
 describe('DIMENSIONS', () => {
-  it('has exactly 11 entries', () => {
-    expect(DIMENSIONS).toHaveLength(11);
+  it('has exactly 12 entries', () => {
+    expect(DIMENSIONS).toHaveLength(12);
+  });
+
+  it('scores 11 of them — Structure is a placeholder and is excluded', () => {
+    expect(PLACEHOLDER_DIMS.has('structure')).toBe(true);
+    expect(SCORED_DIMENSIONS).toHaveLength(11);
+    expect(SCORED_DIMENSIONS.map(d => d.id)).not.toContain('structure');
+  });
+
+  it('marks title_fit as intrinsic (graded on its own scale, no ideal)', () => {
+    expect(INTRINSIC_DIMS.has('title_fit')).toBe(true);
+    expect(dimById('title_fit')?.label).toBe('Title Fit');
   });
 
   it('every id is unique', () => {
@@ -41,5 +60,14 @@ describe('dimProx', () => {
     const dim = dimById('humor_style')!;
     expect(dimProx(dim, 'Pun')).toBe(1);      // ideal = Pun
     expect(dimProx(dim, 'Irony')).toBe(0);    // different category
+  });
+
+  it('grades title_fit intrinsically, best → worst', () => {
+    const dim = dimById('title_fit')!;
+    expect(dimProx(dim, 'Perfect')).toBeCloseTo(1, 6);
+    expect(dimProx(dim, 'Strong')).toBeCloseTo(0.75, 6);
+    expect(dimProx(dim, 'Moderate')).toBeCloseTo(0.5, 6);
+    expect(dimProx(dim, 'Weak')).toBeCloseTo(0.25, 6);
+    expect(dimProx(dim, 'Mismatch')).toBeCloseTo(0, 6);
   });
 });

@@ -784,8 +784,8 @@ function route(
       const points = stats.points;
       const rates = {
         marketPrice: SIM_CONFIG.economics.marketPrice,
-        costOfCreation: SIM_CONFIG.economics.costOfCreation,
         costOfPublishing: SIM_CONFIG.economics.costOfPublishing,
+        costOfDiscard: SIM_CONFIG.economics.costOfDiscard,
       };
       const profit = computeProfit(
         { created: stats.jokes_created, published: stats.jokes_published, sold: stats.total_sales },
@@ -808,8 +808,10 @@ function route(
         profit: Number(profit.toFixed(2)),
         cost_breakdown: {
           revenue: Number((stats.total_sales * rates.marketPrice).toFixed(2)),
-          production_cost: Number((stats.jokes_created * rates.costOfCreation).toFixed(2)),
           publish_cost: Number((stats.jokes_published * rates.costOfPublishing).toFixed(2)),
+          discard_cost: Number(
+            (Math.max(0, stats.jokes_created - stats.jokes_published) * rates.costOfDiscard).toFixed(2),
+          ),
           profit: Number(profit.toFixed(2)),
         },
       };
@@ -1013,8 +1015,11 @@ function route(
       const avg = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
 
       // Force-release: all 5-rated jokes; if none, the highest-rated (ties → lowest joke_id).
+      // Round 2 batches can be a single joke, so Marketing may reject the whole
+      // batch there; without this the safety net would publish one anyway.
       const publishedIds = selectPublishedJokeIds(
         batch.jokes.map(j => ({ joke_id: j.joke_id, rating: ratingByJoke[String(j.joke_id)] ?? 1 })),
+        { allowEmpty: db.round.round_number === 2 },
       );
       const publishedSet = new Set(publishedIds);
       const passes = publishedIds.length;

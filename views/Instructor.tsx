@@ -36,6 +36,9 @@ const Instructor: React.FC = () => {
   const [localBudget, setLocalBudget] = useState(config.customerBudget);
   const [localMarketPrice, setLocalMarketPrice] = useState(config.marketPrice);
   const [localCostOfPublishing, setLocalCostOfPublishing] = useState(config.costOfPublishing);
+  // Marketing's decision clock — how long they may deliberate before each nudge.
+  const [localNudge1, setLocalNudge1] = useState(config.marketingNudge1Seconds);
+  const [localNudge2, setLocalNudge2] = useState(config.marketingNudge2Seconds);
   const [selectedCustomerCount, setSelectedCustomerCount] = useState<number | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showEndRound1Confirm, setShowEndRound1Confirm] = useState(false);
@@ -93,6 +96,8 @@ const Instructor: React.FC = () => {
   useEffect(() => setLocalBudget(config.customerBudget), [config.customerBudget]);
   useEffect(() => setLocalMarketPrice(config.marketPrice), [config.marketPrice]);
   useEffect(() => setLocalCostOfPublishing(config.costOfPublishing), [config.costOfPublishing]);
+  useEffect(() => setLocalNudge1(config.marketingNudge1Seconds), [config.marketingNudge1Seconds]);
+  useEffect(() => setLocalNudge2(config.marketingNudge2Seconds), [config.marketingNudge2Seconds]);
 
   const handleDeleteUser = async (userId: string, displayName?: string) => {
     const label = displayName ? `${displayName} (${userId})` : `user ${userId}`;
@@ -155,11 +160,14 @@ const Instructor: React.FC = () => {
   const canEditBatchSize = !config.isActive && config.round === 1;
   const canEditBudget = !config.isActive && (config.round === 1 || config.round === 2);
   const canEditPricing = !config.isActive && (config.round === 1 || config.round === 2);
+  // Pacing, not round-specific — editable between rounds whatever the round number.
+  const canEditNudges = !config.isActive;
 
   const hasPendingConfigChanges =
     (canEditBatchSize && localBatchSize !== config.round1BatchSize) ||
     (canEditBudget && localBudget !== config.customerBudget) ||
-    (canEditPricing && (localMarketPrice !== config.marketPrice || localCostOfPublishing !== config.costOfPublishing));
+    (canEditPricing && (localMarketPrice !== config.marketPrice || localCostOfPublishing !== config.costOfPublishing)) ||
+    (canEditNudges && (localNudge1 !== config.marketingNudge1Seconds || localNudge2 !== config.marketingNudge2Seconds));
 
   const handleUpdateSettings = () => {
     const updates: any = {};
@@ -167,6 +175,13 @@ const Instructor: React.FC = () => {
     if (canEditBudget && localBudget !== config.customerBudget) updates.customerBudget = localBudget;
     if (canEditPricing && localMarketPrice !== config.marketPrice) updates.marketPrice = localMarketPrice;
     if (canEditPricing && localCostOfPublishing !== config.costOfPublishing) updates.costOfPublishing = localCostOfPublishing;
+    // Clamped: a 0s nudge would fire the instant Marketing lands on the view.
+    if (canEditNudges && localNudge1 !== config.marketingNudge1Seconds) {
+      updates.marketingNudge1Seconds = Math.max(5, localNudge1);
+    }
+    if (canEditNudges && localNudge2 !== config.marketingNudge2Seconds) {
+      updates.marketingNudge2Seconds = Math.max(5, localNudge2);
+    }
     if (Object.keys(updates).length === 0) return;
     updateConfig(updates);
   };
@@ -2282,6 +2297,28 @@ const Instructor: React.FC = () => {
                   onChange={e => setLocalBatchSize(Number(e.target.value))}
                   disabled={!canEditBatchSize}
                   className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditBatchSize ? 'opacity-50 cursor-not-allowed' : ''}`}
+                />
+              </div>
+              <div className="flex items-center space-x-3" title="Seconds Marketing may deliberate before the first publish reminder">
+                <label className="text-sm text-gray-600 whitespace-nowrap">Nudge 1 (s):</label>
+                <input
+                  type="number"
+                  min={5}
+                  value={localNudge1}
+                  onChange={e => setLocalNudge1(Number(e.target.value))}
+                  disabled={!canEditNudges}
+                  className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditNudges ? 'opacity-50 cursor-not-allowed' : ''}`}
+                />
+              </div>
+              <div className="flex items-center space-x-3" title="Seconds after that reminder is dismissed before the final one">
+                <label className="text-sm text-gray-600 whitespace-nowrap">Nudge 2 (s):</label>
+                <input
+                  type="number"
+                  min={5}
+                  value={localNudge2}
+                  onChange={e => setLocalNudge2(Number(e.target.value))}
+                  disabled={!canEditNudges}
+                  className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditNudges ? 'opacity-50 cursor-not-allowed' : ''}`}
                 />
               </div>
               <div className="flex items-center space-x-3">

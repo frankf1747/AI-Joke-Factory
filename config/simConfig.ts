@@ -32,11 +32,13 @@ export const SIM_CONFIG = {
 
   bannedCategories: ['Religion', 'Politics', 'Tragedy', 'Targeting a person or group'],
 
-  // ---- Economics (two-cost model; assume ~15 teams) ----
+  // ---- Economics (Marketing-only cost model; assume ~15 teams) ----
+  // JM creates for free. Marketing pays to publish, and pays a smaller amount
+  // to throw a joke away — so they prioritise without JM under-producing.
   economics: {
     marketPrice:      1.00,
-    costOfCreation:   0.10,
     costOfPublishing: 0.10,
+    costOfDiscard:    0.01,
     buyerBudget:      3.00,
   },
 
