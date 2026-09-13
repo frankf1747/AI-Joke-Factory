@@ -611,7 +611,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```typescript
 import { apiRequest } from '../apiClient';
 import type {
-  LobbyResponse, ConfigRequest, InstructorRoundResponse,
+  LobbyResponse, ConfigRequest, InstructorRoundResponse, PublicRoundResponse,
   PatchUserRequest, RoundStatsResponse,
 } from '../../types/api';
 
@@ -650,12 +650,20 @@ export const instructorApi = {
     return apiRequest<InstructorRoundResponse>(`/v1/instructor/rounds/${roundId}/start`, { method: 'POST', body });
   },
 
+  /** CORRECTED: returns the PUBLIC projection, not the instructor one.
+   *  handler/instructor.go:221 calls dto.ToPublicRound — so buy_threshold,
+   *  jitter, swap_margin, feedback_pass_threshold and ideal_profile are NOT
+   *  on this response. Only config (:86) and start (:192) return
+   *  ToInstructorRound. Typing this as InstructorRoundResponse would be a
+   *  lie the compiler cannot catch, because the type is a claim about the
+   *  wire rather than a check of it. */
   end(roundId: number) {
-    return apiRequest<InstructorRoundResponse>(`/v1/instructor/rounds/${roundId}/end`, { method: 'POST' });
+    return apiRequest<PublicRoundResponse>(`/v1/instructor/rounds/${roundId}/end`, { method: 'POST' });
   },
 
+  /** Also the PUBLIC projection — handler/instructor.go:248. See end(). */
   popups(roundId: number, isActive: boolean) {
-    return apiRequest<InstructorRoundResponse>(`/v1/instructor/rounds/${roundId}/popups`, {
+    return apiRequest<PublicRoundResponse>(`/v1/instructor/rounds/${roundId}/popups`, {
       method: 'POST',
       body: { is_popped_active: isActive },
     });
@@ -932,8 +940,10 @@ devDependency in Step 2 rather than reaching for a different runner. It must:
 2. `GET /health` first and abort with a clear message if it fails — no point testing further.
 3. For each endpoint that is safe to call without mutating state — `/health`, `/health/detailed`, `/v1/rounds/active` — fetch it and check:
    - the status is 2xx
-   - the envelope matches expectation (raw for the three, `{data}` for the rest)
+   - the envelope matches expectation (`/health*` are raw and sit outside `/v1`; `/v1/rounds/active` is wrapped in `{data}`)
    - every key the corresponding `types/api.ts` interface declares is present
+
+   **`/health/detailed` has no declared type**, and deliberately so: `handler/health.go:45-48` returns whatever `usecase.HealthService.Check` produces, which is not a fixed shape. Check only that it is 2xx and parses as JSON — do not assert keys on it, and do not add a type for it.
 4. Print one line per endpoint: `PASS`, or `FAIL` with the specific missing or extra key.
 5. **Report extra keys as warnings, not failures** — the backend adding a field is not our problem; the backend *removing* one is.
 6. Exit non-zero if any check fails.
