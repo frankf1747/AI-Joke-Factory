@@ -67,6 +67,26 @@ Plus three transport-level defects:
 - The default base URL is `http://localhost:8081`; the backend's `APP_PORT` default is **8080**.
 - Three TypeScript errors at `services/apiClient.ts:95` — the mock's discriminated union isn't narrowed before `.error` is read.
 
+**Amendment, made during Task 1 on the strength of a measurement.** The plan
+originally forbade touching `tsconfig.json`, on the assumption that enabling
+`strictNullChecks` would be a large repo-wide change deserving its own phase.
+That assumption was wrong, and the reverse is true: the repo typechecks with
+**1** error under `strictNullChecks` versus **5** without it. The three
+`apiClient.ts:95` errors are *caused by the flag's absence* — without it the
+discriminated union `{ok:true}|{ok:false}` does not narrow on `if (!resp.ok)`,
+so `.error` cannot resolve.
+
+It is now on. This matters beyond the error count: without it, `null` is
+assignable to every type, so every `| null` in `types/api.ts` was documentation
+rather than enforcement and `res.batches.map(...)` on a null `batches` compiled
+cleanly. Those unions describe the real empty-state responses — an empty lobby,
+a team with no batches — which is exactly where a first classroom run lands.
+
+Consequences for the tasks below: the baseline error count is **1**, not 2, and
+it is `services/mockApi.ts:657` alone. Task 2 step 5's manual narrowing fix is
+no longer strictly required to compile, though the early-return form is still
+the better code and should still be written.
+
 ## The envelope, verified in code
 
 - **Wrapped** in `{ "data": … }`: everything using `response.OK` / `response.Created` — which is every handler except the three below.
@@ -427,8 +447,8 @@ Expected: PASS, 13 tests.
 
 Run: `npx vitest run` — the existing 214 must still pass; the app still runs on the mock, whose branch is unchanged.
 
-Run: `npx tsc --noEmit -p tsconfig.json 2>&1 | grep -c "error TS"`
-Expected: **2** — down from 5. The three `apiClient.ts` errors are gone; the two in `mockApi.ts` remain and are not in scope.
+Run: `npm run typecheck 2>&1 | grep -c "error TS"`
+Expected: **1** — `services/mockApi.ts:657` only, which is the post-`strictNullChecks` baseline and out of scope. Anything above 1 is a regression you introduced.
 
 - [ ] **Step 5: Commit**
 
@@ -1023,8 +1043,8 @@ Expected: 214 existing + 13 transport + 14 contract = **241 passing**, 9 files.
 
 - [ ] **Step 2: Typecheck**
 
-Run: `npx tsc --noEmit -p tsconfig.json 2>&1 | grep -c "error TS"`
-Expected: **2**, both in `services/mockApi.ts`. The three `apiClient.ts` errors are fixed; `mockApi.ts` is legacy and out of scope.
+Run: `npm run typecheck 2>&1 | grep -c "error TS"`
+Expected: **1**, `services/mockApi.ts:657`. That is the whole remaining debt in the repo.
 
 - [ ] **Step 3: Confirm nothing user-facing changed**
 
@@ -1040,7 +1060,7 @@ Expected: empty. (The legacy `services/*.ts` still contain them — that is expe
 ```bash
 git commit --allow-empty -m "chore(api): verify phase 2
 
-241 tests; 2 pre-existing type errors in the legacy mock; no user-facing
+241 tests; 1 pre-existing type error in the legacy mock; no user-facing
 change. The client is wired for the real backend and provable without it.
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
