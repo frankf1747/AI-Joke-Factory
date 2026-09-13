@@ -69,6 +69,19 @@ export type Dimension =
   | 'TITLE_FIT';
 
 /**
+ * The 11 dimensions an instructor picks an ideal category for.
+ * TITLE_FIT is excluded because it is self-scoring — it grades how well the
+ * title matches its own joke, so there is no class-wide ideal to compare
+ * against. It is the only spec with HasIdeal:false
+ * (domain/scoring/dimensions.go:133-138); domain/scoring/dimensions.go:143-152
+ * is the Go helper that derives the same 11.
+ *
+ * Mirrors IDEAL_DIMENSIONS in config/dimensions.ts:111, which filters the same
+ * single dimension out of the same 12.
+ */
+export type IdealDimension = Exclude<Dimension, 'TITLE_FIT'>;
+
+/**
  * domain/entities.go:5-9 — the one domain entity that carries json tags, so it
  * stays snake_case even when nested inside the PascalCase lobby structs.
  */
@@ -103,7 +116,15 @@ export interface InstructorLoginResponse {
   round_id: number | null;
 }
 
-/** dto/admin.go:4-7 — POST /v1/instructor/login. */
+/**
+ * dto/admin.go:4-7 — POST /v1/instructor/login. Consumed by Task 3
+ * (sessionApi.instructorLogin), which would otherwise declare it inline.
+ *
+ * RENAMED: Go calls this `dto.AdminLoginRequest`. Kept as
+ * InstructorLoginRequest here so it pairs with InstructorLoginResponse and
+ * matches the route it posts to; the handler is AdminHandler.Login but the
+ * endpoint is /v1/instructor/login. Grep AdminLoginRequest to find it.
+ */
 export interface InstructorLoginRequest {
   display_name: string;
   password: string;
@@ -143,13 +164,16 @@ export interface RoundsActiveResponse { rounds: PublicRound[]; }
  * dto/round.go:27-34 — the instructor projection: PublicRound plus the hidden
  * engine knobs. ideal_profile carries `omitempty`, so the key is absent (not
  * null) when no profile is configured.
+ *
+ * Optional at the property level but TOTAL once present — see ConfigRequest
+ * for why a partial profile is not a legal value.
  */
 export interface InstructorRound extends PublicRound {
   buy_threshold: number;
   jitter: number;
   swap_margin: number;
   feedback_pass_threshold: number;
-  ideal_profile?: Partial<Record<Dimension, string>>;
+  ideal_profile?: Record<IdealDimension, string>;
 }
 
 /**
@@ -159,8 +183,16 @@ export interface InstructorRound extends PublicRound {
 export interface InstructorRoundResponse { round: InstructorRound; }
 
 /**
- * handler/instructor.go:221 (end), :248 (popups) — wrapped.
- * These two return the PUBLIC projection, not the instructor one.
+ * handler/instructor.go:221 (end), :248 (popups) — wrapped. Consumed by Task 5
+ * (instructorApi.end, instructorApi.popups).
+ *
+ * These two return the PUBLIC projection, not the instructor one: both call
+ * dto.ToPublicRound, so buy_threshold, jitter, swap_margin,
+ * feedback_pass_threshold and ideal_profile are ABSENT from the body. Only
+ * config (:86-88) and start (:192) use dto.ToInstructorRound.
+ *
+ * Not interchangeable with RoundsActiveResponse, which is {rounds: [...]} — a
+ * list, not a single round.
  */
 export interface PublicRoundResponse { round: PublicRound; }
 
@@ -188,7 +220,7 @@ export interface BatchSubmitResponse {
 export interface TeamBatchJoke {
   joke_id: number;
   joke_text: string;
-  /** domain/entities.go:71 — *string, null until Marketing titles it. */
+  /** domain/entities.go:72 — *string, null until Marketing titles it. */
   joke_title: string | null;
   publish_status: JokePublishStatus;
   published_at: string | null;
@@ -307,7 +339,11 @@ export interface MarketingQueueResponse {
   queue_size: number;
 }
 
-/** handler/marketing.go:135 — wrapped. GET /v1/marketing/queue/count. */
+/**
+ * handler/marketing.go:135 — wrapped. GET /v1/marketing/queue/count.
+ * Consumed by Task 4 (marketingApi.queueCount), which would otherwise declare
+ * `{ queue_size: number }` inline at the call site.
+ */
 export interface MarketingQueueCountResponse { queue_size: number; }
 
 /** dto/models.go:29-33 */
@@ -413,12 +449,30 @@ export interface ConfigRequest {
   swap_margin?: number;
   feedback_joke_count?: number;
   feedback_pass_threshold?: number;
-  ideal_profile?: Partial<Record<Dimension, string>>;
+  /**
+   * Optional at the property level, TOTAL once present. Go's map type would
+   * accept anything, but scoring.ValidateIdealProfile rejects an incomplete or
+   * over-complete one with a 400:
+   *   - every one of the 11 IdealDimensions must carry a category, or
+   *     "missing category for <DIM>" (domain/scoring/dimensions.go:189-194);
+   *   - any key whose spec lacks HasIdeal — i.e. TITLE_FIT — gets
+   *     "dimension has no ideal selector: <DIM>" (dimensions.go:201-205);
+   *   - the catch-all category is refused as an ideal (dimensions.go:195-197);
+   *   - an empty map is refused outright as "ideal_profile is required"
+   *     (dimensions.go:184-186), which `Record` already forbids.
+   * Enforced on both live paths: usecase/instructor.go:53-57 (config, whenever
+   * the profile is non-nil) and :243 (start, unconditionally).
+   */
+  ideal_profile?: Record<IdealDimension, string>;
 }
 
 /**
  * dto/models.go:17-19 — POST /v1/instructor/rounds/{id}/assign.
- * team_count only; there is no customer_count on this endpoint.
+ * Consumed by Task 5 (instructorApi.assign).
+ *
+ * team_count only; there is no customer_count on this endpoint. The old
+ * frontend sent one and the backend ignored it — this type makes that
+ * impossible to repeat.
  */
 export interface AssignRequest { team_count: number; }
 
@@ -433,10 +487,17 @@ export interface PatchUserRequest {
   team_id?: number | null;
 }
 
-/** handler/instructor.go:287 — wrapped. DELETE .../users/{user_id}. */
+/**
+ * handler/instructor.go:287 — wrapped. DELETE .../users/{user_id}.
+ * Consumed by Task 5 (instructorApi.deleteUser), which would otherwise declare
+ * `{ deleted_user_id: number }` inline at the call site.
+ */
 export interface DeleteUserResponse { deleted_user_id: number; }
 
-/** dto/popup.go:4-6 — POST /v1/instructor/rounds/{id}/popups, required field. */
+/**
+ * dto/popup.go:4-6 — POST /v1/instructor/rounds/{id}/popups, required field.
+ * Consumed by Task 5 (instructorApi.popups).
+ */
 export interface PopupStateRequest { is_popped_active: boolean; }
 
 // ---- Instructor: stats -----------------------------------------------------
@@ -480,5 +541,13 @@ export interface AdminResetResponse {
 
 // ---- Health (RAW — no data envelope) ---------------------------------------
 
-/** handler/health.go:29-31, emitted at :38 — RAW. GET /health. */
+/**
+ * handler/health.go:29-31, emitted at :38 — RAW, and outside /v1.
+ * Consumed by Task 7 (scripts/smoke-api.ts), which probes /health first and
+ * checks every declared key is present.
+ *
+ * NOTE: /health/detailed (handler/health.go:45-48) returns whatever
+ * usecase.HealthService.Check produces and has NO type here. Task 7 probes it
+ * too, so it will need one.
+ */
 export interface HealthResponse { status: string; }
