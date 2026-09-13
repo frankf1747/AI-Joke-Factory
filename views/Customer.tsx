@@ -8,6 +8,7 @@ import {
   simulateCustomer, simulateMarket, buyFraction, DEMO_JOKES, DEMO_CONFIG,
   type DecisionStep, type Verdict, type DimScore, type JokeMarketResult,
 } from '../services/aiCustomerDemo';
+import { DIMENSIONS } from '../config/dimensions';
 
 /* ---- verdict styling ---- */
 const VERDICT: Record<Verdict, { label: string; color: string; bg: string; border: string; icon: React.ReactNode }> = {
@@ -62,9 +63,14 @@ const DimRow: React.FC<{ d: DimScore }> = ({ d }) => (
       {d.source === 'rule' ? <Cpu size={9} /> : <Sparkles size={9} />}
       {d.source === 'rule' ? 'Rule' : 'LLM'}
     </span>
-    <span className="w-32 shrink-0 text-[11px] text-gray-500 truncate" title={`joke: ${d.level} · ideal: ${d.ideal}`}>
+    <span
+      className="w-32 shrink-0 text-[11px] text-gray-500 truncate"
+      title={d.ideal === null ? `joke: ${d.level} · scored on its own scale` : `joke: ${d.level} · ideal: ${d.ideal}`}
+    >
       {d.level}
-      {d.level !== d.ideal && <span className="text-gray-300"> → {d.ideal}</span>}
+      {d.ideal !== null && d.level !== d.ideal && (
+        <span className="text-gray-300"> → {d.ideal}</span>
+      )}
     </span>
     <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
       <div
@@ -90,12 +96,17 @@ const ThresholdBand: React.FC<{ result: JokeMarketResult }> = ({ result }) => {
   const fitPx = share * W;
   const tauPx = W / 2;
 
+  // What the band shows: whose bar this joke clears, before budget. Distinct
+  // from result.bought (BUY + SWAP), which is what survives the budget pass —
+  // a joke can clear every bar and still sell nothing to a full market.
+  const interested = CFG.customerCount - result.counts.SKIP_LOW;
+
   return (
     <div>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} role="img"
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img"
            aria-label={`${Math.round(share * 100)}% of customers have a bar this joke clears`}>
         <rect x={0} y={12} width={W} height={H - 28} rx={3} fill="#e2e8f0" />
-        <rect x={0} y={12} width={fitPx} height={H - 28} rx={3} fill="#86efac" />
+        <rect x={0} y={12} width={fitPx} height={H - 28} rx={3} fill={BRAND.sold} fillOpacity={0.35} />
         <line x1={tauPx} y1={6} x2={tauPx} y2={H - 10} stroke="#475569"
               strokeWidth={1} strokeDasharray="3 3" />
         <text x={tauPx} y={H - 1} textAnchor="middle" fontSize={9} fill="#64748b">
@@ -103,10 +114,23 @@ const ThresholdBand: React.FC<{ result: JokeMarketResult }> = ({ result }) => {
         </text>
         <text x={2} y={9} fontSize={9} fill="#94a3b8">{fit2(lo)}</text>
         <text x={W - 2} y={9} textAnchor="end" fontSize={9} fill="#94a3b8">{fit2(hi)}</text>
+        <text
+          x={share > 0.9 ? fitPx - 4 : fitPx + 4}
+          y={H - 16}
+          textAnchor={share > 0.9 ? 'end' : 'start'}
+          fontSize={10}
+          fontWeight={700}
+          fill="#065f46"
+        >
+          {fit2(result.trueFit)}
+        </text>
       </svg>
       <p className="text-[11px] text-gray-500 mt-1">
         Bars are spread evenly across the band. This joke clears{' '}
-        <b>{result.bought} of {CFG.customerCount}</b>.
+        <b>{interested} of {CFG.customerCount}</b> bars
+        {result.bought !== interested && (
+          <> — <b>{result.bought}</b> bought it, the rest had no budget left</>
+        )}.
       </p>
     </div>
   );
@@ -235,11 +259,11 @@ const Customer: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <Card title="1 · Score" subtitle="once per joke">
             <p className="text-[12px] text-gray-600 leading-relaxed">
-              Each joke is classified on <b>12 dimensions</b> and compared to the instructor's hidden ideal.
-              Add up all {steps[0].score.maxFit} fits → <b>true fit</b>, from 0 to {steps[0].score.maxFit}.
+              Each joke is classified on <b>{DIMENSIONS.length} dimensions</b> and compared to the instructor's
+              hidden ideal. Add up all {steps[0].score.maxFit} fits → <b>true fit</b>, from 0 to {steps[0].score.maxFit}.
               <span className="block mt-1 text-gray-400">
-                Every dimension counts, Structure included — it matches one of seven shapes, exactly like any
-                other categorical dimension.
+                Every dimension counts, Structure included — it matches one of six shapes plus a catch-all when
+                none of them fit, exactly like any other categorical dimension.
               </span>
             </p>
           </Card>
@@ -305,7 +329,7 @@ const Customer: React.FC = () => {
                 </li>
                 <li className="flex items-center gap-2">
                   <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1 py-0.5 rounded bg-violet-100 text-violet-700"><Sparkles size={9} /> LLM</span>
-                  The other 11 — one model call per batch.
+                  The other {DIMENSIONS.filter(d => d.classifiedBy === 'llm').length} — one model call per batch.
                 </li>
                 <li className="flex items-start gap-2 pt-1 border-t border-gray-100">
                   <Info size={12} className="mt-0.5 shrink-0 text-gray-400" />

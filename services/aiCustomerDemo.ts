@@ -64,7 +64,10 @@ export interface DimScore {
   /** Keep this name — views/Customer.tsx renders a Rule/LLM badge from it. */
   source: 'rule' | 'llm';
   level: string;
-  ideal: string;
+  /** The round's ideal category, or null for a dimension graded on its own
+      scale (Title Fit). Null means "no ideal", not "not shown" — how to render
+      that is the view's call, not this module's. */
+  ideal: string | null;
   fit: number;
   pass: boolean;
 }
@@ -146,7 +149,7 @@ export function scoreJoke(joke: DemoJoke, cfg: EngineConfig): JokeScore {
       label: d.label,
       source: d.classifiedBy === 'code' ? 'rule' : 'llm',
       level,
-      ideal: d.hasIdeal ? ideal : '—',
+      ideal: d.hasIdeal ? ideal : null,
       fit,
       pass: fit >= cfg.perDimBar,
     };

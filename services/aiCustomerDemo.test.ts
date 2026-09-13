@@ -84,7 +84,7 @@ describe('Title Fit — intrinsic and graded, never compared to an ideal', () =>
 
   it('shows no ideal of its own', () => {
     const row = scoreJoke(mk('t'), CFG).dims.find(d => d.id === 'TITLE_FIT')!;
-    expect(row.ideal).toBe('—');
+    expect(row.ideal).toBeNull();
   });
 
   it('costs exactly its grade off the total', () => {
