@@ -64,4 +64,8 @@ describe('DIMENSIONS catalog', () => {
     expect(isCatchAll(CATCH_ALL)).toBe(true);
     expect(isCatchAll('Clean')).toBe(false);
   });
+
+  it('returns undefined for an unknown dimension id', () => {
+    expect(dimById('BOGUS')).toBeUndefined();
+  });
 });
