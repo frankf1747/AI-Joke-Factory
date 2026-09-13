@@ -25,9 +25,8 @@
 ============================================================================ */
 
 import {
-  DIMENSIONS,
   MAX_FIT,
-  dimFit,
+  dimRows,
   DEFAULT_IDEAL_PROFILE,
   type Classification,
   type IdealProfile,
@@ -138,22 +137,24 @@ export function buyFraction(fit: number, tau: number, jitter: number): number {
   return Math.max(0, Math.min(1, (fit - lo) / (2 * jitter)));
 }
 
-/** Score one joke against the ideal profile. true_fit = sum of all 12 dim fits. */
+/**
+ * Score one joke against the ideal profile. true_fit = sum of all 12 dim fits.
+ *
+ * The rows come from config/dimensions' shared dimRows — the same loop trueFit
+ * sums — so the table this renders and the canonical total can't drift apart.
+ * All this adds is the view's decoration: a label, a Rule/LLM badge, and the
+ * per-dimension pass mark, none of which belong in the rubric module.
+ */
 export function scoreJoke(joke: DemoJoke, cfg: EngineConfig): JokeScore {
-  const dims: DimScore[] = DIMENSIONS.map(d => {
-    const level = joke.dims[d.id] ?? '';
-    const ideal = d.hasIdeal ? (cfg.ideal[d.id] ?? '') : '';
-    const fit = dimFit(d.id, ideal, level);
-    return {
-      id: d.id,
-      label: d.label,
-      source: d.classifiedBy === 'code' ? 'rule' : 'llm',
-      level,
-      ideal: d.hasIdeal ? ideal : null,
-      fit,
-      pass: fit >= cfg.perDimBar,
-    };
-  });
+  const dims: DimScore[] = dimRows(joke.dims, cfg.ideal).map(r => ({
+    id: r.dim.id,
+    label: r.dim.label,
+    source: r.dim.classifiedBy === 'code' ? 'rule' : 'llm',
+    level: r.level,
+    ideal: r.ideal,
+    fit: r.fit,
+    pass: r.fit >= cfg.perDimBar,
+  }));
 
   const sum = dims.reduce((acc, d) => acc + d.fit, 0);
 
@@ -298,7 +299,12 @@ export const DEMO_CONFIG: EngineConfig = {
 
 /* The batch is tuned to show the whole range under the 3-tier rule:
    #1 a flawless 12, #2 a borderline 7.25 (the jitter story), #3 a strong 11,
-   #4 a 0.75 that nobody touches, #5 strong-but-blocked-by-budget. */
+   #4 a 0.75 that nobody touches, #5 a 10.75 that demonstrates the swap — it
+   arrives with the budget already full for the 92 customers whose bar let #2
+   in, and beats #2 by far more than the margin, so it swaps #2 back out.
+   (Measured: #5 is BUY 8 / SWAP 92.) Note that SKIP_FULL never occurs in this
+   batch: every joke that clears a bar here also clears the swap margin, so the
+   hold branch is described on the Customer page but not demonstrated by it. */
 export const DEMO_JOKES: DemoJoke[] = [
   {
     id: 'j1',

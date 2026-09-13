@@ -228,15 +228,31 @@ export type Classification = Record<string, string>;
 /** The instructor's hidden ideal, keyed by dimension id. No TITLE_FIT. */
 export type IdealProfile = Record<string, string>;
 
+/** One row per dimension: the joke's category, the ideal it was judged against
+ *  (null for Title Fit, which has none), and the resulting fit. */
+export interface DimRow {
+  dim: DimensionSpec;
+  level: string;
+  ideal: string | null;
+  fit: number;
+}
+
+/** Score every dimension. The single place a joke meets a profile — trueFit
+ *  sums these, and the views decorate them. */
+export function dimRows(classification: Classification, profile: IdealProfile): DimRow[] {
+  return DIMENSIONS.map(dim => {
+    const level = classification[dim.id] ?? '';
+    const ideal = dim.hasIdeal ? (profile[dim.id] ?? '') : null;
+    return { dim, level, ideal, fit: dimFit(dim.id, ideal ?? '', level) };
+  });
+}
+
 /**
  * Sum of dim_fit across all 12 dimensions — the number the market buys on.
  * Range [0, 12]. Rounded to 2dp so a run of 0.5s doesn't drift in float.
  * Mirrors scoring.TrueFit.
  */
 export function trueFit(classification: Classification, profile: IdealProfile): number {
-  let sum = 0;
-  for (const dim of DIMENSIONS) {
-    sum += dimFit(dim.id, profile[dim.id] ?? '', classification[dim.id] ?? '');
-  }
+  const sum = dimRows(classification, profile).reduce((acc, r) => acc + r.fit, 0);
   return Math.round(sum * 100) / 100;
 }

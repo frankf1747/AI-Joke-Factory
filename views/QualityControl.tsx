@@ -99,8 +99,12 @@ const DimScale: React.FC<{ dim: ReturnType<typeof dimById>; level: string; prox:
       </div>
     );
   }
+  /* The track plots FIT, not position on the dimension's scale: the marker sits
+     at 0, 0.5 or 1 depending on how far the level is from the ideal. So the ends
+     are labelled with what the axis measures, not with categories — labelling
+     them "Very simple"→"Expert" put a joke that nailed a mid-scale ideal under
+     the name of the worst category. The level itself is in the row above. */
   const frac = Math.max(0, Math.min(1, prox));
-  const maxLevel = dim.categories[dim.categories.length - 1];
   return (
     <div>
       <div className="flex items-center justify-between gap-2 mb-0.5">
@@ -108,7 +112,7 @@ const DimScale: React.FC<{ dim: ReturnType<typeof dimById>; level: string; prox:
         <span className={`text-[10px] truncate ${onTarget ? 'text-emerald-700 font-semibold' : 'text-gray-500'}`}>{level}</span>
       </div>
       <div className="flex items-center gap-1.5">
-        <span className="text-[9px] text-gray-400 truncate max-w-[58px]">{dim.categories[0]}</span>
+        <span className="text-[9px] text-gray-400 truncate max-w-[58px]">Off target</span>
         <div
           className="relative flex-1 h-1.5 rounded-full"
           style={{ background: 'linear-gradient(90deg,#e5e7eb 0%,#d9f2e1 55%,#22c55e 100%)' }}
@@ -124,7 +128,7 @@ const DimScale: React.FC<{ dim: ReturnType<typeof dimById>; level: string; prox:
             }}
           />
         </div>
-        <span className="text-[9px] text-gray-400 truncate max-w-[58px] text-right">{maxLevel}</span>
+        <span className="text-[9px] text-gray-400 truncate max-w-[58px] text-right">On target</span>
       </div>
     </div>
   );

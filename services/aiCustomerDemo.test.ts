@@ -226,8 +226,9 @@ describe('DEMO_JOKES — fits are tuned on purpose (guards against silent drift)
   });
 
   it('agrees with the shared trueFit() — the demo must not drift from the rubric', () => {
-    // scoreJoke sums its own per-dimension rows so the table and the total can
-    // never disagree; this pins that sum to config/dimensions' canonical one.
+    // scoreJoke and trueFit now share one loop (config/dimensions' dimRows), so
+    // this pins the DimRow → DimScore mapping rather than a duplicated sum: if
+    // scoreJoke ever drops or re-derives a row, the totals part company here.
     for (const j of DEMO_JOKES) {
       expect(scoreJoke(j, CFG).trueFit, j.id).toBeCloseTo(trueFit(j.dims, CFG.ideal), 6);
     }
