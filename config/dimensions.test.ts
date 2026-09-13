@@ -9,6 +9,10 @@ import {
   isCatchAll,
   dimFit,
   TITLE_FIT_GRADES,
+  wordCount,
+  classifyLength,
+  LENGTH_SHORT_MAX,
+  LENGTH_MEDIUM_MAX,
 } from './dimensions';
 
 describe('DIMENSIONS catalog', () => {
@@ -142,5 +146,51 @@ describe('dimFit — Title Fit is graded against itself', () => {
   it('exposes the grade table', () => {
     expect(TITLE_FIT_GRADES.Perfect).toBe(1);
     expect(TITLE_FIT_GRADES.Mismatch).toBe(0);
+  });
+});
+
+describe('wordCount', () => {
+  it('counts whitespace-separated tokens', () => {
+    expect(wordCount('one two three')).toBe(3);
+  });
+
+  it('collapses runs of whitespace', () => {
+    expect(wordCount('one   two\n\nthree\tfour')).toBe(4);
+  });
+
+  it('ignores leading and trailing whitespace', () => {
+    expect(wordCount('  padded  ')).toBe(1);
+  });
+
+  it('counts empty and whitespace-only text as 0', () => {
+    expect(wordCount('')).toBe(0);
+    expect(wordCount('   \n\t ')).toBe(0);
+  });
+});
+
+describe('classifyLength', () => {
+  const words = (n: number) => Array.from({ length: n }, () => 'w').join(' ');
+
+  it('exposes the backend thresholds', () => {
+    expect(LENGTH_SHORT_MAX).toBe(15);
+    expect(LENGTH_MEDIUM_MAX).toBe(40);
+  });
+
+  it('calls 15 words or fewer Short', () => {
+    expect(classifyLength(words(1))).toBe('Short');
+    expect(classifyLength(words(15))).toBe('Short');
+  });
+
+  it('calls 16 to 40 words Medium', () => {
+    expect(classifyLength(words(16))).toBe('Medium');
+    expect(classifyLength(words(40))).toBe('Medium');
+  });
+
+  it('calls more than 40 words Long', () => {
+    expect(classifyLength(words(41))).toBe('Long');
+  });
+
+  it('calls empty text Short', () => {
+    expect(classifyLength('')).toBe('Short');
   });
 });

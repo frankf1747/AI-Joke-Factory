@@ -196,3 +196,23 @@ function ordinalFit(spec: DimensionSpec, ideal: string, joke: string): number {
   if (gap === 1) return 0.5;
   return 0;
 }
+
+/* ---- Length: the one dimension the code classifies, not the LLM ----------
+   Mirrors scoring/length.go. The backend never sends Length to the model, so
+   the frontend can compute it locally and show it live as the writer types. */
+
+export const LENGTH_SHORT_MAX = 15;   // Short:  ≤ 15 words
+export const LENGTH_MEDIUM_MAX = 40;  // Medium: 16–40 words; Long: 41+
+
+/** Whitespace-separated token count. Empty / whitespace-only text yields 0. */
+export function wordCount(text: string): number {
+  const trimmed = text.trim();
+  return trimmed === '' ? 0 : trimmed.split(/\s+/).length;
+}
+
+export function classifyLength(text: string): 'Short' | 'Medium' | 'Long' {
+  const n = wordCount(text);
+  if (n <= LENGTH_SHORT_MAX) return 'Short';
+  if (n <= LENGTH_MEDIUM_MAX) return 'Medium';
+  return 'Long';
+}
