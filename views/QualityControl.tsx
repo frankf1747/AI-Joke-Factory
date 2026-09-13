@@ -15,7 +15,7 @@ import {
   INITIAL_NUDGE_STATE, nudgeReducer, isNudgeOpen,
   type NudgeEvent,
 } from '../services/marketingNudge';
-import { DIMENSIONS, SCORED_DIMENSIONS, CATEGORICAL_DIMS, PLACEHOLDER_DIMS, INTRINSIC_DIMS, IDEAL_PROFILE, dimById, dimProx } from '../config/dimensions';
+import { DIMENSIONS, dimById, dimFit, DEFAULT_IDEAL_PROFILE } from '../config/dimensions';
 
 /* ---- Icon lookup for the 10 Topic palette ---- */
 const TOPIC_ICONS: Record<string, LucideIcon> = {
@@ -50,21 +50,24 @@ interface RevealedDim {
   prox: number;
 }
 
-/* Build a default-classified joke from text for demo/seed signals:
-   we lean on the IDEAL_PROFILE so a published joke has a plausible level on each dim. */
+/* A plausible classification for demo/seed signals: lean on the default ideal
+   so a published joke has a sensible level on every dimension. Title Fit has no
+   ideal, so it needs an explicit grade. */
 function defaultDims(): Record<string, string> {
-  return { ...IDEAL_PROFILE };
+  return { ...DEFAULT_IDEAL_PROFILE, TITLE_FIT: 'Strong' };
 }
 
 /* The dims a sale reveals: one of the top-3 closest + two seeded-random others.
-   Placeholder dims (Structure) are excluded — they score 0 forever and would
-   otherwise dominate the bottom of the ranking (REFACTOR_PLAN §7.2). */
+   All 12 are eligible now that Structure is scored like any other dimension. */
 function revealedDimsFor(jokeId: number, dims: Record<string, string>): RevealedDim[] {
-  const scored: RevealedDim[] = SCORED_DIMENSIONS.map(d => ({
-    dim: d,
-    level: dims[d.id] ?? d.levels[0],
-    prox: dimProx(d, dims[d.id] ?? d.levels[0]),
-  }));
+  const scored: RevealedDim[] = DIMENSIONS.map(d => {
+    const level = dims[d.id] ?? d.categories[0];
+    return {
+      dim: d,
+      level,
+      prox: dimFit(d.id, DEFAULT_IDEAL_PROFILE[d.id] ?? '', level),
+    };
+  });
   const ranked = [...scored].sort((a, b) => b.prox - a.prox);
   const top = ranked[Math.floor(mkSeed(jokeId) * 3) % Math.min(3, ranked.length)];
   const rest = scored.filter(s => s.dim!.id !== top.dim!.id);
@@ -82,7 +85,7 @@ const DimScale: React.FC<{ dim: ReturnType<typeof dimById>; level: string; prox:
 }) => {
   if (!dim) return null;
   const onTarget = prox >= 0.999;
-  if (CATEGORICAL_DIMS.has(dim.id)) {
+  if (dim.scoring === 'categorical') {
     return (
       <div className="flex items-center gap-2">
         <span className="text-[10px] font-semibold text-gray-500 w-14 shrink-0">{dim.label}</span>
@@ -93,7 +96,7 @@ const DimScale: React.FC<{ dim: ReturnType<typeof dimById>; level: string; prox:
     );
   }
   const frac = Math.max(0, Math.min(1, prox));
-  const maxLevel = dim.levels[dim.levels.length - 1];
+  const maxLevel = dim.categories[dim.categories.length - 1];
   return (
     <div>
       <div className="flex items-center justify-between gap-2 mb-0.5">
@@ -101,7 +104,7 @@ const DimScale: React.FC<{ dim: ReturnType<typeof dimById>; level: string; prox:
         <span className={`text-[10px] truncate ${onTarget ? 'text-emerald-700 font-semibold' : 'text-gray-500'}`}>{level}</span>
       </div>
       <div className="flex items-center gap-1.5">
-        <span className="text-[9px] text-gray-400 truncate max-w-[58px]">{dim.levels[0]}</span>
+        <span className="text-[9px] text-gray-400 truncate max-w-[58px]">{dim.categories[0]}</span>
         <div
           className="relative flex-1 h-1.5 rounded-full"
           style={{ background: 'linear-gradient(90deg,#e5e7eb 0%,#d9f2e1 55%,#22c55e 100%)' }}
@@ -573,7 +576,7 @@ const QualityControl: React.FC = () => {
     dispatchNudge({ type: 'RELEASED' });   // no popup may ambush a team that shipped
     await rateBatch(batchId, ratings, tagsOut, batchFeedback, titlesOut, topicsOut);
 
-    /* Append SoldSignal entries for the released jokes (using IDEAL_PROFILE-derived dims). */
+    /* Append SoldSignal entries for the released jokes (using DEFAULT_IDEAL_PROFILE-derived dims). */
     setSold(prev => {
       const additions = submittingIds.map(id => {
         const j = jokeById(id)!;
@@ -891,22 +894,17 @@ const QualityControl: React.FC = () => {
           <Card title="The 12 criteria customers judge">
             <div className="flex flex-wrap gap-1.5">
               {DIMENSIONS.map(d => {
-                const placeholder = PLACEHOLDER_DIMS.has(d.id);
-                const intrinsic = INTRINSIC_DIMS.has(d.id);
+                const intrinsic = !d.hasIdeal;
                 return (
                   <span
                     key={d.id}
                     className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border ${
-                      placeholder
-                        ? 'bg-gray-50 text-gray-400 border-gray-200'
-                        : intrinsic
+                      intrinsic
                         ? 'bg-amber-50 text-amber-800 border-amber-300'
                         : 'bg-white text-gray-700 border-gray-200'
                     }`}
                     title={
-                      placeholder
-                        ? 'Structure — categories not defined yet, so it doesn’t count'
-                        : intrinsic
+                      intrinsic
                         ? 'Title Fit — does your title match the joke? This one is yours to control.'
                         : undefined
                     }
