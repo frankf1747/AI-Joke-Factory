@@ -1551,13 +1551,15 @@ three hand-picked jokes. Recorded as a substitution, not a completion.
 
 ### Known gaps carried forward
 
-1. **The Marketing Topic picker still shows the legacy 10 categories.**
-   `views/QualityControl.tsx` renders `SIM_CONFIG.categories`, and
-   `views/JokeMaker.tsx` suggests them as prompts. The rubric is correct; the UI
-   is not. Topic is LLM-classified and the publish endpoint has no field for it,
-   so the picker is removed when the Marketing screen is rebuilt (phase 5), not
-   patched now. `config/simConfig.ts` and its test now state plainly that the
-   palette is legacy and asserts nothing about scoring.
+1. ~~**The Marketing Topic picker still shows the legacy 10 categories.**~~
+   **CLOSED** (`57e51c3`). The picker and the Joke Maker's prompt hint now read
+   `dimById('TOPIC').categories` directly, so there is one Topic list in the
+   codebase. The free-text custom topic went with it — `Other` is a real backend
+   category now, so the escape hatch only produced values the rubric rejects —
+   as did `bannedCategories`, which had no consumers and listed Politics, a
+   valid backend Topic. The picker is still slated for removal in phase 5 (Topic
+   is LLM-classified and the publish endpoint has no field for it); this makes
+   it honest in the meantime.
 
 2. **The three views have no tests.** Both Important findings in the final review
    — the Tutorial contradicting itself, and the ordinal track plotting a fit value
