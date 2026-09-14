@@ -1110,3 +1110,77 @@ VITE_API_BASE_URL=https://<your-app>.azurecontainerapps.io npm run smoke:api
 ```
 
 Expect failures. The types were transcribed by hand from handler code that has no compiler enforcing its own shape, and the design documents already disagreed with the implementation in several places before we started. Fix `types/api.ts` against what the server actually returns, then re-run the contract tests — those payloads are the record of what we believed, and updating them is how the belief gets corrected.
+
+---
+
+# Execution log — COMPLETE (2026-09-13)
+
+Executed subagent-driven: implementer, then spec review, then code-quality
+review, per task. 16 commits from `b783a74` to `3cc7b25`.
+
+## Result vs. the plan's own targets
+
+| | Planned | Actual |
+|---|---|---|
+| Tests | 241 | **266** |
+| Type errors | 2 | **1** |
+| New files | 10 | 11 (+`scripts/smoke-api.ts` header, `apiClient.test.ts`) |
+| User-facing change | none | none — all four roles walked, zero console errors |
+
+## Deviations, and why
+
+**Tasks 3, 4 and 5 were merged into one dispatch** (three commits still). They
+all write thin service modules and all modify `services/api/index.ts`; running
+them as three round trips would have had them fighting over that file for
+~150 lines of code total.
+
+**`strictNullChecks` was enabled, reversing this plan's own instruction not to
+touch `tsconfig.json`.** The instruction rested on an assumption — that turning
+it on was a large repo-wide change — and the measurement inverted it: 5 errors
+without the flag, **1** with it. Three of the five exist *because* it was off.
+See the amendment in "What the frontend currently gets wrong".
+
+## Four errors in this plan, found during execution
+
+Recorded because each was caught by a different mechanism, and that is the
+useful part.
+
+1. **`FRONTEND_PLAN.md` does not exist** in either repo and never has. It was
+   cited as baseline-of-truth #5. Found by an implementer trying to read it.
+2. **`end()` and `popups()` were typed `InstructorRoundResponse`.** They return
+   `dto.ToPublicRound` (`handler/instructor.go:221`, `:248`). Found by an
+   implementer *defending* a type this plan had called unrequested — deleting
+   `PublicRoundResponse` on sight would have removed the only thing that made
+   those two calls typeable, and nothing downstream would ever have complained,
+   because a wire type is a claim about the response rather than a check of it.
+3. **The `NO_JOKE_PUBLISHED` rule exists.** This plan asserted the backend has
+   no ">=1 published" rule and that Round 2's publish-nothing flow was therefore
+   safe. `usecase/marketing.go:81-82` validates only that *decisions* exist —
+   which is where the original reading stopped — but
+   `infra/repo/postgres/marketing_repo.go:198-200` enforces the rule inside the
+   transaction, and the backend has a passing test for it. Task 6 was one step
+   from pinning the mistake as a green contract test.
+4. **`ideal_profile` was typed so a conforming payload would 400** —
+   `Partial<Record<Dimension,…>>` where the backend requires a *total* profile
+   over the 11 ideal dimensions and rejects `TITLE_FIT` by name. Then, one layer
+   further out, `DEFAULT_IDEAL_PROFILE: Record<string,string>` satisfied the
+   corrected type anyway, because a string index signature satisfies required
+   literal keys — so the fix was inert on the one code path that will actually
+   build the payload.
+
+## Open item for phase 3+ — a product decision, not a code change
+
+**Round 2 "Marketing may publish nothing" is not supported by the deployed
+backend.** An all-discard publish returns 400 `NO_JOKE_PUBLISHED`. The failure
+is transactional and aborts before `markBatchProcessed`, so the batch stays
+`SUBMITTED` and claimed by that marketer — retryable, nothing corrupted. A
+Marketing screen migrated onto this layer must either handle the 400 or prevent
+the all-discard state, or the backend must change. Nothing is broken today
+because no view imports `services/api/` yet.
+
+## Still true, and still the point
+
+Nothing here has spoken to a server. The types were transcribed by hand from
+handler code that has no compiler enforcing its own shape. `npm run smoke:api`
+is what converts belief into evidence, and the first run against Azure should be
+expected to fail.
