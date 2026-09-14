@@ -185,6 +185,16 @@ function normalizePath(path: string): string {
   return q >= 0 ? p.slice(0, q) : p;
 }
 
+/** True for a Marketing route under EITHER prefix.
+ *
+ *  V2 renamed `/v1/qc` → `/v1/marketing`. The mock keeps answering the old
+ *  spelling as well as the new one: it is the default runtime for anyone who has
+ *  not set up a local Postgres, so a stale bundle still calling `/v1/qc` must
+ *  not break. `suffix` is the part after the prefix, e.g. 'queue/count'. */
+function isMarketingPath(path: string, suffix: string): boolean {
+  return path === `/v1/marketing/${suffix}` || path === `/v1/qc/${suffix}`;
+}
+
 function getQuery(path: string): URLSearchParams {
   const q = path.includes('?') ? path.slice(path.indexOf('?')) : '';
   return new URLSearchParams(q.startsWith('?') ? q.slice(1) : q);
@@ -913,8 +923,12 @@ function route(
     }
   }
 
-  // --- QC ---
-  if (method === 'GET' && path === '/v1/qc/queue/count') {
+  // --- Marketing (formerly QC) ---
+  // The backend renamed the prefix `/v1/qc` → `/v1/marketing` in V2. The mock is
+  // the default runtime for anyone without a local Postgres, so it answers BOTH
+  // spellings rather than swapping one for the other — an old build or a cached
+  // bundle still calling `/v1/qc` keeps working.
+  if (method === 'GET' && isMarketingPath(path, 'queue/count')) {
     ensureQueueStock(db);
     const round_id = Number(query.get('round_id') ?? db.active_round_id) as RoundId;
     const queue_size = Object.values(db.batches).filter(b => b.round_id === round_id && b.status === 'SUBMITTED').length;
@@ -922,7 +936,7 @@ function route(
     return ok(resp, 200);
   }
 
-  if (method === 'GET' && path === '/v1/qc/queue/next') {
+  if (method === 'GET' && isMarketingPath(path, 'queue/next')) {
     ensureQueueStock(db);
     const round_id = Number(query.get('round_id') ?? db.active_round_id) as RoundId;
     const next = Object.values(db.batches)
@@ -946,7 +960,7 @@ function route(
 
   // Marketing splits a raw-text batch into individual jokes.
   {
-    const m = path.match(/^\/v1\/qc\/batches\/(\d+)\/split$/);
+    const m = path.match(/^\/v1\/(?:qc|marketing)\/batches\/(\d+)\/split$/);
     if (method === 'POST' && m) {
       const batch_id = Number(m[1]) as BatchId;
       const batch = db.batches[String(batch_id)];
@@ -977,7 +991,7 @@ function route(
 
   // Marketing re-opens a split batch back into Phase 1 (restore raw_text, clear jokes).
   {
-    const m = path.match(/^\/v1\/qc\/batches\/(\d+)\/unsplit$/);
+    const m = path.match(/^\/v1\/(?:qc|marketing)\/batches\/(\d+)\/unsplit$/);
     if (method === 'POST' && m) {
       const batch_id = Number(m[1]) as BatchId;
       const batch = db.batches[String(batch_id)];
@@ -1000,7 +1014,7 @@ function route(
   }
 
   {
-    const m = path.match(/^\/v1\/qc\/batches\/(\d+)\/ratings$/);
+    const m = path.match(/^\/v1\/(?:qc|marketing)\/batches\/(\d+)\/ratings$/);
     if (method === 'POST' && m) {
       const batch_id = Number(m[1]) as BatchId;
       const activeErr = requireRoundActive(db);

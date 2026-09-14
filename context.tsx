@@ -21,7 +21,7 @@ import type {
 import { instructorService } from './services/instructorService';
 import type { PatchUserRole } from './services/instructorService';
 import { jmService } from './services/jmService';
-import { qcService } from './services/qcService';
+import { marketingService } from './services/marketingService';
 import { customerService } from './services/customerService';
 import { sessionService } from './services/sessionService';
 import { ApiError } from './services/apiClient';
@@ -1267,7 +1267,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // To avoid noisy errors, check queue/count first and only call queue/next when size > 0.
           let normalizedQueue: ApiQcQueueNextResponse | null = null;
           try {
-            const countRaw = await qcService.queueCount(effectiveRound);
+            const countRaw = await marketingService.queueCount(effectiveRound);
             const countAny: any = (countRaw as any)?.data ?? countRaw;
             // Support both queue_size and count field names.
             const size = Number(countAny?.queue_size ?? countAny?.count ?? 0);
@@ -1282,7 +1282,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const now = Date.now();
               if (now >= qcNextRetryAfterRef.current) {
                 try {
-              const rawQ = await qcService.queueNext(effectiveRound);
+              const rawQ = await marketingService.queueNext(effectiveRound);
               const qAny: any = rawQ;
               const qData = (qAny?.data ?? qAny) as any;
               normalizedQueue = qData
@@ -1780,7 +1780,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const clean = jokes.map(j => j.trim()).filter(Boolean);
     if (clean.length === 0) return;
     try {
-      const updated = await qcService.splitBatch(Number(batchId) as BatchId, { jokes: clean });
+      const updated = await marketingService.splitBatch(Number(batchId) as BatchId, { jokes: clean });
       const q: any = (updated as any)?.data ?? updated;
       if (q && q.batch) setQcQueue(q as ApiQcQueueNextResponse);
     } catch (e) {
@@ -1791,7 +1791,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // V2: Marketing re-opens a split batch back into the splitting phase.
   const unsplitBatch = async (batchId: string) => {
     try {
-      const updated = await qcService.unsplitBatch(Number(batchId) as BatchId);
+      const updated = await marketingService.unsplitBatch(Number(batchId) as BatchId);
       const q: any = (updated as any)?.data ?? updated;
       if (q && q.batch) setQcQueue(q as ApiQcQueueNextResponse);
     } catch (e) {
@@ -1840,7 +1840,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }, {});
       const tagSummary = Object.entries(tagSummaryCounts).map(([tag, count]) => ({ tag, count }));
 
-      const resp = await qcService.submitRatings(bid, {
+      const resp = await marketingService.submitRatings(bid, {
         ratings: ratingList,
         feedback,
       });
