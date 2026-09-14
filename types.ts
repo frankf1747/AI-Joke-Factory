@@ -28,7 +28,9 @@ export type JokeId = number;
 export type ApiRole = 'INSTRUCTOR' | 'JM' | 'MARKETING' | 'QC' | 'CUSTOMER';
 export type ParticipantStatus = 'WAITING' | 'ASSIGNED';
 export type RoundStatus = 'CONFIGURED' | 'ACTIVE' | 'ENDED';
-export type BatchStatus = 'DRAFT' | 'SUBMITTED' | 'RATED';
+/* V2 renamed RATED -> PROCESSED (core/domain/enums.go). 'RATED' is retained only because the
+   in-browser mock (services/mockApi.ts) — the default runtime — still emits it. */
+export type BatchStatus = 'DRAFT' | 'SUBMITTED' | 'PROCESSED' | 'RATED';
 
 // --- App/UI state ---
 export type GameStatus = 'LOBBY' | 'PLAYING';

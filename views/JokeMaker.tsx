@@ -33,7 +33,8 @@ const StatusDot: React.FC<{ status: JokeStatus; size?: number; opacity?: number 
 
 /** Derive each joke's display status from the batch + joke flags. */
 function jokeStatus(batch: Batch, joke: any): JokeStatus {
-  if (batch.status !== 'RATED') return 'reviewing';
+  // V2 renamed RATED to PROCESSED (domain/enums.go). Accept both; the mock still says RATED.
+  if (batch.status !== 'PROCESSED' && batch.status !== 'RATED') return 'reviewing';
   const published = Boolean(joke.is_published);
   const sold = Number(joke.sold_count ?? 0) > 0;
   if (!published) return 'wasted';

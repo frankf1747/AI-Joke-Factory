@@ -138,7 +138,7 @@ function normalizeRoundStatus(s: string | undefined | null): 'ACTIVE' | 'ENDED' 
   return null;
 }
 
-function mapBatchFromTeamList(
+export function mapBatchFromTeamList(
   roundNumber: number,
   team_id: TeamId,
   teamBatches: ApiTeamBatchesResponse['batches'][number],
@@ -155,7 +155,12 @@ function mapBatchFromTeamList(
         content: j.joke_text,
         sold_count: (j as any)?.sold_count ?? (j as any)?.soldCount ?? undefined,
         is_bought: (j as any)?.is_bought ?? (j as any)?.isBought ?? undefined,
-        is_published: (j as any)?.is_published ?? (j as any)?.isPublished ?? undefined,
+        // The backend sends publish_status: PENDING | PUBLISHED | DISCARDED. is_published is
+        // kept as the UI's vocabulary, derived here at the boundary.
+        is_published:
+          (j as any)?.publish_status != null
+            ? (j as any).publish_status === 'PUBLISHED'
+            : ((j as any)?.is_published ?? (j as any)?.isPublished ?? undefined),
         first_sold_at: (j as any)?.first_sold_at ?? (j as any)?.firstSoldAt ?? null,
         published_at: (j as any)?.published_at ?? (j as any)?.publishedAt ?? null,
         topic: (j as any)?.topic ?? (j as any)?.category ?? undefined,
@@ -171,7 +176,10 @@ function mapBatchFromTeamList(
       });
 
   const submittedAt = teamBatches.submitted_at ? Date.parse(teamBatches.submitted_at) : undefined;
-  const ratedAt = teamBatches.rated_at ? Date.parse(teamBatches.rated_at) : undefined;
+  // The backend renamed rated_at -> processed_at in V2 (handler/batch.go). Accept both so a
+  // stale mock response still maps.
+  const ratedAtRaw = (teamBatches as any).processed_at ?? (teamBatches as any).rated_at;
+  const ratedAt = ratedAtRaw ? Date.parse(ratedAtRaw) : undefined;
 
   return {
     batch_id,
@@ -180,7 +188,7 @@ function mapBatchFromTeamList(
     status,
     jokes,
     submitted_at: teamBatches.submitted_at,
-    rated_at: teamBatches.rated_at,
+    rated_at: ratedAtRaw,
     avg_score: teamBatches.avg_score,
     passes_count: teamBatches.passes_count,
     feedback: teamBatches.feedback ?? undefined,
