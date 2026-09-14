@@ -19,7 +19,13 @@ export type BatchId = number;
 export type JokeId = number;
 
 // --- API enums (schema-aligned) ---
-export type ApiRole = 'INSTRUCTOR' | 'JM' | 'QC' | 'CUSTOMER';
+/* The backend's domain.Role (core/domain/enums.go:6-14) is INSTRUCTOR | JM | MARKETING.
+   'QC' is retained only because a browser may still hold it in localStorage from a pre-V2
+   session; the server never sends it. 'CUSTOMER' is likewise never sent by the server —
+   human customers were replaced by simulated ones — but the in-browser mock still emits it
+   (services/mockApi.ts) and this union types the mock's own response shapes, so dropping it
+   here would only make those types lie. It goes when views/Customer.tsx does. */
+export type ApiRole = 'INSTRUCTOR' | 'JM' | 'MARKETING' | 'QC' | 'CUSTOMER';
 export type ParticipantStatus = 'WAITING' | 'ASSIGNED';
 export type RoundStatus = 'CONFIGURED' | 'ACTIVE' | 'ENDED';
 export type BatchStatus = 'DRAFT' | 'SUBMITTED' | 'RATED';

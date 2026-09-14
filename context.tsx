@@ -77,14 +77,21 @@ function isMockModeEnabled(): boolean {
   return forceMock || (prod && !base);
 }
 
-function toRole(apiRole: string | null): Role {
+export function toRole(apiRole: string | null): Role {
   switch (apiRole) {
     case 'INSTRUCTOR':
       return 'INSTRUCTOR' as Role;
     case 'JM':
       return 'JOKE_MAKER' as Role;
+    // The backend renamed QC to MARKETING in V2 (core/domain/enums.go:6-14). The UI enum
+    // keeps the name QUALITY_CONTROL to avoid a repo-wide rename; only the wire value moved.
+    case 'MARKETING':
     case 'QC':
       return 'QUALITY_CONTROL' as Role;
+    // The real backend can never send CUSTOMER, but the in-browser mock still does:
+    // DevRoleSwitcher writes { role: 'CUSTOMER' } into the mock DB and the app re-reads it
+    // through /session/me. Dropping this case would route the dev Customer view to the
+    // Waiting Room. Remove it with views/Customer.tsx, not here.
     case 'CUSTOMER':
       return 'CUSTOMER' as Role;
     default:
