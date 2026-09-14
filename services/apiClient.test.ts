@@ -12,6 +12,17 @@ function jsonResponse(body: unknown, status = 200): Response {
   } as unknown as Response;
 }
 
+/** Non-JSON stand-in, for gateway HTML and empty bodies. */
+function textResponse(body: string, status = 200, contentType = 'text/plain'): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: { get: (k: string) => (k.toLowerCase() === 'content-type' ? contentType : null) },
+    json: async () => { throw new SyntaxError('Unexpected token < in JSON'); },
+    text: async () => body,
+  } as unknown as Response;
+}
+
 /**
  * Snag A: vitest runs with environment 'node', so there is no DOM and no
  * localStorage. Install a minimal in-memory stand-in so the header tests
@@ -105,6 +116,7 @@ describe('apiRequest — errors', () => {
     expect(err.status).toBe(409);
     expect(err.code).toBe('CONFLICT');
     expect(err.message).toBe('round not active');
+    expect(err.requestId).toBe('r1');
   });
 
   it('keeps the field name on a validation error', async () => {
@@ -120,6 +132,48 @@ describe('apiRequest — errors', () => {
     const err: any = await apiRequest('/v1/rounds/active').catch(e => e);
     expect(err).toBeInstanceOf(ApiError);
     expect(err.status).toBe(500);
+  });
+
+  it('keeps a gateway HTML error page out of the message but in details', async () => {
+    // message is what surfaces in the UI: "HTTP 502" beats the first 200
+    // characters of an nginx page. The body still has to survive for debugging.
+    const html = `<html><head><title>502 Bad Gateway</title></head><body>${'x'.repeat(3000)}</body></html>`;
+    globalThis.fetch = vi.fn(async () => textResponse(html, 502, 'text/html')) as any;
+    const err: any = await apiRequest('/v1/rounds/active').catch(e => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.message).toBe('HTTP 502');
+    expect(err.details).toBe(html);
+  });
+
+  it('caps a plain-text error message and keeps the full body in details', async () => {
+    const body = 'y'.repeat(500);
+    globalThis.fetch = vi.fn(async () => textResponse(body, 500, 'text/plain')) as any;
+    const err: any = await apiRequest('/v1/rounds/active').catch(e => e);
+    expect(err.message.length).toBeLessThanOrEqual(200);
+    expect(err.details).toBe(body);
+  });
+});
+
+describe('apiRequest — non-JSON success bodies', () => {
+  it('throws rather than returning a string when a wrapped endpoint answers 200 with HTML', async () => {
+    // Render serves text/html cold-start pages with a 200. Returning that
+    // string cast to T would defeat the envelope guard entirely.
+    const html = '<html><body>Application is starting</body></html>';
+    globalThis.fetch = vi.fn(async () => textResponse(html, 200, 'text/html')) as any;
+    const err: any = await apiRequest('/v1/rounds/active').catch(e => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.code).toBe('MALFORMED_ENVELOPE');
+    expect(err.details).toBe(html);
+  });
+
+  it('still returns a non-JSON body as-is for a raw endpoint', async () => {
+    globalThis.fetch = vi.fn(async () => textResponse('pong', 200, 'text/plain')) as any;
+    await expect(apiRequest('/v1/session/me')).resolves.toBe('pong');
+  });
+
+  it('allows an empty body on a wrapped endpoint', async () => {
+    globalThis.fetch = vi.fn(async () => textResponse('', 200, 'text/plain')) as any;
+    await expect(apiRequest('/v1/rounds/active')).resolves.toBe('');
   });
 });
 
