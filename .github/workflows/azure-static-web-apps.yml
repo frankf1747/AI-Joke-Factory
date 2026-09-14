@@ -1,0 +1,71 @@
+name: Deploy to Azure Static Web Apps
+
+# Deploys the built SPA to Azure Static Web Apps.
+#
+# The build env vars live HERE, not in netlify.toml — that file only governs the
+# Netlify build. If you point the app at a different backend, change it in both
+# places or the two hosts will disagree about which API they talk to.
+#
+# Requires one GitHub secret: AZURE_STATIC_WEB_APPS_API_TOKEN
+# Get it from the Static Web App in the portal → Overview → "Manage deployment token".
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches: [main]
+
+jobs:
+  build_and_deploy:
+    if: github.event_name == 'push' || github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    name: Build and deploy
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install
+        run: npm ci
+
+      # Guard rails: a broken build should not reach students mid-class.
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npx vitest run
+
+      - name: Build
+        run: npm run build
+        env:
+          # The live Azure Container App. Set VITE_USE_MOCK_API to "true" to ship
+          # the offline in-browser demo instead of talking to the backend.
+          VITE_USE_MOCK_API: 'false'
+          VITE_API_BASE_URL: 'https://jokefactory-api.whitepebble-2daa4226.westus2.azurecontainerapps.io'
+
+      - name: Deploy
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          action: 'upload'
+          app_location: '/'
+          output_location: 'dist'
+          # We already built above, with the env vars we want. Letting Oryx build
+          # again would drop them and ship a mock-mode bundle.
+          skip_app_build: true
+
+  close_pull_request:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    name: Close preview environment
+    steps:
+      - uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          action: 'close'
