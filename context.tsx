@@ -399,8 +399,6 @@ interface GameContextType {
   ) => Promise<void>;
   
   sales: Record<string, number>; // jokeId -> count of purchases
-  buyJoke: (jokeId: string, cost: number) => Promise<void>;
-  returnJoke: (jokeId: string, cost: number) => Promise<void>;
 
   // API-driven view models
   roundId: RoundId | null;
@@ -985,56 +983,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
         });
 
-        // Customer-only: hydrate wallet/purchases from budget + market.
-        // Use effectiveRoundId resolved via /v1/rounds/active to avoid /rounds/undefined,
-        // and only update local state when values actually change (avoid UI flicker).
-        if (role === ('CUSTOMER' as Role) && effectiveRoundId) {
-          try {
-            const [budgetRaw, marketRaw] = await Promise.all([
-              customerService.budget(effectiveRoundId),
-              customerService.market(effectiveRoundId),
-            ]);
-            const budget: any = (budgetRaw as any)?.data ?? budgetRaw;
-            const market: any = (marketRaw as any)?.data ?? marketRaw;
-            if (!cancelled) {
-              const items = (market?.items ?? []) as ApiMarketItem[];
-
-              // Only update market list if it actually changed (reduce renders).
-              setMarketItems(prev => {
-                if (prev.length !== items.length) return items;
-                for (let i = 0; i < prev.length; i++) {
-                  const a = prev[i];
-                  const b = items[i];
-                  if (
-                    a.joke_id !== b.joke_id ||
-                    a.is_bought_by_me !== b.is_bought_by_me ||
-                    a.team?.id !== b.team?.id ||
-                    Number((a as any).bought_count ?? (a as any).boughtCount ?? 0) !==
-                      Number((b as any).bought_count ?? (b as any).boughtCount ?? 0)
-                  ) {
-                    return items;
-                  }
-                }
-                return prev;
-              });
-
-              const nextWallet = typeof budget?.remaining_budget === 'number' ? (budget.remaining_budget as number) : null;
-              const nextPurchased = items.filter(i => i.is_bought_by_me).map(i => String(i.joke_id));
-
-              setUser(prev => {
-                if (!prev) return prev;
-                const wallet = nextWallet ?? prev.wallet;
-                const sameWallet = prev.wallet === wallet;
-                const samePurchased = JSON.stringify(prev.purchasedJokes) === JSON.stringify(nextPurchased);
-                if (sameWallet && samePurchased) return prev;
-                return { ...prev, wallet, purchasedJokes: nextPurchased };
-              });
-            }
-          } catch {
-            // ignore customer hydration errors (will surface on action)
-          }
-        }
-
         // Role-specific data
         if (role === ('INSTRUCTOR' as Role)) {
           try {
@@ -1272,7 +1220,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const rawQ = await marketingService.queueNext(effectiveRound);
               const qAny: any = rawQ;
               const qData = (qAny?.data ?? qAny) as any;
-              normalizedQueue = qData
+              // queue/next answers 200 {batch: null, jokes: [], queue_size: N} when every
+              // batch is held by a teammate: CountSubmittedBatchesForTeam counts locked
+              // batches, so queue_size can be > 0 while batch is null. A null batch means
+              // "the queue is not empty but nothing is available to me", which renders
+              // identically to an empty queue — and without this guard QualityControl's
+              // read of qcQueue.batch.batch_id throws and blanks the Marketing screen.
+              normalizedQueue = qData && qData.batch
                 ? {
                     batch: qData.batch,
                     jokes: Array.isArray(qData.jokes) ? qData.jokes : [],
@@ -1851,78 +1805,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const buyJoke = async (jokeId: string, _cost: number) => {
-    if (!user || !roundId) return;
-    const jid = Number(jokeId) as JokeId;
-    try {
-      const respRaw = await customerService.buy(roundId, jid);
-      const resp: any = (respRaw as any)?.data ?? respRaw;
-      setUser(prev => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          wallet: resp?.budget?.remaining_budget ?? prev.wallet,
-          purchasedJokes: Array.from(new Set([...prev.purchasedJokes, String(jid)])),
-        };
-      });
-      const marketRaw = await customerService.market(roundId);
-      const market: any = (marketRaw as any)?.data ?? marketRaw;
-      setMarketItems(market?.items ?? []);
-    } catch (e) {
-      if (e instanceof ApiError) {
-        if (e.status === 409 && e.code === 'ROUND_NOT_ACTIVE') {
-          alert('Round is not active.');
-          return;
-        }
-        if (e.status === 409 && e.code === 'INSUFFICIENT_BUDGET') {
-          alert('Insufficient budget.');
-          return;
-        }
-        if (e.status === 409 && e.code === 'ALREADY_BOUGHT') {
-          alert('You already bought this joke.');
-          return;
-        }
-      }
-      alert('Failed to buy joke.');
-    }
-  };
-
-  const returnJoke = async (jokeId: string, _cost: number) => {
-    if (!user || !roundId) return;
-    const jid = Number(jokeId) as JokeId;
-    try {
-      const respRaw = await customerService.return(roundId, jid);
-      const resp: any = (respRaw as any)?.data ?? respRaw;
-      setUser(prev => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          wallet: resp?.budget?.remaining_budget ?? prev.wallet,
-          purchasedJokes: prev.purchasedJokes.filter(id => id !== String(jid)),
-        };
-      });
-      const marketRaw = await customerService.market(roundId);
-      const market: any = (marketRaw as any)?.data ?? marketRaw;
-      setMarketItems(market?.items ?? []);
-    } catch (e) {
-      if (e instanceof ApiError) {
-        if (e.status === 409 && e.code === 'ROUND_NOT_ACTIVE') {
-          alert('Round is not active.');
-          return;
-        }
-        if (e.status === 409 && e.code === 'NOT_BOUGHT_YET') {
-          alert('You have not bought this joke.');
-          return;
-        }
-        if (e.status === 409 && e.code === 'ALREADY_RETURNED') {
-          alert('This joke was already returned.');
-          return;
-        }
-      }
-      alert('Failed to return joke.');
-    }
-  };
-
   const setRound = (round: number) => {
     // Allow instructor to toggle Round 1/2 manually (e.g. during Lobby/Config).
     // If a round is ACTIVE, polling will likely revert this to the active round, which is intended.
@@ -2150,7 +2032,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       formTeams, resetToLobby,
       teamNames, updateTeamName, updateUser, deleteUser,
       batches, addBatch, submitRawBatch, splitBatch, unsplitBatch, publishBatch,
-      sales, buyJoke, returnJoke,
+      sales,
       roundId,
       marketItems,
       teamSummary,

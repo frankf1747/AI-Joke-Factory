@@ -50,7 +50,7 @@ FE/
     instructorService.ts  - Instructor endpoints (login/lobby/start/end/reset)
     jmService.ts          - Joke Maker endpoints (summary/batches)
     qcService.ts          - QC endpoints (queue/ratings)
-    customerService.ts    - Customer endpoints (market/budget/buy/return)
+    customerService.ts    - Market read (customers are simulated; no buy/return)
   views/                  - Role screens
     Instructor.tsx        - Instructor UI
     JokeMaker.tsx         - JM UI

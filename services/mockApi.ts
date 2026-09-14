@@ -465,33 +465,6 @@ function route(
     return ok(resp, 200);
   }
 
-  if (method === 'GET' && path === '/v1/session/team') {
-    const me = ensureMe(db, meUserId);
-    if ('ok' in me) return me;
-    const round_id = Number(query.get('round_id') ?? db.active_round_id) as RoundId;
-    const team_id = me.assignment.team_id;
-    const members =
-      team_id == null
-        ? []
-        : Object.entries(db.assignments)
-            .filter(([, a]) => a.team_id === team_id)
-            .map(([uid, a]) => {
-              const p = db.participants[uid];
-              if (!p) return null;
-              return {
-                user_id: p.user_id,
-                display_name: p.display_name,
-                role: a.role ?? null,
-                team_id,
-                round_id,
-              };
-            })
-            .filter(Boolean);
-
-    // Minimal shape; caller treats as `any`.
-    return ok({ members }, 200);
-  }
-
   // --- Instructor ---
   if (path.startsWith('/v1/instructor/rounds/')) {
     const me = ensureMe(db, meUserId);

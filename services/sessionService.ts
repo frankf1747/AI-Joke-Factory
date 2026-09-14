@@ -4,8 +4,6 @@ import type {
   ApiSessionJoinRequest,
   ApiSessionJoinResponse,
   ApiSessionMeResponse,
-  ApiTeamsResponse,
-  RoundId,
 } from '../types';
 
 export const sessionService = {
@@ -19,17 +17,6 @@ export const sessionService = {
 
   activeRound(): Promise<ApiActiveRoundResponse> {
     return apiRequest<ApiActiveRoundResponse>('/v1/rounds/active', { method: 'GET' });
-  },
-
-  /**
-   * Provisional endpoint (no formal spec provided): used only to populate
-   * JM/QC “Meet Your Team” modal without using instructor-only lobby API.
-   *
-   * If the backend path/shape differs, update this one function + mapper.
-   */
-  myTeam(round_id: RoundId): Promise<unknown> {
-    const q = encodeURIComponent(String(round_id));
-    return apiRequest<unknown>(`/v1/session/team?round_id=${q}`, { method: 'GET' });
   },
 };
 
