@@ -42,7 +42,21 @@ export const instructorApi = {
     return apiRequest<DeleteUserResponse>(`/v1/instructor/rounds/${roundId}/users/${userId}`, { method: 'DELETE' });
   },
 
-  /** Locks the config and the ideal profile, then generates the AI customers. */
+  /** Locks the config and the ideal profile, then generates the AI customers.
+   *
+   *  MISSING IDEAL PROFILE FAILS AS **409**, NOT 400 — verified live 2026-09-13.
+   *  Starting a round whose ideal profile was never configured returns
+   *  409 CONFLICT with message "conflict: ideal_profile must be configured
+   *  before start" and **no `field` key at all**: usecase/instructor.go:243-245
+   *  re-wraps the scoring failure in domain.NewConflictError, which carries no
+   *  Field, and `field` is omitempty on the error body.
+   *
+   *  config() is the one that returns 400 VALIDATION_ERROR with
+   *  field: "ideal_profile" (usecase/instructor.go:53-56). So error handling
+   *  that branches on `err.field === 'ideal_profile'` covers config() ONLY and
+   *  will silently miss this path — branch on status/code here instead.
+   *  Also 409 from here: "round already active" / "round already ended"
+   *  (usecase/instructor.go:231-236), likewise with no field. */
   start(roundId: number, body: ConfigRequest = {}) {
     return apiRequest<InstructorRoundResponse>(`/v1/instructor/rounds/${roundId}/start`, { method: 'POST', body });
   },

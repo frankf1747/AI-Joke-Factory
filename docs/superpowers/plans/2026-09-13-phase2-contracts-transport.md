@@ -1184,3 +1184,146 @@ Nothing here has spoken to a server. The types were transcribed by hand from
 handler code that has no compiler enforcing its own shape. `npm run smoke:api`
 is what converts belief into evidence, and the first run against Azure should be
 expected to fail.
+
+---
+
+## Live verification (2026-09-13)
+
+The paragraph immediately above — "Nothing here has spoken to a server" — was
+true when this plan was written and is no longer true. It is left in place as
+the record of what this phase was working blind against. This section is what
+happened when the blindfold came off.
+
+### What was run
+
+The backend was brought up locally for the first time: real Go binary, real
+Postgres, **stub classifier** (`APP_LLM_BASE_URL` / `APP_LLM_API_KEY` unset,
+backend README:96), at backend commit `8f9dfff` — the same commit every
+`file.go:line` citation in `types/api.ts` is pinned to.
+
+All 24 endpoints in the `types/api.ts` route table were then walked **twice**:
+once by hand with `curl`, and once through the real `services/api/*.ts` client
+(so the envelope unwrapping, the `isRawEndpoint` list and the `X-User-Id`
+header logic in `services/apiClient.ts` were on the wire path, not bypassed).
+
+### Result: zero type mismatches
+
+Every key declared in `types/api.ts` was present. No undeclared extra keys
+appeared. No scalar arrived with the wrong type. Nothing typed `?:` (absent)
+came back `null`, and nothing typed `| null` came back absent. Specifically
+confirmed:
+
+- the `{data}` envelope wrapped everything **except** exactly the three RAW
+  rows (`/health`, `/v1/session/*`, `/v1/instructor/login` — plus the untyped
+  `/health/detailed`);
+- `LobbyResponse` really is PascalCase, alone among all responses;
+- all four `| null`-when-empty arrays (the `var xs []T` ones) really do
+  serialise as `null` rather than `[]`;
+- the `NO_JOKE_PUBLISHED` 400 on an all-discard publish — the finding recorded
+  above — reproduces;
+- `ideal_profile` totality is enforced exactly as documented: a partial profile
+  and a `TITLE_FIT` key are both rejected by name.
+
+**What this proves:** the transcription was right, and the client speaks the
+backend's dialect end to end. A reader can now treat `types/api.ts` as
+verified rather than believed.
+
+**What it does not prove:** (a) it pins the file to commit `8f9dfff` only —
+future backend changes can still drift, so `npm run smoke:api` remains the
+mechanism, not this paragraph; (b) the classifier was the **stub**, so *no
+scoring behaviour was exercised at all* — only response shapes. Every claim
+about how jokes are scored is still unverified; (c) the run used a fresh local
+database, so volume- and history-dependent shapes were not stressed.
+
+### Five behavioural gotchas — not type drift, still traps
+
+These all type-check. They are documented in place on the affected types and
+methods; listed here so they are findable from the plan.
+
+1. **`sold_count` disagrees between two endpoints for the same joke.** After
+   classification settled, one joke read `sold_count: 0` from
+   `GET /v1/rounds/{r}/teams/{t}/batches` and `sold_count: 20` from
+   `GET /v1/rounds/{r}/market`. The batch figure is structurally always zero:
+   there is no `sold_count` column on `jokes`
+   (`infra/db/migrations/0001_schema.sql:136-144`) and `batch_repo.go:86`/`:123`
+   never select one, so `domain.Joke.SoldCount` keeps its Go zero value. Sales
+   live in the `purchases` table and only `ListMarket` aggregates them
+   (`aicustomer_repo.go:218-232`). **A joke card that reads sales off the batch
+   listing will show zero for every joke.** This is the one most likely to
+   become a visible bug in phases 3–7.
+2. **`ideal_profile` fails with a different status on each path.** `config`
+   with a malformed profile → **400 `VALIDATION_ERROR`**, `field:
+   "ideal_profile"`. `start` with no profile configured → **409 `CONFLICT`**,
+   `"conflict: ideal_profile must be configured before start"`, **no `field`
+   key** — `instructor.go:243` re-wraps the scoring error in
+   `NewConflictError`, which carries no Field. Error handling that branches on
+   `err.field === 'ideal_profile'` covers `config` only.
+3. **`GET /v1/rounds/{r}/market` and `.../feedback` require `X-User-Id`**, or
+   they return 400 `BAD_REQUEST` `"missing X-User-Id header"` before doing any
+   work. Invisible in the browser (`apiClient.getUserIdHeader()` supplies it
+   from `localStorage`), a trap for any Node-side caller — including a future
+   extension of `scripts/smoke-api.ts`. The same applies to `submitBatch` /
+   `batches` (`handler/batch.go:23`, `:58`) and to all three marketing
+   endpoints; `summary` is the one team route that does not need it.
+4. **`GET /v1/rounds/active` is not filtered by status.** The handler calls
+   `RoundService.List` → `ListRounds`, which is `SELECT ... FROM rounds` with
+   no `WHERE` (`round_repo.go:48-49`). `CONFIGURED`, `ACTIVE` and `ENDED`
+   rounds all come back; a caller wanting genuinely active rounds must filter
+   on `status` itself.
+5. **`end()` and `popups()` return the PUBLIC projection**, already recorded
+   above as a Task-3 finding, and confirmed on the wire here: no
+   `buy_threshold`, `jitter`, `swap_margin`, `feedback_pass_threshold` or
+   `ideal_profile` on those two responses.
+
+### Two nullable fields were never reached
+
+Their `| null` is still inference rather than observation. Both are marked in
+place in `types/api.ts` and **neither type was changed** — both are defensible
+from the Go source, and narrowing either would assert something the handler
+does not.
+
+- **`InstructorLoginResponse.round_id`** always came back a number. The handler
+  can emit null (`var roundID interface{}`, assigned only when `res.Round !=
+  nil`, `handler/admin.go:36-39`), but the branch looks unreachable in
+  practice: `AdminAuthService.Login` backfills round 1 when the rounds table is
+  empty and keeps it in the result (`usecase/admin_auth.go:52-74`), so `Round`
+  is non-nil even on a fresh database.
+- **`MarketingQueueBatch.locked_by`** always held the claiming marketer's id.
+  Observing null needs an unlocked batch, which `queue/next` never returns:
+  `ClaimNextBatch` either re-loads the batch this marketer already holds
+  (`... AND locked_by = $3`, `marketing_repo.go:34-41`) or claims a fresh one,
+  setting `locked_by` on the way out.
+
+### Local setup recipe
+
+Worth repeating, and it took some working out.
+
+```bash
+brew install go
+createdb jokefactory
+# jokefactory_be/.env  (gitignored) points APP_DB_USER at the local superuser
+DB_DSN="postgres://frankfu@localhost:5432/jokefactory?sslmode=disable" make migrate-up
+make run                      # :8080, stub classifier, no Azure needed
+APP_BASE_URL=http://localhost:8080 npm run smoke:api
+```
+
+**Docker is not required.** The backend's README reaches for
+`docker compose up -d` in its local-development section purely to provide
+Postgres, which is already installed on this machine via Homebrew;
+`make migrate-up` and `make run` then run the Go binary on the host and never
+touch the containers. (`docker-compose.yml` does also define an `api` service,
+but `make run` bypasses it entirely.)
+
+Two details that cost time:
+
+- **The database role.** Homebrew's Postgres creates a single superuser named
+  after the OS user with trust auth on localhost, so the backend's documented
+  `postgres`/`postgres` defaults do not apply. `jokefactory_be/.env` (gitignored
+  at `.gitignore:36`) points `APP_DB_USER` at that role instead, which is less
+  invasive than creating a `postgres` superuser.
+- **The instructor password** is whatever `APP_ADMIN_PASSWORD` is set to in
+  that same `.env` — `make run` sources the file before `go run .`, and
+  `AdminAuthService.Login` compares against it directly
+  (`usecase/admin_auth.go:26-31`). There is no default and no seeded account;
+  an unset value makes every instructor login 401 with "admin password not
+  configured".

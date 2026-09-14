@@ -10,6 +10,39 @@
    Nothing here is defensive. If the backend sends a field this file does not
    declare, that is drift and scripts/smoke-api.ts is what catches it.
 
+   LIVE-VERIFIED 2026-09-13 — these types are no longer merely transcribed.
+   Every type in this file was walked against a running local backend (Go,
+   real Postgres, stub classifier) at backend commit 8f9dfff: all 24 endpoints
+   in the route table below, first by curl and then again through the real
+   services/api/*.ts client. Result: ZERO mismatches. Every declared key was
+   present, no undeclared extras appeared, no scalar had the wrong type, and
+   nothing that is typed absent came back null (or vice versa). The three RAW
+   rows below are exactly the three endpoints that skipped the {data} envelope;
+   the PascalCase lobby, the four `| null`-when-empty arrays, the
+   NO_JOKE_PUBLISHED 400 and the ideal_profile totality rules all behaved as
+   documented.
+
+   What that run does NOT cover, and why the drift warning above still stands:
+   - It pins this file to commit 8f9dfff only. A future backend change can
+     still drift, and smoke-api.ts is still the thing that catches it.
+   - The classifier was the STUB (APP_LLM_* unset), so no scoring behaviour was
+     exercised — only response shapes.
+   - Two nullable fields were never reached on the wire, so their `| null` is
+     still inference: InstructorLoginResponse.round_id and
+     MarketingQueueBatch.locked_by. Both are marked in place below.
+   See docs/superpowers/plans/2026-09-13-phase2-contracts-transport.md,
+   "Live verification (2026-09-13)", for the run and the local setup recipe.
+
+   BEHAVIOURAL GOTCHAS the live run surfaced that are NOT type drift — the
+   types are correct and the behaviour is still surprising. Each is documented
+   on the type it affects:
+   - TeamBatchJoke.sold_count vs MarketItem.sold_count disagree for the same
+     joke. READ THIS ONE before building a joke card.
+   - RoundsActiveResponse is not filtered by status.
+   - ConfigRequest.ideal_profile fails with a different status on config (400)
+     than on start (409).
+   - GET /v1/rounds/{rid}/market and .../feedback require an X-User-Id header.
+
    Conventions used throughout:
    - A Go `*T` field (pointer) marshals to `null` when unset  -> `T | null`.
    - A Go `time.Time` marshals to an RFC3339 string           -> `string`.
@@ -192,6 +225,17 @@ export interface SessionMeResponse {
  */
 export interface InstructorLoginResponse {
   user: SessionUser & { role: Role };
+  /**
+   * `| null` IS UNVERIFIED AGAINST LIVE. Every login in the 2026-09-13 run
+   * returned a number. The null branch is defensible from the Go — the handler
+   * declares `var roundID interface{}` and only assigns when res.Round != nil
+   * (app/http/handler/admin.go:36-39), so an unset Round marshals to null —
+   * but it may be unreachable in practice: AdminAuthService.Login backfills
+   * round 1 when the rounds table is empty and keeps it in the result
+   * (core/usecase/admin_auth.go:52-74), so Round is non-nil even on a fresh
+   * database. Kept as-is: the type matches what the handler can emit, and
+   * narrowing it to `number` would be a claim the handler does not make.
+   */
   round_id: number | null;
 }
 
@@ -240,6 +284,13 @@ export interface PublicRound {
  * GET /v1/rounds/active — wrapped. app/http/handler/round.go:30-35
  * rounds is make([]dto.PublicRound, 0, n) at app/http/handler/round.go:30, so
  * it is [] and never null.
+ *
+ * THE NAME LIES: "active" applies no status filter. RoundHandler.Active calls
+ * RoundService.List (core/usecase/round.go:28-30) -> Repositories.ListRounds,
+ * which is `SELECT ... FROM rounds ORDER BY round_id ASC` with no WHERE clause
+ * (infra/repo/postgres/round_repo.go:48-49). Every round in the table comes
+ * back — CONFIGURED, ACTIVE and ENDED alike. A caller that wants genuinely
+ * active rounds must filter on `status` itself.
  */
 export interface RoundsActiveResponse { rounds: PublicRound[]; }
 
@@ -312,6 +363,24 @@ export interface TeamBatchJoke {
   joke_title: string | null;
   publish_status: JokePublishStatus;
   published_at: string | null;
+  /**
+   * DOES NOT AGREE WITH MarketItem.sold_count FOR THE SAME JOKE. Observed live
+   * 2026-09-13: after classification settled, one joke read `sold_count: 0`
+   * here and `sold_count: 20` on GET /v1/rounds/{rid}/market. Both are
+   * type-correct numbers; the two endpoints source the figure differently.
+   *
+   * This one is structurally always 0. There is no sold_count column on the
+   * `jokes` table (infra/db/migrations/0001_schema.sql:136-144) and
+   * infra/repo/postgres/batch_repo.go:86 / :123 select only
+   * joke_id, batch_id, joke_text, joke_title, publish_status, published_at,
+   * created_at — so domain.Joke.SoldCount (core/domain/entities.go:76) keeps
+   * its Go zero value and handler/batch.go:89 emits it.
+   *
+   * Sales truth lives in the `purchases` table, and only ListMarket aggregates
+   * it (infra/repo/postgres/aicustomer_repo.go:218-232). A joke card that
+   * reads sales off THIS listing will show zero for every joke. Read
+   * MarketItem.sold_count instead, and join by joke_id.
+   */
   sold_count: number;
 }
 
@@ -401,6 +470,16 @@ export interface MarketItem {
   joke_title: string;
   team_id: number;
   team_name: string;
+  /**
+   * THE ONLY TRUSTWORTHY SALES FIGURE. Counted live from the `purchases` table
+   * for this round — `COUNT(*) ... FROM purchases WHERE round_id = $1 GROUP BY
+   * joke_id`, LEFT JOINed and COALESCEd to 0
+   * (infra/repo/postgres/aicustomer_repo.go:218-232).
+   *
+   * TeamBatchJoke.sold_count is a DIFFERENT number for the same joke and is
+   * structurally always 0 — observed live 2026-09-13 as 20 here vs 0 there.
+   * See the note on TeamBatchJoke.sold_count.
+   */
   sold_count: number;
   published_at?: string;
 }
@@ -429,6 +508,16 @@ export interface MarketingQueueBatch {
   status: BatchStatus;
   submitted_at: string | null;
   locked_at: string | null;
+  /**
+   * `| null` IS UNVERIFIED AGAINST LIVE. Every batch the 2026-09-13 run pulled
+   * from queue/next carried the claiming marketer's user id. Observing null
+   * needs an UNLOCKED batch, which this endpoint never returns: ClaimNextBatch
+   * either re-loads the batch this marketer already holds
+   * (`... AND locked_by = $3`, infra/repo/postgres/marketing_repo.go:34-41) or
+   * claims a fresh one, setting locked_by on the way out. Kept as `| null`
+   * because domain.Batch.LockedBy is a *int64 (core/domain/entities.go:63) and
+   * handler/marketing.go:64 emits it raw.
+   */
   locked_by: number | null;
 }
 
@@ -581,6 +670,24 @@ export interface ConfigRequest {
    *     (dimensions.go:184-186), which `Record` already forbids.
    * Enforced on both live paths: core/usecase/instructor.go:53-57 (config, whenever
    * the profile is non-nil) and :243 (start, unconditionally).
+   *
+   * THE TWO PATHS FAIL WITH DIFFERENT STATUSES — verified live 2026-09-13:
+   *   POST .../config with a malformed profile
+   *     -> 400 VALIDATION_ERROR, field: "ideal_profile", message is the raw
+   *        scoring text, e.g. "missing category for COMPLEXITY" or
+   *        "dimension has no ideal selector: TITLE_FIT".
+   *        (instructor.go:53-56 returns the scoring error unwrapped;
+   *        response.FromDomainError maps ErrInvalidInput -> ValidationError,
+   *        which carries Field.)
+   *   POST .../start with NO profile configured
+   *     -> 409 CONFLICT, message "conflict: ideal_profile must be configured
+   *        before start", and NO `field` key at all.
+   *        (instructor.go:243-245 re-wraps the scoring error in
+   *        domain.NewConflictError, which has no Field; `field` is omitempty
+   *        on response.ErrorDetail, so the key is absent, not empty.)
+   * Consequence: code that branches on `err.field === 'ideal_profile'` handles
+   * the config path ONLY and will silently miss the start path. Branch on the
+   * status/code for start, not on the field.
    */
   ideal_profile?: Record<IdealDimension, string>;
 }
