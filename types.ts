@@ -339,21 +339,26 @@ export interface ApiInstructorStatsResponse {
     total_jokes: number;
     published_jokes: number;
   }>;
-  cumulative_sales: Array<{
+  /* The four series below are NOT sent by the Go backend — GET /v1/instructor/rounds/{id}/stats
+     returns {round_id, leaderboard} only (ports.RoundStats). They are optional because the
+     views render an honest "Not available yet" state when absent, and rejection_by_team is
+     derived client-side from leaderboard counts. Do not make them required again without a
+     backend that actually sends them. */
+  cumulative_sales?: Array<{
     event_index: number;
     timestamp: string;
     team_id: TeamId;
     team_name: string;
     total_sales: number;
   }>;
-  unrated_jokes_over_time: Array<{
+  unrated_jokes_over_time?: Array<{
     team_event_index: number;
     timestamp: string;
     team_id: TeamId;
     team_name: string;
     queue_count: number;
   }>;
-  learning_curve: Array<{
+  learning_curve?: Array<{
     team_id: TeamId;
     team_name: string;
     batch_order: number;
@@ -362,7 +367,7 @@ export interface ApiInstructorStatsResponse {
   /* DERIVED, not from the wire. The backend sends no rejection series, but the
      "Wasted Jokes" bars only need discarded_jokes / total_jokes, and both are on
      the leaderboard — so context.tsx computes this from it. */
-  rejection_by_team: Array<{
+  rejection_by_team?: Array<{
     team_id: TeamId;
     team_name: string;
     unaccepted_jokes: number;

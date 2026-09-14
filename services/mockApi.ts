@@ -649,7 +649,20 @@ function route(
           points: t.points,
           total_sales: t.total_sales,
           batches_processed: t.batches_rated,
-          published_jokes: t.accepted_jokes,
+          published_jokes: t.jokes_published,
+          // The real backend derives these from the same counts (stats_repo.go); the mock's
+          // internal names predate the V2 rename, hence the mapping rather than a passthrough.
+          discarded_jokes: Math.max(0, t.jokes_created - t.jokes_published),
+          total_jokes: t.jokes_created,
+          unsold_jokes: t.unsold_jokes,
+          profit: computeProfit(
+            { created: t.jokes_created, published: t.jokes_published, sold: t.total_sales },
+            {
+              marketPrice: SIM_CONFIG.economics.marketPrice,
+              costOfPublishing: SIM_CONFIG.economics.costOfPublishing,
+              costOfDiscard: SIM_CONFIG.economics.costOfDiscard,
+            },
+          ),
         })),
         cumulative_sales,
         learning_curve,
