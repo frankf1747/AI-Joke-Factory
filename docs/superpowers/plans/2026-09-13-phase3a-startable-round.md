@@ -726,3 +726,71 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 Submission, splitting, publishing, every metric tile, and the feedback panel. Phase 3A makes
 the game **reachable**; 3B makes it **playable**; 3C makes it **correct**.
+
+---
+
+# Execution log — COMPLETE (2026-09-13)
+
+Executed subagent-driven. 5 commits: `b7d752b`, `6501ce7`, `8bd3d1d`, `7ee5603`, `1f46d0a`.
+281 tests (from 266), typecheck holding at its 1 pre-existing error, `dist/` clean.
+
+## Task 5 — the live walk, against a real Go backend + real Postgres
+
+Frontend served with `VITE_USE_MOCK_API=false VITE_API_BASE_URL=http://localhost:8080`.
+DB wiped with `POST /v1/admin/reset` first. Every step below was observed in the browser and
+confirmed against the server with curl.
+
+| Step | Result |
+|---|---|
+| Instructor login | 200, reached the console |
+| Ideal-profile picker | renders, pre-filled with the 11 defaults |
+| Two pairs join | `alice_bob` (17), `carol_dave` (18), both WAITING |
+| Auto-Assign | 200 — Team 1: 17=`JM`, 18=`MARKETING`, `Assigned: 2, TeamCount: 1` |
+| **Start Round** | **200 — round 1 `ACTIVE`**, `started_at` set |
+| Profile persisted | **11 dimensions**, no `TITLE_FIT`; en-dash in `Setup–punchline` round-trips |
+| Picker after start | greyed out — `disabled={config.isActive}` mirrors the backend freeze |
+| **Marketing student** | **reaches the Marketing Desk**, not the Waiting Room |
+
+Both show-stoppers are gone. Before this phase, start always returned
+`409 "ideal_profile must be configured before start"` and every Marketing student was
+stranded.
+
+## Deviations and discoveries
+
+**Task 1 grew a second half.** The implementer found the *mirror* of the bug it was fixing:
+`context.tsx` mapped `Role.QUALITY_CONTROL → 'QC'` on the **outbound** PATCH, which the
+backend rejects (`usecase/instructor.go:207-218`, `default: "unsupported role"`). Proven live
+as a 400, fixed to `MARKETING`, and verified 400 → 200. The write vocabulary is now a separate
+narrower type (`PatchUserRole`) from the read vocabulary (`ApiRole`) — inbound tolerates a
+legacy `'QC'` from a stale browser, outbound cannot emit one. Deliberately not unified.
+
+**A plan instruction was correctly refused.** This plan said to drop `'CUSTOMER'` from
+`ApiRole` because "the server can never send it". True of the server, false of the repo:
+removing it took typecheck from 1 error to 4 (the mock's own response shapes are typed by
+`ApiRole`) and would have stranded `DevRoleSwitcher`'s Customer button in the Waiting Room —
+the very bug being fixed. The orthogonal half shipped; the rest did not.
+
+**The mock would have broken on partial config bodies.** `services/mockApi.ts` required both
+`customer_budget` and `batch_size` and 400'd otherwise. The new `updateConfig` sends only
+changed fields, so in mock mode — the committed default — saving just a market price would
+have popped "Settings were not saved to the server" every time. The mock now mirrors the real
+all-optional `dto.ConfigRequest`.
+
+**`vitest.config.ts` only collected `**/*.test.ts`.** The new `.test.tsx` was silently skipped
+while the suite still reported green. Caught by requiring the *file count* to change, 10 → 11,
+rather than trusting a pass.
+
+**No debounce needed.** The plan worried `updateConfig` might POST per keystroke. It does not:
+the config inputs write local state and `updateConfig` is called only behind an explicit
+Apply button, itself disabled unless something changed.
+
+## Known-remaining, by design
+
+- `GET /v1/qc/queue/count` 404s — Content Backlog reads 0. **Phase 3C.**
+- `GET /v1/rounds/{id}/market` 409s while the round is not ACTIVE, polled on a loop. Noise,
+  pre-existing, not caused by this phase. **3C.**
+- "Created to Publish" shows `—` (`rated_at` vs `processed_at`) and Content Waste reads 0
+  (`RATED` vs `PROCESSED`, `jokes_created` missing). **3C for the field names, 3B for the
+  missing fields.**
+- JM cannot submit and Marketing cannot split — the backend has no `raw_text` and no split
+  endpoint. **Phase 3B.**
