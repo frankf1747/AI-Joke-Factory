@@ -53,9 +53,22 @@ export const instructorService = {
     return apiRequest<ApiInstructorDeleteUserResponse>(`/v1/instructor/rounds/${round_id}/users/${user_id}`, { method: 'DELETE' });
   },
 
+  /**
+   * POST /config — mirrors dto.ConfigRequest (app/http/dto/models.go:51-63), where every
+   * field is a Go pointer and therefore optional; omitted values keep the existing round.
+   * This is the only non-start path that accepts an ideal_profile.
+   */
   updateRoundConfig(
     round_id: RoundId,
-    body: { customer_budget: number; batch_size: number },
+    body: {
+      customer_budget?: number;
+      batch_size?: number;
+      market_price?: number;
+      cost_of_publishing?: number;
+      cost_of_discard?: number;
+      customer_count?: number;
+      ideal_profile?: Record<string, string>;
+    },
   ): Promise<ApiInstructorRoundConfigResponse> {
     return apiRequest<ApiInstructorRoundConfigResponse>(`/v1/instructor/rounds/${round_id}/config`, { method: 'POST', body });
   },
@@ -64,9 +77,21 @@ export const instructorService = {
     return apiRequest<ApiInstructorRoundConfigResponse>(`/v1/instructor/rounds/${round_id}/popups`, { method: 'POST', body });
   },
 
+  /**
+   * POST /start — the handler binds the same dto.ConfigRequest as /config and merges it
+   * before activating (handler/instructor.go:151-183), so the profile can ride along with
+   * the start call. It must: StartRound validates the stored profile unconditionally and
+   * returns 409 CONFLICT if none was ever configured (usecase/instructor.go:239-245).
+   */
   start(
     round_id: RoundId,
-    body: { customer_budget: number; batch_size: number; market_price: number; cost_of_publishing: number },
+    body: {
+      customer_budget: number;
+      batch_size: number;
+      market_price: number;
+      cost_of_publishing: number;
+      ideal_profile?: Record<string, string>;
+    },
   ): Promise<void> {
     return apiRequest<void>(`/v1/instructor/rounds/${round_id}/start`, { method: 'POST', body });
   },

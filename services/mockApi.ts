@@ -673,14 +673,30 @@ function route(
     }
 
     if ((method === 'PUT' || method === 'POST') && sub === '/config') {
-      const body = (opts.body ?? {}) as { customer_budget: number; batch_size: number; is_popped_active?: boolean };
-      const customer_budget = Number(body.customer_budget);
-      const batch_size = Number(body.batch_size);
-      if (!Number.isFinite(customer_budget) || !Number.isFinite(batch_size)) {
-        return err(400, 'INVALID_REQUEST', 'customer_budget and batch_size must be numbers.');
+      // Every field of the real dto.ConfigRequest is a Go pointer and therefore optional;
+      // omitted values keep the existing round (usecase.MergeConfig). The caller sends only
+      // the knobs that actually changed, so demanding a full body here would 400 on every
+      // partial save. Fields the mock round does not model (market_price, ideal_profile, …)
+      // are accepted and ignored rather than rejected.
+      const body = (opts.body ?? {}) as {
+        customer_budget?: number;
+        batch_size?: number;
+        is_popped_active?: boolean;
+      };
+      if (body.customer_budget !== undefined) {
+        const customer_budget = Number(body.customer_budget);
+        if (!Number.isFinite(customer_budget)) {
+          return err(400, 'INVALID_REQUEST', 'customer_budget must be a number.');
+        }
+        db.round.customer_budget = customer_budget;
       }
-      db.round.customer_budget = customer_budget;
-      db.round.batch_size = batch_size;
+      if (body.batch_size !== undefined) {
+        const batch_size = Number(body.batch_size);
+        if (!Number.isFinite(batch_size)) {
+          return err(400, 'INVALID_REQUEST', 'batch_size must be a number.');
+        }
+        db.round.batch_size = batch_size;
+      }
       persistDb(db);
       return ok(
         {

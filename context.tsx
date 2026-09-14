@@ -26,6 +26,8 @@ import { customerService } from './services/customerService';
 import { sessionService } from './services/sessionService';
 import { ApiError } from './services/apiClient';
 import { setMockRoundNumber } from './services/mockApi';
+import { DEFAULT_IDEAL_PROFILE } from './config/dimensions';
+import { isCompleteProfile } from './components/IdealProfilePicker';
 
 const LS_USER_ID = 'joke_factory_user_id';
 const LS_DISPLAY_NAME = 'joke_factory_display_name';
@@ -478,6 +480,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     costOfDiscard: DEFAULT_COST_OF_DISCARD,
     marketingNudge1Seconds: DEFAULT_MARKETING_NUDGE_1_SECONDS,
     marketingNudge2Seconds: DEFAULT_MARKETING_NUDGE_2_SECONDS,
+    idealProfile: { ...DEFAULT_IDEAL_PROFILE },
   });
 
   const [config, setConfig] = useState<GameConfig>(initialConfig());
@@ -1543,7 +1546,28 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateConfig = async (updates: Partial<GameConfig>) => {
     setConfig(prev => ({ ...prev, ...updates }));
-    // No server-side config endpoint; values are sent when starting the round.
+
+    // Client-only knobs: the marketing nudge timers are React state by design and have no
+    // backend column. Everything else is a real round parameter and must be persisted, or
+    // the instructor's settings are silently discarded (they were, until now).
+    if (!roundId || !user || user.role !== ('INSTRUCTOR' as Role)) return;
+
+    const body: Record<string, unknown> = {};
+    if (updates.customerBudget !== undefined) body.customer_budget = updates.customerBudget;
+    if (updates.marketPrice !== undefined) body.market_price = updates.marketPrice;
+    if (updates.costOfPublishing !== undefined) body.cost_of_publishing = updates.costOfPublishing;
+    if (updates.costOfDiscard !== undefined) body.cost_of_discard = updates.costOfDiscard;
+    if (updates.round1BatchSize !== undefined) body.batch_size = updates.round1BatchSize;
+    if (updates.idealProfile !== undefined) body.ideal_profile = updates.idealProfile;
+
+    if (Object.keys(body).length === 0) return;
+
+    try {
+      await instructorService.updateRoundConfig(roundId, body);
+    } catch (e) {
+      console.error('Failed to persist round config', e);
+      alert('Settings were not saved to the server. Check the connection and try again.');
+    }
   };
 
   // --- LOBBY & TEAM FORMATION LOGIC ---
@@ -2058,11 +2082,20 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           alert('Cost of Publishing must be 0 or greater.');
           return;
         }
+        // The backend validates the profile unconditionally on start and answers a bare
+        // 409 CONFLICT with no `field` key when it is unset (usecase/instructor.go:239-245).
+        // Check it here so a partial profile reads as a fixable instruction instead.
+        if (!isCompleteProfile(config.idealProfile)) {
+          alert('Set every dimension of the hidden ideal joke before starting the round.');
+          return;
+        }
+
         await instructorService.start(rid, {
           customer_budget,
           batch_size,
           market_price,
           cost_of_publishing,
+          ideal_profile: config.idealProfile,
         });
       }
       setConfig(prev => ({

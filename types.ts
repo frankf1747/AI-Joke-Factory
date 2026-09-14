@@ -121,6 +121,8 @@ export interface GameConfig {
   marketingNudge1Seconds: number;
   /** Seconds after that nudge is dismissed before the second (and last) one. */
   marketingNudge2Seconds: number;
+  /** Instructor-only. Never sent to students; the backend strips it from the public round. */
+  idealProfile: Record<string, string>;
 }
 
 // --- API shapes (schema-aligned) ---
