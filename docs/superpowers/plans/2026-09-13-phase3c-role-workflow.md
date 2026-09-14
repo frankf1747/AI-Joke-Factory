@@ -511,3 +511,72 @@ more than the learning design intends and none of it is real. The market board r
 `team` object and `bought_count` the backend does not send. The instructor view renders four
 charts off arrays that do not exist, and a leaderboard whose `Avg Score` and `Accepted Jokes`
 columns cannot be restored because V2 deleted ratings as a concept.
+
+---
+
+# Execution log — COMPLETE (2026-09-13)
+
+Executed subagent-driven. Commits `c03a07d`, `3f9dd1b`, `1e6d8fe`, `13c51be`.
+**285 tests / 12 files**, typecheck holds at its 1 pre-existing error, `dist/` clean.
+
+## Verified in a browser, against the live backend
+
+A Joke Maker pasted a five-joke blob and submitted it. Marketing claimed it and **the splitter
+rendered the raw text**, with Content Backlog reading **1** — it read 0 before, because
+`/v1/qc/queue/count` 404'd. Zero console errors on either screen.
+
+After split and publish, the Joke Maker's own view:
+
+| Tile | Before 3C | After |
+|---|---|---|
+| Created to Publish | `—` | **1m 36s** |
+| Content Waste | `0` | **4** |
+| Jokes by stage | In review 5, forever | **In review 0 · On market 1 · Wasted 4** |
+| Profit | — | **−$0.14** |
+
+−$0.14 is independently correct: one publish at $0.10 plus four discards at $0.01, no sales
+yet. Zero console errors, and **no `/v1/qc/*` request anywhere**.
+
+## Things the plan got wrong
+
+1. **`ratedAt` alone would not have fixed "Created to Publish".** The tile calls
+   `computeAvgCreatedToPublishSeconds`, which reads the raw string `b.rated_at`
+   (`services/economics.ts:103`), not the parsed number `b.ratedAt` the plan's snippet
+   assigned. Both are now fed from the same `processed_at ?? rated_at` source. The plan's
+   version would have passed its own test while the tile still showed a dash.
+2. **Task 1 was internally impossible as written** — it said delete `qcService.ts` in commit 1,
+   while `rateBatch` (commit 2's job) still called `submitRatings`. Carried through commit 1 as
+   a commented holdover, deleted in commit 2.
+3. **The plan never mentioned the mock needed a publish route.** Publishing is *the* Marketing
+   action; without it the default no-Postgres runtime breaks at Release. Added, mirroring all
+   three backend rules, and the mock now answers **both** route prefixes rather than swapping.
+4. **`services/api/marketing.ts` already had a `publish`** — a parallel contract layer from
+   phase 2 that nothing in the runtime imports. `services/marketingService.ts` now duplicates
+   it. Worth collapsing in a later phase.
+5. **That file's doc comment asserted the opposite of reality** — that an all-discard publish
+   is rejected unconditionally and "a 'publish nothing' flow is NOT supported by this backend".
+   3B made it round-scoped. Corrected; it would have misled phase 3D.
+
+## The batch-feedback lie, which predates all of this
+
+Marketing's feedback box was labelled "(sent to Joke Maker)" and its toast said "feedback sent
+to Joke Maker". Nothing ever sent it: the only thing that stored feedback was **the marketer's
+own browser localStorage**. A real Joke Maker in a different browser has always seen "Awaiting
+Marketing's feedback" and always would have — the promise was false before V2 dropped the
+field, and before this project started.
+
+The textarea is kept (removing a teaching surface is the owner's call, and the panel is phase
+3D's) but the copy no longer claims delivery: it now reads "(for your team's discussion — not
+sent)", and a TODO names the missing backend field.
+
+## Known-remaining, by design — phase 3D
+
+The feedback panel still fabricates entries locally against a hardcoded ideal profile and
+renders graded proximity bars where the backend correctly returns pass/fail only. The market
+board reads a `team` object and `bought_count` the backend does not send. The instructor view
+renders four charts from arrays that do not exist, and a leaderboard whose `Avg Score` and
+`Accepted Jokes` columns cannot be restored, because V2 deleted ratings as a concept.
+
+Also noted: the mock still carries the legacy `/ratings` route, now unreachable; and
+`GET /v1/rounds/{id}/market` 409s on a polling loop while a round is not ACTIVE — pre-existing
+noise, not introduced here.
