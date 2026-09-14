@@ -388,8 +388,7 @@ interface GameContextType {
   resetGame: () => Promise<boolean>;
   
   // Lobby / Team Formation
-  calculateValidCustomerOptions: () => number[];
-  formTeams: (customerCount: number) => Promise<void>;
+  formTeams: () => Promise<void>;
   resetToLobby: () => void;
 
   // Team Name Management
@@ -1572,43 +1571,24 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // --- LOBBY & TEAM FORMATION LOGIC ---
 
-  const calculateValidCustomerOptions = (): number[] => {
-    // Count pairs that are available for assignment (exclude Instructor)
-    const availablePairs = roster.filter(u => u.role !== ('INSTRUCTOR' as Role));
-    const P = availablePairs.length;
-    
-    const options: number[] = [];
-    
-    // Constraints:
-    // 1. User Request: 2 <= C <= 10
-    // 2. Game Logic: C <= P - 2 (Must leave at least 2 pairs for production: 1 JM + 1 QC)
-    // 3. Game Logic: (P - C) % 2 === 0 (Remaining pairs must be even to split evenly into teams)
-    
-    for (let c = 2; c <= 10; c++) {
-        if (c > P - 2) break;
-
-        const remaining = P - c;
-        if (remaining >= 2 && remaining % 2 === 0) {
-            options.push(c);
-        }
-    }
-    return options;
-  };
-
-  const formTeams = async (customerCount: number) => {
+  const formTeams = async () => {
     if (!roundId) return;
     if (!user || user.role !== ('INSTRUCTOR' as Role)) return;
 
-    // Delegate auto-assignment to backend.
-    const productionPairs = roster.filter(u => u.role !== ('INSTRUCTOR' as Role)).length - customerCount;
-    const teamCount = productionPairs / 2;
-    if (teamCount <= 0 || !Number.isInteger(teamCount)) {
-      alert('Invalid team count. Please check participant numbers.');
+    // One account per seat: a "user" here is a student pair (App.tsx normalises two names
+    // into one key), and each team is 1 JM + 1 Marketing. Human customers are gone, so
+    // there is nothing to set aside — the backend ignores customer_count entirely
+    // (dto.AssignRequest is {team_count} only) and pushes any surplus account back to
+    // WAITING (usecase/instructor.go:175-186).
+    const assignable = roster.filter(u => u.role !== ('INSTRUCTOR' as Role)).length;
+    const teamCount = Math.floor(assignable / 2);
+    if (teamCount <= 0) {
+      alert('At least 2 participants are needed to form a team.');
       return;
     }
 
     try {
-      await instructorService.autoAssign(roundId, { customer_count: customerCount, team_count: teamCount });
+      await instructorService.autoAssign(roundId, { team_count: teamCount });
       await updateConfig({ status: 'PLAYING' });
     } catch {
       alert('Failed to auto-assign teams. Please try again.');
@@ -2219,7 +2199,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <GameContext.Provider value={{
       user, login, instructorLogin, logout, roster,
       config, updateConfig, setRound, setGameActive, endRound, resetGame, toggleTeamPopup,
-      calculateValidCustomerOptions, formTeams, resetToLobby,
+      formTeams, resetToLobby,
       teamNames, updateTeamName, updateUser, deleteUser,
       batches, addBatch, submitRawBatch, splitBatch, unsplitBatch, rateBatch,
       sales, buyJoke, returnJoke,

@@ -7,6 +7,8 @@ import {
   LineChart, Line, Legend, ScatterChart, Scatter, LabelList
 } from 'recharts';
 import { Role } from '../types';
+import { IdealProfilePicker } from '../components/IdealProfilePicker';
+import type { IdealDimension } from '../config/dimensions';
 
 // Expanded Palette for more teams
 const PALETTE = [
@@ -23,7 +25,7 @@ const Instructor: React.FC = () => {
   const { 
     config, updateConfig, setGameActive, setRound, resetGame, toggleTeamPopup,
     roster, teamNames, updateTeamName, updateUser,
-    calculateValidCustomerOptions, formTeams, resetToLobby
+    formTeams, resetToLobby
     , instructorStats
     , instructorStatsRound1
     , instructorStatsRound2
@@ -39,7 +41,6 @@ const Instructor: React.FC = () => {
   // Marketing's decision clock — how long they may deliberate before each nudge.
   const [localNudge1, setLocalNudge1] = useState(config.marketingNudge1Seconds);
   const [localNudge2, setLocalNudge2] = useState(config.marketingNudge2Seconds);
-  const [selectedCustomerCount, setSelectedCustomerCount] = useState<number | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showEndRound1Confirm, setShowEndRound1Confirm] = useState(false);
 
@@ -187,12 +188,13 @@ const Instructor: React.FC = () => {
   };
 
   // --- Lobby Logic ---
-  const validCustomerOptions = calculateValidCustomerOptions();
+  // Every non-instructor account is assignable: human customers are gone, so none are held
+  // back. Each team seats 1 Joke Maker + 1 Marketing, hence the pairing.
   const connectedPairs = roster.filter(u => u.role !== Role.INSTRUCTOR).length;
-  
+  const assignableCount = connectedPairs;
+
   const handleFormTeams = () => {
-      if (selectedCustomerCount === null) return;
-      formTeams(selectedCustomerCount);
+      formTeams();
   };
 
 
@@ -785,7 +787,9 @@ const Instructor: React.FC = () => {
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
   };
-  const handleDrop = (e: React.DragEvent, targetType: 'TEAM' | 'CUSTOMER' | 'LOBBY', targetId?: string) => {
+  // No CUSTOMER target: customers are simulated now, and context.updateUser already refuses
+  // a CUSTOMER role as a guaranteed 400 from the backend.
+  const handleDrop = (e: React.DragEvent, targetType: 'TEAM' | 'LOBBY', targetId?: string) => {
     e.preventDefault();
     const userId = e.dataTransfer.getData('userId');
     if (!userId) return;
@@ -793,9 +797,7 @@ const Instructor: React.FC = () => {
     const user = roster.find(u => u.id === userId);
     if (!user) return;
 
-    if (targetType === 'CUSTOMER') {
-        updateUser(userId, { role: Role.CUSTOMER, team: 'N/A' });
-    } else if (targetType === 'LOBBY') {
+    if (targetType === 'LOBBY') {
         updateUser(userId, { role: Role.UNASSIGNED, team: 'N/A' });
     } else if (targetType === 'TEAM' && targetId) {
         const currentRole = (user.role === Role.JOKE_MAKER || user.role === Role.QUALITY_CONTROL) 
@@ -2161,26 +2163,18 @@ const Instructor: React.FC = () => {
                     </div>
 
                     <div className="flex flex-col gap-3 w-full md:w-auto bg-white p-4 rounded shadow-sm border border-gray-200 min-w-[300px]">
-                        <label className="text-sm font-semibold text-gray-700">Select Customer Pairs:</label>
-                        <select 
-                            className="p-2 border rounded bg-gray-50 text-gray-800 font-medium w-full"
-                            value={selectedCustomerCount ?? ''}
-                            onChange={(e) => setSelectedCustomerCount(Number(e.target.value))}
-                        >
-                            <option value="">-- Choose Valid Count --</option>
-                            {validCustomerOptions.length === 0 && <option disabled>Waiting for more pairs...</option>}
-                            {validCustomerOptions.map(opt => {
-                                const remaining = connectedPairs - opt;
-                                return (
-                                    <option key={opt} value={opt}>
-                                        {opt} Customer Pairs ({remaining} Prod. Pairs &rarr; {remaining/2} Teams)
-                                    </option>
-                                );
-                            })}
-                        </select>
-                        <Button 
-                            onClick={handleFormTeams} 
-                            disabled={selectedCustomerCount === null}
+                        <span className="text-sm font-semibold text-gray-700">
+                            {Math.floor(assignableCount / 2)} team{Math.floor(assignableCount / 2) === 1 ? '' : 's'} from {assignableCount} participant{assignableCount === 1 ? '' : 's'}
+                        </span>
+                        {assignableCount % 2 === 1 && (
+                          <p className="text-xs text-amber-700">
+                            {assignableCount} participants — one will be left unassigned. Each team seats 1 Joke
+                            Maker and 1 Marketing.
+                          </p>
+                        )}
+                        <Button
+                            onClick={handleFormTeams}
+                            disabled={assignableCount < 2}
                             className="w-full flex justify-center items-center gap-2"
                         >
                             <CheckCircle size={16} /> Auto-Assign
@@ -2370,6 +2364,16 @@ const Instructor: React.FC = () => {
                 Apply
               </Button>
             </div>
+
+            {/* Row 4: the hidden ideal joke. The backend will not start a round without a
+                complete profile, so this has to be reachable before Start. */}
+            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+              <IdealProfilePicker
+                value={config.idealProfile as Record<IdealDimension, string>}
+                onChange={next => updateConfig({ idealProfile: next })}
+                disabled={config.isActive}
+              />
+            </div>
           </div>
         </Card>
 
@@ -2392,8 +2396,8 @@ const Instructor: React.FC = () => {
           {/* Team Management (full width) */}
           <Card className="xl:col-span-2 border-t-4 border-t-purple-500" title="Team Management (Drag to Move, Click to Switch Role)">
             <div className="space-y-4">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                {/* Two columns of production teams (JM/QC) */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Two columns of production teams (JM/Marketing) */}
                   {[0, 1].map((colIdx) => {
                     const colTeamIds = visibleTeamIds.filter((_, idx) => idx % 2 === colIdx);
                     return (
@@ -2435,7 +2439,7 @@ const Instructor: React.FC = () => {
                                   >
                                     <GripVertical size={10} className="mr-1 opacity-50" />
                                     <span className="font-bold">{u.name}</span>
-                                    <span className="ml-1 opacity-70">({u.role === Role.JOKE_MAKER ? 'JM' : 'QC'})</span>
+                                    <span className="ml-1 opacity-70">({u.role === Role.JOKE_MAKER ? 'JM' : 'Marketing'})</span>
                                     <button
                                       type="button"
                                       onClick={(e) => {
@@ -2465,50 +2469,6 @@ const Instructor: React.FC = () => {
                     );
                   })}
 
-                {/* Customers column */}
-                <div
-                  className="rounded-lg border border-amber-200 bg-amber-50/40 p-3"
-                  onDragOver={handleDragOver}
-                  onDrop={(e) => handleDrop(e, 'CUSTOMER')}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="font-bold text-amber-800">Customers</div>
-                    <div className="text-xs font-bold text-amber-700/70">{roster.filter(u => u.role === Role.CUSTOMER).length}</div>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {roster.filter(u => u.role === Role.CUSTOMER).map(u => (
-                      <div
-                        key={u.id}
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, u.id)}
-                        className="cursor-move inline-flex items-center px-2 py-1 rounded text-xs bg-amber-100 text-amber-800 border border-amber-200 hover:shadow-md"
-                      >
-                        <GripVertical size={10} className="mr-1 opacity-50" />
-                        {u.name}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleDeleteUser(u.id, u.name);
-                          }}
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                          }}
-                          disabled={deletingUserIds.includes(u.id)}
-                          className="ml-2 p-1 rounded hover:bg-white/60 text-amber-700/70 hover:text-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="Delete user"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    ))}
-                    {roster.filter(u => u.role === Role.CUSTOMER).length === 0 && (
-                      <span className="text-gray-400 text-xs italic">Drag users here to make them Customers</span>
-                    )}
-                  </div>
-                </div>
               </div>
 
               {/* Lobby / Unassigned (full width) */}

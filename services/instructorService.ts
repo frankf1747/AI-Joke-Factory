@@ -37,7 +37,12 @@ export const instructorService = {
     return apiRequest<ApiInstructorStatsResponse>(`/v1/instructor/rounds/${round_id}/stats`, { method: 'GET' });
   },
 
-  autoAssign(round_id: RoundId, body: { customer_count: number; team_count: number }): Promise<void> {
+  /**
+   * POST /assign — dto.AssignRequest is {team_count} only (app/http/dto/models.go:17-19).
+   * The old call site also sent customer_count; the backend silently ignored it. Keeping
+   * this type narrow is what stops that from coming back.
+   */
+  autoAssign(round_id: RoundId, body: { team_count: number }): Promise<void> {
     return apiRequest<void>(`/v1/instructor/rounds/${round_id}/assign`, { method: 'POST', body });
   },
 
