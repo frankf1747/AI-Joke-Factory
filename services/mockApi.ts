@@ -31,7 +31,7 @@ import type {
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 type MockOk<T> = { ok: true; status: number; json: T };
-type MockErr = { ok: false; status: number; json: { code?: string; message: string; details?: unknown } };
+type MockErr = { ok: false; status: number; json: { code?: string; message: string; field?: string; details?: unknown } };
 type MockResp<T> = MockOk<T> | MockErr;
 
 type ParticipantStatus = 'WAITING' | 'ASSIGNED';
@@ -161,8 +161,10 @@ function persistDb(db: MockDb) {
   localStorage.setItem(LS_KEY, JSON.stringify(db));
 }
 
-function err(status: number, code: string | undefined, message: string, details?: unknown): MockErr {
-  return { ok: false, status, json: { code, message, details } };
+/** `field` mirrors the real backend's validation envelope, which names the
+ *  rejected request field alongside the code and message. */
+function err(status: number, code: string | undefined, message: string, field?: string, details?: unknown): MockErr {
+  return { ok: false, status, json: { code, message, field, details } };
 }
 
 function ok<T>(json: T, status = 200): MockOk<T> {
@@ -1082,6 +1084,96 @@ function route(
         published: { count: publishedIds.length, joke_ids: publishedIds },
       };
       return ok(resp, 200);
+    }
+  }
+
+  /* Marketing states an explicit decision per joke. This replaces the ratings
+     route above, which the real backend deleted in V2 along with the whole rating
+     model; that block survives only so an old cached bundle still gets an answer.
+
+     Mirrors the three rules the Go server enforces:
+       - one decision per joke in the batch — a partial list is rejected
+         (core/usecase/marketing.go);
+       - a published joke needs a non-empty title;
+       - round 1 demands at least one published joke (NO_JOKE_PUBLISHED), round 2
+         allows an all-discard batch. That asymmetry is deliberate upstream —
+         see TestPublishRequiresAtLeastOnePublishedInRound1 /
+         TestPublishAllowsAllDiscardInRound2. */
+  {
+    const m = path.match(/^\/v1\/(?:qc|marketing)\/batches\/(\d+)\/publish$/);
+    if (method === 'POST' && m) {
+      const batch_id = Number(m[1]) as BatchId;
+      const activeErr = requireRoundActive(db);
+      if (activeErr) return activeErr;
+
+      const batch = db.batches[String(batch_id)];
+      if (!batch) return err(404, 'NOT_FOUND', 'Batch not found.');
+      if (batch.status === 'RATED') return err(409, 'BATCH_ALREADY_PROCESSED', 'This batch was already processed.');
+
+      const body = (opts.body ?? {}) as {
+        jokes?: Array<{ joke_id?: unknown; joke_title?: unknown; is_published?: unknown }>;
+      };
+      const decisions = Array.isArray(body.jokes) ? body.jokes : [];
+      if (decisions.length === 0) {
+        return err(400, 'VALIDATION_ERROR', 'at least one joke decision required', 'jokes');
+      }
+
+      const byJoke = new Map<number, { title: string; publish: boolean }>();
+      for (const d of decisions) {
+        const jid = Number(d?.joke_id);
+        if (!Number.isFinite(jid)) continue;
+        byJoke.set(jid, {
+          title: String(d?.joke_title ?? '').trim(),
+          publish: Boolean(d?.is_published),
+        });
+      }
+
+      // Every joke in the batch needs a decision — a partial list is rejected.
+      for (const j of batch.jokes) {
+        if (!byJoke.has(j.joke_id)) {
+          return err(400, 'VALIDATION_ERROR', 'decision required for every joke', 'jokes');
+        }
+      }
+      for (const [jid, d] of byJoke) {
+        if (d.publish && !d.title) {
+          return err(400, 'VALIDATION_ERROR', 'title required for published jokes', 'joke_title');
+        }
+        void jid;
+      }
+
+      const publishedIds = batch.jokes
+        .filter(j => byJoke.get(j.joke_id)?.publish)
+        .map(j => j.joke_id);
+
+      if (db.round.round_number !== 2 && publishedIds.length === 0) {
+        return err(400, 'VALIDATION_ERROR', 'NO_JOKE_PUBLISHED', 'jokes');
+      }
+
+      const publishedSet = new Set(publishedIds);
+      batch.status = 'RATED';
+      batch.rated_at = isoNow();
+      batch.passes_count = publishedIds.length;
+      batch.jokes = batch.jokes.map(j => {
+        const d = byJoke.get(j.joke_id);
+        const isPub = publishedSet.has(j.joke_id);
+        return {
+          ...j,
+          is_published: isPub,
+          ...(isPub ? { published_at: batch.rated_at } : {}),
+          ...(d?.title ? { joke_title: d.title } : {}),
+        };
+      });
+      persistDb(db);
+
+      const discardedIds = batch.jokes.map(j => j.joke_id).filter(id => !publishedSet.has(id));
+      return ok(
+        {
+          batch: { batch_id: batch.batch_id, status: 'PROCESSED', processed_at: batch.rated_at },
+          published: { count: publishedIds.length, joke_ids: publishedIds },
+          discarded: { count: discardedIds.length, joke_ids: discardedIds },
+        },
+        200,
+      );
     }
   }
 

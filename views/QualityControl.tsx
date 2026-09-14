@@ -423,7 +423,7 @@ const BatchSplitter: React.FC<{
 
 /* ============================ Marketing screen ============================ */
 const QualityControl: React.FC = () => {
-  const { user, roster, qcQueue, rateBatch, splitBatch, unsplitBatch, config, teamSummary, batches } = useGame();
+  const { user, roster, qcQueue, publishBatch, splitBatch, unsplitBatch, config, teamSummary, batches } = useGame();
 
   /* Live queue from API */
   const incomingJokes = useMemo(() => {
@@ -565,25 +565,21 @@ const QualityControl: React.FC = () => {
 
   const release = async () => {
     if (!canRelease || !qcQueue) return;
-    /* Build ratings: 5 for submitted, 1 for not (force-release picks the 5s). */
-    const ratings: Record<string, number> = {};
-    const topicsOut: Record<string, string> = {};
+    /* Only titles survive to the wire now. The backend stores no rating, no tag,
+       no batch feedback and no topic, so the old ratings/tags/topics payloads had
+       nowhere to go; `submittingIds` already states exactly which jokes ship, which
+       is what publish wants. The topic picker stays — it is deliberately decorative
+       (the LLM classifies topic from the joke text), and nothing here claims it was
+       saved. It is still required by `canRelease` as a "think about it" gate. */
     const titlesOut: Record<string, string> = {};
-    const tagsOut: Record<string, string[]> = {};
-    for (const id of orderIds) {
-      const submit = submittingIds.includes(id);
-      ratings[String(id)] = submit ? 5 : 1;
-      if (submit) {
-        topicsOut[String(id)] = topics[id];
-        titlesOut[String(id)] = titles[id];
-      }
-      tagsOut[String(id)] = []; // rank-and-select model doesn't require tags
+    for (const id of submittingIds) {
+      titlesOut[String(id)] = titles[id];
     }
 
     const batchId = String(qcQueue.batch.batch_id);
     const count = submittingIds.length;
     dispatchNudge({ type: 'RELEASED' });   // no popup may ambush a team that shipped
-    await rateBatch(batchId, ratings, tagsOut, batchFeedback, titlesOut, topicsOut);
+    await publishBatch(batchId, submittingIds, titlesOut);
 
     /* Append SoldSignal entries for the released jokes (using DEFAULT_IDEAL_PROFILE-derived dims). */
     setSold(prev => {
@@ -602,8 +598,8 @@ const QualityControl: React.FC = () => {
     // TEMP (ranking disabled): used to read "Rank 1 + N selected".
     setToast(
       count === 0
-        ? `Passed on this batch · ${orderIds.length} joke${orderIds.length > 1 ? 's' : ''} discarded · feedback sent to Joke Maker · −${fmt$(orderIds.length * config.costOfDiscard)}`
-        : `Released ${count} joke${count > 1 ? 's' : ''} · feedback sent to Joke Maker · −${fmt$(count * config.costOfPublishing)}`,
+        ? `Passed on this batch · ${orderIds.length} joke${orderIds.length > 1 ? 's' : ''} discarded · −${fmt$(orderIds.length * config.costOfDiscard)}`
+        : `Released ${count} joke${count > 1 ? 's' : ''} · −${fmt$(count * config.costOfPublishing)}`,
     );
     window.setTimeout(() => setToast(null), 2800);
   };
@@ -849,9 +845,20 @@ const QualityControl: React.FC = () => {
                   );
                 })}
 
+                {/* TODO(phase-3D): batch feedback is COLLECTED BUT NOT PERSISTED.
+                    V2 has no field for it — the publish payload carries only
+                    {joke_id, joke_title, is_published}, and there is no batch
+                    feedback column, no /ratings route and nothing on the Joke
+                    Maker's batch list that could return it. The label used to read
+                    "(sent to Joke Maker)" and the release toast used to say
+                    "feedback sent to Joke Maker"; both were false, and doubly so
+                    across browsers, since the only thing that ever stored this was
+                    the marketer's OWN localStorage. Copy now says what actually
+                    happens. Restore the promise only once the backend grows a
+                    field to put it in. */}
                 <div className="rounded-lg border border-gray-200 bg-white p-4">
                   <SectionLabel className="mb-1.5">
-                    Batch feedback <span className="text-gray-400">(sent to Joke Maker)</span>
+                    Batch feedback <span className="text-gray-400">(for your team's discussion — not sent)</span>
                   </SectionLabel>
                   <textarea
                     value={batchFeedback}

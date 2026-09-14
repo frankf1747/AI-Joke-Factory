@@ -49,24 +49,6 @@ const POLL_INTERVAL_MS = 2500;
 const INITIAL_TEAM_NAMES: Record<string, string> = {};
 for (let i = 1; i <= 20; i++) INITIAL_TEAM_NAMES[i.toString()] = `Team ${i}`;
 
-// Map UI tag labels to backend enum values for QC submission.
-const QC_TAG_MAP: Record<string, string> = {
-  'EXCELLENT / STANDOUT': 'EXCELLENT_STANDOUT',
-  'EXCELLENT_STANDOUT': 'EXCELLENT_STANDOUT',
-  'GENUINELY FUNNY': 'GENUINELY_FUNNY',
-  'MADE ME SMILE': 'MADE_ME_SMILE',
-  'ORIGINAL IDEA': 'ORIGINAL_IDEA',
-  'POLITE SMILE': 'POLITE_SMILE',
-  "DIDN'T LAND": 'DIDNT_LAND',
-  'DIDNT LAND': 'DIDNT_LAND',
-  'NOT ACCEPTABLE': 'NOT_ACCEPTABLE',
-  OTHER: 'OTHER',
-};
-
-function normalizeQcTag(label: string): string | null {
-  const key = label.trim().toUpperCase().replace(/\s+/g, ' ');
-  return QC_TAG_MAP[key] ?? null;
-}
 
 function nowMs() {
   return Date.now();
@@ -402,13 +384,10 @@ interface GameContextType {
   submitRawBatch: (rawText: string) => Promise<void>;
   splitBatch: (batchId: string, jokes: string[]) => Promise<void>;
   unsplitBatch: (batchId: string) => Promise<void>;
-  rateBatch: (
+  publishBatch: (
     batchId: string,
-    ratings: { [jokeId: string]: number },
-    tags: { [jokeId: string]: string[] },
-    feedback: string,
+    publishedIds: number[],
     jokeTitles: { [jokeId: string]: string },
-    topics?: { [jokeId: string]: string },
   ) => Promise<void>;
   
   sales: Record<string, number>; // jokeId -> count of purchases
@@ -1799,107 +1778,68 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const rateBatch = async (
+  /* Replaces `rateBatch`. V2 deleted the rating model outright — no joke_ratings
+     table, no avg_score, no /ratings route — so Marketing now states an explicit
+     per-joke decision instead of scoring jokes and letting the server infer which
+     ones ship.
+
+     The old body also mirrored the batch into `qcRatedHistoryRef` + localStorage
+     and pushed it through setBatches. That is deliberately NOT carried over:
+       - `batches` is re-hydrated from jmService.listTeamBatches on the 2.5s poll,
+         and that API data already wins over the local copy in every merge, so the
+         published batch reappears on its own with real is_published / sold_count.
+       - The local copy's only unique fields were `feedback` and `tagSummary`,
+         which no longer exist on either side of the wire.
+     Stale entries written by earlier builds are still merged on hydration and
+     still cleared by resetGame, so nothing breaks for an existing session. */
+  const publishBatch = async (
     batchId: string,
-    ratings: { [jokeId: string]: number },
-    tags: { [jokeId: string]: string[] },
-    feedback: string,
+    publishedIds: number[],
     jokeTitles: { [jokeId: string]: string },
-    topics: { [jokeId: string]: string } = {},
   ) => {
     if (!roundId) return;
     const bid = Number(batchId) as BatchId;
-
     const active = qcQueue?.batch?.batch_id === bid ? qcQueue : null;
     if (!active) return;
 
-    const ratingList = Object.entries(ratings).map(([jid, rating]) => ({
-      joke_id: Number(jid) as JokeId,
-      rating,
-      tag: '',
-      joke_title: rating >= 4 ? (jokeTitles[String(jid)] ?? '').trim() : undefined,
-      topic: topics[String(jid)] || undefined,
+    // The backend requires a decision for EVERY joke in the batch, not just the published
+    // ones (a partial list is rejected), so build from the batch contents.
+    const published = new Set(publishedIds);
+    const jokes = (active.jokes ?? []).map(j => ({
+      joke_id: Number(j.joke_id),
+      joke_title: published.has(Number(j.joke_id)) ? (jokeTitles[String(j.joke_id)] ?? '').trim() : '',
+      is_published: published.has(Number(j.joke_id)),
     }));
 
     try {
-      // Attach a normalized tag per rating when provided; tolerate empty (rank-and-select
-      // model doesn't require tags).
-      for (const entry of ratingList) {
-        const selected = tags[String(entry.joke_id)]?.[0] ?? '';
-        if (selected) {
-          const mapped = normalizeQcTag(selected);
-          entry.tag = mapped || 'GENUINELY_FUNNY';
-        } else {
-          entry.tag = 'GENUINELY_FUNNY';
-        }
-      }
-
-      const tagSummaryCounts = ratingList.reduce<Record<string, number>>((acc, entry) => {
-        acc[entry.tag] = (acc[entry.tag] || 0) + 1;
-        return acc;
-      }, {});
-      const tagSummary = Object.entries(tagSummaryCounts).map(([tag, count]) => ({ tag, count }));
-
-      const resp = await marketingService.submitRatings(bid, {
-        ratings: ratingList,
-        feedback,
-      });
-      const respAny: any = (resp as any)?.data ?? resp;
-      const respBatch: any = respAny?.batch ?? respAny;
-      const respPublished: any = respAny?.published ?? respAny?.Published ?? null;
-      // Build a local “rated batch” for UI history (API doesn't return tag/feedback but we preserve client-side).
-      const ratedJokes: Joke[] = active.jokes.map(j => ({
-        joke_id: j.joke_id,
-        joke_text: j.joke_text,
-        id: String(j.joke_id),
-        content: j.joke_text,
-        rating: ratings[String(j.joke_id)] ?? 1,
-        tags: [ratingList.find(r => r.joke_id === j.joke_id)?.tag ?? ''],
-      }));
-      const avgRating = respBatch?.avg_score ?? null;
-      const acceptedCount = respBatch?.passes_count ?? null;
-      const batch: Batch = {
-        batch_id: respBatch.batch_id,
-        round_id: roundId,
-        team_id: active.batch.team_id,
-        status: 'RATED',
-        jokes: ratedJokes,
-        rated_at: respBatch.rated_at,
-        avg_score: respBatch.avg_score,
-        passes_count: respBatch.passes_count,
-        id: String(respBatch.batch_id),
-        team: String(active.batch.team_id),
-        round: config.round,
-        ratedAt: respBatch.rated_at ? Date.parse(respBatch.rated_at) : undefined,
-        avgRating,
-        acceptedCount,
-        feedback,
-        tagSummary,
-      };
-      qcRatedHistoryRef.current[`${roundId}:${String(batch.batch_id)}`] = batch;
-      setBatches(Object.values(qcRatedHistoryRef.current));
-      try {
-        localStorage.setItem(LS_QC_RATED_HISTORY, JSON.stringify(qcRatedHistoryRef.current));
-      } catch {
-        // ignore
-      }
+      await marketingService.publish(bid, { jokes });
       setQcQueue(null);
     } catch (e) {
       if (e instanceof ApiError) {
+        // NO_JOKE_PUBLISHED arrives as a 400 VALIDATION_ERROR whose *message* is the
+        // sentinel (field: 'jokes'). Round 1 only — round 2 accepts an all-discard
+        // batch by design, so this alert should never fire there.
+        if (e.message === 'NO_JOKE_PUBLISHED') {
+          alert('Round 1 requires at least one joke to be published.');
+          return;
+        }
         if (e.status === 409 && e.code === 'ROUND_NOT_ACTIVE') {
           alert('Round is not active. Please wait for the instructor to start.');
           return;
         }
-        if (e.status === 409 && e.code === 'BATCH_ALREADY_RATED') {
-          alert('This batch was already rated.');
+        // V2 renamed these two: BATCH_ALREADY_RATED -> BATCH_ALREADY_PROCESSED and
+        // NOT_ASSIGNED_TO_THIS_QC -> NOT_ASSIGNED_TO_THIS_MARKETER. The old handler
+        // was matching codes this backend no longer emits.
+        if (e.status === 409 && e.code === 'BATCH_ALREADY_PROCESSED') {
+          alert('This batch was already processed.');
           return;
         }
-        if (e.status === 403 && e.code === 'NOT_ASSIGNED_TO_THIS_QC') {
-          alert('You are not assigned to rate this batch.');
+        if (e.status === 403 && e.code === 'NOT_ASSIGNED_TO_THIS_MARKETER') {
+          alert('You are not assigned to this batch.');
           return;
         }
       }
-      alert('Failed to submit ratings.');
+      alert('Failed to publish the batch. Please try again.');
     }
   };
 
@@ -2201,7 +2141,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       config, updateConfig, setRound, setGameActive, endRound, resetGame, toggleTeamPopup,
       formTeams, resetToLobby,
       teamNames, updateTeamName, updateUser, deleteUser,
-      batches, addBatch, submitRawBatch, splitBatch, unsplitBatch, rateBatch,
+      batches, addBatch, submitRawBatch, splitBatch, unsplitBatch, publishBatch,
       sales, buyJoke, returnJoke,
       roundId,
       marketItems,

@@ -22,26 +22,31 @@ export const marketingApi = {
 
   /** One decision per joke. Publishing is final for the batch.
    *
-   *  CORRECTED: the backend DOES require at least one PUBLISHED joke. An
-   *  earlier draft of this module claimed it validated only "at least one
-   *  joke decision" — that is just the first of two checks:
+   *  The rules, all re-verified live against the running backend:
    *
-   *    1. usecase/marketing.go:81-82 rejects an empty `jokes` array with
-   *       VALIDATION_ERROR field=jokes, "at least one joke decision required".
-   *    2. The store then rejects an all-discard batch with VALIDATION_ERROR
-   *       field=jokes, message "NO_JOKE_PUBLISHED" — enforced in
-   *       infra/repo/postgres/marketing_repo.go:198-200, mirrored in the
-   *       in-memory store at core/usecase/testutil/memstore.go:474-475, and
-   *       locked in by core/usecase/marketing_test.go:146-153.
+   *    1. A decision is required for EVERY joke in the batch. A partial list is
+   *       rejected with VALIDATION_ERROR field=jokes, "expected N joke
+   *       decisions"; an empty array with "at least one joke decision required".
+   *    2. A published joke needs a non-empty title; a discarded one does not.
+   *    3. An all-discard batch is rejected with VALIDATION_ERROR field=jokes,
+   *       message "NO_JOKE_PUBLISHED" — but ONLY IN ROUND 1.
    *
-   *  Both surface as HTTP 400. So a "publish nothing" flow is NOT supported
-   *  by this backend: any caller that lets Marketing discard every joke in a
-   *  batch must handle the 400, or forbid the all-discard selection in the UI.
+   *  CORRECTION: an earlier version of this comment said the all-discard
+   *  rejection was unconditional and that "a 'publish nothing' flow is NOT
+   *  supported by this backend". That is wrong. The check is round-gated —
+   *  `requireAtLeastOnePublished` in
+   *  infra/repo/postgres/marketing_repo.go:299-301, mirrored at
+   *  core/usecase/testutil/memstore.go:610-612 — and the asymmetry is
+   *  deliberate: round 1 asks Marketing to prioritise a full batch, while round 2
+   *  may hand them a single weak joke they must be able to pass on. Both halves
+   *  are pinned by TestPublishRequiresAtLeastOnePublishedInRound1 and
+   *  TestPublishAllowsAllDiscardInRound2 (core/usecase/marketing_test.go).
+   *  Round 2 all-discard returns 200 with published.count 0.
+   *
    *  A rejected publish leaves the batch SUBMITTED: the whole operation runs
-   *  inside one WithTx (infra/repo/postgres/marketing_repo.go:84) and aborts
-   *  before markBatchProcessed, so it stays claimed by this marketer from the
-   *  earlier queueNext and the call can simply be retried with a valid
-   *  decision set. */
+   *  inside one WithTx and aborts before markBatchProcessed, so it stays claimed
+   *  by this marketer from the earlier queueNext and the call can simply be
+   *  retried with a valid decision set. */
   publish(batchId: number, body: PublishRequest) {
     return apiRequest<PublishResponse>(`/v1/marketing/batches/${batchId}/publish`, { method: 'POST', body });
   },
