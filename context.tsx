@@ -19,6 +19,7 @@ import type {
   UserId,
 } from './types';
 import { instructorService } from './services/instructorService';
+import type { PatchUserRole } from './services/instructorService';
 import { jmService } from './services/jmService';
 import { qcService } from './services/qcService';
 import { customerService } from './services/customerService';
@@ -96,6 +97,34 @@ export function toRole(apiRole: string | null): Role {
       return 'CUSTOMER' as Role;
     default:
       return 'UNASSIGNED' as Role;
+  }
+}
+
+/**
+ * UI role -> the value the backend will accept on a write. The mirror of `toRole`.
+ *
+ * The read side is deliberately permissive (it still accepts the legacy 'QC'); this side must
+ * not be. usecase/instructor.go:207-218 accepts INSTRUCTOR | JM | MARKETING and returns
+ * 400 VALIDATION_ERROR "unsupported role" for everything else, so a Marketing seat has exactly
+ * one correct spelling on the wire and 'QC' is a guaranteed failure.
+ *
+ * Returns undefined for roles with no backend seat (CUSTOMER, UNASSIGNED). Callers must treat
+ * undefined as "do not send a role", not as "send it without one": PatchUser falls back to
+ * `existing.Role` when role is nil (instructor.go:196-198), so an omitted role silently keeps
+ * the old one instead of failing.
+ */
+export function toApiRole(uiRole: Role | undefined): PatchUserRole | undefined {
+  switch (uiRole) {
+    case 'INSTRUCTOR' as Role:
+      return 'INSTRUCTOR';
+    case 'JOKE_MAKER' as Role:
+      return 'JM';
+    case 'QUALITY_CONTROL' as Role:
+      return 'MARKETING';
+    default:
+      // CUSTOMER has no backend seat at all (customers are simulated now), and UNASSIGNED is
+      // expressed as status WAITING rather than as a role.
+      return undefined;
   }
 }
 
@@ -1600,17 +1629,25 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) return;
     const isInstructor = user.role === ('INSTRUCTOR' as Role);
     const isSelf = Number(userId) === user.user_id;
-    // Allow DebugPanel to switch the current user's role/team in mock/demo mode (even if not instructor),
-    // so you can jump between JM/QC/Customer views during local demos.
+    // Allow the current user to switch their own role/team in mock/demo mode (even if not
+    // instructor), so you can jump between the JM and Marketing views during local demos.
+    // The Customer view is reached via DevRoleSwitcher, which writes the mock DB directly.
     if (!isInstructor && !(isMockModeEnabled() && isSelf)) return;
     const uid = Number(userId) as UserId;
 
-    const role =
-      updates.role === ('JOKE_MAKER' as Role) ? 'JM'
-      : updates.role === ('QUALITY_CONTROL' as Role) ? 'QC'
-      : updates.role === ('CUSTOMER' as Role) ? 'CUSTOMER'
-      : updates.role === ('INSTRUCTOR' as Role) ? 'INSTRUCTOR'
-      : undefined;
+    // There is no human Customer seat to assign any more - customers are simulated - and the
+    // backend has no CUSTOMER role, so this PATCH is a guaranteed 400 VALIDATION_ERROR
+    // "unsupported role" (usecase/instructor.go:207-218, reproduced against a live server).
+    // views/Instructor.tsx:797 still offers a Customer drop zone; refuse here rather than fire
+    // a request we know fails, and rather than omit the role, which would make the backend
+    // silently keep the user's existing one. The dev route to views/Customer.tsx is
+    // DevRoleSwitcher, which writes the mock DB directly and does not come through here.
+    if (updates.role === ('CUSTOMER' as Role)) {
+      alert('Customers are simulated in this version, so there is no Customer seat to assign.');
+      return;
+    }
+
+    const role = toApiRole(updates.role);
 
     const status =
       updates.role === ('UNASSIGNED' as Role) ? 'WAITING'

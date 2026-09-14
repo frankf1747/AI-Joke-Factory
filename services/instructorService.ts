@@ -11,6 +11,19 @@ import type {
   UserId,
 } from '../types';
 
+/**
+ * Exactly the roles the backend will accept on a write (usecase/instructor.go:207-218:
+ * `switch *desiredRole { case RoleInstructor: ...; case RoleJM, RoleMarketing: ...;
+ * default: return NewValidationError("role", "unsupported role") }`).
+ *
+ * Deliberately narrower than `ApiRole`. `ApiRole` describes what we may *read* — it tolerates
+ * the legacy 'QC' and the mock's 'CUSTOMER' because a stale browser or the in-browser mock can
+ * still produce them. This describes what we may *send*, where there is exactly one correct
+ * value per seat and any other is a guaranteed 400. Keep them separate: widening this to be
+ * "consistent" with ApiRole would re-open the bug it exists to prevent.
+ */
+export type PatchUserRole = 'INSTRUCTOR' | 'JM' | 'MARKETING';
+
 export const instructorService = {
   login(body: ApiInstructorLoginRequest): Promise<ApiInstructorLoginResponse> {
     return apiRequest<ApiInstructorLoginResponse>('/v1/instructor/login', { method: 'POST', body });
@@ -31,7 +44,7 @@ export const instructorService = {
   patchUser(
     round_id: RoundId,
     user_id: UserId,
-    body: { status?: 'WAITING' | 'ASSIGNED'; role?: 'INSTRUCTOR' | 'JM' | 'QC' | 'CUSTOMER'; team_id?: TeamId | null },
+    body: { status?: 'WAITING' | 'ASSIGNED'; role?: PatchUserRole; team_id?: TeamId | null },
   ): Promise<void> {
     return apiRequest<void>(`/v1/instructor/rounds/${round_id}/users/${user_id}`, { method: 'PATCH', body });
   },
