@@ -1,5 +1,7 @@
 import { computeProfit, selectPublishedJokeIds } from './economics';
 import { SIM_CONFIG } from '../config/simConfig';
+import { DIMENSIONS } from '../config/dimensions';
+import type { TeamFeedbackResponse } from '../types/api';
 import type {
   ApiActiveRoundResponse,
   ApiCreateBatchRequest,
@@ -301,6 +303,52 @@ function getMarketItems(db: MockDb, round_id: RoundId): ApiMarketResponse {
     });
 
   return { items };
+}
+
+/**
+ * GET /v1/rounds/{rid}/teams/{tid}/feedback — the mock's copy of the real route.
+ *
+ * AS CONSTRAINED AS THE REAL ENDPOINT, deliberately: dimension IDS ONLY. No
+ * numbers, no categories, no ideal levels, no proximity. A graded reveal would
+ * let a team solve the hidden ideal without ever selling a joke, which is the
+ * whole reason the real endpoint sends nothing richer than pass/fail per
+ * dimension (core/usecase/feedback.go:127-132). Nothing here may carry a score.
+ *
+ * The mock runs no classifier and stores no classification, so there is nothing
+ * to derive a real split from. The split is therefore picked deterministically
+ * from the joke id — a rotation of the dimension catalog — so a demo shows the
+ * same chips on every reload instead of reshuffling under the user. A joke that
+ * sold gets a longer "good" list, which is the one thing the mock does know
+ * about it.
+ */
+function getTeamFeedback(db: MockDb, round_id: RoundId, team_id: TeamId): TeamFeedbackResponse {
+  const pool = DIMENSIONS.map(d => String(d.id));
+  const soldJokeIds = new Set<number>(
+    Object.values(db.purchases)
+      .filter(p => p.round_id === round_id && !p.returned_at)
+      .map(p => Number(p.joke_id)),
+  );
+
+  const jokes = Object.values(db.batches)
+    .filter(b => b.round_id === round_id && b.team_id === team_id)
+    .flatMap(b => b.jokes)
+    .filter(j => Boolean(j.is_published))
+    .map(j => {
+      const id = Number(j.joke_id);
+      const was_bought = soldJokeIds.has(id);
+      const start = ((id % pool.length) + pool.length) % pool.length;
+      const rotated = [...pool.slice(start), ...pool.slice(0, start)];
+      const goodCount = (was_bought ? 4 : 1) + (id % 3);
+      return {
+        joke_id: id,
+        joke_title: String(j.joke_title ?? ''),
+        was_bought,
+        good_dimensions: rotated.slice(0, goodCount),
+        improve_dimensions: rotated.slice(goodCount, goodCount + 3),
+      };
+    });
+
+  return { jokes } as TeamFeedbackResponse;
 }
 
 function computeTeamPoints(db: MockDb, team_id: TeamId): number {
@@ -778,6 +826,17 @@ function route(
       const team_id = Number(m[2]) as TeamId;
       const resp: ApiTeamBatchesResponse = listTeamBatches(db, round_id, team_id);
       return ok(resp, 200);
+    }
+  }
+
+  {
+    const m = path.match(/^\/v1\/rounds\/(\d+)\/teams\/(\d+)\/feedback$/);
+    if (method === 'GET' && m) {
+      const round_id = Number(m[1]) as RoundId;
+      const team_id = Number(m[2]) as TeamId;
+      const me = ensureMe(db, meUserId);
+      if ('ok' in me) return me;
+      return ok(getTeamFeedback(db, round_id, team_id), 200);
     }
   }
 

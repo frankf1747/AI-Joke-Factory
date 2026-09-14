@@ -1451,6 +1451,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setMarketItems([]);
     setTeamSummary(null);
     setTeamFeedback(null);
+    /* Clear the "route missing" latches too. They exist to stop hammering a
+       backend that 404s, not to remember a verdict for the rest of the page's
+       life — a latch tripped before a route existed must not outlive the
+       session it was tripped in. */
+    teamSummaryUnsupportedRef.current = false;
+    teamFeedbackUnsupportedRef.current = false;
     setInstructorLobby(null);
     setInstructorStats(null);
     setInstructorStatsByRoundNumber({ 1: null, 2: null });
@@ -1977,6 +1983,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setMarketItems([]);
     setTeamSummary(null);
     setTeamFeedback(null);
+    /* Clear the "route missing" latches too. They exist to stop hammering a
+       backend that 404s, not to remember a verdict for the rest of the page's
+       life — a latch tripped before a route existed must not outlive the
+       session it was tripped in. */
+    teamSummaryUnsupportedRef.current = false;
+    teamFeedbackUnsupportedRef.current = false;
     setInstructorLobby(null);
     setInstructorStats(null);
     setInstructorStatsByRoundNumber({ 1: null, 2: null });
