@@ -15,7 +15,8 @@ import {
   INITIAL_NUDGE_STATE, nudgeReducer, isNudgeOpen,
   type NudgeEvent,
 } from '../services/marketingNudge';
-import { DIMENSIONS, dimById, dimFit, DEFAULT_IDEAL_PROFILE } from '../config/dimensions';
+import { DIMENSIONS, dimById } from '../config/dimensions';
+import type { TeamFeedbackResponse } from '../types/api';
 
 /* ---- Icons for the backend's Topic categories. Keyed by the category string
    itself so the picker stays in step with config/dimensions automatically: add
@@ -52,102 +53,53 @@ const ordinal = (n: number) => {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 };
 
-/* deterministic 0..1 from an integer — keeps the revealed dim subset stable per joke */
-const mkSeed = (n: number) => {
-  const x = Math.sin(n * 99.13) * 10000;
-  return x - Math.floor(x);
-};
+/* ============================ Marketing feedback ============================
+   GET /v1/rounds/{rid}/teams/{tid}/feedback, mapped for rendering.
 
-/* ---- Dim metadata for rendering revealed dims on each sale ---- */
-interface RevealedDim {
-  dim: ReturnType<typeof dimById>;
-  level: string;
-  prox: number;
+   This panel used to invent its own data: it scored each joke against
+   config/dimensions' DEFAULT_IDEAL_PROFILE — the frontend's hardcoded default,
+   NOT the round's real ideal, which the instructor configures and the scoring
+   engine actually uses — then picked three dimensions from a hash of the joke
+   id and drew a proximity bar. Two bugs in one: the numbers were fiction, and a
+   graded distance-to-ideal reveal leaks more than the learning design allows.
+   Teams are meant to reverse-engineer the hidden ideal from partial feedback;
+   a per-dimension "how far off" bar would let them solve the profile without
+   ever selling a joke.
+
+   So the backend sends dimension IDS ONLY — no numbers, no categories, no ideal
+   levels (core/usecase/feedback.go:127-132) — and this mapper keeps it that
+   way. A dimension either passed or needs work. Nothing here may carry a score.
+
+   Exported as a pure function so the mapping is testable without React
+   (views/feedback.test.ts). */
+
+export interface FeedbackDim {
+  /** The backend enum id, e.g. 'HUMOR_STYLE'. */
+  id: string;
+  /** Display label from the dimension catalog, falling back to the raw id so a
+      dimension added upstream renders as itself rather than vanishing. */
+  label: string;
 }
 
-/* A plausible classification for demo/seed signals: lean on the default ideal
-   so a published joke has a sensible level on every dimension. Title Fit has no
-   ideal, so it needs an explicit grade. */
-function defaultDims(): Record<string, string> {
-  return { ...DEFAULT_IDEAL_PROFILE, TITLE_FIT: 'Strong' };
+export interface FeedbackRow {
+  joke_id: number;
+  joke_title: string;
+  was_bought: boolean;
+  good: FeedbackDim[];
+  improve: FeedbackDim[];
 }
 
-/* The dims a sale reveals: one of the top-3 closest + two seeded-random others.
-   All 12 are eligible now that Structure is scored like any other dimension. */
-function revealedDimsFor(jokeId: number, dims: Record<string, string>): RevealedDim[] {
-  const scored: RevealedDim[] = DIMENSIONS.map(d => {
-    const level = dims[d.id] ?? d.categories[0];
-    return {
-      dim: d,
-      level,
-      prox: dimFit(d.id, DEFAULT_IDEAL_PROFILE[d.id] ?? '', level),
-    };
-  });
-  const ranked = [...scored].sort((a, b) => b.prox - a.prox);
-  const top = ranked[Math.floor(mkSeed(jokeId) * 3) % Math.min(3, ranked.length)];
-  const rest = scored.filter(s => s.dim!.id !== top.dim!.id);
-  const r1 = rest[Math.floor(mkSeed(jokeId + 1) * rest.length)];
-  let r2 = rest[Math.floor(mkSeed(jokeId + 7) * rest.length)];
-  if (r2 && r1 && r2.dim!.id === r1.dim!.id) {
-    r2 = rest[(rest.indexOf(r1) + 1) % rest.length];
-  }
-  return [top, r1, r2].filter(Boolean) as RevealedDim[];
+export function toFeedbackRows(payload: TeamFeedbackResponse | null | undefined): FeedbackRow[] {
+  const toDims = (ids: readonly string[] | null | undefined): FeedbackDim[] =>
+    (ids ?? []).map(id => ({ id, label: dimById(id)?.label ?? id }));
+  return (payload?.jokes ?? []).map(j => ({
+    joke_id: j.joke_id,
+    joke_title: j.joke_title,
+    was_bought: j.was_bought,
+    good: toDims(j.good_dimensions),
+    improve: toDims(j.improve_dimensions),
+  }));
 }
-
-/* ============================ Dim scale ============================ */
-const DimScale: React.FC<{ dim: ReturnType<typeof dimById>; level: string; prox: number }> = ({
-  dim, level, prox,
-}) => {
-  if (!dim) return null;
-  const onTarget = prox >= 0.999;
-  /* Only ordinal dims are a distance along a scale, so only they get the bar.
-     Categorical dims have no order, and graded ones (Title Fit) grade themselves
-     against no ideal — plotting either on the bar would put a top score at the
-     end labelled with the worst category. Both render as a badge instead. */
-  if (dim.scoring !== 'ordinal') {
-    return (
-      <div className="flex items-center gap-2">
-        <span className="text-[10px] font-semibold text-gray-500 w-14 shrink-0">{dim.label}</span>
-        <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded ${onTarget ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
-          {onTarget ? <Check size={11} /> : <XIcon size={11} />} {level}
-        </span>
-      </div>
-    );
-  }
-  /* The track plots FIT, not position on the dimension's scale: the marker sits
-     at 0, 0.5 or 1 depending on how far the level is from the ideal. So the ends
-     are labelled with what the axis measures, not with categories — labelling
-     them "Very simple"→"Expert" put a joke that nailed a mid-scale ideal under
-     the name of the worst category. The level itself is in the row above. */
-  const frac = Math.max(0, Math.min(1, prox));
-  return (
-    <div>
-      <div className="flex items-center justify-between gap-2 mb-0.5">
-        <span className="text-[10px] font-semibold text-gray-500 truncate">{dim.label}</span>
-        <span className={`text-[10px] truncate ${onTarget ? 'text-emerald-700 font-semibold' : 'text-gray-500'}`}>{level}</span>
-      </div>
-      <div className="flex items-center gap-1.5">
-        <span className="text-[9px] text-gray-400 truncate max-w-[58px]">Off target</span>
-        <div
-          className="relative flex-1 h-1.5 rounded-full"
-          style={{ background: 'linear-gradient(90deg,#e5e7eb 0%,#d9f2e1 55%,#22c55e 100%)' }}
-        >
-          <span
-            className="absolute top-1/2 rounded-full bg-white"
-            style={{
-              left: `calc(5px + (100% - 10px) * ${frac})`,
-              width: 11, height: 11,
-              transform: 'translate(-50%,-50%)',
-              border: `2px solid ${onTarget ? '#16a34a' : '#94a3b8'}`,
-              boxShadow: '0 1px 2px rgb(0 0 0 / .15)',
-            }}
-          />
-        </div>
-        <span className="text-[9px] text-gray-400 truncate max-w-[58px] text-right">On target</span>
-      </div>
-    </div>
-  );
-};
 
 /* ============================ Shared release fields ============================
    A joke can't go to market without a Topic and a title. The second decision
@@ -204,29 +156,63 @@ const TitleField: React.FC<{
   </div>
 );
 
-/* ============================ Sold signal ============================ */
-const SoldSignal: React.FC<{ entry: { id: number; text: string; title: string; dims: RevealedDim[] } }> = ({ entry }) => {
-  const top2 = [...entry.dims].sort((a, b) => b.prox - a.prox).slice(0, 2).map(s => s.dim!.label.toLowerCase());
-  return (
-    <div className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-3 mk-fade-in">
-      <div className="flex items-center gap-1.5 mb-1.5">
-        <BadgeCheck size={13} className="text-emerald-600 shrink-0" />
-        <span className="text-[11px] font-semibold text-emerald-700">
-          Sold{entry.title ? ` · "${entry.title}"` : ''}
-        </span>
-      </div>
-      <p className="text-[11px] text-gray-500 italic mb-2 line-clamp-2">{entry.text}</p>
-      {top2.length === 2 && (
-        <p className="text-[11px] text-gray-700 mb-2.5">
-          Bought because the <b>{top2[0]}</b> and <b>{top2[1]}</b> were right.
-        </p>
-      )}
-      <div className="space-y-1.5">
-        {entry.dims.map(s => <DimScale key={s.dim!.id} dim={s.dim} level={s.level} prox={s.prox} />)}
-      </div>
+/* ============================ Feedback card ============================
+   Pass/fail per dimension, nothing more. No bar, no percentage, no "→ target"
+   arrow and no ideal level: the team should learn WHICH dimensions missed, not
+   by how much. See the note on toFeedbackRows above. */
+
+const DimChip: React.FC<{ label: string; tone: 'good' | 'improve' }> = ({ label, tone }) => (
+  <span
+    className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border ${
+      tone === 'good'
+        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+        : 'bg-amber-50 text-amber-800 border-amber-300'
+    }`}
+  >
+    {tone === 'good' ? <Check size={11} /> : <XIcon size={11} />} {label}
+  </span>
+);
+
+const FeedbackCard: React.FC<{ row: FeedbackRow }> = ({ row }) => (
+  <div
+    className={`rounded-lg border p-3 mk-fade-in ${
+      row.was_bought ? 'border-emerald-100 bg-emerald-50/40' : 'border-gray-200 bg-gray-50/60'
+    }`}
+  >
+    <div className="flex items-center gap-1.5 mb-2">
+      {row.was_bought
+        ? <BadgeCheck size={13} className="text-emerald-600 shrink-0" />
+        : <Minus size={13} className="text-gray-400 shrink-0" />}
+      <span className={`text-[11px] font-semibold ${row.was_bought ? 'text-emerald-700' : 'text-gray-500'}`}>
+        {row.was_bought ? 'Sold' : 'Not sold yet'}
+        {row.joke_title ? ` · "${row.joke_title}"` : ''}
+      </span>
     </div>
-  );
-};
+
+    {row.good.length === 0 && row.improve.length === 0 ? (
+      <p className="text-[11px] text-gray-400 italic">No customer read on this one yet.</p>
+    ) : (
+      <div className="space-y-2">
+        {row.good.length > 0 && (
+          <div>
+            <SectionLabel className="mb-1">Landed</SectionLabel>
+            <div className="flex flex-wrap gap-1.5">
+              {row.good.map(d => <DimChip key={d.id} label={d.label} tone="good" />)}
+            </div>
+          </div>
+        )}
+        {row.improve.length > 0 && (
+          <div>
+            <SectionLabel className="mb-1">Needs work</SectionLabel>
+            <div className="flex flex-wrap gap-1.5">
+              {row.improve.map(d => <DimChip key={d.id} label={d.label} tone="improve" />)}
+            </div>
+          </div>
+        )}
+      </div>
+    )}
+  </div>
+);
 
 /* ============================ Phase 1: interactive batch splitter ============================
    Marketing reads the raw AI blob and splits it into individual jokes by placing a
@@ -423,7 +409,7 @@ const BatchSplitter: React.FC<{
 
 /* ============================ Marketing screen ============================ */
 const QualityControl: React.FC = () => {
-  const { user, roster, qcQueue, publishBatch, splitBatch, unsplitBatch, config, teamSummary, batches } = useGame();
+  const { user, roster, qcQueue, publishBatch, splitBatch, unsplitBatch, config, teamSummary, teamFeedback, batches } = useGame();
 
   /* Live queue from API */
   const incomingJokes = useMemo(() => {
@@ -478,30 +464,11 @@ const QualityControl: React.FC = () => {
     }
   }, [queueSig, incomingJokes]);
 
-  /* Marketing feedback panel: seed a sample signal from team's already-published jokes
-     so the panel isn't empty on first load. Then append entries as releases happen. */
-  const [sold, setSold] = useState<Array<{ id: number; text: string; title: string; dims: RevealedDim[] }>>([]);
-  React.useEffect(() => {
-    // Build initial sample from the current team's published-and-sold jokes once.
-    if (sold.length > 0 || !user?.team) return;
-    const myBatches = batches.filter(b => b.team === user?.team);
-    const samples: Array<{ id: number; text: string; title: string; dims: RevealedDim[] }> = [];
-    for (const b of myBatches) {
-      for (const j of (b.jokes as any[])) {
-        if (j.is_published && Number(j.sold_count ?? 0) > 0) {
-          samples.push({
-            id: j.joke_id,
-            text: j.joke_text ?? j.content ?? '',
-            title: j.joke_title ?? '',
-            dims: revealedDimsFor(j.joke_id, j.dims ?? defaultDims()),
-          });
-          if (samples.length >= 3) break;
-        }
-      }
-      if (samples.length >= 3) break;
-    }
-    if (samples.length) setSold(samples);
-  }, [batches, user?.team, sold.length]);
+  /* Marketing feedback panel. Real data from the backend now — see
+     toFeedbackRows. Nothing is seeded and nothing is appended locally: the poll
+     in context.tsx is the only source, so the panel can never show a joke the
+     scoring engine hasn't actually judged. */
+  const feedbackRows = useMemo(() => toFeedbackRows(teamFeedback), [teamFeedback]);
 
   const move = (idx: number, dir: -1 | 1) => setOrderIds(o => {
     const n = [...o];
@@ -581,19 +548,9 @@ const QualityControl: React.FC = () => {
     dispatchNudge({ type: 'RELEASED' });   // no popup may ambush a team that shipped
     await publishBatch(batchId, submittingIds, titlesOut);
 
-    /* Append SoldSignal entries for the released jokes (using DEFAULT_IDEAL_PROFILE-derived dims). */
-    setSold(prev => {
-      const additions = submittingIds.map(id => {
-        const j = jokeById(id)!;
-        return {
-          id,
-          text: j?.text ?? '',
-          title: (titles[id] || '').trim(),
-          dims: revealedDimsFor(id, defaultDims()),
-        };
-      });
-      return [...additions, ...prev];
-    });
+    /* No local feedback entry is appended here. Releasing a joke does not mean a
+       customer has judged it — the panel fills in from the backend's own
+       feedback poll once the scoring engine has actually run. */
 
     // TEMP (ranking disabled): used to read "Rank 1 + N selected".
     setToast(
@@ -890,7 +847,7 @@ const QualityControl: React.FC = () => {
           </Card>
         </div>
 
-        {/* RIGHT: stats + sold-signal learning panel */}
+        {/* RIGHT: stats + customer-feedback learning panel */}
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3">
             <StatBox label="Current Team Rank" value={String(myRank)} tone="rank" />
@@ -931,17 +888,17 @@ const QualityControl: React.FC = () => {
             </div>
           </Card>
           <Card
-            title="What's selling — and why"
-            subtitle="Each sale is free market research: which attributes matched customer demand"
+            title="Customer feedback"
+            subtitle="Which criteria landed and which missed — the customers never say by how much"
             accent={BRAND.sold}
           >
             <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
-              {sold.length === 0 ? (
+              {feedbackRows.length === 0 ? (
                 <p className="text-sm text-gray-400 italic py-4 text-center">
-                  No sales yet — release jokes to start uncovering the target.
+                  No feedback yet — release jokes to start uncovering the target.
                 </p>
               ) : (
-                sold.map(e => <SoldSignal key={e.id} entry={e} />)
+                feedbackRows.map(r => <FeedbackCard key={r.joke_id} row={r} />)
               )}
             </div>
           </Card>

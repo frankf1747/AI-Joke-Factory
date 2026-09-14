@@ -18,6 +18,8 @@ import type {
   User,
   UserId,
 } from './types';
+import type { TeamFeedbackResponse } from './types/api';
+import { teamApi } from './services/api';
 import { instructorService } from './services/instructorService';
 import type { PatchUserRole } from './services/instructorService';
 import { jmService } from './services/jmService';
@@ -404,6 +406,12 @@ interface GameContextType {
   roundId: RoundId | null;
   marketItems: ApiMarketItem[];
   teamSummary: ApiTeamSummaryResponse | null;
+  /* Per-joke pass/fail feedback for the signed-in user's team. Dimension IDS
+     only — the backend deliberately sends no categories, no ideal levels and no
+     numbers, because teams are meant to reverse-engineer the hidden ideal by
+     selling jokes. Null until the first successful poll (and in mock mode,
+     which has no /feedback route). */
+  teamFeedback: TeamFeedbackResponse | null;
   instructorLobby: ApiInstructorLobbyResponse | null;
   instructorStats: ApiInstructorStatsResponse | null;
   instructorStatsRound1: ApiInstructorStatsResponse | null;
@@ -430,6 +438,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [marketItems, setMarketItems] = useState<ApiMarketItem[]>([]);
   const [teamSummary, setTeamSummary] = useState<ApiTeamSummaryResponse | null>(null);
+  const [teamFeedback, setTeamFeedback] = useState<TeamFeedbackResponse | null>(null);
   const [instructorLobby, setInstructorLobby] = useState<ApiInstructorLobbyResponse | null>(null);
   const [instructorStats, setInstructorStats] = useState<ApiInstructorStatsResponse | null>(null);
   const [instructorStatsByRoundNumber, setInstructorStatsByRoundNumber] = useState<Record<1 | 2, ApiInstructorStatsResponse | null>>({
@@ -438,6 +447,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
   const [qcQueue, setQcQueue] = useState<ApiQcQueueNextResponse | null>(null);
   const teamSummaryUnsupportedRef = useRef<boolean>(false);
+  /* Same latch as teamSummaryUnsupportedRef: the in-browser mock API has no
+     /feedback route, so without this every poll tick would fire a doomed
+     request. One 404 and we stop asking. */
+  const teamFeedbackUnsupportedRef = useRef<boolean>(false);
   const lastInstructorStatsFetchRef = useRef<Record<number, number>>({});
   const qcNextRetryAfterRef = useRef<number>(0);
 
@@ -1273,6 +1286,24 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // QC batch history: load team batches from API so refresh/logout can restore submitted/rated batch stats.
           // Merge with locally persisted QC-rated history to preserve feedback/tags where the API omits them.
           const qcTeamId = (me.assignment?.team_id ?? null) as TeamId | null;
+
+          /* Marketing's feedback panel. Gated on the user actually being on a
+             team, because the route is per-team. teamApi.feedback unwraps the
+             {data} envelope itself, so this needs no `?.data ?? x` dance — see
+             apiClient.apiRequest. X-User-Id is required by the handler and is
+             attached from localStorage by apiRequest. */
+          if (qcTeamId && !teamFeedbackUnsupportedRef.current) {
+            try {
+              const fb = await teamApi.feedback(effectiveRound, qcTeamId);
+              if (!cancelled) setTeamFeedback(fb ?? null);
+            } catch (e) {
+              if (e instanceof ApiError && (e.status === 404 || e.code === 'NOT_FOUND')) {
+                teamFeedbackUnsupportedRef.current = true;
+              }
+              // ignore; retry on the next poll if supported
+            }
+          }
+
           let didHydrateBatchesFromApi = false;
           if (qcTeamId) {
             try {
@@ -1472,6 +1503,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setBatches([]);
     setMarketItems([]);
     setTeamSummary(null);
+    setTeamFeedback(null);
     setInstructorLobby(null);
     setInstructorStats(null);
     setInstructorStatsByRoundNumber({ 1: null, 2: null });
@@ -1997,6 +2029,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setBatches([]);
     setMarketItems([]);
     setTeamSummary(null);
+    setTeamFeedback(null);
     setInstructorLobby(null);
     setInstructorStats(null);
     setInstructorStatsByRoundNumber({ 1: null, 2: null });
@@ -2036,6 +2069,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       roundId,
       marketItems,
       teamSummary,
+      teamFeedback,
       instructorLobby,
       instructorStats,
       instructorStatsRound1: instructorStatsByRoundNumber[1],
