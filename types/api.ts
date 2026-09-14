@@ -25,11 +25,12 @@
    `jokefactory_be/src/app/http/handler/round.go:55`. Line numbers are against
    backend commit 8f9dfff.
 
-   CAVEAT — the `| null` unions here are ADVISORY, not enforced. This repo
-   compiles without `strictNullChecks`, so `null` is assignable to every type
-   and `res.batches.map(...)` type-checks even though `batches` really can be
-   null. Read them as documentation of what the wire does until that flag is
-   on. (Measured: enabling it takes the repo from 5 errors to 1 — see README's
+   ENFORCED — the `| null` unions here are checked, not advisory. This repo
+   compiles with `strictNullChecks` (tsconfig.json), which was turned on during
+   this phase, so `null` is NOT assignable to a non-nullable type and
+   `res.batches.map(...)` is a compile error until `batches` is narrowed. Treat
+   every union below as a null check the compiler will demand of you.
+   (Measured: enabling it took the repo from 5 errors to 1 — see README's
    Scripts section.)
 
    ---------------------------------------------------------------------------

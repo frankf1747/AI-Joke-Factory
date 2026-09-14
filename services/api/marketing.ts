@@ -32,13 +32,13 @@ export const marketingApi = {
    *       field=jokes, message "NO_JOKE_PUBLISHED" — enforced in
    *       infra/repo/postgres/marketing_repo.go:198-200, mirrored in the
    *       in-memory store at core/usecase/testutil/memstore.go:474-475, and
-   *       locked in by core/usecase/marketing_test.go:145-153.
+   *       locked in by core/usecase/marketing_test.go:146-153.
    *
    *  Both surface as HTTP 400. So a "publish nothing" flow is NOT supported
    *  by this backend: any caller that lets Marketing discard every joke in a
    *  batch must handle the 400, or forbid the all-discard selection in the UI.
    *  A rejected publish leaves the batch SUBMITTED: the whole operation runs
-   *  inside one WithTx (infra/repo/postgres/marketing_repo.go:83) and aborts
+   *  inside one WithTx (infra/repo/postgres/marketing_repo.go:84) and aborts
    *  before markBatchProcessed, so it stays claimed by this marketer from the
    *  earlier queueNext and the call can simply be retried with a valid
    *  decision set. */

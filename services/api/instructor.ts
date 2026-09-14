@@ -2,12 +2,15 @@ import { apiRequest } from '../apiClient';
 import type {
   LobbyResponse, ConfigRequest, InstructorRoundResponse, PublicRoundResponse,
   PatchUserRequest, DeleteUserResponse, RoundStatsResponse, AdminResetResponse,
+  AssignRequest, PopupStateRequest,
 } from '../../types/api';
 
 /* AssignRequest and PopupStateRequest are built inline below rather than taken
    as parameters — the call sites take plain arguments, which is friendlier than
-   making every caller construct a body object. The types still exist in
-   types/api.ts and the literals below must satisfy them. */
+   making every caller construct a body object. The `satisfies` clauses on those
+   literals are what enforce the match: without them the claim would be a
+   comment, and a renamed wire key would compile. They also keep the key names
+   visible to a reader, which the scalar-parameter signatures otherwise hide. */
 
 export const instructorApi = {
   /** NOTE: this response is PascalCase, unlike every other endpoint — the Go
@@ -27,7 +30,7 @@ export const instructorApi = {
   assign(roundId: number, teamCount: number) {
     return apiRequest<LobbyResponse>(`/v1/instructor/rounds/${roundId}/assign`, {
       method: 'POST',
-      body: { team_count: teamCount },
+      body: { team_count: teamCount } satisfies AssignRequest,
     });
   },
 
@@ -47,7 +50,7 @@ export const instructorApi = {
   /** CORRECTED: returns the PUBLIC projection, not the instructor one.
    *  handler/instructor.go:221 calls dto.ToPublicRound — so buy_threshold,
    *  jitter, swap_margin, feedback_pass_threshold and ideal_profile are NOT
-   *  on this response. Only config (:86) and start (:192) return
+   *  on this response. Only config (:87) and start (:192) return
    *  ToInstructorRound. Typing this as InstructorRoundResponse would be a
    *  lie the compiler cannot catch, because the type is a claim about the
    *  wire rather than a check of it. */
@@ -59,7 +62,7 @@ export const instructorApi = {
   popups(roundId: number, isActive: boolean) {
     return apiRequest<PublicRoundResponse>(`/v1/instructor/rounds/${roundId}/popups`, {
       method: 'POST',
-      body: { is_popped_active: isActive },
+      body: { is_popped_active: isActive } satisfies PopupStateRequest,
     });
   },
 
