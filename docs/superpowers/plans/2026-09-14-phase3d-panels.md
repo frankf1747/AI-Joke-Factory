@@ -364,3 +364,70 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - The leaderboard shows real counts, and no column renders a placeholder zero.
 - No type remains in `types.ts` for an endpoint or field the backend does not send.
 - 289 tests pass, typecheck holds at 1, `dist/` clean.
+
+---
+
+# Execution log — COMPLETE (2026-09-14)
+
+Commits `8294c30`, `befdad1`, `9677c23`, `d76361c`, `b19a2a8`.
+**289 tests / 13 files. `npm run typecheck` → 0 errors** — clean for the first time in this
+repo's history.
+
+## Verified against the live backend, full round with real sales
+
+Clean database, round configured with an ideal profile tuned to the stub classifier so the
+jokes would actually sell. JM submitted a raw blob, Marketing split it, published 2 and
+discarded 3. **Both published jokes sold to all 100 AI customers.**
+
+**Marketing** — Profit **$199.77**, which checks independently: 200 sales × $1 − 2 published ×
+$0.10 − 3 discarded × $0.01. Feedback panel shows the backend's real dimensions as chips, and
+now states the constraint itself: *"Which criteria landed and which missed — the customers
+never say by how much."*
+
+**Instructor, Live Market** — `Mystery Code | Team 1 | 100`, `The Other IDE | Team 1 | 100`.
+Before: blank team, 0 sales.
+
+**Instructor, Leaderboard** — `Rank 1 | Team 1 | Processed Batches 1 | Published Jokes 2 |
+Wasted Jokes 3 | Unsold Jokes 0 | Total Jokes 5 | Total Sales 200 | Profit 199.77`. No Avg
+Score column. Team Management reads `mk_pair (Marketing)`, not `(QC)`.
+
+**Charts** — "Batch Sequence vs Quality → *Not available yet. The backend sends no per-batch
+quality series.*" rather than an empty axis that reads as zero data.
+
+Zero console errors on every screen.
+
+## Beyond the plan
+
+**Typecheck reached 0.** The mock's leaderboard literal predated the V2 rename and was missing
+four fields; completed from the counts `computeTeamStats` already returns. Then the four
+instructor chart series were made **optional**, which is what the wire actually looks like —
+`/stats` returns `{round_id, leaderboard}` and nothing else, so requiring them was a type-level
+claim about a backend that does not exist.
+
+**The mock gained a `/feedback` route.** Task 1 left the default no-Postgres runtime showing an
+empty panel. The mock now serves the same shape — **dimension ids only**, deterministic from
+the joke id so a demo is stable across reloads. Re-opening the graded leak in the mock would
+have undone the point of Task 1.
+
+## Things the plan got wrong
+
+1. **`Sold: n/n` had no flat equivalent.** The plan listed `team.sold_jokes_count` among the
+   broken reads but offered no replacement — the market payload carries no team-level totals at
+   all. The sub-line was deleted rather than derived from the leaderboard, which would couple
+   the market panel to the leaderboard's round toggle.
+2. **`feedback` is not purely a wire field.** The plan said to delete `avg_score`,
+   `passes_count`, `feedback` and `tag_summary` as fields "the backend never sends". True of
+   the wire type — but app-level `Batch.feedback` is local state that `views/JokeMaker.tsx`
+   renders. The wire fields went; `feedback`/`tagSummary` stayed, explicitly local-only.
+3. **`leaderboard.points` also has no backend source** and was not in the plan's list of four.
+   It is not rendered, so it was left alone — worth a follow-up.
+
+## Known-remaining
+
+- `cumulative_sales`, `learning_curve`, `unrated_jokes_over_time` are still not sent by the
+  backend. The charts now say so. `cumulative_sales` is the cheapest to add — `ports.SalesPoint`
+  is already declared with the right json tags and nothing constructs it.
+- `learning_curve`, `Avg Score` and `Accepted Jokes` are **not restorable**: V2 deleted ratings
+  as a concept, so per-batch quality has no definition.
+- `GET /v1/rounds/{id}/market` still 409s on a polling loop while a round is not ACTIVE.
+  Pre-existing noise.
