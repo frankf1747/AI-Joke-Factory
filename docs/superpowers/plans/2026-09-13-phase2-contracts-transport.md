@@ -52,6 +52,17 @@ Verified against `server.go`'s route table:
 | `GET /v1/qc/queue/next` | `GET /v1/marketing/queue/next` | rename |
 | `GET /v1/qc/queue/count` | `GET /v1/marketing/queue/count` | rename |
 | `POST /v1/qc/batches/{id}/ratings` | `POST /v1/marketing/batches/{id}/publish` — different body entirely | replace |
+
+**Correction, found during Task 4.** Earlier drafts of this plan stated that the
+backend has no "at least one published joke" rule, and that the Round 2
+publish-nothing flow was therefore compatible with it. **That was wrong.**
+`usecase/marketing.go:81-82` validates only that *decisions* exist, which is as
+far as the original reading went; the >=1-PUBLISHED rule is enforced one layer
+down inside the transaction at `infra/repo/postgres/marketing_repo.go:198-200`,
+and the backend has a passing test for it. The failure is transactional and
+aborts before `markBatchProcessed`, so a rejected batch stays `SUBMITTED` and
+still claimed by that marketer — retryable, nothing corrupted. This is a
+product decision for phase 3+, not a phase 2 change.
 | `POST /v1/qc/batches/{id}/split` | **does not exist** | drop (splitting moves to JM in phase 4) |
 | `POST /v1/qc/batches/{id}/unsplit` | **does not exist** | drop |
 | `GET /v1/rounds/{id}/customers/budget` | **removed** (no human customers) | drop |
@@ -757,6 +768,7 @@ work out which, then report it — do not loosen the annotation to make it pass.
 
 ```typescript
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { ApiError } from '../apiClient';
 import { sessionApi } from './session';
 import { teamApi } from './team';
 import { marketingApi } from './marketing';
@@ -854,19 +866,30 @@ describe('marketing', () => {
     expect(sent).toEqual({ jokes: [{ joke_id: 1, joke_title: 't', is_published: true }] });
   });
 
-  it('publishes nothing without error — the backend has no >=1 rule', async () => {
-    // usecase/marketing.go:80 validates only that decisions exist. Both plan
-    // documents claim a 400 here; the implementation does not. Round 2 depends
-    // on this, so pin it.
-    const spy = stub({ data: { batch: {}, published: { count: 0, joke_ids: [] }, discarded: { count: 2, joke_ids: [1, 2] } } });
-    const res = await marketingApi.publish(501, {
+  it('rejects an all-discard publish with NO_JOKE_PUBLISHED', async () => {
+    // CORRECTED. An earlier draft of this plan asserted the opposite, on the
+    // strength of usecase/marketing.go:81-82, which validates only that
+    // *decisions* exist. The >=1-PUBLISHED rule lives one layer down, inside
+    // the transaction: infra/repo/postgres/marketing_repo.go:198-200 returns
+    // NewValidationError("jokes", "NO_JOKE_PUBLISHED") when len(published)==0.
+    // Mirrored in testutil/memstore.go:474-475 and pinned by the backend's own
+    // test at usecase/marketing_test.go:145-153.
+    //
+    // This matters beyond the contract: the Round 2 "Marketing may publish
+    // nothing" flow is NOT supported by the deployed backend, and a screen
+    // migrated onto this layer must either handle the 400 or prevent the
+    // all-discard state. See the note in services/api/marketing.ts.
+    stub({ error: { code: 'VALIDATION_ERROR', message: 'NO_JOKE_PUBLISHED', field: 'jokes' } }, 400);
+    const err = await marketingApi.publish(501, {
       jokes: [
         { joke_id: 1, joke_title: '', is_published: false },
         { joke_id: 2, joke_title: '', is_published: false },
       ],
-    });
-    expect(res.discarded.count).toBe(2);
-    expect(spy).toHaveBeenCalled();
+    }).catch(e => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(400);
+    expect(err.field).toBe('jokes');
+    expect(err.message).toBe('NO_JOKE_PUBLISHED');
   });
 });
 
