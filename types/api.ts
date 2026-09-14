@@ -71,9 +71,11 @@
 
    Route table transcribed from app/server/server.go:115-174.
 
-   NOT TYPED: GET /health/detailed returns whatever usecase.HealthService.Check
-   produces (app/http/handler/health.go:45-48). Task 7 probes it, so it needs a
-   type before that task can check its keys.
+   DELIBERATELY NOT TYPED: GET /health/detailed returns whatever
+   usecase.HealthService.Check produces (app/http/handler/health.go:45-48) — it
+   has no fixed shape, so any interface here would be a guess that drifts
+   silently. scripts/smoke-api.ts probes it for 2xx and valid JSON only, and
+   asserts no keys on it. That is the intended end state, not a gap.
 
    ---------------------------------------------------------------------------
    NAME COLLISIONS WITH THE ROOT `types.ts` — read this before importing.
@@ -663,11 +665,12 @@ export interface AdminResetResponse {
 /**
  * GET /health — RAW, and outside /v1. app/http/handler/health.go:29-31,
  * emitted at :38.
- * Consumed by Task 7 (scripts/smoke-api.ts), which probes /health first and
- * checks every declared key is present.
+ * Consumed by scripts/smoke-api.ts, which probes /health first and checks every
+ * declared key is present.
  *
  * NOTE: /health/detailed (app/http/handler/health.go:45-48) returns whatever
- * usecase.HealthService.Check produces and has NO type here. Task 7 probes it
- * too, so it will need one.
+ * usecase.HealthService.Check produces and has NO type here ON PURPOSE — the
+ * shape is not fixed, so there is nothing honest to declare. The smoke script
+ * checks it for 2xx and valid JSON and asserts no keys. Do not add a type.
  */
 export interface HealthResponse { status: string; }
