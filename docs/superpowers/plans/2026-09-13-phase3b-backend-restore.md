@@ -900,3 +900,85 @@ Three things worth saying explicitly when these changes are handed over:
 3. **The `≥1 published` rule is now a parameter, not a constant.** `PublishBatch` takes a
    boolean from the usecase rather than deciding for itself, so the repo no longer encodes a
    teaching rule.
+
+---
+
+# Execution log — COMPLETE (2026-09-13)
+
+Executed subagent-driven on `main` in `jokefactory_be`, **local only — 8 commits ahead of
+`origin/main`, nothing pushed**. `make verify` exits 0.
+
+| Commit | |
+|---|---|
+| `efbc0ae` | `feat(batches): add raw_text columns` |
+| `b7cf2bc` | `feat(batches): accept a raw_text submission` |
+| `e7f8558` | `feat(marketing): restore the split endpoint` |
+| `40e3409` | `feat(marketing): restore the unsplit endpoint` |
+| `aca8188` | `feat(marketing): scope the >=1-published rule to round 1` |
+| `8f72655` | `fix(batches): report real per-joke sales` |
+| `edf7255` | `feat(summary): add jokes_created and jokes_published` |
+| (empty) | `chore: verify phase 3B` |
+
+## The full round, walked by hand on a clean database
+
+```
+JM submits a RAW BLOB      batch 1, jokes_count 0
+Marketing claims it        raw_text present: True | joke rows: 0 | queue: 1
+Marketing SPLITS           raw_text now: None | joke ids: [1,2,3,4,5]
+publishes 1, discards 4    batch PROCESSED | published 1 | discarded 4
+summary                    jokes_created 5 | jokes_published 1 | profit -0.14
+```
+
+Profit checks independently: one publish at $0.10 plus four discards at $0.01, no sales yet.
+
+## Verified individually
+
+- **R1 size enforcement fires on the raw path.** Splitting 4 jokes when `batch_size` is 5
+  returns `expected 5 jokes` — the identical string `Submit` used before the rule moved.
+- **Unsplit is byte-identical.** 173 bytes submitted, 173 returned, formatting intact. A
+  re-split issues fresh joke ids.
+- **The publish rule is round-scoped.** The same all-discard body returns 400
+  `NO_JOKE_PUBLISHED` on a Round 1 batch and 200 with `published.count: 0` on a Round 2 batch.
+- **`sold_count` now agrees across endpoints.** Proven with a *real* sale, not injected rows:
+  the ideal profile was set to match what the stub classifier emits, scoring a perfect fit, and
+  all 5 AI customers bought on the tick. Both `/batches` and `/market` report `sold_count: 5`
+  for joke 1. `first_sold_at` is a real timestamp.
+
+## Things the plan got wrong, corrected during execution
+
+1. **"mirror the shape `Publish` uses" was wrong.** `Publish` does *not* check team, status or
+   lock in the usecase — those live in the repo's `lockBatchForPublish`, where they are
+   race-safe. The implementer put the plan's five usecase preconditions in *and* kept the repo
+   guards, deliberately duplicated.
+2. **Guard ordering matters for error precedence.** The plan put the decided-jokes check first;
+   running it after the team/status/lock guard means a marketer with no rights gets `403`
+   rather than a `409` that leaks whether the jokes are decided.
+3. **`queue/next` did not emit `raw_text`.** The plan said "check"; it didn't. Split, unsplit
+   and queue/next now share one `queueEnvelope` helper so they cannot drift.
+4. **The batch listing is two queries, not one.** `round_id` was in Go scope but not in the
+   jokes query; it had to be threaded through as a second parameter.
+5. **The memstore had no purchase-event log**, so `first_sold_at` could not be test-driven
+   until one was added mirroring the real two-table model.
+6. **`migrate-down` is only safe while `0002` is applied.** If the database ever reaches a
+   state where `0001` is last-applied, `make migrate-down` drops the entire schema. Worth a
+   warning in the README.
+
+## New wire strings the frontend has never seen
+
+- `BATCH_JOKES_ALREADY_DECIDED` — conflict code on split/unsplit of a decided batch.
+- `BATCH_ALREADY_PROCESSED` on split of a processed batch.
+- `BatchSplitRequest.Jokes` keeps `binding:"required"`, so an explicit `"jokes": []` is
+  rejected by gin as a 400 `invalid payload` rather than reaching the usecase's typed
+  `at least one joke required`. Two different error shapes for adjacent cases; Phase 3C should
+  handle both.
+
+## Handover notes for the backend developer
+
+1. **This adds the repo's first incremental migration** (`0002_batch_raw_text.sql`). The README
+   describes the schema as a single file; that convention has to change or a deployed database
+   cannot be migrated.
+2. **The R1 batch-size rule moved from `Submit` to `Split`** — not weakened, enforced at the
+   first point a joke count exists on the raw path. A reviewer looking in `batch.go` won't
+   find it.
+3. **The `≥1 published` rule is a parameter now**, computed by the usecase from
+   `round.RoundNumber`, so the repository no longer encodes a teaching rule.
