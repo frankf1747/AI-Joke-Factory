@@ -274,24 +274,30 @@ function computeBudget(db: MockDb, round_id: RoundId, buyer_user_id: UserId): Ap
   };
 }
 
-function getMarketItems(db: MockDb, round_id: RoundId, buyer_user_id: UserId): ApiMarketResponse {
+// Flat market item, matching the real handler: team_id/team_name inline and a
+// `sold_count` counted from the purchase ledger. There is no "bought by me" —
+// the buyer is the AI Customer, not a session.
+function getMarketItems(db: MockDb, round_id: RoundId): ApiMarketResponse {
   const items = Object.values(db.batches)
     .filter(b => b.round_id === round_id && b.status === 'RATED')
     .flatMap(b => b.jokes.map(j => ({ batch: b, joke: j })))
     .filter(({ joke }) => Boolean(joke.is_published))
     .map(({ batch, joke }) => {
-      const key = `${round_id}:${buyer_user_id}:${joke.joke_id}`;
-      const purchaseId = db.purchaseIndex[key];
-      const purchase = purchaseId ? db.purchases[String(purchaseId)] : null;
       const team = db.teams.find(t => t.id === batch.team_id) ?? { id: batch.team_id, name: `Team ${batch.team_id}` };
+      const sold_count = Object.values(db.purchases).reduce((sum, p) => {
+        if (p.round_id !== round_id) return sum;
+        if (p.joke_id !== joke.joke_id) return sum;
+        if (p.returned_at) return sum;
+        return sum + 1;
+      }, 0);
       return {
         joke_id: joke.joke_id,
-        joke_title: (joke as any).joke_title ?? undefined,
         joke_text: joke.joke_text,
-        team,
-        is_bought_by_me: !!purchase && !purchase.returned_at,
-        category: (joke as any).topic ?? undefined,
-      } as any;
+        joke_title: String((joke as any).joke_title ?? ''),
+        team_id: team.id,
+        team_name: team.name,
+        sold_count,
+      };
     });
 
   return { items };
@@ -1168,7 +1174,7 @@ function route(
       const round_id = Number(m[1]) as RoundId;
       const me = ensureMe(db, meUserId);
       if ('ok' in me) return me;
-      const market = getMarketItems(db, round_id, me.user.user_id);
+      const market = getMarketItems(db, round_id);
       return ok(market, 200);
     }
   }

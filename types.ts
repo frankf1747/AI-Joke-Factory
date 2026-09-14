@@ -279,14 +279,24 @@ export interface ApiQcSubmitRatingsResponse {
   published: { count: number; joke_ids: JokeId[] };
 }
 
+/**
+ * GET /v1/rounds/{rid}/market — one published joke.
+ *
+ * FLAT, not nested: the backend emits team_id/team_name inline and there is no
+ * `team` object, no `bought_count` and no `is_bought_by_me` (the AI Customer is
+ * not a session, so "bought by me" has no referent). Mirrors `MarketItem` in
+ * types/api.ts, which is the live-verified transcription of the handler.
+ *
+ * `sold_count` is the only trustworthy sales figure — counted from `purchases`.
+ */
 export interface ApiMarketItem {
   joke_id: JokeId;
-  joke_title?: string;
   joke_text: string;
-  team: Team;
-  is_bought_by_me: boolean;
-  // Newer backends expose how many times a joke has been purchased.
-  bought_count?: number;
+  joke_title: string;
+  team_id: TeamId;
+  team_name: string;
+  sold_count: number;
+  published_at?: string;
 }
 
 export interface ApiMarketResponse {

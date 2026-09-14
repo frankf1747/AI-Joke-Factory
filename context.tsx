@@ -692,10 +692,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     const b = items[i];
                     if (
                       a.joke_id !== b.joke_id ||
-                      a.is_bought_by_me !== b.is_bought_by_me ||
-                      a.team?.id !== b.team?.id ||
-                      Number((a as any).bought_count ?? (a as any).boughtCount ?? 0) !==
-                        Number((b as any).bought_count ?? (b as any).boughtCount ?? 0)
+                      a.team_id !== b.team_id ||
+                      Number(a.sold_count ?? 0) !== Number(b.sold_count ?? 0)
                     ) {
                       return items;
                     }

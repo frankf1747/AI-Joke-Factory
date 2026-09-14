@@ -3009,25 +3009,26 @@ const Instructor: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {(() => {
+                    // The market payload is flat (team_id/team_name/sold_count inline).
+                    // It carries no team-level totals, so there is no "sold / published"
+                    // sub-line to render here.
                     const rows = (marketItems ?? []).map(it => ({
-                      joke_id: Number((it as any).joke_id),
-                      joke_title: String((it as any).joke_title ?? '').trim(),
-                      joke_text: String((it as any).joke_text ?? ''),
-                      team_id: Number((it as any).team?.id ?? 0),
-                      team_name: String((it as any).team?.name ?? ''),
-                      bought_count: Number((it as any).bought_count ?? (it as any).boughtCount ?? 0),
-                      sold_jokes_count: Number((it as any).team?.sold_jokes_count ?? 0),
-                      accepted_jokes: Number((it as any).team?.accepted_jokes ?? 0),
+                      joke_id: Number(it.joke_id),
+                      joke_title: String(it.joke_title ?? '').trim(),
+                      joke_text: String(it.joke_text ?? ''),
+                      team_id: Number(it.team_id ?? 0),
+                      team_name: String(it.team_name ?? ''),
+                      sold_count: Number(it.sold_count ?? 0),
                     }));
 
                     rows.sort((a, b) => {
                       const dir = marketSortDir === 'asc' ? 1 : -1;
                       if (marketSortKey === 'sales') {
                         // Secondary sort by ID desc if sales are equal
-                        if (a.bought_count === b.bought_count) {
+                        if (a.sold_count === b.sold_count) {
                             return b.joke_id - a.joke_id;
                         }
-                        return dir * (a.bought_count - b.bought_count);
+                        return dir * (a.sold_count - b.sold_count);
                       }
                       // Default sort by ID (Newest = desc)
                       return dir * (a.joke_id - b.joke_id);
@@ -3079,12 +3080,9 @@ const Instructor: React.FC = () => {
                             <div>
                               {r.team_name ? r.team_name : `Team ${r.team_id || ''}`}
                             </div>
-                            <div className="text-xs text-gray-400 mt-0.5" title="Team Stats: Sold / Accepted">
-                              Sold: {r.sold_jokes_count}/{r.accepted_jokes}
-                            </div>
                           </td>
                           <td className="px-3 py-2 text-right font-mono text-gray-900 align-top">
-                            {r.bought_count}
+                            {r.sold_count}
                           </td>
                         </tr>
                         );
