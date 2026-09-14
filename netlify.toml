@@ -8,33 +8,26 @@
 [build.environment]
   NODE_VERSION = "20"
 
-  # ---- GOING LIVE: flip ONE value, VITE_USE_MOCK_API, to "false" ----
+  # ---- LIVE against the real backend (2026-09-14) ----
   #
-  # This block is what production actually uses. [build.environment] overrides
-  # .env.local for the Netlify build, so these two lines — not .env.local —
-  # decide what the deployed app talks to.
+  # This block is what production uses. [build.environment] overrides .env.local
+  # for the Netlify build, so these two lines — not .env.local — decide what the
+  # deployed app talks to.
   #
-  # The API URL below is the real Azure Container App and is correct.
+  # The Azure Container App is running the phase-3B backend: /marketing/.../split
+  # and /unsplit exist, raw_text submissions parse, and migration 0002 (the
+  # batches.raw_text columns) is applied. Verified before this was flipped.
   #
-  # DO NOT flip VITE_USE_MOCK_API to "false" until the backend running there has
-  # the phase-3B changes (raw_text + split/unsplit). As of 2026-09-14 it does
-  # NOT: it still rejects a raw_text submission with 400 "invalid payload" and
-  # 404s on /split. Pointing the app at it in that state breaks the core
-  # workflow — the Joke Maker cannot submit and Marketing cannot split.
+  # To go back to the offline demo — no backend, in-browser mock, DEV
+  # role-switcher visible — set VITE_USE_MOCK_API back to "true".
   #
-  # One-line readiness check (404 = not deployed yet, anything else = ready):
+  # If the app breaks after a backend deploy, check this first:
   #   curl -s -o /dev/null -w "%{http_code}\n" -X POST \
   #     -H 'Content-Type: application/json' -d '{"jokes":["a"]}' \
   #     "$VITE_API_BASE_URL/v1/marketing/batches/1/split"
-  #
-  # Also confirm APP_LLM_BASE_URL and APP_LLM_API_KEY are set on the Container
-  # App. Without them the backend silently uses the STUB classifier, which
-  # scores every joke identically — the game will appear to work while the
-  # whole reverse-engineering exercise is meaningless.
-  #
-  # While this stays "true" the app runs entirely on the in-browser mock with
-  # the DEV role-switcher visible, which is a fine reviewer demo.
-  VITE_USE_MOCK_API = "true"
+  # 404 means the backend rolled back to a pre-3B image and the Joke Maker's
+  # submit and Marketing's split will both be broken.
+  VITE_USE_MOCK_API = "false"
   VITE_API_BASE_URL = "https://jokefactory-api.whitepebble-2daa4226.westus2.azurecontainerapps.io"
 
 [[redirects]]
