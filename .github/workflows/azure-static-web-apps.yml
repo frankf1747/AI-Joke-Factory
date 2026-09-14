@@ -54,10 +54,17 @@ jobs:
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
           action: 'upload'
-          app_location: '/'
-          output_location: 'dist'
-          # We already built above, with the env vars we want. Letting Oryx build
-          # again would drop them and ship a mock-mode bundle.
+          # We already built above with the env vars we want; Oryx building again
+          # would drop them and ship a mock-mode bundle. But when skip_app_build
+          # is set the action uploads app_location VERBATIM and ignores
+          # output_location — so app_location must BE the built folder.
+          #
+          # Getting this wrong is not a subtle failure: app_location '/' uploads
+          # the repo root, whose index.html points at /index.tsx, and the browser
+          # dies with "Expected a JavaScript-or-Wasm module script but the server
+          # responded with a MIME type of application/octet-stream".
+          app_location: 'dist'
+          output_location: ''
           skip_app_build: true
 
   close_pull_request:
