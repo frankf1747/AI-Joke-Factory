@@ -191,18 +191,16 @@ export function mapBatchFromTeamList(
     jokes,
     submitted_at: teamBatches.submitted_at,
     rated_at: ratedAtRaw,
-    avg_score: teamBatches.avg_score,
-    passes_count: teamBatches.passes_count,
-    feedback: teamBatches.feedback ?? undefined,
-    tagSummary: teamBatches.tag_summary ?? [],
+    // No avg_score / passes_count / feedback / tag_summary: the batch listing
+    // sends none of them. `feedback` and `tagSummary` survive only as local
+    // state, merged back in by the caller from its persisted copy.
+    tagSummary: [],
     // UI compatibility aliases
     id: String(batch_id),
     team: String(team_id),
     round: roundNumber,
     submittedAt,
     ratedAt,
-    avgRating: teamBatches.avg_score ?? undefined,
-    acceptedCount: teamBatches.passes_count ?? undefined,
   };
 }
 
@@ -224,17 +222,26 @@ function normalizeInstructorStats(raw: any): ApiInstructorStatsResponse {
     points: Number(item.points ?? item.Points ?? 0),
     total_sales: Number(item.total_sales ?? item.TotalSales ?? 0),
     unsold_jokes: Number(item.unsold_jokes ?? item.UnsoldJokes ?? item.unsoldJokes ?? 0),
-    unaccepted_jokes: Number(item.unaccepted_jokes ?? item.UnacceptedJokes ?? item.unacceptedJokes ?? 0),
-    batches_rated: Number(item.batches_rated ?? item.BatchesRated ?? 0),
+    discarded_jokes: Number(item.discarded_jokes ?? item.DiscardedJokes ?? 0),
+    batches_processed: Number(item.batches_processed ?? item.BatchesProcessed ?? 0),
     profit: Number(item.profit ?? item.Profit ?? 0),
     total_jokes: Number(item.total_jokes ?? item.TotalJokes ?? 0),
-    avg_score_overall: Number(item.avg_score_overall ?? item.AvgScoreOverall ?? 0),
-    accepted_jokes: Number(item.accepted_jokes ?? item.AcceptedJokes ?? 0),
+    published_jokes: Number(item.published_jokes ?? item.PublishedJokes ?? 0),
+  }));
+
+  /* rejection_by_team is NOT on the wire — ports.TeamStats has no rejection
+     series. It is derived here from the leaderboard, whose discarded_jokes and
+     total_jokes are exactly its two inputs, so the "Wasted Jokes" bars render
+     real numbers instead of an array the backend never sends. */
+  const rejection_by_team = normLeaderboard.map((t: ApiInstructorStatsResponse['leaderboard'][number]) => ({
+    team_id: t.team.id,
+    team_name: t.team.name,
+    unaccepted_jokes: t.discarded_jokes,
+    rejection_rate: t.total_jokes > 0 ? t.discarded_jokes / t.total_jokes : 0,
   }));
 
   // Stats API shape varies by backend implementation. Support both naming schemes:
   // - sales_over_time -> cumulative_sales
-  // - batch_size_quality -> batch_quality_by_size
   // - batch_sequence_quality -> learning_curve
   const cumulative_sales = Array.isArray(data.cumulative_sales ?? data.CumulativeSales)
     ? (data.cumulative_sales ?? data.CumulativeSales)
@@ -244,20 +251,11 @@ function normalizeInstructorStats(raw: any): ApiInstructorStatsResponse {
   const unrated_jokes_over_time = Array.isArray(data.unrated_jokes_over_time ?? data.UnratedJokesOverTime)
     ? (data.unrated_jokes_over_time ?? data.UnratedJokesOverTime)
     : [];
-  const batch_quality_by_size = Array.isArray(data.batch_quality_by_size ?? data.BatchQualityBySize)
-    ? (data.batch_quality_by_size ?? data.BatchQualityBySize)
-    : Array.isArray(data.batch_size_quality ?? data.BatchSizeQuality)
-      ? (data.batch_size_quality ?? data.BatchSizeQuality)
-      : [];
   const learning_curve = Array.isArray(data.learning_curve ?? data.LearningCurve)
     ? (data.learning_curve ?? data.LearningCurve)
     : Array.isArray(data.batch_sequence_quality ?? data.BatchSequenceQuality)
       ? (data.batch_sequence_quality ?? data.BatchSequenceQuality)
       : [];
-  const output_vs_rejection = Array.isArray(data.output_vs_rejection ?? data.OutputVsRejection) ? (data.output_vs_rejection ?? data.OutputVsRejection) : [];
-  const rejection_by_team = Array.isArray(data.rejection_by_team ?? data.RejectionByTeam) ? (data.rejection_by_team ?? data.RejectionByTeam) : [];
-  const revenue_vs_acceptance = Array.isArray(data.revenue_vs_acceptance ?? data.RevenueVsAcceptance) ? (data.revenue_vs_acceptance ?? data.RevenueVsAcceptance) : [];
-
   const mapKeys = (arr: any[], keyMap: Record<string, string>) =>
     arr.map((item: any) => {
       const out: any = {};
@@ -301,20 +299,6 @@ function normalizeInstructorStats(raw: any): ApiInstructorStatsResponse {
       timestamp: 'timestamp',
       Timestamp: 'timestamp',
     }),
-    batch_quality_by_size: mapKeys(batch_quality_by_size, {
-      batch_id: 'batch_id',
-      BatchId: 'batch_id',
-      team_id: 'team_id',
-      TeamId: 'team_id',
-      team_name: 'team_name',
-      TeamName: 'team_name',
-      submitted_at: 'submitted_at',
-      SubmittedAt: 'submitted_at',
-      batch_size: 'batch_size',
-      BatchSize: 'batch_size',
-      avg_score: 'avg_score',
-      AvgScore: 'avg_score',
-    }),
     learning_curve: mapKeys(learning_curve, {
       team_id: 'team_id',
       TeamId: 'team_id',
@@ -325,42 +309,7 @@ function normalizeInstructorStats(raw: any): ApiInstructorStatsResponse {
       avg_score: 'avg_score',
       AvgScore: 'avg_score',
     }),
-    output_vs_rejection: mapKeys(output_vs_rejection, {
-      team_id: 'team_id',
-      TeamId: 'team_id',
-      team_name: 'team_name',
-      TeamName: 'team_name',
-      total_jokes: 'total_jokes',
-      TotalJokes: 'total_jokes',
-      rated_jokes: 'rated_jokes',
-      RatedJokes: 'rated_jokes',
-      accepted_jokes: 'accepted_jokes',
-      AcceptedJokes: 'accepted_jokes',
-      rejection_rate: 'rejection_rate',
-      RejectionRate: 'rejection_rate',
-    }),
-    rejection_by_team: mapKeys(rejection_by_team, {
-      team_id: 'team_id',
-      TeamId: 'team_id',
-      team_name: 'team_name',
-      TeamName: 'team_name',
-      unaccepted_jokes: 'unaccepted_jokes',
-      UnacceptedJokes: 'unaccepted_jokes',
-      rejection_rate: 'rejection_rate',
-      RejectionRate: 'rejection_rate',
-    }),
-    revenue_vs_acceptance: mapKeys(revenue_vs_acceptance, {
-      team_id: 'team_id',
-      TeamId: 'team_id',
-      team_name: 'team_name',
-      TeamName: 'team_name',
-      total_sales: 'total_sales',
-      TotalSales: 'total_sales',
-      accepted_jokes: 'accepted_jokes',
-      AcceptedJokes: 'accepted_jokes',
-      acceptance_rate: 'acceptance_rate',
-      AcceptanceRate: 'acceptance_rate',
-    }),
+    rejection_by_team,
   };
 }
 

@@ -75,7 +75,7 @@ const Instructor: React.FC = () => {
   const [hiddenCharts, setHiddenCharts] = useState<ChartKey[]>([]);
   const [deletingUserIds, setDeletingUserIds] = useState<string[]>([]);
   const [leaderboardSortKey, setLeaderboardSortKey] = useState<
-    'team' | 'rated_batches' | 'accepted_jokes' | 'unaccepted_jokes' | 'unsold_jokes' | 'total_jokes' | 'avg_score_overall' | 'total_sales' | 'profit'
+    'team' | 'batches_processed' | 'published_jokes' | 'discarded_jokes' | 'unsold_jokes' | 'total_jokes' | 'total_sales' | 'profit'
   >('profit');
   const [leaderboardSortDir, setLeaderboardSortDir] = useState<'asc' | 'desc'>('desc');
   const [rankUpTeamIds, setRankUpTeamIds] = useState<string[]>([]);
@@ -234,12 +234,11 @@ const Instructor: React.FC = () => {
       return {
         team_id: teamId,
         team_name: teamName,
-        rated_batches: Number(row.batches_rated ?? 0),
-        accepted_jokes: Number(row.accepted_jokes ?? 0),
-        unaccepted_jokes: Number(row.unaccepted_jokes ?? 0),
+        batches_processed: Number(row.batches_processed ?? 0),
+        published_jokes: Number(row.published_jokes ?? 0),
+        discarded_jokes: Number(row.discarded_jokes ?? 0),
         unsold_jokes: Number(row.unsold_jokes ?? 0),
         total_jokes: Number(row.total_jokes ?? 0),
-        avg_score_overall: Number(row.avg_score_overall ?? 0),
         total_sales: Number(row.total_sales ?? 0),
         profit: Number(row.profit ?? 0),
       };
@@ -261,28 +260,27 @@ const Instructor: React.FC = () => {
   // Metrics that must be displayed as integers (joke counts, batches, sales)
   const integerMetricKeys = new Set([
     'total_sales',
-    'accepted_jokes',
-    'unaccepted_jokes',
+    'published_jokes',
+    'discarded_jokes',
     'unsold_jokes',
     'total_jokes',
-    'rated_batches',
+    'batches_processed',
   ]);
 
   const scatterBaseMetrics = [
     { key: 'total_sales', label: 'Total Sales' },
-    { key: 'accepted_jokes', label: 'Accepted Jokes' },
-    { key: 'unaccepted_jokes', label: 'Wasted Jokes' },
+    { key: 'published_jokes', label: 'Published Jokes' },
+    { key: 'discarded_jokes', label: 'Wasted Jokes' },
     { key: 'unsold_jokes', label: 'Unsold Jokes' },
     { key: 'total_jokes', label: 'Total Jokes' },
-    { key: 'rated_batches', label: 'Rated Batches' },
-    { key: 'avg_score_overall', label: 'Avg Score' },
+    { key: 'batches_processed', label: 'Processed Batches' },
     { key: 'profit', label: 'Profit' },
   ];
   const scatterRatioMetrics = [
     { key: 'ratio:waste_rate', label: 'Waste Rate (Wasted / Total)' },
-    { key: 'ratio:accept_rate', label: 'Accept Rate (Accepted / Total)' },
-    { key: 'ratio:marketing_efficiency', label: 'Mkt Efficiency (Sales / Accepted)' },
-    { key: 'ratio:marketing_inefficiency', label: 'Mkt Inefficiency (Unsold / Accepted)' },
+    { key: 'ratio:accept_rate', label: 'Publish Rate (Published / Total)' },
+    { key: 'ratio:marketing_efficiency', label: 'Mkt Efficiency (Sales / Published)' },
+    { key: 'ratio:marketing_inefficiency', label: 'Mkt Inefficiency (Unsold / Published)' },
   ];
   const scatterMetrics = [...scatterBaseMetrics, ...scatterRatioMetrics];
 
@@ -298,18 +296,18 @@ const Instructor: React.FC = () => {
       switch (key) {
         case 'ratio:waste_rate': {
           const den = pick('total_jokes');
-          return den === 0 ? 0 : pick('unaccepted_jokes') / den;
+          return den === 0 ? 0 : pick('discarded_jokes') / den;
         }
         case 'ratio:accept_rate': {
           const den = pick('total_jokes');
-          return den === 0 ? 0 : pick('accepted_jokes') / den;
+          return den === 0 ? 0 : pick('published_jokes') / den;
         }
         case 'ratio:marketing_efficiency': {
-          const den = pick('accepted_jokes');
+          const den = pick('published_jokes');
           return den === 0 ? 0 : pick('total_sales') / den;
         }
         case 'ratio:marketing_inefficiency': {
-          const den = pick('accepted_jokes');
+          const den = pick('published_jokes');
           return den === 0 ? 0 : pick('unsold_jokes') / den;
         }
         default:
@@ -426,22 +424,6 @@ const Instructor: React.FC = () => {
     );
   };
 
-  const avgQualityByTeamId = useMemo(() => {
-    const out: Record<string, number> = {};
-    leaderboardBase.forEach(t => {
-      out[String(t.team_id)] = Number(t.avg_score_overall ?? 0);
-    });
-    return out;
-  }, [leaderboardBase]);
-
-  const avgQualityR1ByTeamId = useMemo(() => {
-    const out: Record<string, number> = {};
-    (statsR1?.leaderboard ?? []).forEach(row => {
-      out[String(row.team.id)] = Number(row.avg_score_overall ?? 0);
-    });
-    return out;
-  }, [statsR1?.leaderboard]);
-
   const wasteChartData = useMemo(() => {
     const r1Data = (statsR1?.rejection_by_team as any[]) ?? [];
     const r2Data = (statsR2?.rejection_by_team as any[]) ?? [];
@@ -474,14 +456,6 @@ const Instructor: React.FC = () => {
       };
     });
   }, [statsR1?.rejection_by_team, statsR2?.rejection_by_team, teamNames]);
-  const avgQualityR2ByTeamId = useMemo(() => {
-    const out: Record<string, number> = {};
-    (statsR2?.leaderboard ?? []).forEach(row => {
-      out[String(row.team.id)] = Number(row.avg_score_overall ?? 0);
-    });
-    return out;
-  }, [statsR2?.leaderboard]);
-
   // If the backend doesn't provide sales-over-time, build a local event series based on changes
   // in `leaderboard.total_sales` (which moves up/down on buy/return).
   useEffect(() => {
@@ -841,14 +815,14 @@ const Instructor: React.FC = () => {
                   type="button"
                   className="inline-flex items-center hover:text-gray-800"
                   onClick={() => {
-                    setLeaderboardSortKey('rated_batches');
-                    setLeaderboardSortDir(prev => (leaderboardSortKey === 'rated_batches' ? (prev === 'asc' ? 'desc' : 'asc') : 'desc'));
+                    setLeaderboardSortKey('batches_processed');
+                    setLeaderboardSortDir(prev => (leaderboardSortKey === 'batches_processed' ? (prev === 'asc' ? 'desc' : 'asc') : 'desc'));
                   }}
-                  title="Sort by Rated Batches"
+                  title="Sort by Processed Batches"
                 >
-                  <span>Rated Batches</span>
+                  <span>Processed Batches</span>
                   <span className="ml-1 w-3 text-center">
-                    {leaderboardSortKey === 'rated_batches' ? (leaderboardSortDir === 'asc' ? '▲' : '▼') : ''}
+                    {leaderboardSortKey === 'batches_processed' ? (leaderboardSortDir === 'asc' ? '▲' : '▼') : ''}
                   </span>
                 </button>
               </th>
@@ -857,14 +831,14 @@ const Instructor: React.FC = () => {
                   type="button"
                   className="inline-flex items-center hover:text-gray-800"
                   onClick={() => {
-                    setLeaderboardSortKey('accepted_jokes');
-                    setLeaderboardSortDir(prev => (leaderboardSortKey === 'accepted_jokes' ? (prev === 'asc' ? 'desc' : 'asc') : 'desc'));
+                    setLeaderboardSortKey('published_jokes');
+                    setLeaderboardSortDir(prev => (leaderboardSortKey === 'published_jokes' ? (prev === 'asc' ? 'desc' : 'asc') : 'desc'));
                   }}
-                  title="Sort by Accepted Jokes"
+                  title="Sort by Published Jokes"
                 >
-                  <span>Accepted Jokes</span>
+                  <span>Published Jokes</span>
                   <span className="ml-1 w-3 text-center">
-                    {leaderboardSortKey === 'accepted_jokes' ? (leaderboardSortDir === 'asc' ? '▲' : '▼') : ''}
+                    {leaderboardSortKey === 'published_jokes' ? (leaderboardSortDir === 'asc' ? '▲' : '▼') : ''}
                   </span>
                 </button>
               </th>
@@ -873,14 +847,14 @@ const Instructor: React.FC = () => {
                   type="button"
                   className="inline-flex items-center hover:text-gray-800"
                   onClick={() => {
-                  setLeaderboardSortKey('unaccepted_jokes');
-                  setLeaderboardSortDir(prev => (leaderboardSortKey === 'unaccepted_jokes' ? (prev === 'asc' ? 'desc' : 'asc') : 'desc'));
+                  setLeaderboardSortKey('discarded_jokes');
+                  setLeaderboardSortDir(prev => (leaderboardSortKey === 'discarded_jokes' ? (prev === 'asc' ? 'desc' : 'asc') : 'desc'));
                   }}
                   title="Sort by Wasted Jokes"
                 >
                   <span>Wasted Jokes</span>
                   <span className="ml-1 w-3 text-center">
-                    {leaderboardSortKey === 'unaccepted_jokes' ? (leaderboardSortDir === 'asc' ? '▲' : '▼') : ''}
+                    {leaderboardSortKey === 'discarded_jokes' ? (leaderboardSortDir === 'asc' ? '▲' : '▼') : ''}
                   </span>
                 </button>
               </th>
@@ -921,22 +895,6 @@ const Instructor: React.FC = () => {
                   type="button"
                   className="inline-flex items-center hover:text-gray-800"
                   onClick={() => {
-                    setLeaderboardSortKey('avg_score_overall');
-                    setLeaderboardSortDir(prev => (leaderboardSortKey === 'avg_score_overall' ? (prev === 'asc' ? 'desc' : 'asc') : 'desc'));
-                  }}
-                  title="Sort by Average Score"
-                >
-                  <span>Avg Score</span>
-                  <span className="ml-1 w-3 text-center">
-                    {leaderboardSortKey === 'avg_score_overall' ? (leaderboardSortDir === 'asc' ? '▲' : '▼') : ''}
-                  </span>
-                </button>
-              </th>
-              <th className="px-3 py-2 text-right font-medium text-gray-500">
-                <button
-                  type="button"
-                  className="inline-flex items-center hover:text-gray-800"
-                  onClick={() => {
                     setLeaderboardSortKey('total_sales');
                     setLeaderboardSortDir(prev => (leaderboardSortKey === 'total_sales' ? (prev === 'asc' ? 'desc' : 'asc') : 'desc'));
                   }}
@@ -969,7 +927,7 @@ const Instructor: React.FC = () => {
           <tbody className="divide-y divide-gray-100">
             {leaderboardSorted.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-3 py-6 text-center text-gray-400 italic">
+                <td colSpan={9} className="px-3 py-6 text-center text-gray-400 italic">
                   No leaderboard data yet.
                 </td>
               </tr>
@@ -981,12 +939,11 @@ const Instructor: React.FC = () => {
               >
                 <td className="px-3 py-2 font-mono text-gray-700">{idx + 1}</td>
                 <td className="px-3 py-2 font-semibold text-gray-900">{row.team_name}</td>
-                <td className="px-3 py-2 text-right text-gray-800">{row.rated_batches}</td>
-                <td className="px-3 py-2 text-right text-gray-800">{row.accepted_jokes}</td>
-                <td className="px-3 py-2 text-right text-gray-800">{row.unaccepted_jokes}</td>
+                <td className="px-3 py-2 text-right text-gray-800">{row.batches_processed}</td>
+                <td className="px-3 py-2 text-right text-gray-800">{row.published_jokes}</td>
+                <td className="px-3 py-2 text-right text-gray-800">{row.discarded_jokes}</td>
                 <td className="px-3 py-2 text-right text-gray-800">{row.unsold_jokes}</td>
                 <td className="px-3 py-2 text-right text-gray-800">{row.total_jokes}</td>
-                <td className="px-3 py-2 text-right text-gray-800">{row.avg_score_overall.toFixed(1)}</td>
                 <td className="px-3 py-2 text-right text-gray-800">{row.total_sales}</td>
                 <td className={`px-3 py-2 text-right font-bold ${Number(row.profit) < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
                   {Number(row.profit).toFixed(2)}
@@ -998,6 +955,19 @@ const Instructor: React.FC = () => {
       </div>
     );
   };
+
+  /* An axis drawn over an absent series reads as a measured zero — "nobody sold
+     anything" rather than "the backend does not send this". These three series
+     ARE rendered, so the charts stay; when the array is absent we say so instead
+     of drawing an empty grid. */
+  const seriesUnavailable = (what: string) => (
+    <div className="flex h-full w-full items-center justify-center px-6 text-center">
+      <div>
+        <div className="text-sm font-semibold text-gray-500">Not available yet</div>
+        <div className="mt-1 text-xs text-gray-400">{what}</div>
+      </div>
+    </div>
+  );
 
   // Render Charts Helper
   const renderChart = (type: string, opts?: { isExpanded?: boolean }) => {
@@ -1016,6 +986,9 @@ const Instructor: React.FC = () => {
             }
             if (teamsWithSalesR2.size === 0 && config.round === 2 && localSalesOverTime.length > 0) {
               localSalesOverTime.forEach(ev => teamsWithSalesR2.add(String(ev.team_id)));
+            }
+            if (teamsWithSalesR1.size === 0 && teamsWithSalesR2.size === 0) {
+              return seriesUnavailable('No sales series for this round yet.');
             }
             const seriesDisplayName = (rawKey: string) => {
               const isR1 = rawKey.startsWith('r1-');
@@ -1207,16 +1180,6 @@ const Instructor: React.FC = () => {
                         const roundLabel = isR1 ? 'Round 1' : isR2 ? 'Round 2' : '';
                         const teamName = String(teamNames[teamId] ?? `Team ${teamId}`);
                         const sales = Number(p.value ?? 0);
-                        const avg =
-                          isR1
-                            ? avgQualityR1ByTeamId[teamId]
-                            : isR2
-                              ? avgQualityR2ByTeamId[teamId]
-                              : salesTab === 'R1'
-                                ? avgQualityR1ByTeamId[teamId]
-                                : salesTab === 'R2'
-                                  ? avgQualityR2ByTeamId[teamId]
-                                  : avgQualityByTeamId[teamId];
                         const label = Number(props?.label);
                         return (
                           <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-lg">
@@ -1227,12 +1190,6 @@ const Instructor: React.FC = () => {
                               <div className="flex justify-between gap-4">
                                 <span className="font-medium">Sales</span>
                                 <span className="font-mono font-bold text-emerald-700">{Number.isFinite(sales) ? sales : 0}</span>
-                              </div>
-                              <div className="flex justify-between gap-4">
-                                <span className="font-medium">Avg Score</span>
-                                <span className="font-mono font-bold text-indigo-700">
-                                  {Number.isFinite(avg) ? avg.toFixed(1) : '—'}
-                                </span>
                               </div>
                             </div>
                           </div>
@@ -1342,6 +1299,13 @@ const Instructor: React.FC = () => {
             const pointsR2 = statsR2?.learning_curve ?? [];
             const teamsWithSeqR1 = new Set<string>(pointsR1.map((p: any) => String(p.team_id)));
             const teamsWithSeqR2 = new Set<string>(pointsR2.map((p: any) => String(p.team_id)));
+            if (
+              teamsWithSeqR1.size === 0 &&
+              teamsWithSeqR2.size === 0 &&
+              (instructorStats?.learning_curve?.length ?? 0) === 0
+            ) {
+              return seriesUnavailable('The backend sends no per-batch quality series.');
+            }
 
             const seriesDisplayName = (rawKey: string) => {
               const isR1 = rawKey.startsWith('r1-');
@@ -1661,6 +1625,9 @@ const Instructor: React.FC = () => {
             }
             if (teamsWithUnratedR2.size === 0 && config.round === 2 && fallbackEvents.length > 0) {
               fallbackEvents.forEach((e: any) => teamsWithUnratedR2.add(String(e.team_id)));
+            }
+            if (teamsWithUnratedR1.size === 0 && teamsWithUnratedR2.size === 0) {
+              return seriesUnavailable('The backend sends no queue-depth series.');
             }
 
             const seriesDisplayName = (rawKey: string) => {

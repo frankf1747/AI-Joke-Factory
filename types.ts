@@ -91,8 +91,6 @@ export interface Batch {
 
   submitted_at?: string;
   rated_at?: string;
-  avg_score?: number | null;
-  passes_count?: number | null;
 
   // UI compatibility aliases
   id: string;
@@ -100,8 +98,8 @@ export interface Batch {
   round: number;
   submittedAt?: number;
   ratedAt?: number;
-  avgRating?: number;
-  acceptedCount?: number;
+  /* Local-only, never from the wire: Marketing types this into its own panel and
+     it is persisted client-side for the team's own discussion. */
   feedback?: string;
   tagSummary?: Array<{ tag: string; count: number }>;
 }
@@ -211,10 +209,9 @@ export interface ApiTeamSummaryResponse {
   total_sales: number;
   profit?: number;
   batches_created: number;
-  batches_rated: number;
-  accepted_jokes: number;
-  avg_score_overall: number;
-  unrated_batches: number;
+  batches_processed: number;
+  published_jokes: number;
+  unprocessed_batches: number;
   unsold_jokes?: number;
   jokes_created?: number;
   jokes_published?: number;
@@ -227,10 +224,9 @@ export interface ApiTeamBatchesResponse {
     status: BatchStatus;
     submitted_at: string;
     rated_at?: string;
-    avg_score: number | null;
-    passes_count: number | null;
-    feedback?: string | null;
-    tag_summary?: Array<{ tag: string; count: number }>;
+    // No avg_score / passes_count / feedback / tag_summary: V2 removed ratings,
+    // and the batch listing (handler/batch.go) never carried a feedback column
+    // or a tag summary in the first place.
     jokes?: Array<{ joke_id: JokeId; joke_text: string }>;
   }>;
 }
@@ -337,12 +333,11 @@ export interface ApiInstructorStatsResponse {
     points: number;
     total_sales: number;
     unsold_jokes: number;
-    unaccepted_jokes: number;
-    batches_rated: number;
+    discarded_jokes: number;
+    batches_processed: number;
     profit: number;
     total_jokes: number;
-    avg_score_overall: number;
-    accepted_jokes: number;
+    published_jokes: number;
   }>;
   cumulative_sales: Array<{
     event_index: number;
@@ -358,40 +353,20 @@ export interface ApiInstructorStatsResponse {
     team_name: string;
     queue_count: number;
   }>;
-  batch_quality_by_size: Array<{
-    batch_id: BatchId;
-    team_id: TeamId;
-    team_name: string;
-    submitted_at: string;
-    batch_size: number;
-    avg_score: number;
-  }>;
   learning_curve: Array<{
     team_id: TeamId;
     team_name: string;
     batch_order: number;
     avg_score: number;
   }>;
-  output_vs_rejection: Array<{
-    team_id: TeamId;
-    team_name: string;
-    total_jokes: number;
-    rated_jokes: number;
-    accepted_jokes: number;
-    rejection_rate: number;
-  }>;
+  /* DERIVED, not from the wire. The backend sends no rejection series, but the
+     "Wasted Jokes" bars only need discarded_jokes / total_jokes, and both are on
+     the leaderboard — so context.tsx computes this from it. */
   rejection_by_team: Array<{
     team_id: TeamId;
     team_name: string;
     unaccepted_jokes: number;
     rejection_rate: number;
-  }>;
-  revenue_vs_acceptance: Array<{
-    team_id: TeamId;
-    team_name: string;
-    total_sales: number;
-    accepted_jokes: number;
-    acceptance_rate: number;
   }>;
 }
 

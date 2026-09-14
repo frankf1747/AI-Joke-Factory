@@ -318,9 +318,6 @@ function computeTeamStats(db: MockDb, team_id: TeamId) {
   const rated = teamBatches.filter(b => b.status === 'RATED');
   const batches_rated = rated.length;
   const accepted_jokes = rated.reduce((sum, b) => sum + (b.passes_count ?? 0), 0);
-  const avg_score_overall = rated.length
-    ? rated.reduce((sum, b) => sum + (b.avg_score ?? 0), 0) / rated.length
-    : 0;
   const total_sales = Object.values(db.purchases).reduce((sum, p) => {
     if (p.team_id !== team_id) return sum;
     if (p.returned_at) return sum;
@@ -342,7 +339,6 @@ function computeTeamStats(db: MockDb, team_id: TeamId) {
     batches_created,
     batches_rated,
     accepted_jokes,
-    avg_score_overall,
     unrated_batches,
     jokes_created,
     jokes_published,
@@ -585,15 +581,6 @@ function route(
         };
       });
 
-      const batch_quality_by_size: ApiInstructorStatsResponse['batch_quality_by_size'] = ratedBatches.map(b => ({
-        batch_id: b.batch_id,
-        team_id: b.team_id,
-        team_name: teamNameById.get(b.team_id) || `Team ${b.team_id}`,
-        submitted_at: b.submitted_at,
-        batch_size: b.jokes.length,
-        avg_score: b.avg_score ?? 0,
-      }));
-
       const learning_curve: ApiInstructorStatsResponse['learning_curve'] = db.teams.flatMap(t => {
         const teamRated = ratedBatches
           .filter(b => b.team_id === t.id)
@@ -606,43 +593,6 @@ function route(
         }));
       });
 
-      const ratedJokesByTeam: Record<string, number> = {};
-      ratedBatches.forEach(b => {
-        ratedJokesByTeam[String(b.team_id)] = (ratedJokesByTeam[String(b.team_id)] ?? 0) + b.jokes.length;
-      });
-
-      const totalJokesByTeam: Record<string, number> = {};
-      allBatches.forEach(b => {
-        totalJokesByTeam[String(b.team_id)] = (totalJokesByTeam[String(b.team_id)] ?? 0) + b.jokes.length;
-      });
-
-      const output_vs_rejection: ApiInstructorStatsResponse['output_vs_rejection'] = db.teams.map(t => {
-        const rated_jokes = ratedJokesByTeam[String(t.id)] ?? 0;
-        const accepted_jokes = computeTeamStats(db, t.id).accepted_jokes;
-        const rejection_rate = rated_jokes > 0 ? Math.max(0, (rated_jokes - accepted_jokes) / rated_jokes) : 0;
-        return {
-          team_id: t.id,
-          team_name: t.name,
-          total_jokes: totalJokesByTeam[String(t.id)] ?? 0,
-          rated_jokes,
-          accepted_jokes,
-          rejection_rate,
-        };
-      });
-
-      const revenue_vs_acceptance: ApiInstructorStatsResponse['revenue_vs_acceptance'] = db.teams.map(t => {
-        const rated_jokes = ratedJokesByTeam[String(t.id)] ?? 0;
-        const s = computeTeamStats(db, t.id);
-        const acceptance_rate = rated_jokes > 0 ? Math.max(0, s.accepted_jokes / rated_jokes) : 0;
-        return {
-          team_id: t.id,
-          team_name: t.name,
-          total_sales: s.total_sales,
-          accepted_jokes: s.accepted_jokes,
-          acceptance_rate,
-        };
-      });
-
       const resp: ApiInstructorStatsResponse = {
         round_id,
         leaderboard: teamsStats.map((t, idx) => ({
@@ -650,15 +600,11 @@ function route(
           team: t.team,
           points: t.points,
           total_sales: t.total_sales,
-          batches_rated: t.batches_rated,
-          avg_score_overall: t.avg_score_overall,
-          accepted_jokes: t.accepted_jokes,
+          batches_processed: t.batches_rated,
+          published_jokes: t.accepted_jokes,
         })),
         cumulative_sales,
-        batch_quality_by_size,
         learning_curve,
-        output_vs_rejection,
-        revenue_vs_acceptance,
       };
       return ok(resp, 200);
     }
@@ -805,10 +751,9 @@ function route(
         points,
         total_sales: stats.total_sales,
         batches_created: stats.batches_created,
-        batches_rated: stats.batches_rated,
-        accepted_jokes: stats.accepted_jokes,
-        avg_score_overall: stats.avg_score_overall,
-        unrated_batches: stats.unrated_batches,
+        batches_processed: stats.batches_rated,
+        published_jokes: stats.accepted_jokes,
+        unprocessed_batches: stats.unrated_batches,
         unsold_jokes: stats.unsold_jokes,
         jokes_created: stats.jokes_created,
         jokes_published: stats.jokes_published,
