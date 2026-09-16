@@ -11,3 +11,19 @@ __pycache__/
 .idea/
 # macOS
 .DS_Store
+
+# Playwright (Layer 3 e2e)
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
+# e2e run artifacts (report.json, timings.csv, scores.csv)
+scripts/e2e/.results/
+
+# Build output. NEVER commit this. The SWA workflow runs `npm run build` and then
+# uploads dist/ verbatim (skip_app_build: true), so a committed dist/ is only ever
+# consulted when something skips the build — and the stale copy that lived here
+# was a MOCK build pointed at a decommissioned Render backend. Shipping it looks
+# perfectly healthy and talks to no backend at all.
+dist/

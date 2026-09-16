@@ -39,9 +39,11 @@ export const teamApi = {
    *  header" without it (handler/customer.go:25 -> handler/session.go:101-106),
    *  verified live 2026-09-13. See feedback() above.
    *
-   *  This is also the ONLY endpoint with a real sold_count. The same joke reads
-   *  0 in batches() and its true sales figure here — see the notes on
-   *  MarketItem.sold_count and TeamBatchJoke.sold_count in types/api.ts. */
+   *  NOT the only endpoint with a real sold_count any more. It was at backend
+   *  commit 8f9dfff — the same joke read 0 in batches() and its true figure
+   *  here — but at 824655a the batch listing runs the identical `purchases`
+   *  aggregate, so the two agree. See the notes on MarketItem.sold_count and
+   *  TeamBatchJoke.sold_count in types/api.ts before writing either off. */
   market(roundId: number) {
     return apiRequest<MarketResponse>(`/v1/rounds/${roundId}/market`);
   },

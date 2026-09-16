@@ -159,12 +159,18 @@ describe('session', () => {
 // ---- marketing -------------------------------------------------------------
 
 describe('marketing', () => {
-  it('unwraps the queue payload', async () => {
+  /** A SPLIT batch: raw_text null, jokes populated. handler/marketing.go:92-94
+   *  says the two states are mutually exclusive and both explicit, so raw_text
+   *  is the discriminator — not jokes.length. CORRECTED 2026-09-16: this
+   *  literal predated raw_text and pinned a shape the backend no longer
+   *  sends. */
+  it('unwraps the queue payload for a split batch', async () => {
     const body: Wrapped<MarketingQueueNextResponse> = {
       data: {
         batch: {
           batch_id: 501, round_id: 1, team_id: 3, status: 'SUBMITTED',
           submitted_at: '2026-01-12T10:20:00Z', locked_at: '2026-01-12T10:22:00Z', locked_by: 15,
+          raw_text: null,
         },
         jokes: [{ joke_id: 9101, joke_text: 'a' }, { joke_id: 9102, joke_text: 'b' }],
         queue_size: 4,
@@ -173,8 +179,31 @@ describe('marketing', () => {
     stub(body);
     const res = await marketingApi.queueNext(1);
     expect(res.batch?.batch_id).toBe(501);
+    expect(res.batch?.raw_text).toBeNull();
     expect(res.jokes).toHaveLength(2);
     expect(res.queue_size).toBe(4);
+  });
+
+  /** An UNSPLIT batch: raw_text a blob, jokes `[]`. The joke ids do not exist
+   *  yet — POST .../split assigns them (usecase/marketing.go:72-74). Pinned
+   *  because a marketing screen that branches on jokes.length alone cannot
+   *  tell this apart from a split batch whose jokes all went missing. */
+  it('unwraps the queue payload for an unsplit raw batch', async () => {
+    const body: Wrapped<MarketingQueueNextResponse> = {
+      data: {
+        batch: {
+          batch_id: 502, round_id: 1, team_id: 3, status: 'SUBMITTED',
+          submitted_at: '2026-01-12T10:20:00Z', locked_at: '2026-01-12T10:22:00Z', locked_by: 15,
+          raw_text: 'one joke. then another joke. then a third joke.',
+        },
+        jokes: [],
+        queue_size: 1,
+      },
+    };
+    stub(body);
+    const res = await marketingApi.queueNext(1);
+    expect(res.batch?.raw_text).not.toBeNull();
+    expect(res.jokes).toEqual([]);
   });
 
   it('handles an empty queue', async () => {
@@ -276,6 +305,37 @@ describe('team', () => {
     const spy = stub(body);
     await teamApi.submitBatch(1, { team_id: 3, jokes: ['one', 'two'] });
     expect(sentBody(spy).jokes).toEqual(['one', 'two']);
+    expect(sentBody(spy)).not.toHaveProperty('raw_text');
+  });
+
+  /** ADDED 2026-09-16 with the raw_text arm (dto/models.go:15-19).
+   *
+   *  EXACTLY ONE OF jokes AND raw_text, enforced in BatchService.Submit
+   *  (usecase/batch.go:31-39) rather than by a binding tag — both is a 400
+   *  "supply either jokes or raw_text, not both", neither is a 400 "either
+   *  jokes or raw_text required". BatchSubmitRequest is a union so both
+   *  mistakes are compile errors; what this test pins is that the raw arm puts
+   *  no `jokes` key on the wire, because an empty array alongside raw_text is
+   *  still only one submission but reads as the jokes arm to a human.
+   *
+   *  jokes_count comes back 0 on this arm — handler/batch.go:52 counts
+   *  req.Jokes, and the jokes do not exist until Marketing splits the batch. */
+  it('submits an unsplit raw blob with no jokes key', async () => {
+    const body: Wrapped<BatchSubmitResponse> = {
+      data: {
+        batch: {
+          batch_id: 504, round_id: 1, team_id: 3, status: 'SUBMITTED',
+          submitted_at: '2026-01-12T10:20:00Z', jokes_count: 0,
+        },
+      },
+    };
+    const spy = stub(body);
+    const res = await teamApi.submitBatch(1, {
+      team_id: 3, raw_text: 'a blob of at least twenty runes, unsplit',
+    });
+    expect(sentBody(spy)).not.toHaveProperty('jokes');
+    expect(sentBody(spy).raw_text).toContain('unsplit');
+    expect(res.batch.jokes_count).toBe(0);
   });
 
   it('reads a team batch listing', async () => {
@@ -287,11 +347,13 @@ describe('team', () => {
           jokes: [{
             joke_id: 9101, joke_text: 'a', joke_title: 'Corporate Comedy',
             publish_status: 'PUBLISHED', published_at: '2026-01-12T10:30:00Z', sold_count: 4,
+            first_sold_at: '2026-01-12T10:31:00Z',
           }, {
             // handler/batch.go:86 emits the raw *string, so an untitled joke is
             // null here — unlike the market board, which flattens it to "".
             joke_id: 9102, joke_text: 'b', joke_title: null,
             publish_status: 'DISCARDED', published_at: null, sold_count: 0,
+            first_sold_at: null,
           }],
         }],
       },
@@ -299,6 +361,37 @@ describe('team', () => {
     stub(body);
     const res = await teamApi.batches(1, 3);
     expect(res.batches![0].jokes![1].joke_title).toBeNull();
+    expect(res.batches![0].jokes![1].first_sold_at).toBeNull();
+  });
+
+  /** ADDED 2026-09-16 with first_sold_at (handler/batch.go:90).
+   *
+   *  A RETURNED JOKE READS `sold_count: 0` WITH A NON-NULL first_sold_at, and
+   *  that combination is the only evidence it ever sold. The two figures come
+   *  from two tables on purpose: sold_count counts `purchases`, which holds
+   *  only what customers still own, while first_sold_at is MIN(created_at)
+   *  over the append-only `purchase_events` log where delta = 1
+   *  (batch_repo.go:98-111). A "never sold" filter written as `sold_count === 0`
+   *  will therefore hide jokes that sold and came back. */
+  it('reads a returned joke as sold_count 0 with a surviving first_sold_at', async () => {
+    const body: Wrapped<TeamBatchesResponse> = {
+      data: {
+        batches: [{
+          batch_id: 503, status: 'PROCESSED',
+          submitted_at: '2026-01-12T10:20:00Z', processed_at: '2026-01-12T10:30:00Z',
+          jokes: [{
+            joke_id: 9104, joke_text: 'd', joke_title: 'Sold Then Returned',
+            publish_status: 'PUBLISHED', published_at: '2026-01-12T10:30:00Z',
+            sold_count: 0, first_sold_at: '2026-01-12T10:31:00Z',
+          }],
+        }],
+      },
+    };
+    stub(body);
+    const res = await teamApi.batches(1, 3);
+    const joke = res.batches![0].jokes![0];
+    expect(joke.sold_count).toBe(0);
+    expect(joke.first_sold_at).not.toBeNull();
   });
 
   /** NULLABLE ARRAYS. handler/batch.go:79 declares `var out []gin.H` and :81
@@ -343,7 +436,16 @@ describe('team', () => {
     expect(res.jokes[0]).not.toHaveProperty('dim_fit');
   });
 
-  it('reads the team summary keys', async () => {
+  /** CORRECTED 2026-09-16. handler/round.go:75-76 also emits jokes_created and
+   *  jokes_published; this literal pinned the shape from before they landed.
+   *  They are ADDED ALONGSIDE the older keys, never instead of them — the
+   *  handler's own comment at :73-74 says so — so published_jokes and
+   *  discarded_jokes are still asserted here, and jokes_published is asserted
+   *  to EQUAL published_jokes, which ports/repositories.go:70-71 promises
+   *  ("mirrors PublishedJokes"). Content Waste is jokes_created minus
+   *  jokes_published, and it cannot be derived from the other keys because
+   *  round 2 batch sizes vary. */
+  it('reads the team summary keys, old and new alike', async () => {
     const body: Wrapped<TeamSummaryResponse> = {
       data: {
         team: { id: 3, name: 'Team 3' }, round_id: 1, rank: 1, points: 42,
@@ -351,12 +453,17 @@ describe('team', () => {
         unsold_jokes: 0, sold_jokes_count: 10, batches_created: 4,
         batches_processed: 3, published_jokes: 10, discarded_jokes: 5,
         unprocessed_batches: 1,
+        jokes_created: 15, jokes_published: 10,
       },
     };
     stub(body);
     const res = await teamApi.summary(1, 3);
     expect(res.profit).toBeCloseTo(40.85);
     expect(res.unprocessed_batches).toBe(1);
+    expect(res.published_jokes).toBe(10);
+    expect(res.discarded_jokes).toBe(5);
+    expect(res.jokes_created).toBe(15);
+    expect(res.jokes_published).toBe(res.published_jokes);
   });
 
   /** handler/customer.go:43-62. joke_title is flattened to "" (never null), and

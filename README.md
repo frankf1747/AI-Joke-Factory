@@ -156,28 +156,57 @@ Verify traffic:
 - **`npm test`**: run the Vitest suite
 - **`npm run typecheck`**: `tsc --noEmit` over the whole repo
 
-### `npm run typecheck` is not green — known baseline
+### `npm run typecheck` is green
 
-It exits with **exactly 5 pre-existing errors**. Do not wire it into CI
-expecting a clean run, and do not treat these as something you broke:
-
-| Count | Location | Status |
-|---|---|---|
-| 3 | `services/apiClient.ts:95` | Cleared by the Phase 2 transport rewrite |
-| 2 | `services/mockApi.ts:657`, `:1216` | Out of scope — the mock is untouched until phase 7 |
-
-Treat the count, not the exit code, as the signal: **5 is the baseline, more
-than 5 means a regression.**
-
-Worth knowing: `npx tsc --noEmit --strictNullChecks` reports only **1** error
-(`mockApi.ts:657`) — the flag *fixes* 4 of the 5 above and introduces none. It
-is not enabled because that is a repo-wide behavioural change, but it is a
-cheap win whenever someone wants it, and it is what would make the `| null`
-unions in `types/api.ts` actually enforced rather than advisory.
+It exits with **0 errors**, and CI enforces that. An earlier version of this
+README described a baseline of "exactly 5 pre-existing errors" in
+`services/apiClient.ts` and `services/mockApi.ts`; those were cleared by the
+Phase 2 transport rewrite and the claim outlived the problem. If you see a
+non-zero count, you broke something — it is not a known baseline.
 
 ---
 
-## Deployment (Netlify)
+## End-to-end tests
+
+`npm test` covers units. The suite under `scripts/e2e/` covers the **deployed
+stack**: a real class of 12 teams driven through a full round against the live
+Azure backend, plus a real browser driving the deployed frontend.
+
+| Command | What it does | Safe? |
+|---|---|---|
+| `npm run e2e:preflight` | Read-only coherence check: backend contract, SPA fallback, CORS, and whether the deployed bundle was built against the backend you think it was | **Yes** — GET only, safe during a class |
+| `npm run e2e -- --wipe-db` | The full class: reset, 24 students, 12 teams, concurrent submit/split/publish, waits for async classification, 8 assertions | **NO — destroys all game data** |
+| `npm run e2e:browser` | Playwright drives the deployed UI through Instructor → Joke Maker → Marketing → feedback | Writes to the backend |
+
+Both destructive commands require `E2E_ADMIN_PASSWORD`, and `npm run e2e`
+additionally refuses to start without `--wipe-db`. Set the password for the one
+command rather than exporting it:
+
+```bash
+E2E_ADMIN_PASSWORD='…' npm run e2e -- --wipe-db
+```
+
+**`e2e:preflight` is the one to run before class.** It takes about five seconds,
+touches nothing, and catches the failure that looks healthiest: a frontend
+deployed against the wrong backend, or a mock-mode bundle talking to no backend
+at all.
+
+What the full suite is actually for is the part no unit test can reach — after
+Marketing publishes, the backend enqueues classification on a background worker
+and answers `200` immediately. Whether an Azure LLM call then succeeds, scores
+the jokes and produces sales is invisible to every other kind of test in this
+repo. It is also, historically, the thing that breaks.
+
+---
+
+## Deployment
+
+**Live host: Azure Static Web Apps** (`.github/workflows/azure-static-web-apps.yml`).
+The Netlify config below is retained as a secondary path — if you change the
+backend URL, change it in BOTH places or the two hosts will disagree about which
+API they talk to.
+
+### Netlify
 This repo ships with:
 - **`netlify.toml`**: build/publish settings + environment defaults
 - **`public/_redirects`**: SPA fallback routing

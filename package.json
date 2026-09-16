@@ -9,7 +9,12 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "smoke:api": "tsx scripts/smoke-api.ts"
+    "smoke:api": "tsx scripts/smoke-api.ts",
+    "e2e": "tsx scripts/e2e/run.ts",
+    "e2e:preflight": "tsx scripts/e2e/preflight.ts",
+    "e2e:browser": "playwright test",
+    "e2e:browser:headed": "E2E_HEADED=1 playwright test",
+    "e2e:browser:report": "playwright show-report"
   },
   "dependencies": {
     "lucide-react": "^0.562.0",
@@ -18,6 +23,7 @@
     "recharts": "^3.6.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
     "tsx": "^4.23.13",
