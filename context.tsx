@@ -204,6 +204,54 @@ export function mapBatchFromTeamList(
   };
 }
 
+/**
+ * Roles allowed to read their team's customer feedback.
+ *
+ * Both team seats poll it, because the payload is per TEAM, not per seat:
+ * FeedbackService.Get rejects anyone who is not JM or MARKETING on that team
+ * (core/usecase/feedback.go:44-49). The Joke Maker used to be left out on this
+ * side only — the fetch lived inside the Marketing branch of the poll — so the
+ * people writing the jokes were the one role that never heard what the
+ * customers thought of them.
+ */
+const TEAM_FEEDBACK_ROLES: ReadonlySet<string> = new Set(['JOKE_MAKER', 'QUALITY_CONTROL']);
+
+/**
+ * One poll of GET /v1/rounds/{rid}/teams/{tid}/feedback, shared by both team
+ * branches so their behaviour and failure modes cannot drift apart.
+ *
+ * Returns `undefined` for "nothing to apply" — no team yet, route unsupported,
+ * or a failed request. That is deliberately distinct from `null`: a transient
+ * failure must leave the last good feedback on screen rather than blanking the
+ * panel mid-round.
+ *
+ * `unsupportedRef` latches on a 404 so a backend without the route is asked
+ * once, not every POLL_INTERVAL_MS forever; it is reset wherever the session is
+ * (see the resets below).
+ *
+ * teamApi.feedback unwraps the {data} envelope itself, so callers need no
+ * `?.data ?? x` dance — see apiClient.apiRequest. X-User-Id is required by the
+ * handler and is attached from localStorage by apiRequest.
+ */
+export async function pollTeamFeedback(
+  role: Role,
+  roundId: RoundId | number | null,
+  teamId: TeamId | null,
+  unsupportedRef: { current: boolean },
+): Promise<TeamFeedbackResponse | null | undefined> {
+  if (!TEAM_FEEDBACK_ROLES.has(String(role))) return undefined;
+  if (!roundId || !teamId || unsupportedRef.current) return undefined;
+  try {
+    return (await teamApi.feedback(Number(roundId), teamId)) ?? null;
+  } catch (e) {
+    if (e instanceof ApiError && (e.status === 404 || e.code === 'NOT_FOUND')) {
+      unsupportedRef.current = true;
+    }
+    // ignore; retry on the next poll if supported
+    return undefined;
+  }
+}
+
 function normalizeInstructorStats(raw: any): ApiInstructorStatsResponse {
   const data = raw?.data ?? raw ?? {};
   const normalizeTeam = (t: any) => ({
@@ -1102,6 +1150,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // ignore; action will surface
           }
 
+          /* The team's customer feedback, same route and same guards Marketing
+             uses (see pollTeamFeedback). The Joke Maker reads it to learn which
+             of the 12 criteria their jokes keep missing — the feedback loop the
+             per-batch "Marketing note" modal only ever pretended to close. */
+          const jmFeedback = await pollTeamFeedback(
+            role, effectiveRound, me.assignment.team_id as TeamId, teamFeedbackUnsupportedRef,
+          );
+          if (jmFeedback !== undefined && !cancelled) setTeamFeedback(jmFeedback);
+
           // Round 2: show team popup members when backend says popup is active.
           if (popupActive) {
             // Use /session/me teammates to populate popup (no lobby fetch).
@@ -1235,21 +1292,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const qcTeamId = (me.assignment?.team_id ?? null) as TeamId | null;
 
           /* Marketing's feedback panel. Gated on the user actually being on a
-             team, because the route is per-team. teamApi.feedback unwraps the
-             {data} envelope itself, so this needs no `?.data ?? x` dance — see
-             apiClient.apiRequest. X-User-Id is required by the handler and is
-             attached from localStorage by apiRequest. */
-          if (qcTeamId && !teamFeedbackUnsupportedRef.current) {
-            try {
-              const fb = await teamApi.feedback(effectiveRound, qcTeamId);
-              if (!cancelled) setTeamFeedback(fb ?? null);
-            } catch (e) {
-              if (e instanceof ApiError && (e.status === 404 || e.code === 'NOT_FOUND')) {
-                teamFeedbackUnsupportedRef.current = true;
-              }
-              // ignore; retry on the next poll if supported
-            }
-          }
+             team, because the route is per-team — pollTeamFeedback owns that
+             gate and the 404 latch, and the Joke Maker branch above calls the
+             same helper so both seats poll identically. */
+          const qcFeedback = await pollTeamFeedback(role, effectiveRound, qcTeamId, teamFeedbackUnsupportedRef);
+          if (qcFeedback !== undefined && !cancelled) setTeamFeedback(qcFeedback);
 
           let didHydrateBatchesFromApi = false;
           if (qcTeamId) {

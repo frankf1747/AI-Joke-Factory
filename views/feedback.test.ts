@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toFeedbackRows } from './QualityControl';
+import { toFeedbackRows } from './feedback';
 
 /* Captured live from GET /v1/rounds/{rid}/teams/{tid}/feedback. The backend
    deliberately sends no numbers, no categories and no ideal levels, because
@@ -32,6 +32,29 @@ describe('toFeedbackRows', () => {
   it('survives an unknown dimension id', () => {
     const [row] = toFeedbackRows({ jokes: [{ ...payload.jokes[0], good_dimensions: ['NEW_DIM'] }] } as never);
     expect(row.good[0].label).toBe('NEW_DIM');
+  });
+
+  /* The mapper is now shared by BOTH team seats (views/QualityControl.tsx and
+     views/JokeMaker.tsx render it through components/FeedbackCard). One leak
+     would therefore be two leaks, so this pins the whole result, not one row:
+     no key and no value anywhere may carry a number the team could read as
+     "how far off". */
+  it('carries no numeric score for either seat, across every row', () => {
+    const rows = toFeedbackRows({
+      jokes: [
+        payload.jokes[0],
+        { joke_id: 2, joke_title: 'Second', was_bought: true, good_dimensions: ['CLARITY'], improve_dimensions: ['ENERGY'] },
+      ],
+    } as never);
+    expect(rows).toHaveLength(2);
+    const values = rows.flatMap(r => [...r.good, ...r.improve]).flatMap(d => Object.values(d));
+    expect(values.every(v => typeof v === 'string')).toBe(true);
+    // joke_id is the React key and is allowed; nothing else may be a number.
+    for (const row of rows) {
+      const { joke_id, ...rest } = row;
+      expect(typeof joke_id).toBe('number');
+      expect(JSON.stringify(rest)).not.toMatch(/\d/);
+    }
   });
 
   it('handles a joke with no feedback yet', () => {

@@ -430,6 +430,32 @@ export class JokeMakerPage {
     /* And the review bucket emptying is the "classification finished" signal. */
     await expect(this.stageCount('In review', 0)).toBeVisible({ timeout: LLM_BUDGET_MS });
   }
+
+  /**
+   * The Joke Maker's own "Customer feedback" card.
+   *
+   * WHY THIS ASSERTION EXISTS. The JM used to have a per-BATCH feedback modal
+   * bound to `batch.feedback` — a field the backend never persists, since the
+   * publish payload carries only `{joke_id, joke_title, is_published}`. It was
+   * therefore permanently empty, and no test noticed, because "a modal renders"
+   * and "a modal renders something" are different claims. The panel is now the
+   * same team-level card Marketing has, fed by the per-team feedback route.
+   *
+   * So this checks BOTH halves: the empty state clearing proves rows arrived,
+   * and a real verdict heading proves those rows carry actual dimension content
+   * rather than a row of blanks. Checking only the first would pass against an
+   * empty array rendered as zero cards.
+   */
+  get customerFeedbackEmpty(): Locator {
+    return this.page.getByText(/No feedback yet — release jokes to start uncovering the target/);
+  }
+
+  async waitForCustomerFeedback(): Promise<void> {
+    await expect(this.customerFeedbackEmpty).toHaveCount(0, { timeout: LLM_BUDGET_MS });
+    await expect(this.page.getByText(/^(Landed|Needs work)$/).first()).toBeVisible({
+      timeout: LLM_BUDGET_MS,
+    });
+  }
 }
 
 /** views/QualityControl.tsx — the Marketing role. */
@@ -511,35 +537,61 @@ export class MarketingPage {
    * cut is: place the caret at the first newline, fire the events the component
    * listens for, then press Enter (QualityControl.tsx `doSplit`).
    */
+  /**
+   * Cut the raw blob into one card per joke.
+   *
+   * THE SPLITTER IS A readOnly TEXTAREA that derives its cut point from
+   * `selectionStart`, so there is no typing to simulate — the caret has to be
+   * planted by script and then announced with the events the component listens
+   * for (`onSelect` / `onClick` / `onKeyUp`), after which Enter performs the cut.
+   *
+   * THAT HANDSHAKE IS RACY, and pretending otherwise cost a red run: the
+   * component re-renders after every accepted cut, and a caret set against the
+   * node as it is being replaced is silently dropped. Observed failing on cut 4
+   * with cuts 1-3 landing, which is the signature of a lost race rather than a
+   * wrong offset — a wrong offset would fail on the first cut, every time. So
+   * each cut is retried against the freshly-read value, and only a cut that
+   * never takes across several attempts is a real failure.
+   *
+   * N JOKES NEED N CUTS, not N-1. The last pass places the caret at end-of-text,
+   * and that is precisely what promotes the trailing joke into its own card and
+   * empties the unsplit box — which is the condition "Confirm, next" enables on.
+   * Treating the tail as "whatever is left over" and skipping that final cut
+   * leaves the last joke stranded in the box with Confirm greyed out, which is
+   * exactly how this helper was broken while trying to tidy it.
+   */
   async splitIntoJokes(expected: number): Promise<void> {
     const ta = this.splitterTextarea;
     await expect(ta).toBeVisible();
 
-    for (let i = 0; i < expected; i++) {
-      const remaining = await ta.inputValue();
-      if (!remaining.trim()) break;
-      const nl = remaining.indexOf('\n');
-      const offset = nl === -1 ? remaining.length : nl;
+    for (let cut = 1; cut <= expected; cut++) {
+      const before = await ta.inputValue();
+      if (!before.trim()) break;
+      const nl = before.indexOf('\n');
+      const offset = nl === -1 ? before.length : nl;
 
-      await ta.evaluate((el, off) => {
-        const node = el as HTMLTextAreaElement;
-        node.focus();
-        node.setSelectionRange(off, off);
-        /* The component reads selectionStart from onSelect / onClick / onKeyUp;
-           both are dispatched so it does not matter which React binds. */
-        node.dispatchEvent(new Event('select', { bubbles: true }));
-        node.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      }, offset);
+      let shrank = false;
+      for (let attempt = 1; attempt <= 4 && !shrank; attempt++) {
+        await ta.evaluate((el, off) => {
+          const node = el as HTMLTextAreaElement;
+          node.focus();
+          node.setSelectionRange(off, off);
+          node.dispatchEvent(new Event('select', { bubbles: true }));
+          node.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+          node.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'ArrowRight' }));
+        }, offset);
+        await ta.press('Enter');
 
-      await ta.press('Enter');
+        const after = await ta.inputValue();
+        shrank = after !== before;
+        if (!shrank) await this.page.waitForTimeout(250);
+      }
 
-      /* Fail fast and legibly if the caret never reached the component — a
-         silent no-op here would otherwise hang on the Confirm assertion. */
-      await expect(
-        ta,
-        `cut ${i + 1}/${expected} did not shrink the unsplit text — the splitter ` +
-          'never picked up the caret position',
-      ).not.toHaveValue(remaining, { timeout: 5_000 });
+      expect(
+        shrank,
+        `cut ${cut}/${expected} never took — the splitter did not pick up the caret ` +
+          'after 4 attempts, so this is not the usual re-render race',
+      ).toBe(true);
     }
 
     await expect(
@@ -707,6 +759,9 @@ test.describe('Three-role round: Instructor → Joke Maker → Marketing → Jok
            the poll loop, never a reload. */
         await jm.waitForClassification(JOKE_COUNT);
         await mk.waitForCustomerFeedback();
+        /* The whole point of the per-team wiring: the Joke Maker sees the same
+           customer verdicts Marketing does, on its own screen. */
+        await jm.waitForCustomerFeedback();
       });
     } finally {
       await instructorCtx.close();

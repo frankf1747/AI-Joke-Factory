@@ -4,7 +4,7 @@ import { Button, Card, StatBox, RoleLayout, Modal, SectionLabel, BRAND, fmt$ } f
 import type { StatBoxTone } from '../components';
 import {
   Send, Zap, GripVertical, ChevronUp, ChevronDown, Check, X as XIcon,
-  Star, BadgeCheck, CheckCircle2, Minus, MousePointerClick,
+  Star, CheckCircle2, MousePointerClick,
   Scissors, CornerDownLeft, Trash2,
   Briefcase, Heart, Users, Utensils, Cpu, PawPrint, GraduationCap,
   DollarSign, Plane, HeartPulse, Medal, Landmark, Coffee, Languages,
@@ -16,7 +16,10 @@ import {
   type NudgeEvent,
 } from '../services/marketingNudge';
 import { DIMENSIONS, dimById } from '../config/dimensions';
-import type { TeamFeedbackResponse } from '../types/api';
+/* The feedback mapper and its card moved out of this file when the Joke Maker
+   started showing the same per-team rows — see views/feedback.ts. */
+import { toFeedbackRows } from './feedback';
+import { FeedbackCard } from '../components/FeedbackCard';
 
 /* ---- Icons for the backend's Topic categories. Keyed by the category string
    itself so the picker stays in step with config/dimensions automatically: add
@@ -52,54 +55,6 @@ const ordinal = (n: number) => {
   const v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 };
-
-/* ============================ Marketing feedback ============================
-   GET /v1/rounds/{rid}/teams/{tid}/feedback, mapped for rendering.
-
-   This panel used to invent its own data: it scored each joke against
-   config/dimensions' DEFAULT_IDEAL_PROFILE — the frontend's hardcoded default,
-   NOT the round's real ideal, which the instructor configures and the scoring
-   engine actually uses — then picked three dimensions from a hash of the joke
-   id and drew a proximity bar. Two bugs in one: the numbers were fiction, and a
-   graded distance-to-ideal reveal leaks more than the learning design allows.
-   Teams are meant to reverse-engineer the hidden ideal from partial feedback;
-   a per-dimension "how far off" bar would let them solve the profile without
-   ever selling a joke.
-
-   So the backend sends dimension IDS ONLY — no numbers, no categories, no ideal
-   levels (core/usecase/feedback.go:127-132) — and this mapper keeps it that
-   way. A dimension either passed or needs work. Nothing here may carry a score.
-
-   Exported as a pure function so the mapping is testable without React
-   (views/feedback.test.ts). */
-
-export interface FeedbackDim {
-  /** The backend enum id, e.g. 'HUMOR_STYLE'. */
-  id: string;
-  /** Display label from the dimension catalog, falling back to the raw id so a
-      dimension added upstream renders as itself rather than vanishing. */
-  label: string;
-}
-
-export interface FeedbackRow {
-  joke_id: number;
-  joke_title: string;
-  was_bought: boolean;
-  good: FeedbackDim[];
-  improve: FeedbackDim[];
-}
-
-export function toFeedbackRows(payload: TeamFeedbackResponse | null | undefined): FeedbackRow[] {
-  const toDims = (ids: readonly string[] | null | undefined): FeedbackDim[] =>
-    (ids ?? []).map(id => ({ id, label: dimById(id)?.label ?? id }));
-  return (payload?.jokes ?? []).map(j => ({
-    joke_id: j.joke_id,
-    joke_title: j.joke_title,
-    was_bought: j.was_bought,
-    good: toDims(j.good_dimensions),
-    improve: toDims(j.improve_dimensions),
-  }));
-}
 
 /* ============================ Shared release fields ============================
    A joke can't go to market without a Topic and a title. The second decision
@@ -153,64 +108,6 @@ const TitleField: React.FC<{
       maxLength={120}
       className="w-full bg-white border border-gray-300 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#8bb8e8]"
     />
-  </div>
-);
-
-/* ============================ Feedback card ============================
-   Pass/fail per dimension, nothing more. No bar, no percentage, no "→ target"
-   arrow and no ideal level: the team should learn WHICH dimensions missed, not
-   by how much. See the note on toFeedbackRows above. */
-
-const DimChip: React.FC<{ label: string; tone: 'good' | 'improve' }> = ({ label, tone }) => (
-  <span
-    className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border ${
-      tone === 'good'
-        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-        : 'bg-amber-50 text-amber-800 border-amber-300'
-    }`}
-  >
-    {tone === 'good' ? <Check size={11} /> : <XIcon size={11} />} {label}
-  </span>
-);
-
-const FeedbackCard: React.FC<{ row: FeedbackRow }> = ({ row }) => (
-  <div
-    className={`rounded-lg border p-3 mk-fade-in ${
-      row.was_bought ? 'border-emerald-100 bg-emerald-50/40' : 'border-gray-200 bg-gray-50/60'
-    }`}
-  >
-    <div className="flex items-center gap-1.5 mb-2">
-      {row.was_bought
-        ? <BadgeCheck size={13} className="text-emerald-600 shrink-0" />
-        : <Minus size={13} className="text-gray-400 shrink-0" />}
-      <span className={`text-[11px] font-semibold ${row.was_bought ? 'text-emerald-700' : 'text-gray-500'}`}>
-        {row.was_bought ? 'Sold' : 'Not sold yet'}
-        {row.joke_title ? ` · "${row.joke_title}"` : ''}
-      </span>
-    </div>
-
-    {row.good.length === 0 && row.improve.length === 0 ? (
-      <p className="text-[11px] text-gray-400 italic">No customer read on this one yet.</p>
-    ) : (
-      <div className="space-y-2">
-        {row.good.length > 0 && (
-          <div>
-            <SectionLabel className="mb-1">Landed</SectionLabel>
-            <div className="flex flex-wrap gap-1.5">
-              {row.good.map(d => <DimChip key={d.id} label={d.label} tone="good" />)}
-            </div>
-          </div>
-        )}
-        {row.improve.length > 0 && (
-          <div>
-            <SectionLabel className="mb-1">Needs work</SectionLabel>
-            <div className="flex flex-wrap gap-1.5">
-              {row.improve.map(d => <DimChip key={d.id} label={d.label} tone="improve" />)}
-            </div>
-          </div>
-        )}
-      </div>
-    )}
   </div>
 );
 

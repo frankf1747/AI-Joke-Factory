@@ -93,16 +93,44 @@ function sample(label: string, jokes: FeedbackJoke[], soldCounts: number[]): Cor
 }
 
 /**
- * "Flat" means BOTH proxies were silent: every joke sold the same number of
- * times AND every joke got the same feedback. Requiring both is what keeps a
- * legitimately hard round — where nothing sells but the dimensions still differ
- * per joke — from being reported as a stub.
+ * "Flat" means the classifier did not distinguish the jokes from one another.
+ *
+ * THAT IS MEASURED ON FEEDBACK SIGNATURES ALONE, and sales are deliberately NOT
+ * part of the judgement. Two earlier versions got this wrong in the same way, so
+ * the reasoning is worth recording.
+ *
+ * A feedback signature is the set of dimensions the backend reports per joke —
+ * a DIRECT observation of what the classifier produced. Sold counts are three
+ * steps downstream: fit, then the buy threshold, then per-customer jitter
+ * (`jitter := (rng.Float64()*2 - 1) * round.Jitter`, usecase/aicustomer.go:39,
+ * ±0.3 by default). Crucially that noise is not constant — it scales with how
+ * near the threshold a joke lands. A joke well below τ sells 0 every time; a
+ * joke sitting exactly ON τ has each of 100 customers flip a weighted coin.
+ *
+ * Both failures came from the bland control, which by construction clusters at a
+ * single fit value — so wherever that value lands relative to τ, all four jokes
+ * land there together and jitter does the rest:
+ *   run 1: sold [1, 0, 0, 1]   — just under τ, a couple of stray buys
+ *   run 2: sold [24 … 37]      — right on τ, a third of the pool buying
+ * Both runs reported ONE distinct feedback signature across the control and 17
+ * across the varied corpus. The classifier behaved identically and correctly in
+ * both; only the sales proxy moved, and no fixed tolerance can cover a range
+ * that swings from 1 to 13 for the same underlying verdict.
+ *
+ * Dropping sales from the gate does not weaken stub detection, which was the
+ * original reason for the AND. StubClassifier hands every joke the same
+ * categories, so under the stub the VARIED corpus goes flat too — and varied-flat
+ * is the signal that fires. It also still protects a legitimately hard round
+ * where nothing sells but the dimensions genuinely differ per joke: those
+ * signatures differ, so it is correctly not flat.
+ *
+ * Sales remain in the reported evidence as corroboration — a varied corpus
+ * ranging 0..100 is a satisfying second opinion — but they no longer decide.
  */
 function isFlat(s: CorpusSample): boolean {
-  const salesFlat = s.soldSpread.n === 0 || s.soldSpread.distinct <= 1;
-  const feedbackFlat = s.jokes.length < 2 ? true : s.distinctSignatures <= 1;
-  return salesFlat && feedbackFlat;
+  return s.jokes.length < 2 ? true : s.distinctSignatures <= 1;
 }
+
 
 export const classifierVerdict: Assertion = (evidence) => {
   const board = new Map(evidence.market.map((i) => [i.joke_id, i]));
@@ -146,6 +174,7 @@ export const classifierVerdict: Assertion = (evidence) => {
     ? judgeClassifier(p50, jokesPerBatch)
     : null;
 
+  const customerCount = evidence.round.customer_count;
   const variedFlat = isFlat(varied);
   const blandFlat = isFlat(bland);
   const looksStubByLatency = latency?.verdict === 'LIKELY_STUB';
@@ -171,7 +200,7 @@ export const classifierVerdict: Assertion = (evidence) => {
       ? { p50Ms: Math.round(p50), jokesPerBatch, verdict: latency.verdict, msPerJoke: Math.round(latency.msPerJoke) }
       : null,
     buyThreshold: evidence.round.buy_threshold,
-    customerCount: evidence.round.customer_count,
+    customerCount,
   };
 
   // The numbers, printed on every branch. This is the part that makes the

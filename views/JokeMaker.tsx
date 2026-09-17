@@ -1,13 +1,17 @@
 import React, { useMemo, useState } from 'react';
 import { useGame } from '../context';
-import { Button, Card, StatBox, RoleLayout, Modal, SectionLabel, BRAND, fmt$ } from '../components';
+import { Button, Card, StatBox, RoleLayout, Modal, BRAND, fmt$ } from '../components';
 import type { StatBoxTone } from '../components';
 import {
-  Send, ChevronRight, MessageSquare, Info, CheckCircle2,
+  Send, ChevronRight, Info, CheckCircle2,
 } from 'lucide-react';
 import { Batch } from '../types';
 import { computeAvgCreatedToPublishSeconds } from '../services/economics';
 import { dimById } from '../config/dimensions';
+/* The same mapper and card Marketing renders — the feedback is per TEAM, so
+   both seats must read it identically. See views/feedback.ts. */
+import { toFeedbackRows } from './feedback';
+import { FeedbackCard } from '../components/FeedbackCard';
 
 /* ---- per-joke status drives the status dots ---- */
 type JokeStatus = 'reviewing' | 'market' | 'sold' | 'wasted';
@@ -56,8 +60,7 @@ const BatchCard: React.FC<{
   batch: Batch;
   open: boolean;
   onToggle: () => void;
-  onFeedback: () => void;
-}> = ({ batch, open, onToggle, onFeedback }) => {
+}> = ({ batch, open, onToggle }) => {
   const jokes = batch.jokes as any[];
   return (
     <div className="rounded-lg border border-gray-200 bg-white">
@@ -75,12 +78,6 @@ const BatchCard: React.FC<{
           <span className="text-[11px] text-gray-400 ml-auto pl-2 group-hover:text-gray-600">
             {jokes.length} jokes
           </span>
-        </button>
-        <button
-          onClick={onFeedback}
-          className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded hover:bg-blue-100 shrink-0"
-        >
-          <MessageSquare size={12} /> Feedback
         </button>
       </div>
       {open && (
@@ -152,38 +149,23 @@ const StageDots: React.FC<{ batches: Batch[] }> = ({ batches }) => {
   );
 };
 
-/* ============================ Feedback modal ============================ */
-const JmFeedbackModal: React.FC<{ batch: Batch; onClose: () => void }> = ({ batch, onClose }) => {
-  return (
-    <Modal
-      isOpen={true}
-      onClose={onClose}
-      title={`Marketing feedback · #${batch.id.slice(-4)}`}
-    >
-      <div>
-        <SectionLabel className="mb-2">Note from Marketing</SectionLabel>
-        {batch.feedback ? (
-          <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 text-sm text-gray-800">
-            {batch.feedback}
-          </div>
-        ) : (
-          <p className="text-sm text-gray-400 italic">Awaiting Marketing's feedback — batch still in review.</p>
-        )}
-      </div>
-    </Modal>
-  );
-};
+/* The per-batch "Marketing feedback" modal used to live here. It rendered
+   batch.feedback, which NOTHING ever persisted — the publish payload carries
+   only {joke_id, joke_title, is_published} and there is no batch feedback
+   column — so it was permanently empty, and the button that opened it promised
+   a conversation that never happened. Replaced by the team-level "Customer
+   feedback" card below, which reads the real per-team route. Don't bring the
+   modal back: the data it wanted is per TEAM, not per batch. */
 
 /* ============================ Joke Maker screen ============================ */
 const MIN_RAW_CHARS = 20;
 
 const JokeMaker: React.FC = () => {
-  const { user, roster, batches, submitRawBatch, config, teamSummary } = useGame();
+  const { user, roster, batches, submitRawBatch, config, teamSummary, teamFeedback } = useGame();
 
   const [input, setInput] = useState('');
   const [certified, setCertified] = useState(false);
   const [openSet, setOpenSet] = useState<Set<string>>(() => new Set());
-  const [fb, setFb] = useState<Batch | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [dismissedTeamPopup, setDismissedTeamPopup] = useState(false);
 
@@ -252,6 +234,11 @@ const JokeMaker: React.FC = () => {
     () => computeAvgCreatedToPublishSeconds(myBatches),
     [myBatches],
   );
+
+  /* The team's customer feedback — the same rows Marketing sees, fetched by the
+     same poll in context.tsx. Per TEAM and capped at the round's
+     feedback_joke_count, so it is a short standing list, not a per-batch log. */
+  const feedbackRows = useMemo(() => toFeedbackRows(teamFeedback), [teamFeedback]);
 
   React.useEffect(() => {
     if (!config.showTeamPopup) setDismissedTeamPopup(false);
@@ -347,14 +334,13 @@ const JokeMaker: React.FC = () => {
                   batch={b}
                   open={openSet.has(b.id)}
                   onToggle={() => toggleBatch(b.id)}
-                  onFeedback={() => setFb(b)}
                 />
               ))}
             </div>
           </Card>
         </div>
 
-        {/* RIGHT: stat tiles + Jokes by stage */}
+        {/* RIGHT: stat tiles + Jokes by stage + the team's customer feedback */}
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3">
             <StatBox label="Current Team Rank" value={String(myRank)} tone="rank" />
@@ -367,10 +353,24 @@ const JokeMaker: React.FC = () => {
           <Card title="Jokes by stage" subtitle="Where your output sits right now">
             <StageDots batches={myBatches} />
           </Card>
+          <Card
+            title="Customer feedback"
+            subtitle="Which criteria landed and which missed — the customers never say by how much"
+            accent={BRAND.sold}
+          >
+            <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
+              {feedbackRows.length === 0 ? (
+                <p className="text-sm text-gray-400 italic py-4 text-center">
+                  No feedback yet — release jokes to start uncovering the target.
+                </p>
+              ) : (
+                feedbackRows.map(r => <FeedbackCard key={r.joke_id} row={r} />)
+              )}
+            </div>
+          </Card>
         </div>
       </div>
 
-      {fb && <JmFeedbackModal batch={fb} onClose={() => setFb(null)} />}
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm px-4 py-2.5 rounded-lg shadow-xl flex items-center gap-2">
           <CheckCircle2 size={16} className="text-emerald-400" /> {toast}
