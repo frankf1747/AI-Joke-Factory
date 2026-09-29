@@ -2404,6 +2404,9 @@ export class BotEngine {
   }
 
   private setActivity(seat: SeatRuntime, activity: string): void {
+    // An actor can be mid-request when stop() runs; when that request returns it
+    // must not overwrite 'stopped' with a stale activity or emit after the stop.
+    if (!this.running) return;
     if (seat.activity === activity) return;
     seat.activity = activity;
     this.emitStatus();
