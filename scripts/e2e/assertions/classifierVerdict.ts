@@ -281,10 +281,10 @@ export const classifierVerdict: Assertion = (evidence) => {
           'The control is ten near-identical jokes: same structure, same topic, same word count, one ' +
           'swapped noun each. It spreading means one of two things, and neither lets you trust the ' +
           'varied corpus reading above it:\n' +
-          '  1. THE FIXTURE WAS EDITED. Someone "improved" blandControl in scripts/e2e/fixtures/' +
-          'jokes.ts. Read the SET B block at the top of that file — the flatness IS the measurement — ' +
-          'and run assertFixtureIntegrity, which pins the control to one length bucket, one topic and ' +
-          'one word count.\n' +
+          '  1. THE FIXTURE WAS EDITED. Someone "improved" blandControl in ' +
+          'services/shared/jokes.ts. Read the SET B block at the top of that file — the flatness IS ' +
+          'the measurement — and run assertFixtureIntegrity, which pins the control to one length ' +
+          'bucket, one topic and one word count.\n' +
           '  2. THE CLASSIFIER IS RETURNING NOISE. If the fixture is intact, interchangeable jokes are ' +
           'being scored differently, which means the scores are not a function of the joke. A ' +
           'temperature that is not zero, or a prompt that leaks the joke id, would both do this.\n' +
