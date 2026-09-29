@@ -43,7 +43,7 @@ export function botName(index: number, seat: Seat): string {
  * WHY CASE SENSITIVITY IS THE PROTECTION: a student cannot forge this marker.
  * The login form lowercases every name and joins the pair with an underscore
  * (App.tsx `normalizeTeamName`, lines 21-26), so no human display name can
- * contain an uppercase `Bot`/`BOT` or a space-separated prefix.
+ * contain an uppercase `Bot`/`BOT` marker.
  *
  * If a deployment ever mangles the emoji, the fix is switching `BOT_PREFIX` to
  * the `[BOT] ` fallback — not loosening this regex.
