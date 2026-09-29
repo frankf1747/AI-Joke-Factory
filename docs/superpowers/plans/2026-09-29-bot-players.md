@@ -1738,6 +1738,20 @@ describe('fitPieces', () => {
   it('drops blank pieces first', () => {
     expect(fitPieces(['a', '  ', 'b'], 2, 1)).toEqual(['a', 'b']);
   });
+
+  it('halves by character when there are too few words, never cutting an emoji or CJK character', () => {
+    const knock = fitPieces(['Knock-knock!'], 5, 1);
+    expect(knock).toHaveLength(5);
+    expect(knock.join('')).toBe('Knock-knock!');
+
+    const cjk = fitPieces(['为什么程序员分不清万圣节和圣诞节'], 5, 1);
+    expect(cjk).toHaveLength(5);
+    expect(cjk.join('')).toBe('为什么程序员分不清万圣节和圣诞节');
+
+    const emoji = fitPieces(['🤖🤖🤖🤖🤖🤖'], 5, 1);
+    expect(emoji).toHaveLength(5);
+    for (const piece of emoji) expect(Array.from(piece).every(ch => ch === '🤖')).toBe(true);
+  });
 });
 ```
 
@@ -1855,8 +1869,14 @@ export function titleOf(text: string): string {
  * A bot's own blobs always split cleanly, but a Marketing bot can inherit a
  * batch someone else wrote. The backend hands a marketer its own held batch
  * first on every poll, so a split it rejects is rejected forever. Merging the
- * tail, or halving the longest piece at a word boundary, always lands on a
- * legal count without reordering the text.
+ * tail, or halving the longest piece, always lands on a legal count without
+ * reordering the text.
+ *
+ * Halving prefers a word boundary, then falls back to the middle CHARACTER for
+ * text with too few words — a two-word knock-knock, or Chinese, which has no
+ * spaces at all. `Array.from` splits by code point, so an emoji or a CJK
+ * character is never cut in half. The submit minimum of 20 characters
+ * (usecase/batch.go:42-45) guarantees enough characters to reach any batch size.
  */
 export function fitPieces(pieces: readonly string[], batchSize: number, roundNumber: number): string[] {
   const out = pieces.map(p => p.trim()).filter(p => p.length > 0);
@@ -1866,16 +1886,28 @@ export function fitPieces(pieces: readonly string[], batchSize: number, roundNum
     out[out.length - 1] = `${out[out.length - 1]} ${last}`;
   }
   while (out.length < target) {
-    let longest = -1;
-    for (let i = 0; i < out.length; i++) {
-      if (out[i].split(/\s+/).length >= 2 && (longest === -1 || out[i].length > out[longest].length)) longest = i;
+    const byWords = longestIndex(out, p => p.split(/\s+/).length >= 2);
+    if (byWords !== -1) {
+      const words = out[byWords].split(/\s+/);
+      const mid = Math.ceil(words.length / 2);
+      out.splice(byWords, 1, words.slice(0, mid).join(' '), words.slice(mid).join(' '));
+      continue;
     }
-    if (longest === -1) break;
-    const words = out[longest].split(/\s+/);
-    const mid = Math.ceil(words.length / 2);
-    out.splice(longest, 1, words.slice(0, mid).join(' '), words.slice(mid).join(' '));
+    const byChars = longestIndex(out, p => Array.from(p).length >= 2);
+    if (byChars === -1) break; // every piece is one character: impossible above the submit minimum
+    const chars = Array.from(out[byChars]);
+    const mid = Math.ceil(chars.length / 2);
+    out.splice(byChars, 1, chars.slice(0, mid).join(''), chars.slice(mid).join(''));
   }
   return out;
+}
+
+function longestIndex(pieces: readonly string[], eligible: (p: string) => boolean): number {
+  let best = -1;
+  for (let i = 0; i < pieces.length; i++) {
+    if (eligible(pieces[i]) && (best === -1 || pieces[i].length > pieces[best].length)) best = i;
+  }
+  return best;
 }
 
 /** A bot's own user row is gone — it was removed — so its actor stops. */
@@ -1993,12 +2025,17 @@ export class BotEngine {
       // Check BEFORE seating anyone. The backend refuses to start a round that
       // is ACTIVE or ENDED (usecase/instructor.go:232-237); bots seated for a
       // round that can never start would just sit there.
-      const round = (await this.deps.api.roundsActive()).rounds.find(r => r.id === options.roundId);
+      const rounds = (await this.deps.api.roundsActive()).rounds;
+      const round = rounds.find(r => r.id === options.roundId);
       if (!round || round.status !== 'CONFIGURED') {
         throw new Error(
           `Round ${round?.round_number ?? options.roundId} is ${round?.status ?? 'missing'}; an all-bot class needs a round that has not started.`,
         );
       }
+      // Only one round may be active at a time (a unique index,
+      // migrations/0001_schema.sql:84); starting a second returns a 500.
+      const busy = rounds.find(r => r.status === 'ACTIVE');
+      if (busy) throw new Error(`Round ${busy.round_number} is still active; end it before starting an all-bot class.`);
     }
 
     this.speed = options.speed;
@@ -2324,12 +2361,14 @@ export class BotEngine {
       return false;
     }
     if (statusOf(err) === 403) {
-      // The batch moved out from under us: our lock went stale and someone else
-      // claimed it, or it belongs to another team. Production reports that as
-      // 403, not 409 (usecase/marketing.go:143-160). Nothing is broken; poll
-      // again. A genuinely mis-seated bot is caught by checkSeat instead.
-      this.log(team, seat, 'lost the batch — polling the queue again');
-      this.setActivity(seat, 'lost the batch — polling again');
+      // Refused, but not broken. For Marketing this is usually a batch that moved
+      // out from under us — a stale lock someone else claimed, or another team's
+      // batch — which production reports as 403, not 409
+      // (usecase/marketing.go:143-160). Every other 403 comes from the role/team
+      // fields checkSeat compares, so a genuinely mis-seated bot pauses there on
+      // the next loop instead of spinning here.
+      this.log(team, seat, 'the backend refused this (403) — polling again');
+      this.setActivity(seat, 'not allowed right now — polling again');
       await this.pace(QUEUE_POLL_MS, signal);
       return true;
     }
@@ -2392,7 +2431,7 @@ export class BotEngine {
 - [ ] **Step 4: Run it to verify it passes**
 
 Run: `npx vitest run services/bots/engine.test.ts`
-Expected: 25 passed. If a play test times out, print `world.calls.slice(-40)` and `engine.status()` inside `until`'s error path to see where the actor loop stalled — do not raise the iteration limit to make it pass.
+Expected: 26 passed. If a play test times out, print `world.calls.slice(-40)` and `engine.status()` inside `until`'s error path to see where the actor loop stalled — do not raise the iteration limit to make it pass.
 
 - [ ] **Step 5: Full suite and typecheck**
 
