@@ -1463,8 +1463,8 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_IDEAL_PROFILE } from '../../config/dimensions';
 import { variedCorpus } from '../shared/jokes';
-import { BotEngine, splitBlob, titleOf, wallClockSteps } from './engine';
-import { botName } from './naming';
+import { BotEngine, fitPieces, splitBlob, titleOf, wallClockSteps } from './engine';
+import { botName, isBotName } from './naming';
 import { BATCH_CAP_PER_ROUND } from './personas';
 import type { FromWorker, StartOptions } from './protocol';
 import { FakeWorld } from './testing/fakeApi';
@@ -1634,6 +1634,51 @@ describe('BotEngine', () => {
     expect(emitted[emitted.length - 1]).toMatchObject({ type: 'probe' });
     expect(engine.status().warnings.join(' ')).toMatch(/alice has no human partner/);
   });
+
+  it('refuses a round that has already ended, before seating anyone', async () => {
+    const { world, engine } = setup();
+    world.round.status = 'ENDED';
+    await expect(engine.start(options())).rejects.toThrow(/ENDED/);
+    expect([...world.users.values()].some(u => isBotName(u.name))).toBe(false);
+  });
+
+  it('Careful gives up when feedback never arrives, then keeps playing', async () => {
+    const { world, engine } = setup();
+    world.autoClassify = false;
+    await engine.start(options({ teams: [{ index: 1, persona: 'CAREFUL' }] }));
+    const jm = world.userNamed(botName(1, 'A'));
+    if (!jm) throw new Error('bot 01A missing');
+    await until(() => engine.historyFor(jm.id).some(e => /gave up waiting/.test(e.text)), 'the feedback timeout');
+    await until(() => world.decisions.length >= 2, 'a second batch after giving up');
+    engine.stop();
+  });
+
+  it('publishes an inherited batch that does not split cleanly into the round-1 count', async () => {
+    const { world, engine } = setup();
+    await engine.start(options({ startRound: false }));
+    const team = teamOf(world, botName(1, 'A'));
+    if (team == null) throw new Error('bot team missing');
+    // Adjust this literal to FakeBatch's required fields if the fake has grown more.
+    world.batches.push({
+      id: world.newBatchId(), teamId: team, state: 'QUEUED', lockedBy: null, jokes: [],
+      rawText: 'A joke nobody on this team wrote, told as one long rambling story\n\n!!! and a tail',
+    });
+    world.round.status = 'ACTIVE';
+    world.profileConfigured = true;
+    await until(() => world.decisions.some(d => d.teamId === team), 'the inherited batch to publish');
+    engine.stop();
+    expect(world.decisions[0]).toMatchObject({ teamId: team, total: 5 });
+  });
+
+  it('treats a lost batch (403) as a re-poll, not an error', async () => {
+    const { world, engine } = setup();
+    world.failNext('marketingPublish', 1, botName(1, 'B'), 403);
+    await engine.start(options());
+    const team = teamOf(world, botName(1, 'A'));
+    await until(() => world.decisions.some(d => d.teamId === team), 'a publish after the lost batch');
+    engine.stop();
+    expect(engine.status().teams[0].marketing.error).toBeNull();
+  });
 });
 
 describe('wallClockSteps', () => {
@@ -1667,6 +1712,31 @@ describe('titleOf', () => {
 
   it('falls back instead of throwing on text it does not know', () => {
     expect(titleOf('A brand new joke about ducks')).toBe('A brand new joke');
+  });
+
+  it('never returns an empty title, which publish would reject', () => {
+    expect(titleOf('!!! ???')).toBe('Untitled joke');
+  });
+});
+
+describe('fitPieces', () => {
+  it('merges extra pieces into the last one for round 1', () => {
+    expect(fitPieces(['a b', 'c', 'd', 'e', 'f', 'g'], 5, 1)).toEqual(['a b', 'c', 'd', 'e', 'f g']);
+  });
+
+  it('halves the longest piece until round 1 has enough, keeping the text in order', () => {
+    const out = fitPieces(['one two three four', 'five six'], 5, 1);
+    expect(out).toHaveLength(5);
+    expect(out.join(' ')).toBe('one two three four five six');
+  });
+
+  it('only caps later rounds, never pads them', () => {
+    expect(fitPieces(['a', 'b'], 5, 2)).toEqual(['a', 'b']);
+    expect(fitPieces(['a', 'b', 'c', 'd', 'e', 'f'], 5, 2)).toHaveLength(5);
+  });
+
+  it('drops blank pieces first', () => {
+    expect(fitPieces(['a', '  ', 'b'], 2, 1)).toEqual(['a', 'b']);
   });
 });
 ```
@@ -1770,8 +1840,42 @@ export function titleOf(text: string): string {
   try {
     return titleFor(text);
   } catch {
-    return text.split(/\s+/).slice(0, 4).join(' ').replace(/[^\p{L}\p{N} ']/gu, '');
+    // Never empty: publish rejects a blank title with a 400
+    // (usecase/marketing.go:209), and the backend hands a marketer its own held
+    // batch first on every poll, so one bad title would stall the team all round.
+    const derived = text.split(/\s+/).slice(0, 4).join(' ').replace(/[^\p{L}\p{N} ']/gu, '').trim();
+    return derived || 'Untitled joke';
   }
+}
+
+/**
+ * Coerce split pieces into a count the backend accepts: exactly `batchSize` in
+ * round 1, 1..`batchSize` after (usecase/marketing.go:98-102).
+ *
+ * A bot's own blobs always split cleanly, but a Marketing bot can inherit a
+ * batch someone else wrote. The backend hands a marketer its own held batch
+ * first on every poll, so a split it rejects is rejected forever. Merging the
+ * tail, or halving the longest piece at a word boundary, always lands on a
+ * legal count without reordering the text.
+ */
+export function fitPieces(pieces: readonly string[], batchSize: number, roundNumber: number): string[] {
+  const out = pieces.map(p => p.trim()).filter(p => p.length > 0);
+  const target = roundNumber === 1 ? batchSize : Math.min(Math.max(out.length, 1), batchSize);
+  while (out.length > target) {
+    const last = out.pop() as string;
+    out[out.length - 1] = `${out[out.length - 1]} ${last}`;
+  }
+  while (out.length < target) {
+    let longest = -1;
+    for (let i = 0; i < out.length; i++) {
+      if (out[i].split(/\s+/).length >= 2 && (longest === -1 || out[i].length > out[longest].length)) longest = i;
+    }
+    if (longest === -1) break;
+    const words = out[longest].split(/\s+/);
+    const mid = Math.ceil(words.length / 2);
+    out.splice(longest, 1, words.slice(0, mid).join(' '), words.slice(mid).join(' '));
+  }
+  return out;
 }
 
 /** A bot's own user row is gone — it was removed — so its actor stops. */
@@ -1885,6 +1989,17 @@ export class BotEngine {
     if (this.running) throw new Error('Bots are already running — stop them first.');
     if (options.teams.length === 0) throw new Error('Choose at least one bot team.');
     if (options.teams.length > MAX_BOT_TEAMS) throw new Error(`At most ${MAX_BOT_TEAMS} bot teams.`);
+    if (options.startRound) {
+      // Check BEFORE seating anyone. The backend refuses to start a round that
+      // is ACTIVE or ENDED (usecase/instructor.go:232-237); bots seated for a
+      // round that can never start would just sit there.
+      const round = (await this.deps.api.roundsActive()).rounds.find(r => r.id === options.roundId);
+      if (!round || round.status !== 'CONFIGURED') {
+        throw new Error(
+          `Round ${round?.round_number ?? options.roundId} is ${round?.status ?? 'missing'}; an all-bot class needs a round that has not started.`,
+        );
+      }
+    }
 
     this.speed = options.speed;
     this.roundId = options.roundId;
@@ -2087,6 +2202,10 @@ export class BotEngine {
     }
     if (!signal.aborted) {
       team.awaitingFeedback = [];
+      // If a publish committed but its response was lost, `published` would stay
+      // one behind `submitted` for good and every later batch would wait the full
+      // timeout. Giving up is the moment to re-sync.
+      team.published = Math.max(team.published, team.submitted);
       this.log(team, seat, 'gave up waiting for feedback — writing the next batch anyway');
     }
   }
@@ -2125,7 +2244,8 @@ export class BotEngine {
         if (signal.aborted) break;
 
         if (jokes.length === 0 && batch.raw_text) {
-          const split = await me.marketingSplit(batch.batch_id, { jokes: splitBlob(batch.raw_text) });
+          const pieces = fitPieces(splitBlob(batch.raw_text), round.batch_size, round.round_number);
+          const split = await me.marketingSplit(batch.batch_id, { jokes: pieces });
           jokes = split.jokes;
           this.log(team, seat, `split batch #${batch.batch_id} into ${jokes.length} jokes`);
           this.setActivity(seat, `choosing from ${jokes.length} jokes`);
@@ -2203,8 +2323,18 @@ export class BotEngine {
       this.setActivity(seat, 'stopped');
       return false;
     }
+    if (statusOf(err) === 403) {
+      // The batch moved out from under us: our lock went stale and someone else
+      // claimed it, or it belongs to another team. Production reports that as
+      // 403, not 409 (usecase/marketing.go:143-160). Nothing is broken; poll
+      // again. A genuinely mis-seated bot is caught by checkSeat instead.
+      this.log(team, seat, 'lost the batch — polling the queue again');
+      this.setActivity(seat, 'lost the batch — polling again');
+      await this.pace(QUEUE_POLL_MS, signal);
+      return true;
+    }
     if (statusOf(err) === 409) {
-      // ROUND_NOT_ACTIVE and lock conflicts: nothing is broken, the game moved on.
+      // ROUND_NOT_ACTIVE, or a batch already processed: the game moved on.
       this.roundCache = null;
       this.setActivity(seat, 'idle — round not active');
       await this.pace(IDLE_POLL_MS, signal);
@@ -2262,7 +2392,7 @@ export class BotEngine {
 - [ ] **Step 4: Run it to verify it passes**
 
 Run: `npx vitest run services/bots/engine.test.ts`
-Expected: 16 passed. If a play test times out, print `world.calls.slice(-40)` and `engine.status()` inside `until`'s error path to see where the actor loop stalled — do not raise the iteration limit to make it pass.
+Expected: 25 passed. If a play test times out, print `world.calls.slice(-40)` and `engine.status()` inside `until`'s error path to see where the actor loop stalled — do not raise the iteration limit to make it pass.
 
 - [ ] **Step 5: Full suite and typecheck**
 
@@ -2551,11 +2681,14 @@ export const BotPanel: React.FC = () => {
   const total = PERSONA_ORDER.reduce((sum, id) => sum + counts[id], 0);
   const running = status?.running ?? false;
   const roundActive = probe?.roundStatus === 'ACTIVE';
+  // Only a round that has not started can take bots: the backend refuses to
+  // start an ACTIVE or ENDED one (usecase/instructor.go:232-237).
+  const roundOpen = probe?.roundStatus === 'CONFIGURED';
   const sizeOk = total >= 1 && total <= MAX_BOT_TEAMS;
   const profileOk = isCompleteProfile(config.idealProfile);
   const idle = !running && pending === null;
-  const canRunAllBots = idle && sizeOk && profileOk && probe !== null && probe.humans === 0 && !roundActive;
-  const canFill = idle && sizeOk && probe !== null && !roundActive;
+  const canRunAllBots = idle && sizeOk && profileOk && probe !== null && probe.humans === 0 && roundOpen;
+  const canFill = idle && sizeOk && probe !== null && roundOpen;
   const nothingToRemove = (probe?.bots ?? 0) === 0 && (status?.teams.length ?? 0) === 0;
 
   const start = (startRound: boolean) => {
@@ -2640,6 +2773,9 @@ export const BotPanel: React.FC = () => {
         )}
         {roundActive && idle && (
           <p className="text-xs text-amber-700">A round is active. Bots can only be added before it starts.</p>
+        )}
+        {probe?.roundStatus === 'ENDED' && idle && (
+          <p className="text-xs text-amber-700">This round has ended. Bots need a round that has not started yet.</p>
         )}
         {status?.warnings.map(w => <p key={w} className="text-xs text-amber-700">{w}</p>)}
         {status?.scrambled && (
