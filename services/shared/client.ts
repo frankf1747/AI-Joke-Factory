@@ -1,7 +1,14 @@
 /**
- * Transport for the end-to-end classroom run. One typed method per backend
- * route, one place that unwraps the envelope, one error type that says enough
- * to diagnose a failure without a second run.
+ * Transport for the end-to-end classroom run and for the bot players. One
+ * typed method per backend route, one place that unwraps the envelope, one
+ * error type that says enough to diagnose a failure without a second run.
+ *
+ * SHARED BY NODE AND THE BROWSER. The e2e suite (Node, scripts/e2e/) and the bot
+ * engine (a Web Worker, services/bots/) both import this file, so there is one
+ * copy of the per-actor client rather than two that can drift apart. Keep it
+ * free of Node-only APIs — `process`, `fs`, `node:*`, `Buffer` — because a
+ * browser worker bundles it and would fail to load, or fail only at runtime in a
+ * code path the Node tests never reach.
  *
  * RAW FETCH, NOT services/apiClient — the same reasoning scripts/smoke-api.ts
  * gives, applied one level up. The e2e test judges whether a real deployment

@@ -1,5 +1,12 @@
 /**
- * E2E joke corpora.
+ * Joke corpora for the end-to-end run and the bot players.
+ *
+ * SHARED BY NODE AND THE BROWSER. The e2e suite (Node, scripts/e2e/) and the bot
+ * engine (a Web Worker, services/bots/) draw from the same 60 jokes and the same
+ * seeded RNG, so a seed means the same deal in both. Keep this file free of
+ * Node-only APIs — `process`, `fs`, `node:*`, `Buffer` — because a browser
+ * worker bundles it and would fail to load, or fail only at runtime in a code
+ * path the Node tests never reach.
  *
  * Two deliberately contrasting sets of jokes plus the plumbing an end-to-end
  * run needs to get them through the real pipeline:
