@@ -17,7 +17,20 @@ describe('bot naming', () => {
   });
 
   it('does not mistake humans for bots', () => {
-    for (const name of ['alice_bob', 'Bot 03A', '🤖 Bot 3A', '🤖 Bot 03C', '🤖 Bot 03A extra']) {
+    const humans = [
+      'alice_bob',
+      'bot_alice',
+      'Bot 03A',
+      '🤖 Bot 3A',
+      '🤖 Bot 03C',
+      '🤖 Bot 03A extra',
+      '🤖 Bot 00A', // index 0 is outside botName's 1..99 domain
+      '🤖 bot 03a', // case variants: case sensitivity is what stops forgery
+      '[bot] 04a',
+      ' 🤖 Bot 03A', // no trimming
+      '🤖 Bot 03A\n',
+    ];
+    for (const name of humans) {
       expect(isBotName(name)).toBe(false);
     }
   });
@@ -29,5 +42,7 @@ describe('bot naming', () => {
   it('refuses indices it cannot print in two digits', () => {
     expect(() => botName(0, 'A')).toThrow(RangeError);
     expect(() => botName(100, 'A')).toThrow(RangeError);
+    expect(() => botName(1.5, 'A')).toThrow(RangeError);
+    expect(() => botName(NaN, 'A')).toThrow(RangeError);
   });
 });

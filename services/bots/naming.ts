@@ -34,7 +34,21 @@ export function botName(index: number, seat: Seat): string {
   return `${BOT_PREFIX}${String(index).padStart(2, '0')}${seat}`;
 }
 
-const PATTERN = /^(?:🤖 Bot |\[BOT\] )(\d{2})([AB])$/u;
+/**
+ * The match is deliberately exact: anchored, case-sensitive, no trimming, and no
+ * tolerance for emoji variation selectors. `(?!00)` keeps the parser's domain
+ * equal to `botName`'s (1..99), because later tasks place bots on teams by the
+ * parsed index.
+ *
+ * WHY CASE SENSITIVITY IS THE PROTECTION: a student cannot forge this marker.
+ * The login form lowercases every name and joins the pair with an underscore
+ * (App.tsx `normalizeTeamName`, lines 21-26), so no human display name can
+ * contain an uppercase `Bot`/`BOT` or a space-separated prefix.
+ *
+ * If a deployment ever mangles the emoji, the fix is switching `BOT_PREFIX` to
+ * the `[BOT] ` fallback — not loosening this regex.
+ */
+const PATTERN = /^(?:🤖 Bot |\[BOT\] )(?!00)(\d{2})([AB])$/u;
 
 export function parseBotName(name: string): BotIdentity | null {
   const m = PATTERN.exec(name);
