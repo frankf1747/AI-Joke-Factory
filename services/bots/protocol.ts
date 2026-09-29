@@ -1,0 +1,101 @@
+// services/bots/protocol.ts
+/**
+ * Messages between the Bot Panel, its worker, and watch tabs.
+ *
+ * Panel ↔ worker uses postMessage. Worker → watch tabs uses a BroadcastChannel,
+ * because a watch tab is a separate tab with no handle on the worker; the
+ * channel reaches every same-origin tab with no backend involved.
+ */
+import type { Seat } from './naming';
+import type { PersonaId } from './personas';
+
+export type Speed = 1 | 3 | 10;
+export const SPEEDS: readonly Speed[] = [1, 3, 10];
+export const BOT_CHANNEL = 'jf-bots';
+
+export interface BotTeamSpec {
+  index: number;
+  persona: PersonaId;
+}
+
+export interface StartOptions {
+  roundId: number;
+  teams: BotTeamSpec[];
+  speed: Speed;
+  /** true for "Run all-bot class"; false for "Fill with bot teams". */
+  startRound: boolean;
+  /**
+   * The instructor's hidden ideal joke, sent in the start request exactly as the
+   * real Start button does (context.tsx). A freshly reset round has none, and
+   * the backend refuses to start without one (usecase/instructor.go:239-245).
+   */
+  idealProfile?: Record<string, string>;
+}
+
+export type ToWorker =
+  | { type: 'init'; baseUrl: string; instructorUserId: number; seed: string }
+  | { type: 'probe'; roundId: number }
+  | { type: 'start'; options: StartOptions }
+  | { type: 'stop' }
+  | { type: 'setSpeed'; speed: Speed }
+  | { type: 'remove'; roundId: number }
+  | { type: 'reform' };
+
+export interface SeatStatus {
+  userId: number | null;
+  name: string;
+  activity: string;
+  error: string | null;
+}
+
+export interface TeamStatus {
+  index: number;
+  persona: PersonaId;
+  teamId: number | null;
+  batchesPublished: number;
+  jm: SeatStatus;
+  marketing: SeatStatus;
+}
+
+export interface EngineStatus {
+  running: boolean;
+  speed: Speed;
+  teams: TeamStatus[];
+  /** Published jokes = Azure LLM classification calls this session. */
+  classificationCalls: number;
+  scrambled: boolean;
+  warnings: string[];
+}
+
+export interface ProbeResult {
+  humans: number;
+  bots: number;
+  roundStatus: 'CONFIGURED' | 'ACTIVE' | 'ENDED' | 'UNKNOWN';
+}
+
+export interface ReasoningEntry {
+  botUserId: number;
+  teamIndex: number;
+  seat: Seat;
+  persona: PersonaId;
+  at: number;
+  text: string;
+}
+
+export interface BotMeta {
+  teamIndex: number;
+  seat: Seat;
+  persona: PersonaId;
+  teamId: number | null;
+}
+
+export type FromWorker =
+  | { type: 'status'; status: EngineStatus }
+  | { type: 'probe'; result: ProbeResult }
+  | { type: 'log'; entry: ReasoningEntry }
+  | { type: 'fatal'; message: string };
+
+export type ChannelMessage =
+  | { type: 'log'; entry: ReasoningEntry }
+  | { type: 'history-request'; botUserId: number }
+  | { type: 'history'; botUserId: number; entries: ReasoningEntry[]; meta: BotMeta | null };
