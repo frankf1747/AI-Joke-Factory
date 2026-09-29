@@ -54,6 +54,15 @@ export class FakeWorld {
   readonly batches: FakeBatch[] = [];
   readonly decisions: Decision[] = [];
   readonly calls: string[] = [];
+  /**
+   * Publishing enqueues an LLM classification, so a joke's dimensions arrive
+   * after the publish, not with it. Tests turn this off to model the lag, then
+   * call classify().
+   */
+  autoClassify = true;
+  readonly classified = new Set<number>();
+  /** Published joke ids in publish order, oldest first. */
+  readonly publishOrder: number[] = [];
   private failures: Array<{ method: string; userName?: string; remaining: number }> = [];
   private nextUserId = 100;
   private nextBatchId = 1;
@@ -72,6 +81,11 @@ export class FakeWorld {
   /** Make `method` fail with a 500, `times` times, optionally only for one user. */
   failNext(method: string, times: number, userName?: string): void {
     this.failures.push({ method, userName, remaining: times });
+  }
+
+  /** Classify the given published jokes, or every published joke when none are named. */
+  classify(jokeIds?: number[]): void {
+    for (const id of jokeIds ?? this.publishOrder) this.classified.add(id);
   }
 
   api(): BotApi {
@@ -99,10 +113,13 @@ export class FakeWorld {
     return {
       RoundID: this.round.id,
       Summary: { Waiting: unassigned.length, Assigned: ps.length - unassigned.length, Dropped: 0, TeamCount: this.teamIds.length },
-      Teams: this.teamIds.map(id => ({
-        Team: { id, name: `Team ${id}`, created_at: STAMP },
-        Members: ps.filter(u => u.teamId === id).map(u => ({ UserID: u.id, DisplayName: u.name, Role: (u.role ?? 'JM') as Role })),
-      })),
+      // real: stats_repo.go:42 — a team with no members is not listed.
+      Teams: this.teamIds
+        .map(id => ({
+          Team: { id, name: `Team ${id}`, created_at: STAMP },
+          Members: ps.filter(u => u.teamId === id).map(u => ({ UserID: u.id, DisplayName: u.name, Role: (u.role ?? 'JM') as Role })),
+        }))
+        .filter(t => t.Members.length > 0),
       Unassigned: unassigned.map(u => ({ UserID: u.id, DisplayName: u.name, Status: 'WAITING' as const })),
     };
   }
@@ -110,10 +127,17 @@ export class FakeWorld {
   newBatchId(): number { return this.nextBatchId++; }
   newJokeId(): number { return this.nextJokeId++; }
 
-  claimedBy(batchId: number, userId: number): FakeBatch {
+  /**
+   * real: usecase/marketing.go:143-160, repo/marketing_repo.go:228-238 — a batch
+   * of another team or held by another marketer is 403, not 409; 409 is only
+   * for a batch that is already processed.
+   */
+  claimedBy(batchId: number, user: FakeUser): FakeBatch {
     const b = this.batches.find(x => x.id === batchId);
     if (!b) throw new FakeApiError(404, 'NOT_FOUND');
-    if (b.state !== 'CLAIMED' || b.lockedBy !== userId) throw new FakeApiError(409, 'NOT_LOCKED');
+    if (b.teamId !== user.teamId) throw new FakeApiError(403, 'FORBIDDEN');
+    if (b.state === 'DONE') throw new FakeApiError(409, 'CONFLICT');
+    if (b.state !== 'CLAIMED' || b.lockedBy !== user.id) throw new FakeApiError(403, 'FORBIDDEN');
     return b;
   }
 
@@ -152,6 +176,12 @@ class FakeApi implements BotApi {
     if (this.requireUser(method).role !== 'INSTRUCTOR') throw new FakeApiError(403, 'FORBIDDEN');
   }
 
+  private requireMarketing(method: string): FakeUser {
+    const u = this.requireUser(method);
+    if (u.role !== 'MARKETING') throw new FakeApiError(403, 'FORBIDDEN');
+    return u;
+  }
+
   private requireActive(): void {
     if (this.w.round.status !== 'ACTIVE') throw new FakeApiError(409, 'ROUND_NOT_ACTIVE');
   }
@@ -179,31 +209,45 @@ class FakeApi implements BotApi {
   }
 
   async submitBatch(_roundId: number, body: BatchSubmitRequest) {
+    // real: usecase/batch.go:41-71 — validate the body, then role/team, then
+    // round status, in that order.
     const u = this.requireUser('submitBatch');
-    this.requireActive();
-    if (u.role !== 'JM' || u.teamId !== body.team_id) throw new FakeApiError(403, 'FORBIDDEN');
     const raw = 'raw_text' in body && body.raw_text ? body.raw_text : null;
-    if (!raw) throw new FakeApiError(400, 'VALIDATION_ERROR');
+    if (!raw || raw.trim().length < 20) throw new FakeApiError(400, 'VALIDATION_ERROR');
+    if (u.role !== 'JM' || u.teamId !== body.team_id) throw new FakeApiError(403, 'FORBIDDEN');
+    this.requireActive();
     this.w.batches.push({ id: this.w.newBatchId(), teamId: u.teamId, rawText: raw, jokes: [], state: 'QUEUED', lockedBy: null });
     return {};
   }
 
   async teamFeedback(_roundId: number, teamId: number) {
     this.requireUser('teamFeedback');
-    const jokes: FeedbackJoke[] = this.w.batches
-      .filter(b => b.teamId === teamId && b.state === 'DONE')
-      .flatMap(b => b.jokes.filter(j => j.published))
-      .map(j => ({
-        joke_id: j.joke_id, joke_title: 't', was_bought: false,
-        good_dimensions: ['LENGTH'] as FeedbackJoke['good_dimensions'], improve_dimensions: [],
-      }));
+    // real: usecase/feedback.go:38-76 — nothing before the round has started.
+    if (this.w.round.status === 'CONFIGURED') throw new FakeApiError(409, 'ROUND_NOT_ACTIVE');
+    // real: repo/stats_repo.go:134-157 — only the latest feedback_joke_count
+    // published jokes of the team, newest first; dimensions land once classified.
+    const mine = new Set(
+      this.w.batches.filter(b => b.teamId === teamId && b.state === 'DONE').flatMap(b => b.jokes.map(j => j.joke_id)),
+    );
+    const jokes: FeedbackJoke[] = [...this.w.publishOrder]
+      .reverse()
+      .filter(id => mine.has(id))
+      .slice(0, this.w.round.feedback_joke_count)
+      .map(id => {
+        const done = this.w.classified.has(id);
+        return {
+          joke_id: id, joke_title: 't', was_bought: false,
+          good_dimensions: (done ? ['LENGTH'] : []) as FeedbackJoke['good_dimensions'],
+          improve_dimensions: [],
+        };
+      });
     return { jokes };
   }
 
   async marketingQueueNext(_roundId: number): Promise<MarketingQueueEnvelope> {
-    const u = this.requireUser('marketingQueueNext');
+    // real: usecase/marketing.go:33-43 — role is checked before round status.
+    const u = this.requireMarketing('marketingQueueNext');
     this.requireActive();
-    if (u.role !== 'MARKETING') throw new FakeApiError(403, 'FORBIDDEN');
     const b = this.w.batches.find(
       x => x.teamId === u.teamId && (x.state === 'QUEUED' || (x.state === 'CLAIMED' && x.lockedBy === u.id)),
     );
@@ -214,24 +258,49 @@ class FakeApi implements BotApi {
   }
 
   async marketingSplit(batchId: number, body: { jokes: string[] }) {
-    const u = this.requireUser('marketingSplit');
-    const b = this.w.claimedBy(batchId, u.id);
-    if (this.w.round.round_number === 1 && body.jokes.length !== this.w.round.batch_size) {
-      throw new FakeApiError(400, 'VALIDATION_ERROR');
-    }
-    b.jokes = body.jokes.map(joke_text => ({ joke_id: this.w.newJokeId(), joke_text, published: false }));
+    // real: usecase/marketing.go:236-241 — role, then round status, then the claim.
+    const u = this.requireMarketing('marketingSplit');
+    this.requireActive();
+    const b = this.w.claimedBy(batchId, u);
+    // real: usecase/marketing.go:85-102 — blanks are dropped first; round 1
+    // must split into exactly batch_size, later rounds into 1..batch_size.
+    const jokes = body.jokes.map(t => t.trim()).filter(t => t !== '');
+    const size = this.w.round.batch_size;
+    const ok = this.w.round.round_number === 1 ? jokes.length === size : jokes.length >= 1 && jokes.length <= size;
+    if (!ok) throw new FakeApiError(400, 'VALIDATION_ERROR');
+    b.jokes = jokes.map(joke_text => ({ joke_id: this.w.newJokeId(), joke_text, published: false }));
     b.rawText = null;
     return this.w.envelope(b);
   }
 
   async marketingPublish(batchId: number, body: PublishRequest) {
-    const u = this.requireUser('marketingPublish');
-    const b = this.w.claimedBy(batchId, u.id);
+    // real: usecase/marketing.go:236-241 — role, round status, then the claim.
+    const u = this.requireMarketing('marketingPublish');
+    this.requireActive();
+    const b = this.w.claimedBy(batchId, u);
+    // real: handler/marketing.go:189, usecase/marketing.go:209,
+    // repo/marketing_repo.go:254-273 — exactly one decision per joke in the
+    // batch, a title on every published one, and round 1 needs a publish.
+    const ids = body.jokes.map(d => d.joke_id);
+    const batchIds = new Set(b.jokes.map(j => j.joke_id));
+    if (
+      body.jokes.length === 0 ||
+      new Set(ids).size !== ids.length ||
+      ids.length !== batchIds.size ||
+      !ids.every(id => batchIds.has(id)) ||
+      body.jokes.some(d => d.is_published && !(d.joke_title ?? '').trim())
+    ) {
+      throw new FakeApiError(400, 'VALIDATION_ERROR');
+    }
     const published = body.jokes.filter(j => j.is_published).length;
     if (this.w.round.round_number === 1 && published === 0) throw new FakeApiError(400, 'VALIDATION_ERROR');
     for (const d of body.jokes) {
-      const joke = b.jokes.find(j => j.joke_id === d.joke_id);
-      if (joke) joke.published = d.is_published;
+      const joke = b.jokes.find(j => j.joke_id === d.joke_id) as FakeJoke;
+      joke.published = d.is_published;
+      if (d.is_published) {
+        this.w.publishOrder.push(d.joke_id);
+        if (this.w.autoClassify) this.w.classified.add(d.joke_id);
+      }
     }
     b.state = 'DONE';
     this.w.decisions.push({ teamId: b.teamId, batchId, published, total: body.jokes.length });
@@ -245,13 +314,17 @@ class FakeApi implements BotApi {
 
   async instructorAssign(_roundId: number, body: { team_count: number }) {
     this.requireInstructor('instructorAssign');
-    this.w.teamIds = Array.from({ length: body.team_count }, (_, i) => i + 1);
+    // real: repo/team_repo.go:20, usecase/instructor.go:114-124 — Assign only
+    // ever adds teams; existing ones (and their ids) are kept and reused.
+    while (this.w.teamIds.length < body.team_count) {
+      this.w.teamIds.push(Math.max(0, ...this.w.teamIds) + 1);
+    }
     // Deliberately scrambled, like the real shuffle: newest users first, so
     // bots and humans land on each other's teams and must be re-pinned.
     const ps = this.w.participants().sort((a, b) => b.id - a.id);
     ps.forEach((u, i) => {
       const t = Math.floor(i / 2);
-      if (t < body.team_count) {
+      if (t < this.w.teamIds.length) {
         u.teamId = this.w.teamIds[t];
         u.role = i % 2 === 0 ? 'JM' : 'MARKETING';
         u.status = 'ASSIGNED';
@@ -282,6 +355,9 @@ class FakeApi implements BotApi {
 
   async instructorStart(_roundId: number, body?: ConfigRequest) {
     this.requireInstructor('instructorStart');
+    // real: usecase/instructor.go:232-245 — status checks precede the profile check.
+    if (this.w.round.status === 'ACTIVE') throw new FakeApiError(409, 'CONFLICT');
+    if (this.w.round.status === 'ENDED') throw new FakeApiError(409, 'CONFLICT');
     const sent = body?.ideal_profile && Object.keys(body.ideal_profile).length > 0;
     if (!this.w.profileConfigured && !sent) throw new FakeApiError(409, 'IDEAL_PROFILE_REQUIRED');
     this.w.profileConfigured = true;
