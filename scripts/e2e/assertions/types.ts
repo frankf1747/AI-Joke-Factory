@@ -29,7 +29,7 @@ import type {
   RoundStatus,
 } from '../../../types/api';
 import type { TeamOutcome, TeamRoster } from '../harness/class';
-import type { TeamBatchesBody, TeamSummaryBody } from '../harness/client';
+import type { TeamBatchesBody, TeamSummaryBody } from '../../../services/shared/client';
 import type { WaitTimings } from '../harness/wait';
 
 /* ===========================================================================

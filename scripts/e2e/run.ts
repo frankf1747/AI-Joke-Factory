@@ -69,7 +69,7 @@ import {
   type TeamConvergence,
   type TeamSummaryRecord,
 } from './assertions/index';
-import { assertFixtureIntegrity } from './fixtures/jokes';
+import { assertFixtureIntegrity } from '../../services/shared/jokes';
 import {
   assembleClass,
   bindClients,
@@ -81,7 +81,7 @@ import {
   type RolePin,
   type TeamOutcome,
 } from './harness/class';
-import { ApiError, createClient, type JokeFactoryClient } from './harness/client';
+import { ApiError, createClient, type JokeFactoryClient } from '../../services/shared/client';
 import {
   judgeClassifier,
   waitForClassification,

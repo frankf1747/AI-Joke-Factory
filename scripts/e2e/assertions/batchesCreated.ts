@@ -5,7 +5,7 @@
  * WHAT IS ACTUALLY AT RISK HERE. The Joke Maker pastes ONE string; the joke
  * rows do not exist until Marketing splits it. Between those two points the
  * text passes through `strings.TrimSpace` on every piece, the blank-line
- * separator the three consumers in fixtures/jokes.ts all agree on, and the
+ * separator the three consumers in services/shared/jokes.ts all agree on, and the
  * markdown-emphasis stripper. Any of those can silently eat a character, and a
  * joke that arrives at the classifier one word short scores differently for a
  * reason no one will ever connect to the splitter.
@@ -20,10 +20,10 @@
  * compare equal. Nothing else is forgiven.
  */
 
-import { allFixtures } from '../fixtures/jokes';
+import { allFixtures } from '../../../services/shared/jokes';
 import { fail, pass, type Assertion } from './types';
 
-/** Same rule fixtures/jokes.ts uses for its own lookups, restated rather than
+/** Same rule services/shared/jokes.ts uses for its own lookups, restated rather than
  *  exported from there — this file must not be able to drift into forgiving a
  *  difference the fixture would not forgive. */
 function normalize(text: string): string {
@@ -129,7 +129,7 @@ export const batchesCreated: Assertion = (evidence) => {
       (problems.some((p) => p.includes('round trip'))
         ? 'Text came back different from what was sent. That is the splitter or the blob separator, not ' +
           'the network: check services/jokeSplit.ts against the separator contract at the top of ' +
-          'scripts/e2e/fixtures/jokes.ts, and confirm no fixture gained a blank line, a leading list ' +
+          'services/shared/jokes.ts, and confirm no fixture gained a blank line, a leading list ' +
           'marker or markdown emphasis — all three are stripped silently. '
         : '') +
       (problems.some((p) => p.includes('split into'))

@@ -34,7 +34,7 @@
  */
 
 import type { FeedbackJoke, MarketItem } from '../../../types/api';
-import { ApiError, type JokeFactoryClient, type QueueEnvelope } from './client';
+import { ApiError, type JokeFactoryClient, type QueueEnvelope } from '../../../services/shared/client';
 
 /* ===========================================================================
    The generic poller

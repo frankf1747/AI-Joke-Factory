@@ -20,7 +20,7 @@
  *     over the 12 dimensions should produce a range of outcomes: some sell
  *     well, some not at all.
  *   SIGNAL B — THE BLAND CONTROL. One team is dealt ten near-identical jokes
- *     (see the SET B block in fixtures/jokes.ts — it is an instrument, not
+ *     (see the SET B block in services/shared/jokes.ts — it is an instrument, not
  *     filler). It SHOULD cluster. A control that clusters while the varied
  *     corpus spreads is the signature of a classifier that is reading the
  *     jokes. Both flat means the classifier is reading nothing.

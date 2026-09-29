@@ -41,8 +41,8 @@ import {
   titleFor,
   variedCorpus,
   type JokeFixture,
-} from '../fixtures/jokes';
-import { ApiError, type JokeFactoryClient } from './client';
+} from '../../../services/shared/jokes';
+import { ApiError, type JokeFactoryClient } from '../../../services/shared/client';
 import { waitForBatchInMarketingQueue, type WaitTimings } from './wait';
 
 /* ===========================================================================
@@ -316,7 +316,7 @@ export interface StepTiming {
 
 /** Which corpus a team was dealt. The control team exists so the classifier
  *  verdict has something to compare the varied teams against — see the SET B
- *  block in fixtures/jokes.ts, which explains why the control is boring. */
+ *  block in services/shared/jokes.ts, which explains why the control is boring. */
 export type Corpus = 'varied' | 'bland';
 
 export interface TeamPlan {

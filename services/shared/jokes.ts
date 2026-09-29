@@ -28,9 +28,9 @@
  * function; the lookup index is built lazily on first use.
  */
 
-import type { Dimension } from '../../../config/dimensions';
-import { classifyLength, dimById } from '../../../config/dimensions';
-import { splitJokes } from '../../../services/jokeSplit';
+import type { Dimension } from '../../config/dimensions';
+import { classifyLength, dimById } from '../../config/dimensions';
+import { splitJokes } from '../jokeSplit';
 
 /* ============================================================================
    THE BLOB SEPARATOR: A BLANK LINE ("\n\n")
@@ -893,6 +893,13 @@ function mulberry32(seed: number): () => number {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+/** A seeded PRNG for callers outside this file. The bot engine deals its decks
+ *  and makes its persona choices with it. Same FNV-1a + mulberry32 pair the
+ *  fixture dealer uses, so a seed string means the same thing everywhere. */
+export function seededRng(seed: string | number): () => number {
+  return mulberry32(hashSeed(seed));
 }
 
 /** Seeded Fisher–Yates on a copy. The input is never mutated. */

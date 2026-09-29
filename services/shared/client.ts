@@ -63,7 +63,7 @@ import type {
   TeamBatchesResponse,
   TeamFeedbackResponse,
   TeamSummaryResponse,
-} from '../../../types/api';
+} from '../../types/api';
 
 /* ===========================================================================
    WIRE DRIFT — RETIRED 2026-09-16.
