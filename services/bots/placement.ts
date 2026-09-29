@@ -73,9 +73,14 @@ export function planPlacement(lobby: LobbyResponse): PlacementPlan {
   const humanTeamCount = Math.ceil(humans.length / 2);
   const needed = humanTeamCount + botIndices.length;
   if (teamIds.length < needed) {
+    // Two usual causes, both upstream of this function: assign ran with a
+    // team_count below what the class needs, or the lobby is missing teams that
+    // have no members yet (the backend omits empty teams from `Teams`).
+    const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
     throw new Error(
-      `placement needs ${needed} teams (${humanTeamCount} human + ${botIndices.length} bot) ` +
-        `but the lobby has ${teamIds.length}`,
+      `placement needs ${plural(needed, 'team')} (${humanTeamCount} human + ${botIndices.length} bot) ` +
+        `but the lobby has ${teamIds.length}. Run assign with a larger team_count first; the ` +
+        `backend omits empty teams from Teams, so teams nobody has been assigned to do not show up here.`,
     );
   }
 
