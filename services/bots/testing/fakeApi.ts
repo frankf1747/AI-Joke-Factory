@@ -63,7 +63,7 @@ export class FakeWorld {
   readonly classified = new Set<number>();
   /** Published joke ids in publish order, oldest first. */
   readonly publishOrder: number[] = [];
-  private failures: Array<{ method: string; userName?: string; remaining: number }> = [];
+  private failures: Array<{ method: string; userName?: string; remaining: number; status: number }> = [];
   private nextUserId = 100;
   private nextBatchId = 1;
   private nextJokeId = 1000;
@@ -78,9 +78,12 @@ export class FakeWorld {
     return [...this.users.values()].find(u => u.name === name);
   }
 
-  /** Make `method` fail with a 500, `times` times, optionally only for one user. */
-  failNext(method: string, times: number, userName?: string): void {
-    this.failures.push({ method, userName, remaining: times });
+  /**
+   * Make `method` fail `times` times, optionally only for one user. Defaults to
+   * a 500 'INTERNAL'; pass another status (e.g. 403) to test that error path.
+   */
+  failNext(method: string, times: number, userName?: string, status = 500): void {
+    this.failures.push({ method, userName, remaining: times, status });
   }
 
   /** Classify the given published jokes, or every published joke when none are named. */
@@ -99,7 +102,7 @@ export class FakeWorld {
     );
     if (f) {
       f.remaining--;
-      throw new FakeApiError(500, 'INTERNAL');
+      throw new FakeApiError(f.status, f.status === 500 ? 'INTERNAL' : 'INJECTED');
     }
   }
 
