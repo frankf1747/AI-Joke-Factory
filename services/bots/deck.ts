@@ -18,6 +18,11 @@ export class Deck {
     private readonly rand: () => number,
   ) {
     if (corpus.length === 0) throw new Error('Deck needs a non-empty corpus');
+    // The in-batch exclusion in reshuffle() is keyed on id, so two fixtures
+    // sharing one would let a single batch repeat a joke.
+    if (new Set(corpus.map(j => j.id)).size !== corpus.length) {
+      throw new Error('Deck corpus has duplicate joke ids');
+    }
   }
 
   draw(n: number): JokeFixture[] {

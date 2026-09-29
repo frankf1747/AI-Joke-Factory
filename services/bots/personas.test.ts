@@ -1,5 +1,6 @@
 // services/bots/personas.test.ts
 import { describe, it, expect } from 'vitest';
+import { seededRng } from '../shared/jokes';
 import {
   PERSONAS, choosePublished, jitter, personaSequence, publishCount, type Persona,
 } from './personas';
@@ -37,11 +38,15 @@ describe('choosePublished', () => {
   const ids = [11, 12, 13, 14, 15];
 
   it('keeps exactly the requested number of the given ids', () => {
-    let seed = 0.37;
-    const rand = () => (seed = (seed * 9301 + 0.49297) % 1);
-    const kept = choosePublished(ids, 2, rand);
+    const kept = choosePublished(ids, 2, seededRng('choose'));
     expect(kept.size).toBe(2);
     for (const id of kept) expect(ids).toContain(id);
+  });
+
+  it('is deterministic for a given seed', () => {
+    const a = choosePublished(ids, 3, seededRng('choose'));
+    const b = choosePublished(ids, 3, seededRng('choose'));
+    expect([...a]).toEqual([...b]);
   });
 
   it('clamps to the pool', () => {
