@@ -296,6 +296,14 @@ implementation task, measured over a 10-minute hidden-tab run. If bots cannot
 keep pace, the fallback is a dedicated bot-host window kept visible, documented
 in the panel — not keep-alive hacks.
 
+**Result (2026-09-29):** INCONCLUSIVE — main thread 100% of expected ticks,
+worker 100% over 10 minutes (7-minute run: identical, 100% / 100%), Chromium via Playwright 1.63.0.
+Measured by `scripts/spikes/worker-throttle/run.mjs` with Playwright's anti-throttling flags removed.
+In both runs `document.visibilityState` never became `hidden` for the bot-host page (headed
+Playwright opens each page in its own window, so `bringToFront()` on the second page never hides
+the first), and the main-thread control was not throttled, so throttling never engaged and
+nothing is proven either way. Task 13's live test and a manual watch session are the verification.
+
 ## 11. Assumptions to confirm at spec review
 
 - Bots reuse the 60-joke corpus with replacement rather than expanding it.
