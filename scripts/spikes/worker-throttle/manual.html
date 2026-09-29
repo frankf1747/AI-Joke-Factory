@@ -1,0 +1,66 @@
+<!doctype html>
+<!--
+  MANUAL throttling check, for a real browser.
+
+  WHY THIS EXISTS. run.mjs could not answer the question: Playwright emulates
+  focus for every page it controls, so its pages report `visible` even when
+  another tab is in front or the window is minimized. Throttling never engages
+  under automation, and no Playwright test in this repo can measure it. Only a
+  real, hand-driven browser can.
+
+  Serve it (Blob workers need a real origin, not file://):
+    python3 -m http.server 8765 --directory scripts/spikes/worker-throttle
+  then open http://localhost:8765/manual.html in Chrome, switch to another tab
+  for at least 7 minutes, and come back.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<title>Worker throttling check</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; max-width: 42rem; margin: 3rem auto; padding: 0 1rem; }
+  .big { font: 600 1.4rem/1.3 ui-monospace, monospace; }
+  .verdict { margin-top: 1.5rem; padding: 1rem; border-radius: .5rem; background: #f3f4f6; }
+</style>
+</head>
+<body>
+<h1>Does a Web Worker keep pace in a hidden tab?</h1>
+<p><strong>Now switch to another tab for at least 7 minutes, then come back here.</strong>
+Chrome's heavy throttling of hidden pages only starts after about 5 minutes.</p>
+<p class="big" id="counts">starting…</p>
+<div class="verdict" id="verdict">Waiting — no hidden period long enough yet.</div>
+<script>
+  const started = performance.now();
+  let mainTicks = 0, workerTicks = 0, hiddenAt = null, longestHiddenMs = 0;
+  setInterval(() => { mainTicks++; }, 1000);
+  const src = 'let n = 0; setInterval(() => postMessage(++n), 1000);';
+  const worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+  worker.onmessage = e => { workerTicks = e.data; };
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') { hiddenAt = performance.now(); return; }
+    if (hiddenAt !== null) longestHiddenMs = Math.max(longestHiddenMs, performance.now() - hiddenAt);
+    hiddenAt = null;
+    render();
+  });
+
+  function render() {
+    const expected = Math.floor((performance.now() - started) / 1000);
+    const pct = n => expected ? Math.round((100 * n) / expected) : 100;
+    document.getElementById('counts').textContent =
+      `${expected}s elapsed · main thread ${mainTicks} (${pct(mainTicks)}%) · worker ${workerTicks} (${pct(workerTicks)}%)`;
+    const v = document.getElementById('verdict');
+    if (longestHiddenMs < 5.5 * 60_000) {
+      v.textContent = `Waiting — longest hidden stretch so far ${Math.round(longestHiddenMs / 1000)}s; need about 6 minutes.`;
+    } else if (pct(mainTicks) >= 90) {
+      v.textContent = 'INCONCLUSIVE — the main-thread control was not throttled, so throttling never engaged.';
+    } else if (pct(workerTicks) >= 90) {
+      v.textContent = `PASS — main thread slowed to ${pct(mainTicks)}%, the worker kept pace at ${pct(workerTicks)}%. Bots can live in the instructor tab.`;
+    } else {
+      v.textContent = `FAIL — the worker was throttled too (${pct(workerTicks)}%). Watch tabs must open in a separate window.`;
+    }
+  }
+  setInterval(render, 1000);
+</script>
+</body>
+</html>

@@ -302,7 +302,20 @@ Measured by `scripts/spikes/worker-throttle/run.mjs` with Playwright's anti-thro
 In both runs `document.visibilityState` never became `hidden` for the bot-host page (headed
 Playwright opens each page in its own window, so `bringToFront()` on the second page never hides
 the first), and the main-thread control was not throttled, so throttling never engaged and
-nothing is proven either way. Task 13's live test and a manual watch session are the verification.
+nothing is proven either way.
+
+**Root cause, confirmed after the run:** the window layout was not the problem. A follow-up probe
+minimized the bot-host window through the DevTools protocol (`Browser.setWindowBounds`,
+`windowState: 'minimized'`) and the page STILL reported `visible`. Playwright emulates focus for
+every page it controls, so under Playwright a page never becomes hidden and throttling never
+engages. That also rules out the fallback above: the Playwright live tests (Tasks 11 and 18) run
+under the same emulation and cannot measure throttling either.
+
+**The question is therefore open, and answerable only in a real browser:**
+`scripts/spikes/worker-throttle/manual.html`, driven by hand in Chrome, gives the verdict on the
+page itself. Until it is run, the engine stays in a worker (no cost if unneeded). The one
+decision that depends on the answer is whether 👁 opens a new tab or a separate window (Task 17):
+a separate window keeps the instructor tab visible, which sidesteps the question entirely.
 
 ## 11. Assumptions to confirm at spec review
 
