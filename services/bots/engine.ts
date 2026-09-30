@@ -287,7 +287,9 @@ export class BotEngine {
    *
    * The controller is claimed synchronously, before any await, so a second
    * start() is refused at once and stop() can cancel a start still in progress.
-   * The work itself runs on the op chain, never overlapping a reform or remove.
+   * The new run's seats are shown from that same moment, so status() never
+   * pairs `running` with the previous run's stopped seats. The work itself runs
+   * on the op chain, never overlapping a reform or remove.
    */
   async start(options: StartOptions): Promise<void> {
     if (this.running) throw new Error('Bots are already running — stop them first.');
@@ -295,8 +297,10 @@ export class BotEngine {
     if (options.teams.length > MAX_BOT_TEAMS) throw new Error(`At most ${MAX_BOT_TEAMS} bot teams.`);
     const controller = new AbortController();
     this.controller = controller;
+    const teams = options.teams.map(newTeam);
+    this.teams = teams;
     try {
-      await this.serialize(() => this.startNow(options, controller));
+      await this.serialize(() => this.startNow(options, teams, controller));
     } catch (err) {
       if (this.controller === controller) {
         this.controller = null;
@@ -306,7 +310,7 @@ export class BotEngine {
     }
   }
 
-  private async startNow(options: StartOptions, controller: AbortController): Promise<void> {
+  private async startNow(options: StartOptions, teams: TeamRuntime[], controller: AbortController): Promise<void> {
     const { signal } = controller;
     if (signal.aborted) return;
     if (options.startRound) {
@@ -333,7 +337,8 @@ export class BotEngine {
     this.classificationCalls = 0;
     this.scrambled = false;
     this.warnings = [];
-    this.teams = options.teams.map(newTeam);
+    // Again, because a remove() queued ahead of this start clears the teams.
+    this.teams = teams;
     this.emitStatus();
 
     await this.joinBots(signal);

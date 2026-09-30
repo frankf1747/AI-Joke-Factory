@@ -67,8 +67,8 @@ function options(overrides: Partial<StartOptions> = {}): StartOptions {
  */
 class Gate {
   private held: Array<{ method: string; go: () => void }> = [];
-  private methods = new Set<string>();
-  private mode: 'request' | 'response' = 'request';
+  /** Each held method keeps its own mode, so one hold() never changes another's. */
+  private modes = new Map<string, 'request' | 'response'>();
 
   /** How many calls are held, optionally of one method. */
   count(method?: string): number {
@@ -76,13 +76,12 @@ class Gate {
   }
 
   hold(method: string, mode: 'request' | 'response'): void {
-    this.methods.add(method);
-    this.mode = mode;
+    this.modes.set(method, mode);
   }
 
   stopHolding(method?: string): void {
-    if (method === undefined) this.methods.clear();
-    else this.methods.delete(method);
+    if (method === undefined) this.modes.clear();
+    else this.modes.delete(method);
   }
 
   /** Let held calls go, optionally only those of one method. */
@@ -101,9 +100,10 @@ class Gate {
         const method = String(prop);
         return (...args: unknown[]) => {
           const call = () => (value as (...a: unknown[]) => Promise<unknown>).apply(target, args);
-          if (!this.methods.has(method)) return call();
+          const mode = this.modes.get(method);
+          if (mode === undefined) return call();
           const released = new Promise<void>(go => this.held.push({ method, go }));
-          if (this.mode === 'request') return released.then(call);
+          if (mode === 'request') return released.then(call);
           const result = call();
           result.catch(() => undefined); // observed later, after release
           return released.then(() => result);
@@ -353,6 +353,47 @@ describe('BotEngine', () => {
     expect(world.decisions).toEqual([]);
   });
 
+  it('shows only the new run\'s seats once a restart is under way', async () => {
+    const { engine } = setup();
+    await engine.start(options({ startRound: false }));
+    engine.stop();
+    const restart = engine.start(options({ teams: [{ index: 1, persona: 'CAREFUL' }], startRound: false }));
+    const status = engine.status();
+    expect(status.running).toBe(true);
+    expect(status.teams.map(t => [t.persona, t.jm.activity, t.marketing.activity]))
+      .toEqual([['CAREFUL', 'not started', 'not started']]);
+    await restart;
+    engine.stop();
+  });
+
+  it('keeps the new run\'s seats when a start queues behind a remove', async () => {
+    const { world, engine } = setup();
+    await engine.start(options({ startRound: false }));
+    const removing = engine.remove(1);
+    const restart = engine.start(options({ teams: [{ index: 1, persona: 'CAREFUL' }], startRound: false }));
+    await removing;
+    await restart;
+    engine.stop();
+    expect(engine.status().teams.map(t => t.persona)).toEqual(['CAREFUL']);
+    expect(world.userNamed(botName(1, 'B'))).toMatchObject({ role: 'MARKETING' });
+  });
+
+  it('Careful starts round 2 without waiting on round-1 jokes still being classified', async () => {
+    const { world, engine } = setup();
+    world.autoClassify = false;
+    await engine.start(options({ teams: [{ index: 1, persona: 'CAREFUL' }], speed: 1 }));
+    const team = teamOf(world, botName(1, 'A'));
+    const jm = world.userNamed(botName(1, 'A'));
+    if (!jm) throw new Error('bot 01A missing');
+    await until(() => world.decisions.some(d => d.teamId === team), 'a round-1 publish');
+    expect(world.classified.size).toBe(0);
+
+    world.round = { ...world.round, id: 2, round_number: 2, status: 'ACTIVE' };
+    await until(() => world.batches.some(b => b.teamId === team && b.roundId === 2), 'a round-2 batch');
+    engine.stop();
+    expect(engine.historyFor(jm.id).map(e => e.text).join('\n')).not.toMatch(/gave up waiting/);
+  });
+
   it('publishes an inherited batch that does not split cleanly into the round-1 count', async () => {
     const { world, engine } = setup();
     await engine.start(options({ startRound: false }));
@@ -398,6 +439,7 @@ describe('BotEngine', () => {
     expect(stopped).toBe(true);
     await settle(200);
     expect(world.round.status).toBe('CONFIGURED');
+    expect(world.calls).not.toContain('instructorAssign');
     expect(world.calls).not.toContain('sessionMe');
     expect(engine.status().running).toBe(false);
   });
