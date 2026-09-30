@@ -35,11 +35,17 @@ function post(message: FromWorker): void {
 
 channel.onmessage = (event: MessageEvent<ChannelMessage>) => {
   const m = event.data;
+  // Same-origin, so this is robustness rather than security: ignore anything
+  // that isn't a message object.
+  if (!m || typeof m !== 'object') return;
   if (m.type !== 'history-request' || !engine) return;
-  const reply: ChannelMessage = {
-    type: 'history', botUserId: m.botUserId,
-    entries: engine.historyFor(m.botUserId), meta: engine.metaFor(m.botUserId),
-  };
+  const entries = engine.historyFor(m.botUserId);
+  const meta = engine.metaFor(m.botUserId);
+  // A second instructor tab has an idle engine. A watch tab keeps the last reply
+  // it receives, so an empty answer from a worker that doesn't run this bot
+  // could erase the real history.
+  if (!meta && entries.length === 0) return;
+  const reply: ChannelMessage = { type: 'history', botUserId: m.botUserId, entries, meta };
   channel.postMessage(reply);
 };
 
@@ -62,7 +68,14 @@ async function handle(m: ToWorker): Promise<void> {
     }
     if (!engine) throw new Error('bot engine not initialised');
     switch (m.type) {
-      case 'probe': await engine.probe(m.roundId); break;
+      case 'probe':
+        // WHY nothing on failure: the panel polls every 5 s, so a `fatal` here
+        // would repeat the error on every blip and clear the panel's pending
+        // state mid-start. A zeroed ProbeResult would be worse: `humans: 0`
+        // would enable "Run all-bot class" for a lobby that couldn't be read.
+        // The panel keeps its last good reading instead.
+        try { await engine.probe(m.roundId); } catch { /* best-effort poll */ }
+        break;
       case 'start': await engine.start(m.options); break;
       case 'stop': engine.stop(); break;
       case 'setSpeed': engine.setSpeed(m.speed); break;
