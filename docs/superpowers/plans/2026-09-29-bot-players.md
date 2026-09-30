@@ -3803,7 +3803,11 @@ test.describe('Bot players (live)', () => {
       return false;
     }, { timeout: CLASS_BUDGET_MS, intervals: [5_000], message: 'a bot joke published and scored' }).toBe(true);
 
-    await expect(page.locator('tbody tr')).toHaveCount(3);
+    // Scoped to the panel's own table: the instructor view also renders the
+    // leaderboard and Live Market tables, whose rows a bare `tbody tr` counts.
+    await expect(
+      page.getByRole('table', { name: 'Bot teams, and what each seat is doing' }).locator('tbody tr'),
+    ).toHaveCount(3);
 
     // Clean up through the panel, and prove it removed bots and nothing else.
     await page.getByRole('button', { name: 'Stop' }).click();
@@ -3814,7 +3818,6 @@ test.describe('Bot players (live)', () => {
     }, { timeout: 60_000 }).toBe(0);
   });
 });
-```
 
 - [ ] **Step 2: Build a local production bundle against the live backend and serve it**
 
