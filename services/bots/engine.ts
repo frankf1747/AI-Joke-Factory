@@ -204,6 +204,8 @@ export class BotEngine {
   /** Bumped at the end of every team formation; see checkSeat. */
   private formationEpoch = 0;
   private forming = false;
+  /** start, reform and remove queue here; see serialize. */
+  private opChain: Promise<unknown> = Promise.resolve();
   private readonly history = new Map<number, ReasoningEntry[]>();
 
   constructor(private readonly deps: EngineDeps) {}
@@ -252,15 +254,40 @@ export class BotEngine {
     return result;
   }
 
+  /**
+   * Seat the bots, form teams, optionally start the round, then launch the
+   * actors.
+   *
+   * The controller is claimed synchronously, before any await, so a second
+   * start() is refused at once and stop() can cancel a start still in progress.
+   * The work itself runs on the op chain, never overlapping a reform or remove.
+   */
   async start(options: StartOptions): Promise<void> {
     if (this.running) throw new Error('Bots are already running — stop them first.');
     if (options.teams.length === 0) throw new Error('Choose at least one bot team.');
     if (options.teams.length > MAX_BOT_TEAMS) throw new Error(`At most ${MAX_BOT_TEAMS} bot teams.`);
+    const controller = new AbortController();
+    this.controller = controller;
+    try {
+      await this.serialize(() => this.startNow(options, controller));
+    } catch (err) {
+      if (this.controller === controller) {
+        this.controller = null;
+        this.emitStatus();
+      }
+      throw err;
+    }
+  }
+
+  private async startNow(options: StartOptions, controller: AbortController): Promise<void> {
+    const { signal } = controller;
+    if (signal.aborted) return;
     if (options.startRound) {
       // Check BEFORE seating anyone. The backend refuses to start a round that
       // is ACTIVE or ENDED (usecase/instructor.go:232-237); bots seated for a
       // round that can never start would just sit there.
       const rounds = (await this.deps.api.roundsActive()).rounds;
+      if (signal.aborted) return;
       const round = rounds.find(r => r.id === options.roundId);
       if (!round || round.status !== 'CONFIGURED') {
         throw new Error(
@@ -282,25 +309,27 @@ export class BotEngine {
     this.teams = options.teams.map(newTeam);
     this.emitStatus();
 
-    await this.joinBots();
+    await this.joinBots(signal);
+    if (signal.aborted) return;
     await this.formTeams();
+    if (signal.aborted) return;
     if (options.startRound) {
       const body: ConfigRequest = options.idealProfile
         ? { ideal_profile: options.idealProfile as ConfigRequest['ideal_profile'] }
         : {};
       await this.instructor().instructorStart(options.roundId, body);
       this.roundCache = null;
+      if (signal.aborted) return;
     }
 
-    const controller = new AbortController();
-    this.controller = controller;
     for (const team of this.teams) {
-      void this.runJokeMaker(team, controller.signal);
-      void this.runMarketing(team, controller.signal);
+      void this.runJokeMaker(team, signal);
+      void this.runMarketing(team, signal);
     }
     this.emitStatus();
   }
 
+  /** The kill switch: synchronous and immediate, never queued behind the op chain. */
   stop(): void {
     if (!this.controller) return;
     this.controller.abort();
@@ -312,35 +341,50 @@ export class BotEngine {
     this.emitStatus();
   }
 
-  async reform(): Promise<void> {
-    await this.formTeams();
-    this.scrambled = false;
-    this.emitStatus();
+  reform(): Promise<void> {
+    return this.serialize(async () => {
+      await this.formTeams();
+      this.scrambled = false;
+      this.emitStatus();
+    });
   }
 
   /** Stop, then delete every bot user — never a human. Returns how many were removed. */
-  async remove(roundId: number): Promise<number> {
+  remove(roundId: number): Promise<number> {
     this.stop();
-    const instructor = this.instructor();
-    const ids = new Set(
-      participantsOf(await instructor.instructorLobby(roundId)).filter(p => isBotName(p.name)).map(p => p.userId),
-    );
-    for (const team of this.teams) {
-      for (const seat of [team.jm, team.marketing]) if (seat.userId != null) ids.add(seat.userId);
-    }
-    for (const id of ids) {
-      try {
-        await instructor.instructorDeleteUser(roundId, id);
-      } catch (err) {
-        if (statusOf(err) !== 404) throw err;
+    return this.serialize(async () => {
+      const instructor = this.instructor();
+      const ids = new Set(
+        participantsOf(await instructor.instructorLobby(roundId)).filter(p => isBotName(p.name)).map(p => p.userId),
+      );
+      for (const team of this.teams) {
+        for (const seat of [team.jm, team.marketing]) if (seat.userId != null) ids.add(seat.userId);
       }
-    }
-    this.teams = [];
-    this.history.clear();
-    this.warnings = [];
-    this.scrambled = false;
-    this.emitStatus();
-    return ids.size;
+      for (const id of ids) {
+        try {
+          await instructor.instructorDeleteUser(roundId, id);
+        } catch (err) {
+          if (statusOf(err) !== 404) throw err;
+        }
+      }
+      this.teams = [];
+      this.history.clear();
+      this.warnings = [];
+      this.scrambled = false;
+      this.emitStatus();
+      return ids.size;
+    });
+  }
+
+  /**
+   * Run start, reform and remove one at a time. Each re-forms teams, and two
+   * formations interleaving their assign and PATCHes strand humans on broken
+   * teams, since every assign reshuffles. A failed op does not poison the chain.
+   */
+  private serialize<T>(op: () => Promise<T>): Promise<T> {
+    const run = this.opChain.then(op, op);
+    this.opChain = run.catch(() => undefined);
+    return run;
   }
 
   // ---- formation -----------------------------------------------------------
@@ -354,10 +398,11 @@ export class BotEngine {
     return this.roundId;
   }
 
-  private async joinBots(): Promise<void> {
+  private async joinBots(signal: AbortSignal): Promise<void> {
     for (const team of this.teams) {
       for (const seat of [team.jm, team.marketing]) {
         const joined = await this.deps.api.sessionJoin({ display_name: seat.name });
+        if (signal.aborted) return;
         seat.userId = joined.user.user_id;
         seat.activity = 'joined';
       }

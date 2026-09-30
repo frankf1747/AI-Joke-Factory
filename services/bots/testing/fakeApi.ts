@@ -63,6 +63,15 @@ export class FakeWorld {
   readonly classified = new Set<number>();
   /** Published joke ids in publish order, oldest first. */
   readonly publishOrder: number[] = [];
+  /**
+   * The order Auto-Assign deals participants into seats, two per team. The
+   * default, newest first, puts bots and humans on each other's teams. The real
+   * assign shuffles randomly (usecase/instructor.go, r.Shuffle), so two calls
+   * rarely agree; tests that need that pass an order that changes per call.
+   */
+  assignOrder: (participants: FakeUser[], call: number) => FakeUser[] =
+    ps => [...ps].sort((a, b) => b.id - a.id);
+  private assignCalls = 0;
   private failures: Array<{ method: string; userName?: string; remaining: number; status: number }> = [];
   private nextUserId = 100;
   private nextBatchId = 1;
@@ -128,6 +137,7 @@ export class FakeWorld {
   }
 
   newBatchId(): number { return this.nextBatchId++; }
+  nextAssignCall(): number { return ++this.assignCalls; }
   newJokeId(): number { return this.nextJokeId++; }
 
   /**
@@ -324,7 +334,7 @@ class FakeApi implements BotApi {
     }
     // Deliberately scrambled, like the real shuffle: newest users first, so
     // bots and humans land on each other's teams and must be re-pinned.
-    const ps = this.w.participants().sort((a, b) => b.id - a.id);
+    const ps = this.w.assignOrder(this.w.participants(), this.w.nextAssignCall());
     ps.forEach((u, i) => {
       const t = Math.floor(i / 2);
       if (t < this.w.teamIds.length) {

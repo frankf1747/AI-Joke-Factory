@@ -1,31 +1,40 @@
 // services/bots/engine.test.ts
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_IDEAL_PROFILE } from '../../config/dimensions';
-import { variedCorpus } from '../shared/jokes';
+import { seededRng, variedCorpus } from '../shared/jokes';
 import { BotEngine, fitPieces, splitBlob, titleOf, wallClockSteps } from './engine';
 import { botName, isBotName } from './naming';
 import { BATCH_CAP_PER_ROUND } from './personas';
+import type { BotApi } from './api';
 import type { FromWorker, StartOptions } from './protocol';
-import { FakeWorld } from './testing/fakeApi';
+import { FakeWorld, type FakeUser } from './testing/fakeApi';
 
 const nextTick = () => new Promise<void>(resolve => setImmediate(resolve));
 
-function setup(humans: string[] = []) {
+interface Hooks {
+  /** Called after each message is recorded; lets a test act mid-operation. */
+  onEmit?: (message: FromWorker) => void;
+  /** Wraps the fake client, e.g. to hold a request in flight. */
+  wrapApi?: (api: BotApi) => BotApi;
+}
+
+function setup(humans: string[] = [], hooks: Hooks = {}) {
   const world = new FakeWorld();
   const instructorId = world.addUser('Instructor', 'INSTRUCTOR');
   for (const name of humans) world.addUser(name);
   let clock = 0;
   const emitted: FromWorker[] = [];
+  const api = world.api();
   const engine = new BotEngine({
-    api: world.api(),
+    api: hooks.wrapApi ? hooks.wrapApi(api) : api,
     instructorUserId: instructorId,
     // Advances fake time and yields a macrotask, so waiting tests get a turn.
     delay: ms => { clock += ms; return nextTick(); },
     now: () => clock,
-    emit: m => { emitted.push(m); },
+    emit: m => { emitted.push(m); hooks.onEmit?.(m); },
     seed: 'engine-test',
   });
-  return { world, engine, emitted };
+  return { world, engine, emitted, clock: () => clock };
 }
 
 async function until(condition: () => boolean, what: string): Promise<void> {
@@ -52,6 +61,25 @@ function options(overrides: Partial<StartOptions> = {}): StartOptions {
 }
 
 const teamOf = (world: FakeWorld, name: string) => world.userNamed(name)?.teamId ?? null;
+
+/** Every human team holds exactly one JM and one Marketing, and no bot. */
+function expectCleanHumanTeams(world: FakeWorld): void {
+  const byTeam = new Map<number, FakeUser[]>();
+  for (const u of world.participants()) {
+    if (u.teamId == null) continue;
+    byTeam.set(u.teamId, [...(byTeam.get(u.teamId) ?? []), u]);
+  }
+  for (const [teamId, members] of byTeam) {
+    if (!members.some(m => !isBotName(m.name))) continue;
+    const layout = members.map(m => `${m.name}:${m.role}`).sort();
+    expect({ teamId, layout }).toEqual({
+      teamId,
+      layout: expect.arrayContaining([expect.stringMatching(/:JM$/), expect.stringMatching(/:MARKETING$/)]),
+    });
+    expect({ teamId, size: members.length, bots: members.filter(m => isBotName(m.name)).length })
+      .toEqual({ teamId, size: 2, bots: 0 });
+  }
+}
 
 describe('BotEngine', () => {
   it('puts humans on the lowest team and each bot team on its own team', async () => {
@@ -207,6 +235,63 @@ describe('BotEngine', () => {
     await until(() => world.decisions.some(d => d.teamId === team), 'the inherited batch to publish');
     engine.stop();
     expect(world.decisions[0]).toMatchObject({ teamId: team, total: 5 });
+  });
+
+  it('refuses a second start while the first is still starting, and stop() halts the one that ran', async () => {
+    const { world, engine } = setup();
+    const first = engine.start(options({ startRound: false }));
+    const second = engine.start(options({ startRound: false }));
+    await first;
+    await expect(second).rejects.toThrow(/already running/);
+    engine.stop();
+    await settle(200);
+    const callsAfterStop = world.calls.length;
+    await settle(2_000);
+    expect(world.calls.length).toBe(callsAfterStop);
+  });
+
+  it('stop() cancels a start that is still seating bots', async () => {
+    let stopped = false;
+    const { world, engine } = setup([], {
+      onEmit: m => {
+        if (stopped || m.type !== 'status') return;
+        if (m.status.teams.length > 0 && m.status.teams.every(t => t.jm.activity === 'joined')) {
+          stopped = true;
+          engine.stop();
+        }
+      },
+    });
+    await engine.start(options());
+    expect(stopped).toBe(true);
+    await settle(200);
+    expect(world.round.status).toBe('CONFIGURED');
+    expect(world.calls).not.toContain('sessionMe');
+    expect(engine.status().running).toBe(false);
+  });
+
+  it('runs overlapping re-forms one at a time, so no human team is left stranded', async () => {
+    const { world, engine } = setup(['alice', 'bob', 'carol', 'dave', 'erin', 'frank']);
+    // Like the real shuffle (usecase/instructor.go, r.Shuffle), each Auto-Assign
+    // deals seats in a different order. Seeded, so the interleaving is repeatable.
+    world.assignOrder = (ps, call) => {
+      const rand = seededRng(`assign:${call}`);
+      const out = [...ps].sort((a, b) => a.id - b.id);
+      for (let i = out.length - 1; i > 0; i--) {
+        const j = Math.floor(rand() * (i + 1));
+        [out[i], out[j]] = [out[j], out[i]];
+      }
+      return out;
+    };
+    await engine.start(options({ teams: [{ index: 1, persona: 'SPRAY' }, { index: 2, persona: 'SPRAY' }], startRound: false }));
+    expectCleanHumanTeams(world);
+    await Promise.all([engine.reform(), engine.reform()]);
+    engine.stop();
+    expectCleanHumanTeams(world);
+    for (const index of [1, 2]) {
+      const team = teamOf(world, botName(index, 'A'));
+      expect(world.userNamed(botName(index, 'B'))).toMatchObject({ teamId: team, role: 'MARKETING' });
+      expect(world.userNamed(botName(index, 'A'))).toMatchObject({ role: 'JM' });
+    }
   });
 
   it('treats a lost batch (403) as a re-poll, not an error', async () => {
