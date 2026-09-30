@@ -93,6 +93,18 @@ export const BotPanel: React.FC = () => {
         setError(m.message);
       }
     };
+    // WHY: a deploy replaces the hashed worker-*.js chunk, so a tab opened before
+    // it asks for a file that no longer exists. That worker never replies: a
+    // pending command would stick, and even Stop would post into the void. Drop
+    // it, so nothing else is sent to it, and tell the instructor how to recover.
+    const workerFailed = () => {
+      worker.terminate();
+      if (workerRef.current === worker) workerRef.current = null;
+      setPending(null);
+      setError('The bot worker stopped responding. Reload this page to get the current version.');
+    };
+    worker.onerror = workerFailed;
+    worker.onmessageerror = workerFailed;
     const init: ToWorker = { type: 'init', baseUrl: getApiBaseUrl(), instructorUserId: instructorId, seed: `bots-${Date.now()}` };
     worker.postMessage(init);
     probeNow();
