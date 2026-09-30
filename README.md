@@ -197,6 +197,56 @@ and answers `200` immediately. Whether an Azure LLM call then succeeds, scores
 the jokes and produces sales is invisible to every other kind of test in this
 repo. It is also, historically, the thing that breaks.
 
+### Bot players
+
+To test with a full class when you do not have one, open the instructor view with
+`?bots=1` — for example `https://<your-site>/?bots=1` — and use the **Bot players** panel.
+
+- **Run all-bot class** fills an empty lobby with bot teams and starts the round. Use it to
+  watch a full-size class from your dashboard.
+- **Fill with bot teams** adds bot teams after any humans already in the lobby, before the
+  round starts. Every team is all-human or all-bot.
+- **Personas** play differently: *Careful* publishes 2 of 5 and waits for feedback, *Balanced*
+  publishes 3–4, *Spray* publishes everything as fast as it can. They differ in volume and
+  pace, not in how well they pick, so the leaderboard shows whether publishing less ever
+  beats publishing more.
+- **Speed** 1× plays at human pace; 10× compresses a round into about a minute.
+- **👁** on any bot opens its real Joke Maker or Marketing screen in a new tab, read-only,
+  with the bot's reasoning alongside.
+
+Every published bot joke is an Azure LLM classification call, and the panel counts them.
+Closing the instructor tab stops the bots. **Remove bots** deletes bot users and never
+touches humans.
+
+#### Watching a bot
+
+The 👁 tab is the bot's own screen, framed by a black **WATCHING** banner. It is read-only:
+its action cards are locked, it never publishes or submits anything, and it never changes the
+instructor login your other tabs use. The strip on the right shows why the bot did what it did
+(which jokes it kept, what it published), newest first; entries arrive while the instructor
+tab with the Bot panel stays open. When the bot is removed or the game is reset, the tab says
+the bot has left — close it. A malformed watch link shows "Watch mode unavailable" instead of
+opening anything.
+
+#### Caveats
+
+If you press **Stop** at the instant an all-bot class is starting, the round can already be
+active with bots seated but idle. Bots can only be added to a round that has not started, so
+press **Remove bots**, then end or reset the round before running another class.
+
+Avoid pressing the ordinary **Auto-Assign** while bots are playing. It shuffles bots and
+humans together; the bots notice and pause until you press **Re-form teams**, and none will
+ever decide a human team's jokes. A Marketing bot moved onto a human team can still pick up
+one of that team's batches before it notices. The panel warns you when that happens: the
+batch is hidden from the team for up to 15 minutes (the team keeps receiving its other
+batches), and **Remove bots** releases it at once.
+
+```bash
+E2E_ADMIN_PASSWORD='…' npx playwright test scripts/e2e/browser/bots.spec.ts
+```
+
+The live test above resets the game first. Run it only against a backend nobody is using.
+
 ---
 
 ## Deployment
