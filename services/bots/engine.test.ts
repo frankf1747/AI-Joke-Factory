@@ -66,13 +66,15 @@ function options(overrides: Partial<StartOptions> = {}): StartOptions {
  * mode it lands at once and only the reply is late.
  */
 class Gate {
-  private held: Array<{ method: string; go: () => void }> = [];
+  private held: Array<{ method: string; client: string | null; go: () => void }> = [];
   /** Each held method keeps its own mode, so one hold() never changes another's. */
   private modes = new Map<string, 'request' | 'response'>();
 
-  /** How many calls are held, optionally of one method. */
-  count(method?: string): number {
-    return this.held.filter(h => method === undefined || h.method === method).length;
+  /** How many calls are held, optionally of one method and one client (the label given to `as`). */
+  count(method?: string, client?: string): number {
+    return this.held.filter(
+      h => (method === undefined || h.method === method) && (client === undefined || h.client === client),
+    ).length;
   }
 
   hold(method: string, mode: 'request' | 'response'): void {
@@ -91,18 +93,18 @@ class Gate {
     for (const h of go) h.go();
   }
 
-  wrap(api: BotApi): BotApi {
+  wrap(api: BotApi, client: string | null = null): BotApi {
     return new Proxy(api, {
       get: (target, prop, receiver) => {
         const value: unknown = Reflect.get(target, prop, receiver);
-        if (prop === 'as') return (id: number, label: string) => this.wrap(target.as(id, label));
+        if (prop === 'as') return (id: number, label: string) => this.wrap(target.as(id, label), label);
         if (typeof value !== 'function') return value;
         const method = String(prop);
         return (...args: unknown[]) => {
           const call = () => (value as (...a: unknown[]) => Promise<unknown>).apply(target, args);
           const mode = this.modes.get(method);
           if (mode === undefined) return call();
-          const released = new Promise<void>(go => this.held.push({ method, go }));
+          const released = new Promise<void>(go => this.held.push({ method, client, go }));
           if (mode === 'request') return released.then(call);
           const result = call();
           result.catch(() => undefined); // observed later, after release
@@ -297,8 +299,9 @@ describe('BotEngine', () => {
     await engine.start(options({ speed: 10 }));
     const humanTeam = teamOf(world, 'alice');
     if (humanTeam == null) throw new Error('human team missing');
+    const batchId = world.newBatchId();
     world.batches.push({
-      id: world.newBatchId(), roundId: world.round.id, teamId: humanTeam, state: 'QUEUED', lockedBy: null, jokes: [],
+      id: batchId, roundId: world.round.id, teamId: humanTeam, state: 'QUEUED', lockedBy: null, jokes: [],
       rawText: variedCorpus.slice(0, 5).map(j => j.text).join('\n\n'),
     });
     // A mid-round Auto-Assign swaps the bot marketer with the human marketer.
@@ -311,6 +314,46 @@ describe('BotEngine', () => {
     await settle(500);
     engine.stop();
     expect(world.decisions.filter(d => d.teamId === humanTeam)).toEqual([]);
+    // The claim that revealed the move still holds the batch; the instructor is told.
+    expect(engine.status().warnings).toContain(
+      `${botName(1, 'B')} picked up team ${humanTeam}'s batch #${batchId} before noticing it was moved. `
+        + `That batch stays hidden from team ${humanTeam} for up to 15 minutes; Remove bots releases it at once.`,
+    );
+  });
+
+  it('reports a batch held for a human team once, and keeps reporting it after re-forming', async () => {
+    const gate = new Gate();
+    const { world, engine } = setup(['alice', 'bob'], { wrapApi: api => gate.wrap(api) });
+    await engine.start(options({ speed: 10 }));
+    const humanTeam = teamOf(world, 'alice');
+    if (humanTeam == null) throw new Error('human team missing');
+    const batchId = world.newBatchId();
+    world.batches.push({
+      id: batchId, roundId: world.round.id, teamId: humanTeam, state: 'QUEUED', lockedBy: null, jokes: [],
+      rawText: variedCorpus.slice(0, 5).map(j => j.text).join('\n\n'),
+    });
+    const botMarketer = world.userNamed(botName(1, 'B'));
+    const humanMarketer = [...world.users.values()].find(u => !isBotName(u.name) && u.role === 'MARKETING');
+    if (!botMarketer || !humanMarketer) throw new Error('marketers missing');
+    const swap = () => { [botMarketer.teamId, humanMarketer.teamId] = [humanMarketer.teamId, botMarketer.teamId]; };
+    const reports = () => engine.historyFor(botMarketer.id).filter(e => e.text.startsWith('the queue handed me')).length;
+    swap();
+    await until(() => reports() === 1, 'the first report');
+
+    // Re-forming puts the bot back but does not release the batch it holds.
+    await engine.reform();
+    const held = () => engine.status().warnings.filter(w => w.includes(`batch #${batchId}`));
+    expect(held()).toHaveLength(1);
+    // The bot reads its seat just before a second swap and trusts that answer,
+    // so its queue hands it the same held batch again.
+    gate.hold('sessionMe', 'response');
+    await until(() => gate.count('sessionMe', 'bot 1B') >= 1, 'the bot marketer checking its seat');
+    swap();
+    gate.stopHolding();
+    gate.release();
+    await until(() => reports() === 2, 'the second report');
+    engine.stop();
+    expect(held()).toHaveLength(1);
   });
 
   it('stops a Marketing bot mid-dwell once any seat sees a re-shuffle', async () => {

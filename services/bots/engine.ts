@@ -226,6 +226,12 @@ export class BotEngine {
   private classificationCalls = 0;
   private scrambled = false;
   private warnings: string[] = [];
+  /**
+   * Another team's batch a moved Marketing bot claimed before it noticed the
+   * move, by batch id. Kept apart from `warnings` because re-forming rewrites
+   * those but does not release the lock; start and remove clear it.
+   */
+  private heldBatches = new Map<number, string>();
   private roundId: number | null = null;
   private roundCache: { at: number; round: PublicRound | null } | null = null;
   /** Bumped at the end of every team formation; see checkSeat. */
@@ -248,7 +254,7 @@ export class BotEngine {
       teams: this.teams.map(teamStatus),
       classificationCalls: this.classificationCalls,
       scrambled: this.scrambled,
-      warnings: [...this.warnings],
+      warnings: [...this.warnings, ...this.heldBatches.values()],
     };
   }
 
@@ -337,6 +343,7 @@ export class BotEngine {
     this.classificationCalls = 0;
     this.scrambled = false;
     this.warnings = [];
+    this.heldBatches.clear();
     // Again, because a remove() queued ahead of this start clears the teams.
     this.teams = teams;
     this.emitStatus();
@@ -389,6 +396,10 @@ export class BotEngine {
       const ids = new Set(
         participantsOf(await instructor.instructorLobby(roundId)).filter(p => isBotName(p.name)).map(p => p.userId),
       );
+      // When a start() is queued behind this remove, `this.teams` is already that
+      // new run's, not yet joined (every userId null), so this adds nothing. That
+      // is deliberate and safe: the lobby scan above finds every bot seated in
+      // the round, and the new run joins its bots only after this op finishes.
       for (const team of this.teams) {
         for (const seat of [team.jm, team.marketing]) if (seat.userId != null) ids.add(seat.userId);
       }
@@ -402,6 +413,7 @@ export class BotEngine {
       this.teams = [];
       this.history.clear();
       this.warnings = [];
+      this.heldBatches.clear();
       this.scrambled = false;
       this.emitStatus();
       return ids.size;
@@ -605,6 +617,7 @@ export class BotEngine {
           this.markScrambled(
             team, seat, `the queue handed me team ${envelope.batch.team_id}'s batch, but my team is ${team.teamId ?? '—'}`, signal,
           );
+          this.reportHeldBatch(seat, envelope.batch.batch_id, envelope.batch.team_id, signal);
           continue;
         }
         if (!envelope.batch) {
@@ -620,6 +633,9 @@ export class BotEngine {
         await this.pace(jitter(DWELL_MS.claim, rand), signal);
         if (signal.aborted) break;
         // Seats can move during a dwell; never write for a team we may have left.
+        // The batch stays locked to this bot when it continues, on purpose: after
+        // Re-form the backend hands a marketer its own held batch first, so the
+        // bot resumes where it left off. Do not try to release it here.
         if (this.scrambled) continue;
 
         if (jokes.length === 0 && batch.raw_text) {
@@ -709,6 +725,24 @@ export class BotEngine {
       return false;
     }
     return true;
+  }
+
+  /**
+   * The queue call that revealed the move also claimed the batch, and the lock
+   * outlives the bot's return to its own team. The backend skips a batch another
+   * marketer holds (repo/marketing_repo.go:34-67), so it is hidden from its team,
+   * not blocking it, until the lock goes stale after 15 minutes
+   * (marketing_repo.go:53) or the bot user is deleted (batches.locked_by is ON
+   * DELETE SET NULL, migrations/0001_schema.sql:124).
+   */
+  private reportHeldBatch(seat: SeatRuntime, batchId: number, teamId: number, signal: AbortSignal): void {
+    if (signal.aborted || this.heldBatches.has(batchId)) return;
+    this.heldBatches.set(
+      batchId,
+      `${seat.name} picked up team ${teamId}'s batch #${batchId} before noticing it was moved. `
+        + `That batch stays hidden from team ${teamId} for up to 15 minutes; Remove bots releases it at once.`,
+    );
+    this.emitStatus();
   }
 
   /** Pause every bot until teams are re-formed; the first seat to notice says why. */
