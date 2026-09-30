@@ -2,6 +2,7 @@ import React from 'react';
 import { LogOut, User as UserIcon, X, Trophy, TrendingUp, Tag, Info, HelpCircle } from 'lucide-react';
 import { useGame } from './context';
 import { Role } from './types';
+import { isWatchMode } from './services/watchMode';
 import Tutorial, { type TutorialRole } from './components/Tutorial';
 // Presentational primitives live in components/ui.tsx so leaf modules can import
 // them without cycling back through this barrel. Re-exported for existing callers.
@@ -58,7 +59,9 @@ const TutorialLauncher: React.FC<{ role: Role }> = ({ role }) => {
   // then suppress the modal on mount #2, so the tutorial would never appear.
   // Instead we mark it seen when the user actually dismisses it.
   const [open, setOpen] = React.useState(() => {
-    if (!tab) return false;
+    // A watch tab is looking at someone else's seat; a tutorial modal would
+    // cover the screen being watched and write a seen-flag into shared storage.
+    if (!tab || isWatchMode()) return false;
     try {
       return !localStorage.getItem(`${TUTORIAL_SEEN_PREFIX}${role}`);
     } catch {

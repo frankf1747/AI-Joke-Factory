@@ -27,6 +27,7 @@ import { marketingService } from './services/marketingService';
 import { customerService } from './services/customerService';
 import { sessionService } from './services/sessionService';
 import { ApiError } from './services/apiClient';
+import { clearPersisted, getWatchIdentity } from './services/watchMode';
 import { setMockRoundNumber } from './services/mockApi';
 import { DEFAULT_IDEAL_PROFILE } from './config/dimensions';
 import { isCompleteProfile } from './components/IdealProfilePicker';
@@ -506,6 +507,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
   // Initial load from localStorage (session only)
   useEffect(() => {
+    // A watch tab takes its identity from this tab only; the shared
+    // localStorage belongs to the instructor. See services/watchMode.ts.
+    const watching = getWatchIdentity();
+    if (watching) {
+      setUser(makeUser({ user_id: watching.userId as UserId, display_name: watching.displayName }, 'UNASSIGNED' as Role, null));
+      return;
+    }
     const storedUserId = localStorage.getItem(LS_USER_ID);
     const storedName = localStorage.getItem(LS_DISPLAY_NAME);
     const storedRole = localStorage.getItem(LS_ROLE);
@@ -1487,10 +1495,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     setUser(null);
-    localStorage.removeItem(LS_USER_ID);
-    localStorage.removeItem(LS_DISPLAY_NAME);
-    localStorage.removeItem(LS_ROLE);
-    localStorage.removeItem(LS_ROUND_ID);
+    // No-op in a watch tab: this runs on a 404 from /session/me, so removing a
+    // bot while watching it would otherwise log the instructor out everywhere.
+    clearPersisted([LS_USER_ID, LS_DISPLAY_NAME, LS_ROLE, LS_ROUND_ID]);
     setRoundId(null);
     setConfig(initialConfig());
     setRoster([]);
@@ -1512,8 +1519,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Clear local caches (avoid leaking state across users).
     submittedBatchJokesRef.current = {};
     qcRatedHistoryRef.current = {};
-    localStorage.removeItem(LS_SUBMITTED_BATCH_JOKES);
-    localStorage.removeItem(LS_QC_RATED_HISTORY);
+    clearPersisted([LS_SUBMITTED_BATCH_JOKES, LS_QC_RATED_HISTORY]);
   };
 
   const updateConfig = async (updates: Partial<GameConfig>) => {
