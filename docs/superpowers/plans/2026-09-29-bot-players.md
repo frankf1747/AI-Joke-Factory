@@ -3871,6 +3871,10 @@ Every published bot joke is an Azure LLM classification call, and the panel coun
 Closing the instructor tab stops the bots. **Remove bots** deletes bot users and never
 touches humans.
 
+If you press **Stop** at the instant an all-bot class is starting, the round can already be
+active with bots seated but idle. Bots can only be added to a round that has not started, so
+press **Remove bots**, then end or reset the round before running another class.
+
 ```bash
 E2E_ADMIN_PASSWORD='…' npx playwright test scripts/e2e/browser/bots.spec.ts
 ```
