@@ -4847,7 +4847,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Document the feature**
 
-In `README.md`, directly after the `## End-to-end tests` section's table, add:
+In `README.md`, at the end of the `## End-to-end tests` section (just before `## Deployment`, so the paragraphs after the table stay where they are), add the section below. The committed version also has a **Watching a bot** subsection and puts the Stop and Auto-Assign notes under **Caveats**:
 
 ````markdown
 ### Bot players
@@ -4895,7 +4895,7 @@ Run: `npx tsc --noEmit -p tsconfig.json && echo TYPECHECK_OK`
 Expected: `TYPECHECK_OK`.
 
 Run: `npx vitest run`
-Expected: all pass — about 350 tests, up from 299.
+Expected: all pass — 455 tests on 2026-09-29, up from 299.
 
 Run: `npx vite build 2>&1 | tail -4`
 Expected: `✓ built`, with a separate worker chunk.
