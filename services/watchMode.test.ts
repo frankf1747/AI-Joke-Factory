@@ -1,6 +1,6 @@
 // services/watchMode.test.ts
 import { describe, it, expect } from 'vitest';
-import { captureWatchIdentity, clearPersisted, getWatchIdentity, isWatchMode, watchUrl } from './watchMode';
+import { captureWatchIdentity, clearPersisted, getWatchIdentity, isWatchMode, watchRequested, watchUrl } from './watchMode';
 
 class MemoryStorage {
   private map = new Map<string, string>();
@@ -18,10 +18,27 @@ describe('watch mode identity', () => {
     expect(isWatchMode(tab)).toBe(true);
   });
 
-  it('keeps watching after a reload that dropped the query string', () => {
+  it('survives a reload, because the reload keeps the query string', () => {
     const tab = new MemoryStorage();
     captureWatchIdentity('?watch=17&watchName=x', tab);
-    expect(captureWatchIdentity('', tab)).toEqual({ userId: 17, displayName: 'x' });
+    expect(captureWatchIdentity('?watch=17&watchName=x', tab)).toEqual({ userId: 17, displayName: 'x' });
+  });
+
+  it('ends watch mode when the URL no longer carries ?watch', () => {
+    const tab = new MemoryStorage();
+    captureWatchIdentity('?watch=17&watchName=x', tab);
+    expect(captureWatchIdentity('?bots=1', tab)).toBeNull();
+    expect(isWatchMode(tab)).toBe(false);
+    expect(tab.getItem('joke_factory_watch_user_id')).toBeNull();
+    expect(tab.getItem('joke_factory_watch_display_name')).toBeNull();
+  });
+
+  it('clears a stale identity when the new ?watch is invalid', () => {
+    const tab = new MemoryStorage();
+    captureWatchIdentity('?watch=17&watchName=x', tab);
+    expect(captureWatchIdentity('?watch=abc', tab)).toBeNull();
+    expect(isWatchMode(tab)).toBe(false);
+    expect(tab.getItem('joke_factory_watch_display_name')).toBeNull();
   });
 
   it('is off without a watch parameter', () => {
@@ -31,7 +48,7 @@ describe('watch mode identity', () => {
   });
 
   it('ignores ids that are not positive integers', () => {
-    for (const bad of ['abc', '0', '-3', '2.5']) {
+    for (const bad of ['abc', '0', '-3', '2.5', '99999999999999999999']) {
       const tab = new MemoryStorage();
       expect(captureWatchIdentity(`?watch=${bad}`, tab)).toBeNull();
     }
@@ -44,6 +61,68 @@ describe('watch mode identity', () => {
 
   it('is off when there is no sessionStorage at all', () => {
     expect(getWatchIdentity(null)).toBeNull();
+    expect(captureWatchIdentity('?watch=17', null)).toBeNull();
+  });
+});
+
+describe('watch name', () => {
+  it('falls back to "user <id>" when the name is missing, blank or only control characters', () => {
+    for (const q of ['?watch=9', '?watch=9&watchName=', '?watch=9&watchName=%20%20', '?watch=9&watchName=%00%1F%0A']) {
+      expect(captureWatchIdentity(q, new MemoryStorage())).toEqual({ userId: 9, displayName: 'user 9' });
+    }
+  });
+
+  it('trims and strips control characters and bidi overrides', () => {
+    const name = encodeURIComponent('  Bo\u0007b\u202E 03\u202CB\n ');
+    expect(captureWatchIdentity(`?watch=9&watchName=${name}`, new MemoryStorage())).toEqual({
+      userId: 9,
+      displayName: 'Bob 03B',
+    });
+  });
+
+  it('caps the name at 60 characters without splitting an emoji', () => {
+    const a = captureWatchIdentity(`?watch=9&watchName=${'a'.repeat(500)}`, new MemoryStorage());
+    expect(a?.displayName).toBe('a'.repeat(60));
+    const b = captureWatchIdentity(`?watch=9&watchName=${encodeURIComponent('🤖'.repeat(100))}`, new MemoryStorage());
+    expect(b?.displayName).toBe('🤖'.repeat(60));
+  });
+});
+
+describe('a store that throws', () => {
+  it('returns null instead of throwing when setItem fails (quota, blocked storage)', () => {
+    const removed: string[] = [];
+    const broken = {
+      getItem: () => null,
+      setItem: () => { throw new DOMException('full', 'QuotaExceededError'); },
+      removeItem: (k: string) => { removed.push(k); },
+    };
+    expect(() => captureWatchIdentity('?watch=17&watchName=x', broken)).not.toThrow();
+    expect(captureWatchIdentity('?watch=17&watchName=x', broken)).toBeNull();
+    expect(removed).toContain('joke_factory_watch_user_id');
+  });
+
+  it('returns null instead of throwing when removeItem fails', () => {
+    const broken = {
+      getItem: () => null,
+      setItem: () => {},
+      removeItem: () => { throw new Error('blocked'); },
+    };
+    expect(captureWatchIdentity('?bots=1', broken)).toBeNull();
+  });
+});
+
+describe('watchRequested', () => {
+  it('is true whenever the URL carries a watch parameter, valid or not', () => {
+    expect(watchRequested('?watch=17')).toBe(true);
+    expect(watchRequested('?watch=abc')).toBe(true);
+    expect(watchRequested('?watch=')).toBe(true);
+    expect(watchRequested('?bots=1&watch=3')).toBe(true);
+  });
+
+  it('is false without one', () => {
+    expect(watchRequested('')).toBe(false);
+    expect(watchRequested('?bots=1')).toBe(false);
+    expect(watchRequested('?watchName=x')).toBe(false);
   });
 });
 
@@ -62,5 +141,34 @@ describe('clearPersisted', () => {
     captureWatchIdentity('?watch=17', tab);
     clearPersisted(['joke_factory_user_id'], shared, tab);
     expect(shared.getItem('joke_factory_user_id')).toBe('5');
+  });
+
+  it('clears every listed key in a normal tab, and leaves unlisted ones', () => {
+    const shared = new MemoryStorage();
+    shared.setItem('a', '1');
+    shared.setItem('b', '2');
+    shared.setItem('c', '3');
+    clearPersisted(['a', 'b'], shared, new MemoryStorage());
+    expect([shared.getItem('a'), shared.getItem('b'), shared.getItem('c')]).toEqual([null, null, '3']);
+  });
+
+  it('leaves every listed key alone in a watch tab', () => {
+    const shared = new MemoryStorage();
+    shared.setItem('a', '1');
+    shared.setItem('b', '2');
+    const tab = new MemoryStorage();
+    captureWatchIdentity('?watch=17', tab);
+    clearPersisted(['a', 'b'], shared, tab);
+    expect([shared.getItem('a'), shared.getItem('b')]).toEqual(['1', '2']);
+  });
+
+  it('clears again once the tab has left watch mode', () => {
+    const shared = new MemoryStorage();
+    shared.setItem('a', '1');
+    const tab = new MemoryStorage();
+    captureWatchIdentity('?watch=17', tab);
+    captureWatchIdentity('?bots=1', tab);
+    clearPersisted(['a'], shared, tab);
+    expect(shared.getItem('a')).toBeNull();
   });
 });
