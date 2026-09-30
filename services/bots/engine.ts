@@ -40,6 +40,12 @@ export const TICK_MS = 1_000;
 const HISTORY_PER_BOT = 50;
 const ROUND_CACHE_MS = 2_000;
 const MAX_BACKOFF_MS = 30_000;
+/**
+ * How often one seat asks the backend where it sits. Every loop pass used to
+ * ask, which at 10× with 12 bot teams is about 100 requests a second against
+ * production. A re-shuffle is still noticed within this window.
+ */
+export const SEAT_CHECK_MS = 2_000;
 
 /** A real sleep that ends early on abort. */
 export function realDelay(ms: number, signal: AbortSignal): Promise<void> {
@@ -145,6 +151,17 @@ function longestIndex(pieces: readonly string[], eligible: (p: string) => boolea
   return best;
 }
 
+/**
+ * The backoff counter after `err`. A 403 or 409 is the backend answering
+ * coherently — the game moved on — not the backend failing, so it resets the
+ * count rather than growing it: a 500 after a run of 409s backs off from 2 s,
+ * not 30 s. A call that keeps failing still backs off all the way.
+ */
+function nextAttempt(err: unknown, attempt: number): number {
+  const status = statusOf(err);
+  return status === 403 || status === 409 ? 0 : attempt + 1;
+}
+
 /** A bot's own user row is gone — it was removed — so its actor stops. */
 class SeatGone extends Error {
   constructor() {
@@ -154,6 +171,9 @@ class SeatGone extends Error {
 
 interface SeatRuntime extends SeatStatus {
   seat: Seat;
+  /** When this seat last asked the backend where it sits, and in which formation. */
+  checkedAt: number | null;
+  checkedEpoch: number;
 }
 
 interface TeamRuntime {
@@ -177,7 +197,7 @@ interface TeamRuntime {
 }
 
 function newSeat(index: number, seat: Seat): SeatRuntime {
-  return { seat, userId: null, name: botName(index, seat), activity: 'not started', error: null };
+  return { seat, userId: null, name: botName(index, seat), activity: 'not started', error: null, checkedAt: null, checkedEpoch: -1 };
 }
 
 function newTeam(spec: BotTeamSpec): TeamRuntime {
@@ -506,7 +526,8 @@ export class BotEngine {
         await this.pace(jitter(persona.submitIntervalMs, rand), signal);
       } catch (err) {
         if (signal.aborted) break;
-        if (!(await this.recover(team, seat, err, ++attempt, signal))) break;
+        attempt = nextAttempt(err, attempt);
+        if (!(await this.recover(team, seat, err, attempt, signal))) break;
       }
     }
   }
@@ -618,7 +639,8 @@ export class BotEngine {
         this.emitStatus();
       } catch (err) {
         if (signal.aborted) break;
-        if (!(await this.recover(team, seat, err, ++attempt, signal))) break;
+        attempt = nextAttempt(err, attempt);
+        if (!(await this.recover(team, seat, err, attempt, signal))) break;
       }
     }
   }
@@ -631,10 +653,20 @@ export class BotEngine {
    * A reading taken while formation is running — or that straddled one — says
    * nothing about the settled layout, so it is ignored rather than trusted. So
    * is one that comes back after this actor was stopped.
+   *
+   * The backend is asked at most once per SEAT_CHECK_MS per seat. In between,
+   * the last answer stands — unless any seat has since seen a re-shuffle, which
+   * pauses every bot, or teams were re-formed, which forces a fresh answer.
    */
   private async checkSeat(me: BotApi, team: TeamRuntime, seat: SeatRuntime, signal: AbortSignal): Promise<boolean> {
     if (this.forming) return false;
     const epoch = this.formationEpoch;
+    const now = this.deps.now();
+    if (seat.checkedEpoch === epoch && seat.checkedAt !== null && now - seat.checkedAt < SEAT_CHECK_MS) {
+      if (!this.scrambled) return true;
+      this.setActivity(seat, 'paused — teams were re-shuffled', signal);
+      return false;
+    }
     let mine: SessionMeResponse;
     try {
       mine = await me.sessionMe();
@@ -644,6 +676,8 @@ export class BotEngine {
     }
     if (signal.aborted) return false;
     if (this.forming || epoch !== this.formationEpoch) return false;
+    seat.checkedAt = now;
+    seat.checkedEpoch = epoch;
 
     const inPlace = mine.assignment.team_id === team.teamId && mine.assignment.role === SEAT_ROLE[seat.seat];
     if (!inPlace && !this.scrambled) {

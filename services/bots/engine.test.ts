@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_IDEAL_PROFILE } from '../../config/dimensions';
 import { seededRng, variedCorpus } from '../shared/jokes';
-import { BotEngine, fitPieces, splitBlob, titleOf, wallClockSteps } from './engine';
+import { BotEngine, SEAT_CHECK_MS, fitPieces, splitBlob, titleOf, wallClockSteps } from './engine';
 import { botName, isBotName } from './naming';
 import { BATCH_CAP_PER_ROUND } from './personas';
 import type { BotApi } from './api';
@@ -434,6 +434,43 @@ describe('BotEngine', () => {
     expect(engine.historyFor(marketer.id)).toEqual([]);
   });
 
+  it('backs off from scratch on a real error after a run of 409s', async () => {
+    const { world, engine } = setup();
+    world.failNext('submitBatch', 5, botName(1, 'A'), 409);
+    world.failNext('submitBatch', 1, botName(1, 'A'), 500);
+    await engine.start(options());
+    const jm = world.userNamed(botName(1, 'A'));
+    if (!jm) throw new Error('bot 01A missing');
+    await until(() => engine.historyFor(jm.id).some(e => e.text.startsWith('error:')), 'the 500');
+    engine.stop();
+    expect(engine.historyFor(jm.id).find(e => e.text.startsWith('error:'))?.text).toMatch(/retrying in 2s/);
+  });
+
+  it('keeps backing off while the same call keeps failing', async () => {
+    const { world, engine } = setup();
+    world.failNext('submitBatch', 1_000_000, botName(1, 'A'));
+    await engine.start(options());
+    const jm = world.userNamed(botName(1, 'A'));
+    if (!jm) throw new Error('bot 01A missing');
+    const errors = () => engine.historyFor(jm.id).filter(e => e.text.startsWith('error:'));
+    await until(() => errors().length >= 6, 'six failed submits');
+    engine.stop();
+    expect(errors().map(e => e.text.match(/retrying in (\d+)s/)?.[1])).toEqual(['2', '4', '8', '16', '30', '30']);
+  });
+
+  it('asks the backend where each seat is at most once per SEAT_CHECK_MS', async () => {
+    const { world, engine, clock } = setup();
+    await engine.start(options({ startRound: false }));
+    const seatChecks = () => world.calls.filter(c => c === 'sessionMe').length;
+    const t0 = clock();
+    const c0 = seatChecks();
+    await settle(400);
+    engine.stop();
+    const elapsed = clock() - t0;
+    expect(elapsed).toBeGreaterThan(20 * SEAT_CHECK_MS);
+    expect(seatChecks() - c0).toBeLessThanOrEqual(2 * (Math.floor(elapsed / SEAT_CHECK_MS) + 1));
+  });
+
   it('treats a lost batch (403) as a re-poll, not an error', async () => {
     const { world, engine } = setup();
     world.failNext('marketingPublish', 1, botName(1, 'B'), 403);
@@ -442,6 +479,11 @@ describe('BotEngine', () => {
     await until(() => world.decisions.some(d => d.teamId === team), 'a publish after the lost batch');
     engine.stop();
     expect(engine.status().teams[0].marketing.error).toBeNull();
+    const marketer = world.userNamed(botName(1, 'B'));
+    if (!marketer) throw new Error('bot 01B missing');
+    const texts = engine.historyFor(marketer.id).map(e => e.text);
+    expect(texts.some(t => /refused this \(403\)/.test(t))).toBe(true);
+    expect(texts.filter(t => t.startsWith('error:'))).toEqual([]);
   });
 });
 
