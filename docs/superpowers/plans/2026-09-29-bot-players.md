@@ -3875,6 +3875,13 @@ If you press **Stop** at the instant an all-bot class is starting, the round can
 active with bots seated but idle. Bots can only be added to a round that has not started, so
 press **Remove bots**, then end or reset the round before running another class.
 
+Avoid pressing the ordinary **Auto-Assign** while bots are playing. It shuffles bots and
+humans together; the bots notice and pause until you press **Re-form teams**, and none will
+ever decide a human team's jokes. A Marketing bot moved onto a human team can still pick up
+one of that team's batches before it notices. The panel warns you when that happens: the
+batch is hidden from the team for up to 15 minutes (the team keeps receiving its other
+batches), and **Remove bots** releases it at once.
+
 ```bash
 E2E_ADMIN_PASSWORD='…' npx playwright test scripts/e2e/browser/bots.spec.ts
 ```
