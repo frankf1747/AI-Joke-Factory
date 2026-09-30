@@ -4519,6 +4519,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 **Files:**
 - Create: `components/WatchShell.tsx`
 - Modify: `App.tsx`
+- Modify: `components.tsx` (RoleLayout header: hide Logout, stick below the banner)
 
 - [ ] **Step 1: Write the shell**
 
@@ -4532,7 +4533,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
    A bot's CHOICES (why it kept two jokes and dropped three) are not server state
    until publish, so the engine narrates them on a BroadcastChannel and this
    strip shows the entries for the watched bot. */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useGame } from '../context';
 import { getWatchIdentity } from '../services/watchMode';
 import { PERSONAS } from '../services/bots/personas';
@@ -4547,6 +4548,12 @@ function seatLabel(meta: BotMeta | null, role: unknown): string | null {
   return null;
 }
 
+// A stale worker build may send a persona id this bundle does not know.
+function personaLabel(meta: BotMeta): string {
+  const known = PERSONAS as unknown as Record<string, { label: string } | undefined>;
+  return known[meta.persona]?.label ?? meta.persona;
+}
+
 export const WatchShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useGame();
   const watching = getWatchIdentity();
@@ -4554,11 +4561,22 @@ export const WatchShell: React.FC<{ children: React.ReactNode }> = ({ children }
   const [entries, setEntries] = useState<ReasoningEntry[]>([]);
   const [meta, setMeta] = useState<BotMeta | null>(null);
 
+  // Once this tab has shown the bot, losing the user means the bot is gone:
+  // /session/me 404s after Remove bots or a class reset, and context logs out.
+  // Say so, instead of dropping to a login screen whose join would be refused.
+  const hadUser = useRef(false);
+  const [botLeft, setBotLeft] = useState(false);
+  useEffect(() => {
+    if (user) hadUser.current = true;
+    else if (hadUser.current) setBotLeft(true);
+  }, [user]);
+
   useEffect(() => {
     if (botUserId == null || typeof BroadcastChannel === 'undefined') return undefined;
     const channel = new BroadcastChannel(BOT_CHANNEL);
     channel.onmessage = (event: MessageEvent<ChannelMessage>) => {
       const m = event.data;
+      if (!m || typeof m !== 'object') return;
       if (m.type === 'history' && m.botUserId === botUserId) {
         setEntries(m.entries.slice(-MAX_ENTRIES));
         setMeta(m.meta);
@@ -4576,27 +4594,36 @@ export const WatchShell: React.FC<{ children: React.ReactNode }> = ({ children }
 
   return (
     <div className="min-h-screen">
-      <div role="status" data-testid="watch-banner" className="sticky top-0 z-50 bg-gray-900 px-4 py-2 text-sm text-white">
-        👁 WATCHING <strong>{watching.displayName}</strong>
-        {seat ? ` · ${seat}` : ''}
-        {user?.team_id != null ? ` · Team ${user.team_id}` : ''}
-        {meta ? ` · ${PERSONAS[meta.persona].label}` : ''}
-        {' · read-only'}
+      <div role="status" data-testid="watch-banner" className="sticky top-0 z-50 flex h-9 items-center bg-gray-900 px-4 text-sm text-white">
+        <span>
+          👁 WATCHING <strong>{watching.displayName}</strong>
+          {seat ? ` · ${seat}` : ''}
+          {user?.team_id != null ? ` · Team ${user.team_id}` : ''}
+          {meta ? ` · ${personaLabel(meta)}` : ''}
+          {' · read-only'}
+        </span>
       </div>
-      <div className="lg:pr-80">{children}</div>
+      <div className="lg:pr-80">
+        {botLeft ? (
+          <div role="alert" data-testid="watch-bot-left" className="mx-auto mt-16 max-w-md rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-700 shadow-sm">
+            <h1 className="mb-2 text-lg font-semibold text-gray-900">{watching.displayName} has left the game</h1>
+            <p>The bot was removed, or the class was reset. Close this tab.</p>
+          </div>
+        ) : children}
+      </div>
       <aside
         aria-label="Bot reasoning"
-        className="border-t border-gray-200 bg-white p-4 text-xs lg:fixed lg:bottom-0 lg:right-0 lg:top-10 lg:w-80 lg:overflow-y-auto lg:border-l lg:border-t-0"
+        className="border-t border-gray-200 bg-white p-4 text-xs lg:fixed lg:bottom-0 lg:right-0 lg:top-9 lg:w-80 lg:overflow-y-auto lg:border-l lg:border-t-0"
       >
-        <h2 className="mb-2 font-semibold uppercase tracking-wide text-gray-500">Bot&apos;s reasoning</h2>
+        <h2 className="mb-2 font-semibold uppercase tracking-wide text-gray-500">Bot&apos;s reasoning (newest first)</h2>
         {entries.length === 0 ? (
           <p className="italic text-gray-400">
             Nothing yet. Entries appear as the bot acts, while the instructor tab with the Bot Panel stays open.
           </p>
         ) : (
           <ol className="space-y-1.5">
-            {entries.map((e, i) => (
-              <li key={`${e.at}-${i}`} data-testid="reasoning-entry">
+            {[...entries].reverse().map((e, i) => (
+              <li key={`${e.at}-${e.botUserId}-${entries.length - 1 - i}`} data-testid="reasoning-entry">
                 <time className="mr-2 tabular-nums text-gray-400">{new Date(e.at).toLocaleTimeString()}</time>
                 {e.text}
               </li>
@@ -4645,6 +4672,17 @@ git commit -m "feat(watch): frame watch tabs with a banner and the bot's reasoni
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+
+
+> **Revised in review (7e7a227 + bedf5e6).** The shell above is the committed version. Review made
+> five changes to the first draft. (1) A "has left the game" notice replaces the screen once the
+> watched user goes from present to absent, because a 404 from `/session/me` logs the tab out, and
+> its login screen would only offer a join that apiClient refuses. (2) The persona label falls
+> back to the raw id, so a stale worker cannot blank the tab. (3) The banner is a fixed `h-9`.
+> (4) In a watch tab, RoleLayout's sticky header in `components.tsx` uses `top-9` instead of
+> `top-0`, so the banner no longer covers it after scrolling, and the header's Logout button is
+> hidden, because a watch tab has no session of its own to end. (5) Reasoning renders newest
+> first, so the latest decision is visible without scrolling.
 
 ---
 
