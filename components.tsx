@@ -78,7 +78,10 @@ const TutorialLauncher: React.FC<{ role: Role }> = ({ role }) => {
     }
   };
 
-  if (!tab) return null;
+  // Hooks above run unconditionally; only then bail. A watch tab gets no
+  // button at all, since dismissing the tutorial writes a seen-flag into the
+  // shared localStorage that belongs to whoever else uses this browser.
+  if (!tab || isWatchMode()) return null;
 
   return (
     <>

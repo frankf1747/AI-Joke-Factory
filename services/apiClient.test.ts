@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { apiRequest, ApiError, isRawEndpoint, getApiBaseUrl, isMockApiMode } from './apiClient';
+import { mockApiRequest } from './mockApi';
+
+// Wrap the real mock so a test can prove apiRequest never reached it; every
+// other test behaves exactly as with the unwrapped module.
+vi.mock('./mockApi', async importOriginal => {
+  const actual = await importOriginal<typeof import('./mockApi')>();
+  return { ...actual, mockApiRequest: vi.fn(actual.mockApiRequest) };
+});
 
 /** Minimal Response stand-in — we only use the fields apiRequest reads. */
 function jsonResponse(body: unknown, status = 200): Response {
@@ -251,6 +259,18 @@ describe('watch mode', () => {
     globalThis.fetch = (async () => { called = true; return new Response('{}'); }) as typeof fetch;
     await expect(apiRequest('/v1/marketing/batches/1/publish', { method: 'POST', body: {} }))
       .rejects.toMatchObject({ code: 'WATCH_READ_ONLY' });
+    expect(called).toBe(false);
+  });
+
+  it('refuses a non-GET even when the mock API is forced on, reaching neither mock nor network', async () => {
+    vi.stubEnv('VITE_USE_MOCK_API', 'true');
+    expect(isMockApiMode()).toBe(true);
+    vi.mocked(mockApiRequest).mockClear();
+    let called = false;
+    globalThis.fetch = (async () => { called = true; return new Response('{}'); }) as typeof fetch;
+    await expect(apiRequest('/v1/marketing/batches/1/publish', { method: 'POST', body: {} }))
+      .rejects.toMatchObject({ code: 'WATCH_READ_ONLY' });
+    expect(mockApiRequest).not.toHaveBeenCalled();
     expect(called).toBe(false);
   });
 });

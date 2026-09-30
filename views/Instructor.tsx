@@ -9,6 +9,7 @@ import {
 import { Role } from '../types';
 import { IdealProfilePicker } from '../components/IdealProfilePicker';
 import { BotPanel, botPanelRequested } from '../components/BotPanel';
+import { isWatchMode } from '../services/watchMode';
 import type { IdealDimension } from '../config/dimensions';
 
 // Expanded Palette for more teams
@@ -1933,7 +1934,10 @@ const Instructor: React.FC = () => {
   return (
     <RoleLayout>
       <div className="space-y-8">
-        {botPanelRequested(window.location.search) && <BotPanel />}
+        {/* Never in a watch tab: a crafted /?watch=<instructorId>&bots=1 would
+            otherwise run bots, whose worker writes through services/shared/client.ts
+            and so bypasses apiClient's read-only guard. */}
+        {botPanelRequested(window.location.search) && !isWatchMode() && <BotPanel />}
         {/* Reset Confirm Modal */}
         <Modal
           isOpen={showResetConfirm}

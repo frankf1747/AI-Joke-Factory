@@ -27,7 +27,7 @@ import { marketingService } from './services/marketingService';
 import { customerService } from './services/customerService';
 import { sessionService } from './services/sessionService';
 import { ApiError } from './services/apiClient';
-import { clearPersisted, getWatchIdentity, mayClaimMarketingBatch } from './services/watchMode';
+import { clearPersisted, getWatchIdentity, isWatchMode, mayClaimMarketingBatch } from './services/watchMode';
 import { setMockRoundNumber } from './services/mockApi';
 import { DEFAULT_IDEAL_PROFILE } from './config/dimensions';
 import { isCompleteProfile } from './components/IdealProfilePicker';
@@ -232,7 +232,8 @@ const TEAM_FEEDBACK_ROLES: ReadonlySet<string> = new Set(['JOKE_MAKER', 'QUALITY
  *
  * teamApi.feedback unwraps the {data} envelope itself, so callers need no
  * `?.data ?? x` dance — see apiClient.apiRequest. X-User-Id is required by the
- * handler and is attached from localStorage by apiRequest.
+ * handler and is attached by apiRequest (from localStorage, or in a watch tab
+ * from sessionStorage via services/watchMode.ts).
  */
 export async function pollTeamFeedback(
   role: Role,
@@ -480,8 +481,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [config, setConfig] = useState<GameConfig>(initialConfig());
 
-  // Restore local caches across refresh (best-effort).
+  // Restore local caches across refresh (best-effort). Not in a watch tab:
+  // these shared caches belong to the instructor or another user of this
+  // browser, not to the bot being watched.
   useEffect(() => {
+    if (isWatchMode()) return;
     try {
       const raw = localStorage.getItem(LS_SUBMITTED_BATCH_JOKES);
       if (raw) {
@@ -2026,7 +2030,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
   
   const resetGame = async () => {
-    // Only instructors can reset; requires X-User-Id header (already set by apiClient via localStorage).
+    // Only instructors can reset; requires X-User-Id header (set by apiClient — from localStorage, or sessionStorage in a watch tab; see services/watchMode.ts).
     if (!user || user.role !== ('INSTRUCTOR' as Role)) return false;
     try {
       await instructorService.reset();
