@@ -22,6 +22,12 @@ function seatLabel(meta: BotMeta | null, role: unknown): string | null {
   return null;
 }
 
+// A stale worker build may send a persona id this bundle does not know.
+function personaLabel(meta: BotMeta): string {
+  const known = PERSONAS as unknown as Record<string, { label: string } | undefined>;
+  return known[meta.persona]?.label ?? meta.persona;
+}
+
 export const WatchShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useGame();
   const watching = getWatchIdentity();
@@ -44,6 +50,7 @@ export const WatchShell: React.FC<{ children: React.ReactNode }> = ({ children }
     const channel = new BroadcastChannel(BOT_CHANNEL);
     channel.onmessage = (event: MessageEvent<ChannelMessage>) => {
       const m = event.data;
+      if (!m || typeof m !== 'object') return;
       if (m.type === 'history' && m.botUserId === botUserId) {
         setEntries(m.entries.slice(-MAX_ENTRIES));
         setMeta(m.meta);
@@ -61,12 +68,14 @@ export const WatchShell: React.FC<{ children: React.ReactNode }> = ({ children }
 
   return (
     <div className="min-h-screen">
-      <div role="status" data-testid="watch-banner" className="sticky top-0 z-50 bg-gray-900 px-4 py-2 text-sm text-white">
-        👁 WATCHING <strong>{watching.displayName}</strong>
-        {seat ? ` · ${seat}` : ''}
-        {user?.team_id != null ? ` · Team ${user.team_id}` : ''}
-        {meta ? ` · ${PERSONAS[meta.persona].label}` : ''}
-        {' · read-only'}
+      <div role="status" data-testid="watch-banner" className="sticky top-0 z-50 flex h-9 items-center bg-gray-900 px-4 text-sm text-white">
+        <span>
+          👁 WATCHING <strong>{watching.displayName}</strong>
+          {seat ? ` · ${seat}` : ''}
+          {user?.team_id != null ? ` · Team ${user.team_id}` : ''}
+          {meta ? ` · ${personaLabel(meta)}` : ''}
+          {' · read-only'}
+        </span>
       </div>
       <div className="lg:pr-80">
         {botLeft ? (
@@ -78,17 +87,17 @@ export const WatchShell: React.FC<{ children: React.ReactNode }> = ({ children }
       </div>
       <aside
         aria-label="Bot reasoning"
-        className="border-t border-gray-200 bg-white p-4 text-xs lg:fixed lg:bottom-0 lg:right-0 lg:top-10 lg:w-80 lg:overflow-y-auto lg:border-l lg:border-t-0"
+        className="border-t border-gray-200 bg-white p-4 text-xs lg:fixed lg:bottom-0 lg:right-0 lg:top-9 lg:w-80 lg:overflow-y-auto lg:border-l lg:border-t-0"
       >
-        <h2 className="mb-2 font-semibold uppercase tracking-wide text-gray-500">Bot&apos;s reasoning</h2>
+        <h2 className="mb-2 font-semibold uppercase tracking-wide text-gray-500">Bot&apos;s reasoning (newest first)</h2>
         {entries.length === 0 ? (
           <p className="italic text-gray-400">
             Nothing yet. Entries appear as the bot acts, while the instructor tab with the Bot Panel stays open.
           </p>
         ) : (
           <ol className="space-y-1.5">
-            {entries.map((e, i) => (
-              <li key={`${e.at}-${i}`} data-testid="reasoning-entry">
+            {[...entries].reverse().map((e, i) => (
+              <li key={`${e.at}-${e.botUserId}-${entries.length - 1 - i}`} data-testid="reasoning-entry">
                 <time className="mr-2 tabular-nums text-gray-400">{new Date(e.at).toLocaleTimeString()}</time>
                 {e.text}
               </li>
