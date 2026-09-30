@@ -292,6 +292,67 @@ describe('BotEngine', () => {
     expect(engine.historyFor(jm.id).map(e => e.text).join('\n')).not.toMatch(/gave up waiting/);
   });
 
+  it('never lets a bot moved into a human team publish that team\'s batch', async () => {
+    const { world, engine } = setup(['alice', 'bob']);
+    await engine.start(options({ speed: 10 }));
+    const humanTeam = teamOf(world, 'alice');
+    if (humanTeam == null) throw new Error('human team missing');
+    world.batches.push({
+      id: world.newBatchId(), roundId: world.round.id, teamId: humanTeam, state: 'QUEUED', lockedBy: null, jokes: [],
+      rawText: variedCorpus.slice(0, 5).map(j => j.text).join('\n\n'),
+    });
+    // A mid-round Auto-Assign swaps the bot marketer with the human marketer.
+    const botMarketer = world.userNamed(botName(1, 'B'));
+    const humanMarketer = [...world.users.values()].find(u => !isBotName(u.name) && u.role === 'MARKETING');
+    if (!botMarketer || !humanMarketer) throw new Error('marketers missing');
+    [botMarketer.teamId, humanMarketer.teamId] = [humanMarketer.teamId, botMarketer.teamId];
+
+    await until(() => engine.status().scrambled, 'scramble detection');
+    await settle(500);
+    engine.stop();
+    expect(world.decisions.filter(d => d.teamId === humanTeam)).toEqual([]);
+  });
+
+  it('stops a Marketing bot mid-dwell once any seat sees a re-shuffle', async () => {
+    // The Joke Maker is moved the moment Marketing starts reading a batch. A
+    // Joke Maker that had just submitted would rest ~45 s without checking its
+    // seat, far past the dwell, so this one never lands a batch: each refused
+    // submit brings it back to its seat check within a few seconds, while
+    // Marketing is still reading.
+    let moved = false;
+    let marketingWhenScrambled: string | null = null;
+    const { world, engine } = setup([], {
+      onEmit: m => {
+        if (m.type !== 'status' || m.status.teams.length === 0) return;
+        const marketing = m.status.teams[0].marketing.activity;
+        if (!moved && marketing.startsWith('reading batch')) {
+          moved = true;
+          const jm = world.userNamed(botName(1, 'A'));
+          if (jm) jm.teamId = 999;
+        }
+        if (m.status.scrambled && marketingWhenScrambled === null) marketingWhenScrambled = marketing;
+      },
+    });
+    world.failNext('submitBatch', 1_000_000, botName(1, 'A'), 403);
+    await engine.start(options({ speed: 1, startRound: false }));
+    const team = teamOf(world, botName(1, 'A'));
+    if (team == null) throw new Error('bot team missing');
+    world.batches.push({
+      id: world.newBatchId(), roundId: world.round.id, teamId: team, state: 'QUEUED', lockedBy: null, jokes: [],
+      rawText: variedCorpus.slice(0, 5).map(j => j.text).join('\n\n'),
+    });
+    world.round.status = 'ACTIVE';
+
+    await until(() => engine.status().scrambled, 'scramble detection');
+    await settle(300);
+    engine.stop();
+    // The re-shuffle landed while Marketing was still reading, so the dwell
+    // guard is what held the split back.
+    expect(marketingWhenScrambled).toMatch(/^reading batch/);
+    expect(world.calls).not.toContain('marketingSplit');
+    expect(world.decisions).toEqual([]);
+  });
+
   it('publishes an inherited batch that does not split cleanly into the round-1 count', async () => {
     const { world, engine } = setup();
     await engine.start(options({ startRound: false }));

@@ -592,6 +592,16 @@ export class BotEngine {
         }
         const envelope = await me.marketingQueueNext(round.id);
         if (signal.aborted) break;
+        if (envelope.batch && envelope.batch.team_id !== team.teamId) {
+          // The backend hands a marketer its own team's queue, so another team's
+          // batch means this seat was moved — seen here at no extra request, and
+          // possibly before the throttled seat check would notice. Never split
+          // or publish it: that would decide a human team's jokes.
+          this.markScrambled(
+            team, seat, `the queue handed me team ${envelope.batch.team_id}'s batch, but my team is ${team.teamId ?? '—'}`, signal,
+          );
+          continue;
+        }
         if (!envelope.batch) {
           this.setActivity(seat, 'waiting for a batch', signal);
           await this.pace(QUEUE_POLL_MS, signal);
@@ -604,6 +614,8 @@ export class BotEngine {
         this.setActivity(seat, `reading batch #${batch.batch_id}`, signal);
         await this.pace(jitter(DWELL_MS.claim, rand), signal);
         if (signal.aborted) break;
+        // Seats can move during a dwell; never write for a team we may have left.
+        if (this.scrambled) continue;
 
         if (jokes.length === 0 && batch.raw_text) {
           const pieces = fitPieces(splitBlob(batch.raw_text), round.batch_size, round.round_number);
@@ -614,6 +626,7 @@ export class BotEngine {
           this.setActivity(seat, `choosing from ${jokes.length} jokes`, signal);
           await this.pace(jitter(DWELL_MS.split, rand), signal);
           if (signal.aborted) break;
+          if (this.scrambled) continue;
         }
 
         const count = publishCount(persona, jokes.length, round.round_number, rand);
@@ -623,6 +636,7 @@ export class BotEngine {
         this.setActivity(seat, `publishing ${keep.size} of ${jokes.length}`, signal);
         await this.pace(jitter(DWELL_MS.decide, rand), signal);
         if (signal.aborted) break;
+        if (this.scrambled) continue;
 
         await me.marketingPublish(batch.batch_id, {
           jokes: jokes.map(j => ({ joke_id: j.joke_id, joke_title: titleOf(j.joke_text), is_published: keep.has(j.joke_id) })),
@@ -680,20 +694,27 @@ export class BotEngine {
     seat.checkedEpoch = epoch;
 
     const inPlace = mine.assignment.team_id === team.teamId && mine.assignment.role === SEAT_ROLE[seat.seat];
-    if (!inPlace && !this.scrambled) {
-      this.scrambled = true;
-      this.log(
-        team, seat,
-        `my seat moved (now ${mine.assignment.role ?? 'unassigned'} on team ${mine.assignment.team_id ?? '—'}) — every bot pauses until teams are re-formed`,
-        signal,
+    if (!inPlace) {
+      this.markScrambled(
+        team, seat, `my seat moved (now ${mine.assignment.role ?? 'unassigned'} on team ${mine.assignment.team_id ?? '—'})`, signal,
       );
-      this.emitStatus();
     }
     if (this.scrambled) {
       this.setActivity(seat, 'paused — teams were re-shuffled', signal);
       return false;
     }
     return true;
+  }
+
+  /** Pause every bot until teams are re-formed; the first seat to notice says why. */
+  private markScrambled(team: TeamRuntime, seat: SeatRuntime, why: string, signal: AbortSignal): void {
+    if (signal.aborted) return;
+    if (!this.scrambled) {
+      this.scrambled = true;
+      this.log(team, seat, `${why} — every bot pauses until teams are re-formed`, signal);
+      this.emitStatus();
+    }
+    this.setActivity(seat, 'paused — teams were re-shuffled', signal);
   }
 
   /** Returns false when the actor should stop for good. Only called while not aborted. */
