@@ -18,6 +18,7 @@ import { MAX_BOT_TEAMS, PERSONAS, PERSONA_ORDER, personaSequence, type PersonaId
 import {
   SPEEDS, type Command, type EngineStatus, type FromWorker, type ProbeResult, type SeatStatus, type Speed, type ToWorker,
 } from '../services/bots/protocol';
+import { watchUrl } from '../services/watchMode';
 import { panelControls, probeIsStale, type Pending } from './botPanelLogic';
 
 export function botPanelRequested(search: string): boolean {
@@ -33,9 +34,23 @@ function clampCount(raw: string): number {
   return Number.isFinite(n) ? Math.min(MAX_BOT_TEAMS, Math.max(0, n)) : 0;
 }
 
-const SeatCell: React.FC<{ seat: SeatStatus }> = ({ seat }) => (
+const SeatCell: React.FC<{ seat: SeatStatus; label: 'Joke Maker' | 'Marketing'; teamIndex: number }> = ({ seat, label, teamIndex }) => (
   <div>
-    <div>{seat.activity}</div>
+    <div className="flex items-center gap-2">
+      <span>{seat.activity}</span>
+      {seat.userId != null && (
+        <a
+          href={watchUrl(window.location.origin, seat.userId, seat.name)}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`👁 ${label} for bot team ${String(teamIndex).padStart(2, '0')}`}
+          title={`Watch ${seat.name}'s ${label} screen in a new tab`}
+          className="rounded bg-gray-100 px-1.5 py-0.5 font-semibold text-gray-700 hover:bg-gray-200"
+        >
+          👁
+        </a>
+      )}
+    </div>
     {seat.error && <div className="text-rose-700">{seat.error}</div>}
   </div>
 );
@@ -266,8 +281,8 @@ export const BotPanel: React.FC = () => {
                       {String(t.index).padStart(2, '0')}{t.teamId != null ? ` · team ${t.teamId}` : ''}
                     </td>
                     <td className="pr-3">{PERSONAS[t.persona].label}</td>
-                    <td className="pr-3"><SeatCell seat={t.jm} /></td>
-                    <td className="pr-3"><SeatCell seat={t.marketing} /></td>
+                    <td className="pr-3"><SeatCell seat={t.jm} label="Joke Maker" teamIndex={t.index} /></td>
+                    <td className="pr-3"><SeatCell seat={t.marketing} label="Marketing" teamIndex={t.index} /></td>
                     <td className="pr-3">{t.batchesPublished}</td>
                   </tr>
                 ))}
