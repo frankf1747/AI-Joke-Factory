@@ -20,6 +20,7 @@ import { DIMENSIONS, dimById } from '../config/dimensions';
    started showing the same per-team rows — see views/feedback.ts. */
 import { toFeedbackRows } from './feedback';
 import { FeedbackCard } from '../components/FeedbackCard';
+import { isWatchMode } from '../services/watchMode';
 
 /* ---- Icons for the backend's Topic categories. Keyed by the category string
    itself so the picker stays in step with config/dimensions automatically: add
@@ -536,6 +537,8 @@ const QualityControl: React.FC = () => {
     [batches, user?.team],
   );
 
+  const watching = isWatchMode();
+
   return (
     <RoleLayout>
       {/* Round 2: Team popup */}
@@ -561,6 +564,10 @@ const QualityControl: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* LEFT: Marketing Desk */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Read-only in watch mode: this tab shows a bot's seat and must not act for it.
+              A disabled fieldset disables every control inside natively; `contents`
+              keeps it out of the layout. The rest of the view stays interactive. */}
+          <fieldset disabled={watching} className="contents">
           <Card
             title="Marketing Desk"
             subtitle={needsSplit
@@ -612,11 +619,16 @@ const QualityControl: React.FC = () => {
                     <div
                       key={id}
                       onClick={(e) => {
+                        if (watching) return;
                         if ((e.target as HTMLElement).closest('button, input, textarea')) return;
                         toggle(id);
                       }}
-                      draggable
+                      draggable={!watching}
                       onDragStart={(e) => {
+                        if (watching) {
+                          e.preventDefault();
+                          return;
+                        }
                         if ((e.target as HTMLElement).closest('button, input, textarea')) {
                           e.preventDefault();
                           return;
@@ -626,7 +638,7 @@ const QualityControl: React.FC = () => {
                       onDragOver={(e) => onDragOver(e, idx)}
                       onDragEnd={endDrag}
                       onDrop={endDrag}
-                      className={`rounded-xl border-2 p-4 cursor-pointer transition-all shadow-sm hover:shadow-md ${
+                      className={`rounded-xl border-2 p-4 ${watching ? 'cursor-default' : 'cursor-pointer'} transition-all shadow-sm hover:shadow-md ${
                         dragging ? 'opacity-40' : ''
                       } ${
                         selected
@@ -742,6 +754,7 @@ const QualityControl: React.FC = () => {
               </div>
             )}
           </Card>
+          </fieldset>
         </div>
 
         {/* RIGHT: stats + customer-feedback learning panel */}

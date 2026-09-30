@@ -12,6 +12,7 @@ import { dimById } from '../config/dimensions';
    both seats must read it identically. See views/feedback.ts. */
 import { toFeedbackRows } from './feedback';
 import { FeedbackCard } from '../components/FeedbackCard';
+import { isWatchMode } from '../services/watchMode';
 
 /* ---- per-joke status drives the status dots ---- */
 type JokeStatus = 'reviewing' | 'market' | 'sold' | 'wasted';
@@ -244,6 +245,8 @@ const JokeMaker: React.FC = () => {
     if (!config.showTeamPopup) setDismissedTeamPopup(false);
   }, [config.showTeamPopup]);
 
+  const watching = isWatchMode();
+
   return (
     <RoleLayout>
       {/* Round 2: Team popup */}
@@ -269,6 +272,10 @@ const JokeMaker: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* LEFT: Production Line + Value stream */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Read-only in watch mode: this tab shows a bot's seat and must not act for it.
+              A disabled fieldset disables every control inside natively; `contents`
+              keeps it out of the layout. The rest of the view stays interactive. */}
+          <fieldset disabled={watching} className="contents">
           <Card title="Production Line" accent={BRAND.production}>
             <div className="space-y-4">
               {!config.isActive && (
@@ -322,6 +329,7 @@ const JokeMaker: React.FC = () => {
               </div>
             </div>
           </Card>
+          </fieldset>
 
           <Card title="Value stream" subtitle="Your submitted batches — batch-level status" accent={BRAND.production}>
             <div className="space-y-2 max-h-[440px] overflow-y-auto pr-1">
