@@ -96,6 +96,17 @@ function shouldUseMockApi(): boolean {
   return forceMock || (prod && !getConfiguredBaseUrl());
 }
 
+/** The backend origin this build talks to. The Bot Panel hands it to its worker
+ *  so bots hit exactly the server the instructor's own screen does. */
+export function getApiBaseUrl(): string {
+  return getBaseUrl().replace(/\/+$/, '');
+}
+
+/** True when requests go to the in-browser mock. Bots need a real backend. */
+export function isMockApiMode(): boolean {
+  return shouldUseMockApi();
+}
+
 function getUserIdHeader(): string | undefined {
   // Guarded: this module is also imported by Node-side tooling (the smoke
   // script, the test suite), where there is no DOM and no localStorage.

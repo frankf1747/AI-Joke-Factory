@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiRequest, ApiError, isRawEndpoint } from './apiClient';
+import { apiRequest, ApiError, isRawEndpoint, getApiBaseUrl, isMockApiMode } from './apiClient';
 
 /** Minimal Response stand-in — we only use the fields apiRequest reads. */
 function jsonResponse(body: unknown, status = 200): Response {
@@ -199,5 +199,20 @@ describe('apiRequest — headers and base URL', () => {
     globalThis.fetch = spy as any;
     await apiRequest('/v1/rounds/active');
     expect(spy.mock.calls[0][0]).toBe('http://api.test/v1/rounds/active');
+  });
+});
+
+describe('getApiBaseUrl', () => {
+  it('reports the configured backend without a trailing slash', () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test/');
+    expect(getApiBaseUrl()).toBe('http://api.test');
+  });
+});
+
+describe('isMockApiMode', () => {
+  it('is false against a real backend and true when the mock is forced', () => {
+    expect(isMockApiMode()).toBe(false);
+    vi.stubEnv('VITE_USE_MOCK_API', 'true');
+    expect(isMockApiMode()).toBe(true);
   });
 });
