@@ -128,6 +128,14 @@ test.describe('Bot players (live)', () => {
     // The bot's reasoning arrives live over the channel.
     await expect(watch.getByTestId('reasoning-entry').first()).toBeVisible({ timeout: 3 * 60_000 });
 
+    // The desk shows the batch the bot holds. queue/next locks a batch to its
+    // caller, so a watch tab may only call it while the bot's engine says the
+    // bot is Marketing on this team (mayClaimMarketingBatch); this proves the
+    // gate lets that case through. Any control inside the locked desk means a
+    // batch is on screen: the splitter's textarea, or the post-split buttons.
+    await expect(watch.locator('fieldset[disabled] textarea, fieldset[disabled] button').first())
+      .toBeVisible({ timeout: 3 * 60_000 });
+
     // Shared storage still belongs to the instructor, seen from both tabs.
     expect((await readSession(page)).userId).toBe(String(s.instructorId));
     expect((await readSession(watch)).userId).toBe(String(s.instructorId));
