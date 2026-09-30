@@ -3870,7 +3870,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```ts
 // services/watchMode.test.ts
 import { describe, it, expect } from 'vitest';
-import { captureWatchIdentity, clearPersisted, getWatchIdentity, isWatchMode, watchUrl } from './watchMode';
+import { captureWatchIdentity, clearPersisted, getWatchIdentity, isWatchMode, watchRequested, watchUrl } from './watchMode';
 
 class MemoryStorage {
   private map = new Map<string, string>();
@@ -3888,10 +3888,27 @@ describe('watch mode identity', () => {
     expect(isWatchMode(tab)).toBe(true);
   });
 
-  it('keeps watching after a reload that dropped the query string', () => {
+  it('survives a reload, because the reload keeps the query string', () => {
     const tab = new MemoryStorage();
     captureWatchIdentity('?watch=17&watchName=x', tab);
-    expect(captureWatchIdentity('', tab)).toEqual({ userId: 17, displayName: 'x' });
+    expect(captureWatchIdentity('?watch=17&watchName=x', tab)).toEqual({ userId: 17, displayName: 'x' });
+  });
+
+  it('ends watch mode when the URL no longer carries ?watch', () => {
+    const tab = new MemoryStorage();
+    captureWatchIdentity('?watch=17&watchName=x', tab);
+    expect(captureWatchIdentity('?bots=1', tab)).toBeNull();
+    expect(isWatchMode(tab)).toBe(false);
+    expect(tab.getItem('joke_factory_watch_user_id')).toBeNull();
+    expect(tab.getItem('joke_factory_watch_display_name')).toBeNull();
+  });
+
+  it('clears a stale identity when the new ?watch is invalid', () => {
+    const tab = new MemoryStorage();
+    captureWatchIdentity('?watch=17&watchName=x', tab);
+    expect(captureWatchIdentity('?watch=abc', tab)).toBeNull();
+    expect(isWatchMode(tab)).toBe(false);
+    expect(tab.getItem('joke_factory_watch_display_name')).toBeNull();
   });
 
   it('is off without a watch parameter', () => {
@@ -3901,7 +3918,7 @@ describe('watch mode identity', () => {
   });
 
   it('ignores ids that are not positive integers', () => {
-    for (const bad of ['abc', '0', '-3', '2.5']) {
+    for (const bad of ['abc', '0', '-3', '2.5', '99999999999999999999']) {
       const tab = new MemoryStorage();
       expect(captureWatchIdentity(`?watch=${bad}`, tab)).toBeNull();
     }
@@ -3914,6 +3931,68 @@ describe('watch mode identity', () => {
 
   it('is off when there is no sessionStorage at all', () => {
     expect(getWatchIdentity(null)).toBeNull();
+    expect(captureWatchIdentity('?watch=17', null)).toBeNull();
+  });
+});
+
+describe('watch name', () => {
+  it('falls back to "user <id>" when the name is missing, blank or only control characters', () => {
+    for (const q of ['?watch=9', '?watch=9&watchName=', '?watch=9&watchName=%20%20', '?watch=9&watchName=%00%1F%0A']) {
+      expect(captureWatchIdentity(q, new MemoryStorage())).toEqual({ userId: 9, displayName: 'user 9' });
+    }
+  });
+
+  it('trims and strips control characters and bidi overrides', () => {
+    const name = encodeURIComponent('  Bo\u0007b\u202E 03\u202CB\n ');
+    expect(captureWatchIdentity(`?watch=9&watchName=${name}`, new MemoryStorage())).toEqual({
+      userId: 9,
+      displayName: 'Bob 03B',
+    });
+  });
+
+  it('caps the name at 60 characters without splitting an emoji', () => {
+    const a = captureWatchIdentity(`?watch=9&watchName=${'a'.repeat(500)}`, new MemoryStorage());
+    expect(a?.displayName).toBe('a'.repeat(60));
+    const b = captureWatchIdentity(`?watch=9&watchName=${encodeURIComponent('🤖'.repeat(100))}`, new MemoryStorage());
+    expect(b?.displayName).toBe('🤖'.repeat(60));
+  });
+});
+
+describe('a store that throws', () => {
+  it('returns null instead of throwing when setItem fails (quota, blocked storage)', () => {
+    const removed: string[] = [];
+    const broken = {
+      getItem: () => null,
+      setItem: () => { throw new DOMException('full', 'QuotaExceededError'); },
+      removeItem: (k: string) => { removed.push(k); },
+    };
+    expect(() => captureWatchIdentity('?watch=17&watchName=x', broken)).not.toThrow();
+    expect(captureWatchIdentity('?watch=17&watchName=x', broken)).toBeNull();
+    expect(removed).toContain('joke_factory_watch_user_id');
+  });
+
+  it('returns null instead of throwing when removeItem fails', () => {
+    const broken = {
+      getItem: () => null,
+      setItem: () => {},
+      removeItem: () => { throw new Error('blocked'); },
+    };
+    expect(captureWatchIdentity('?bots=1', broken)).toBeNull();
+  });
+});
+
+describe('watchRequested', () => {
+  it('is true whenever the URL carries a watch parameter, valid or not', () => {
+    expect(watchRequested('?watch=17')).toBe(true);
+    expect(watchRequested('?watch=abc')).toBe(true);
+    expect(watchRequested('?watch=')).toBe(true);
+    expect(watchRequested('?bots=1&watch=3')).toBe(true);
+  });
+
+  it('is false without one', () => {
+    expect(watchRequested('')).toBe(false);
+    expect(watchRequested('?bots=1')).toBe(false);
+    expect(watchRequested('?watchName=x')).toBe(false);
   });
 });
 
@@ -3932,6 +4011,35 @@ describe('clearPersisted', () => {
     captureWatchIdentity('?watch=17', tab);
     clearPersisted(['joke_factory_user_id'], shared, tab);
     expect(shared.getItem('joke_factory_user_id')).toBe('5');
+  });
+
+  it('clears every listed key in a normal tab, and leaves unlisted ones', () => {
+    const shared = new MemoryStorage();
+    shared.setItem('a', '1');
+    shared.setItem('b', '2');
+    shared.setItem('c', '3');
+    clearPersisted(['a', 'b'], shared, new MemoryStorage());
+    expect([shared.getItem('a'), shared.getItem('b'), shared.getItem('c')]).toEqual([null, null, '3']);
+  });
+
+  it('leaves every listed key alone in a watch tab', () => {
+    const shared = new MemoryStorage();
+    shared.setItem('a', '1');
+    shared.setItem('b', '2');
+    const tab = new MemoryStorage();
+    captureWatchIdentity('?watch=17', tab);
+    clearPersisted(['a', 'b'], shared, tab);
+    expect([shared.getItem('a'), shared.getItem('b')]).toEqual(['1', '2']);
+  });
+
+  it('clears again once the tab has left watch mode', () => {
+    const shared = new MemoryStorage();
+    shared.setItem('a', '1');
+    const tab = new MemoryStorage();
+    captureWatchIdentity('?watch=17', tab);
+    captureWatchIdentity('?bots=1', tab);
+    clearPersisted(['a'], shared, tab);
+    expect(shared.getItem('a')).toBeNull();
   });
 });
 ```
@@ -3960,6 +4068,8 @@ export const WATCH_PARAM = 'watch';
 export const WATCH_NAME_PARAM = 'watchName';
 const SS_USER_ID = 'joke_factory_watch_user_id';
 const SS_DISPLAY_NAME = 'joke_factory_watch_display_name';
+/** Enough for "🤖 Bot 03B"; small enough that a hostile link cannot fill the banner or the quota. */
+const MAX_NAME_LENGTH = 60;
 
 export interface WatchIdentity {
   userId: number;
@@ -3967,7 +4077,7 @@ export interface WatchIdentity {
 }
 
 type ReadStore = Pick<Storage, 'getItem'>;
-type WriteStore = Pick<Storage, 'getItem' | 'setItem'>;
+type WriteStore = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 function tabStore(): WriteStore | null {
   try {
@@ -3988,19 +4098,57 @@ function sharedStore(): Pick<Storage, 'removeItem'> | null {
 function parseId(raw: string | null): number | null {
   if (raw === null || !/^\d+$/.test(raw)) return null;
   const id = Number(raw);
-  return id > 0 ? id : null;
+  // isSafeInteger: "99999999999999999999" parses to 1e20, which is no user id.
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
-/** Call once at startup, before rendering. Reads `?watch=` into this tab. */
+/**
+ * The name arrives in a link anyone can craft and is rendered in a banner, so
+ * drop control characters and bidi overrides (which can reorder the text around
+ * them), then cap it. Capping by code point keeps an emoji from being cut in half.
+ */
+function sanitizeName(raw: string | null, userId: number): string {
+  const cleaned = (raw ?? '').replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, '').trim();
+  const capped = Array.from(cleaned).slice(0, MAX_NAME_LENGTH).join('').trim();
+  return capped || `user ${userId}`;
+}
+
+/** True when the URL asks for watch mode at all, valid id or not. A caller uses
+ *  it to tell "not a watch tab" from "asked to watch but capture failed". */
+export function watchRequested(search: string): boolean {
+  return new URLSearchParams(search).has(WATCH_PARAM);
+}
+
+/**
+ * Call once at startup, before rendering. The URL is authoritative: `?watch=`
+ * puts this tab in watch mode, and a URL without a valid one takes it out again,
+ * so an instructor who reuses the tab for `/?bots=1` is not left acting as a
+ * read-only bot. Never throws — a blocked or full sessionStorage returns null,
+ * and the caller can tell that apart from "not requested" with watchRequested().
+ */
 export function captureWatchIdentity(search: string, store: WriteStore | null = tabStore()): WatchIdentity | null {
   if (!store) return null;
-  const params = new URLSearchParams(search);
-  const userId = parseId(params.get(WATCH_PARAM));
-  if (userId !== null) {
+  try {
+    const params = new URLSearchParams(search);
+    const userId = parseId(params.get(WATCH_PARAM));
+    if (userId === null) {
+      store.removeItem(SS_USER_ID);
+      store.removeItem(SS_DISPLAY_NAME);
+      return null;
+    }
     store.setItem(SS_USER_ID, String(userId));
-    store.setItem(SS_DISPLAY_NAME, params.get(WATCH_NAME_PARAM) ?? `user ${userId}`);
+    store.setItem(SS_DISPLAY_NAME, sanitizeName(params.get(WATCH_NAME_PARAM), userId));
+    return getWatchIdentity(store);
+  } catch {
+    // Half-written state must not read back as a watch identity.
+    try {
+      store.removeItem(SS_USER_ID);
+      store.removeItem(SS_DISPLAY_NAME);
+    } catch {
+      /* nothing more to do */
+    }
+    return null;
   }
-  return getWatchIdentity(store);
 }
 
 export function getWatchIdentity(store: ReadStore | null = tabStore()): WatchIdentity | null {
@@ -4035,7 +4183,7 @@ export function clearPersisted(
 - [ ] **Step 4: Run it to verify it passes**
 
 Run: `npx vitest run services/watchMode.test.ts`
-Expected: 8 passed.
+Expected: 20 passed.
 
 - [ ] **Step 5: Commit**
 
@@ -4045,6 +4193,15 @@ git commit -m "feat(watch): hold a watched bot's identity per tab
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+
+
+> **Revised in review.** The code above is the committed version (3769bf5 + 3d32a8e). Review
+> changed four things from the first draft: the URL is authoritative, so a tab loaded without a
+> valid `?watch` clears any stored identity instead of staying in watch mode; `watchRequested`
+> tells index.tsx that a watch link was intended even when it is invalid, so it can say "watch
+> mode unavailable" instead of silently logging in as the instructor; `parseId` requires a safe
+> positive integer; and `watchName` is stripped of control and bidi characters, capped at 60
+> code points, and capture never throws when storage does.
 
 ---
 
