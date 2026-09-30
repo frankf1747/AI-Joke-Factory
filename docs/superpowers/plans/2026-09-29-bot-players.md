@@ -2795,7 +2795,12 @@ export const BotPanel: React.FC = () => {
             Remove bots
           </Button>
           {status?.scrambled && (
-            <Button onClick={() => { setPending('reform'); send({ type: 'reform' }); }}>Re-form teams</Button>
+            // Disabled while any command is in flight: two overlapping re-forms each
+            // reshuffle the humans and interleave their patches, which can strand a
+            // human team. The engine also serializes them; this stops the double-click.
+            <Button onClick={() => { setPending('reform'); send({ type: 'reform' }); }} disabled={pending !== null}>
+              Re-form teams
+            </Button>
           )}
         </div>
 
