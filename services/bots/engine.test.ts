@@ -248,6 +248,35 @@ describe('BotEngine', () => {
     expect(emitted.some(m => m.type === 'log' && m.entry.botUserId === marketer.id)).toBe(true);
   });
 
+  it('tells watchers it claims batches only while it would call queue/next itself', async () => {
+    const { world, engine } = setup(['alice', 'bob']);
+    const marketer = () => world.userNamed(botName(1, 'B'));
+    const jm = () => world.userNamed(botName(1, 'A'));
+    await engine.start(options({ speed: 10 }));
+    const botMarketer = marketer();
+    const botJm = jm();
+    if (!botMarketer || !botJm) throw new Error('bots missing');
+
+    // Playing normally: the Marketing seat claims, the Joke Maker never does.
+    await until(() => engine.metaFor(botMarketer.id)?.claiming === true, 'the marketer claiming');
+    expect(engine.metaFor(botJm.id)?.claiming).toBe(false);
+
+    // Auto-Assign swaps the bot marketer onto the human team: every bot pauses.
+    const humanMarketer = [...world.users.values()].find(u => !isBotName(u.name) && u.role === 'MARKETING');
+    if (!humanMarketer) throw new Error('human marketer missing');
+    [botMarketer.teamId, humanMarketer.teamId] = [humanMarketer.teamId, botMarketer.teamId];
+    await until(() => engine.status().scrambled, 'scramble detection');
+    expect(engine.metaFor(botMarketer.id)?.claiming).toBe(false);
+
+    // Re-forming ends the pause.
+    await engine.reform();
+    expect(engine.status().scrambled).toBe(false);
+    expect(engine.metaFor(botMarketer.id)?.claiming).toBe(true);
+
+    engine.stop();
+    expect(engine.metaFor(botMarketer.id)?.claiming).toBe(false);
+  });
+
   it('probes the lobby and round', async () => {
     const { engine, emitted } = setup(['alice']);
     await engine.start(options({ startRound: false }));

@@ -6,6 +6,7 @@ import {
   getWatchIdentity,
   isWatchMode,
   mayClaimMarketingBatch,
+  SEAT_TTL_MS,
   setWatchedSeat,
   watchRequested,
   watchUrl,
@@ -195,7 +196,7 @@ describe('mayClaimMarketingBatch', () => {
     const tab = new MemoryStorage();
     expect(mayClaimMarketingBatch(4, tab)).toBe(true);
     expect(mayClaimMarketingBatch(null, tab)).toBe(true);
-    setWatchedSeat({ seat: 'A', teamId: 9 });
+    setWatchedSeat({ seat: 'A', teamId: 9, claiming: true });
     expect(mayClaimMarketingBatch(4, tab)).toBe(true);
   });
 
@@ -204,32 +205,64 @@ describe('mayClaimMarketingBatch', () => {
   });
 
   it('refuses when the engine says the bot is a Joke Maker', () => {
-    setWatchedSeat({ seat: 'A', teamId: 4 });
+    setWatchedSeat({ seat: 'A', teamId: 4, claiming: true });
     expect(mayClaimMarketingBatch(4, watchTab())).toBe(false);
   });
 
   it('refuses when the bot sits on a team other than the one the engine intends', () => {
-    setWatchedSeat({ seat: 'B', teamId: 4 });
+    setWatchedSeat({ seat: 'B', teamId: 4, claiming: true });
     expect(mayClaimMarketingBatch(5, watchTab())).toBe(false);
   });
 
   it('refuses when either team id is unknown', () => {
     const tab = watchTab();
-    setWatchedSeat({ seat: 'B', teamId: null });
+    setWatchedSeat({ seat: 'B', teamId: null, claiming: true });
     expect(mayClaimMarketingBatch(4, tab)).toBe(false);
     expect(mayClaimMarketingBatch(null, tab)).toBe(false);
-    setWatchedSeat({ seat: 'B', teamId: 4 });
+    setWatchedSeat({ seat: 'B', teamId: 4, claiming: true });
     expect(mayClaimMarketingBatch(null, tab)).toBe(false);
   });
 
   it('allows the Marketing bot on the very team its engine intends', () => {
-    setWatchedSeat({ seat: 'B', teamId: 4 });
+    setWatchedSeat({ seat: 'B', teamId: 4, claiming: true });
     expect(mayClaimMarketingBatch(4, watchTab())).toBe(true);
+  });
+
+  it('refuses while the engine is paused, stopped or not running this seat', () => {
+    setWatchedSeat({ seat: 'B', teamId: 4, claiming: false });
+    expect(mayClaimMarketingBatch(4, watchTab())).toBe(false);
+  });
+
+  it('allows a seat heard from just under SEAT_TTL_MS ago', () => {
+    const tab = watchTab();
+    setWatchedSeat({ seat: 'B', teamId: 4, claiming: true }, () => 1_000);
+    expect(mayClaimMarketingBatch(4, tab, () => 1_000 + SEAT_TTL_MS - 1)).toBe(true);
+  });
+
+  it('refuses once the engine has been silent for SEAT_TTL_MS', () => {
+    const tab = watchTab();
+    setWatchedSeat({ seat: 'B', teamId: 4, claiming: true }, () => 1_000);
+    expect(mayClaimMarketingBatch(4, tab, () => 1_000 + SEAT_TTL_MS)).toBe(false);
+    expect(mayClaimMarketingBatch(4, tab, () => 1_000 + 60_000)).toBe(false);
+  });
+
+  it('a fresh reply renews an expired seat', () => {
+    const tab = watchTab();
+    setWatchedSeat({ seat: 'B', teamId: 4, claiming: true }, () => 1_000);
+    expect(mayClaimMarketingBatch(4, tab, () => 20_000)).toBe(false);
+    setWatchedSeat({ seat: 'B', teamId: 4, claiming: true }, () => 20_000);
+    expect(mayClaimMarketingBatch(4, tab, () => 20_000)).toBe(true);
+  });
+
+  it('refuses a seat stamped in the future, e.g. after the clock went back', () => {
+    const tab = watchTab();
+    setWatchedSeat({ seat: 'B', teamId: 4, claiming: true }, () => 50_000);
+    expect(mayClaimMarketingBatch(4, tab, () => 1_000)).toBe(false);
   });
 
   it('refuses again once the seat is cleared', () => {
     const tab = watchTab();
-    setWatchedSeat({ seat: 'B', teamId: 4 });
+    setWatchedSeat({ seat: 'B', teamId: 4, claiming: true });
     setWatchedSeat(null);
     expect(mayClaimMarketingBatch(4, tab)).toBe(false);
   });

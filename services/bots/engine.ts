@@ -174,6 +174,8 @@ interface SeatRuntime extends SeatStatus {
   /** When this seat last asked the backend where it sits, and in which formation. */
   checkedAt: number | null;
   checkedEpoch: number;
+  /** This seat's actor loop is running (set on entry, cleared on exit). */
+  live: boolean;
 }
 
 interface TeamRuntime {
@@ -197,7 +199,7 @@ interface TeamRuntime {
 }
 
 function newSeat(index: number, seat: Seat): SeatRuntime {
-  return { seat, userId: null, name: botName(index, seat), activity: 'not started', error: null, checkedAt: null, checkedEpoch: -1 };
+  return { seat, userId: null, name: botName(index, seat), activity: 'not started', error: null, checkedAt: null, checkedEpoch: -1, live: false };
 }
 
 function newTeam(spec: BotTeamSpec): TeamRuntime {
@@ -271,11 +273,23 @@ export class BotEngine {
     for (const team of this.teams) {
       for (const seat of [team.jm, team.marketing]) {
         if (seat.userId === botUserId) {
-          return { teamIndex: team.index, seat: seat.seat, persona: team.persona, teamId: team.teamId };
+          return {
+            teamIndex: team.index, seat: seat.seat, persona: team.persona, teamId: team.teamId,
+            claiming: this.claiming(seat),
+          };
         }
       }
     }
     return null;
+  }
+
+  /**
+   * Would this seat's actor call queue/next now? Only a live Marketing actor
+   * does, and only while the engine runs and is neither paused for a scramble
+   * (checkSeat returns false for every bot then) nor forming teams.
+   */
+  private claiming(seat: SeatRuntime): boolean {
+    return seat.seat === 'B' && seat.live && this.running && !this.scrambled && !this.forming;
   }
 
   async probe(roundId: number): Promise<ProbeResult> {
@@ -589,7 +603,17 @@ export class BotEngine {
     }
   }
 
+  /** Marks the seat live for as long as its loop runs; see claiming(). */
   private async runMarketing(team: TeamRuntime, signal: AbortSignal): Promise<void> {
+    team.marketing.live = true;
+    try {
+      await this.marketingLoop(team, signal);
+    } finally {
+      team.marketing.live = false;
+    }
+  }
+
+  private async marketingLoop(team: TeamRuntime, signal: AbortSignal): Promise<void> {
     const persona = PERSONAS[team.persona];
     const seat = team.marketing;
     const me = this.deps.api.as(seat.userId as number, `bot ${team.index}B`);

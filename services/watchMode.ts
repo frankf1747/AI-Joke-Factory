@@ -126,18 +126,26 @@ export function clearPersisted(
 }
 
 /**
- * Where the watched bot's OWN engine says it should sit, as last reported on the
- * bot channel (WatchShell sets it from each `history` reply). In memory only:
- * it is this tab's view of the engine, not an identity, so nothing persists it.
+ * Where the watched bot's OWN engine says it should sit, and whether it would
+ * claim a batch there now, as last reported on the bot channel (WatchShell sets
+ * it from each `history` reply). In memory only: it is this tab's view of the
+ * engine, not an identity, so nothing persists it.
  */
 export interface WatchedSeat {
   seat: 'A' | 'B';
   teamId: number | null;
+  /** BotMeta.claiming: the engine would call queue/next for this bot now. */
+  claiming: boolean;
 }
-let watchedSeat: WatchedSeat | null = null;
+/**
+ * WatchShell re-asks every 5 s, so three missed replies mean the instructor tab
+ * (and its worker) is gone. Its last word is then too old to act on.
+ */
+export const SEAT_TTL_MS = 15_000;
+let watchedSeat: (WatchedSeat & { at: number }) | null = null;
 
-export function setWatchedSeat(seat: WatchedSeat | null): void {
-  watchedSeat = seat ? { seat: seat.seat, teamId: seat.teamId } : null;
+export function setWatchedSeat(seat: WatchedSeat | null, now: () => number = Date.now): void {
+  watchedSeat = seat ? { seat: seat.seat, teamId: seat.teamId, claiming: seat.claiming, at: now() } : null;
 }
 
 /**
@@ -147,15 +155,23 @@ export function setWatchedSeat(seat: WatchedSeat | null): void {
  * A watch tab calls it AS THE BOT, so it must never claim a batch the bot's
  * engine would not. The engine stops claiming when its bot was moved off its
  * intended seat (engine.ts checkSeat) — say, onto a human team by Auto-Assign —
- * and a watch tab left open would otherwise keep locking that team's batches,
- * invisibly and indefinitely. So mirror checkSeat: claim only while the engine
- * says the bot is Marketing on the very team /session/me reports. Fail closed:
- * no word from the engine, or an unknown team, means no claim.
+ * and pauses every bot while teams are scrambled; a watch tab left open would
+ * otherwise keep locking a human team's batches, invisibly and indefinitely. So
+ * claim only while the engine, heard from within SEAT_TTL_MS, says it is
+ * claiming as Marketing on the very team /session/me reports. Fail closed: no
+ * recent word from the engine, or an unknown team, means no claim.
  *
  * A normal tab is unaffected: it always may.
  */
-export function mayClaimMarketingBatch(teamId: number | null, store: ReadStore | null = tabStore()): boolean {
+export function mayClaimMarketingBatch(
+  teamId: number | null,
+  store: ReadStore | null = tabStore(),
+  now: () => number = Date.now,
+): boolean {
   if (!isWatchMode(store)) return true;
   const seat = watchedSeat;
-  return seat !== null && seat.seat === 'B' && seat.teamId !== null && teamId !== null && seat.teamId === teamId;
+  if (seat === null || !seat.claiming || seat.seat !== 'B') return false;
+  if (seat.teamId === null || teamId === null || seat.teamId !== teamId) return false;
+  const age = now() - seat.at;
+  return age >= 0 && age < SEAT_TTL_MS;
 }

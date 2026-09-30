@@ -15,8 +15,9 @@ import { BOT_CHANNEL, type BotMeta, type ChannelMessage, type ReasoningEntry } f
 
 const MAX_ENTRIES = 200;
 /* Re-ask the owning worker for history + meta this often. Keeps the seat the
-   engine intends fresh after a Re-form (context.tsx gates queue/next on it),
-   and fills the strip in if the instructor tab opens after this one. */
+   engine intends fresh after a Re-form or a pause (context.tsx gates queue/next
+   on it, and lets it expire after SEAT_TTL_MS of silence), and fills the strip
+   in if the instructor tab opens after this one. */
 const HISTORY_REFRESH_MS = 5_000;
 
 function seatLabel(meta: BotMeta | null, role: unknown): string | null {
@@ -59,7 +60,8 @@ export const WatchShell: React.FC<{ children: React.ReactNode }> = ({ children }
         // The worker's history is authoritative, so each reply replaces ours.
         setEntries(m.entries.slice(-MAX_ENTRIES));
         setMeta(m.meta);
-        setWatchedSeat(m.meta ? { seat: m.meta.seat, teamId: m.meta.teamId } : null);
+        // `=== true`: a stale worker build without the field must not claim.
+        setWatchedSeat(m.meta ? { seat: m.meta.seat, teamId: m.meta.teamId, claiming: m.meta.claiming === true } : null);
       } else if (m.type === 'log' && m.entry.botUserId === botUserId) {
         setEntries(prev => [...prev, m.entry].slice(-MAX_ENTRIES));
       }

@@ -95,6 +95,12 @@ export interface BotMeta {
   seat: Seat;
   persona: PersonaId;
   teamId: number | null;
+  /**
+   * True exactly when the engine itself would call marketing/queue/next for
+   * this bot: it is running, not paused for a scramble or mid re-form, and this
+   * is a live Marketing seat. A watch tab claims batches only while it is true.
+   */
+  claiming: boolean;
 }
 
 export type CommandDone =
