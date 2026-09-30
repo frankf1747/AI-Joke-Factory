@@ -264,6 +264,16 @@ describe('BotEngine', () => {
     expect([...world.users.values()].some(u => isBotName(u.name))).toBe(false);
   });
 
+  it('refuses to fill an ACTIVE round, before seating anyone', async () => {
+    // The panel's probe can be seconds old: Stop an all-bot run, then Fill at
+    // once, and the panel still believes the round is CONFIGURED.
+    const { world, engine } = setup();
+    world.round.status = 'ACTIVE';
+    await expect(engine.start(options({ startRound: false }))).rejects.toThrow(/ACTIVE/);
+    expect([...world.users.values()].some(u => isBotName(u.name))).toBe(false);
+    expect(engine.status().running).toBe(false);
+  });
+
   it('Careful gives up when feedback never arrives, then keeps playing', async () => {
     const { world, engine } = setup();
     world.autoClassify = false;
@@ -558,7 +568,14 @@ describe('BotEngine', () => {
     expect(world.decisions).toHaveLength(1);
     engine.stop();
     gate.stopHolding();
+    // The instructor resets the round; Fill refuses one that is ACTIVE.
+    world.round.status = 'CONFIGURED';
+    // Hold the next run at seating, which comes after it resets its counters,
+    // so the stopped run's late publish lands on the new run's count.
+    gate.hold('sessionJoin', 'request');
     const restart = engine.start(options({ startRound: false }));
+    await until(() => gate.count('sessionJoin') >= 1, 'the next run seating its bots');
+    gate.stopHolding();
     gate.release();
     await restart;
     expect(engine.status().classificationCalls).toBe(0);

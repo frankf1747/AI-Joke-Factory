@@ -319,20 +319,24 @@ export class BotEngine {
   private async startNow(options: StartOptions, teams: TeamRuntime[], controller: AbortController): Promise<void> {
     const { signal } = controller;
     if (signal.aborted) return;
+    // Check BEFORE seating anyone, for Fill too. The backend refuses to start a
+    // round that is ACTIVE or ENDED (usecase/instructor.go:232-237), so bots
+    // seated for one that can never start would just sit there; and bots may
+    // only join a round before it starts. The panel's lobby probe can be
+    // seconds old — Stop an all-bot run, click Fill at once, and it still reads
+    // CONFIGURED — so this fresh reading is the one that counts.
+    const rounds = (await this.deps.api.roundsActive()).rounds;
+    if (signal.aborted) return;
+    const round = rounds.find(r => r.id === options.roundId);
+    if (!round || round.status !== 'CONFIGURED') {
+      throw new Error(
+        `Round ${round?.round_number ?? options.roundId} is ${round?.status ?? 'missing'}; bots need a round that has not started.`,
+      );
+    }
     if (options.startRound) {
-      // Check BEFORE seating anyone. The backend refuses to start a round that
-      // is ACTIVE or ENDED (usecase/instructor.go:232-237); bots seated for a
-      // round that can never start would just sit there.
-      const rounds = (await this.deps.api.roundsActive()).rounds;
-      if (signal.aborted) return;
-      const round = rounds.find(r => r.id === options.roundId);
-      if (!round || round.status !== 'CONFIGURED') {
-        throw new Error(
-          `Round ${round?.round_number ?? options.roundId} is ${round?.status ?? 'missing'}; an all-bot class needs a round that has not started.`,
-        );
-      }
       // Only one round may be active at a time (a unique index,
       // migrations/0001_schema.sql:84); starting a second returns a 500.
+      // Fill starts nothing, so another round being active does not matter to it.
       const busy = rounds.find(r => r.status === 'ACTIVE');
       if (busy) throw new Error(`Round ${busy.round_number} is still active; end it before starting an all-bot class.`);
     }
