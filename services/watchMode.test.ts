@@ -1,6 +1,15 @@
 // services/watchMode.test.ts
-import { describe, it, expect } from 'vitest';
-import { captureWatchIdentity, clearPersisted, getWatchIdentity, isWatchMode, watchRequested, watchUrl } from './watchMode';
+import { afterEach, describe, it, expect } from 'vitest';
+import {
+  captureWatchIdentity,
+  clearPersisted,
+  getWatchIdentity,
+  isWatchMode,
+  mayClaimMarketingBatch,
+  setWatchedSeat,
+  watchRequested,
+  watchUrl,
+} from './watchMode';
 
 class MemoryStorage {
   private map = new Map<string, string>();
@@ -170,5 +179,58 @@ describe('clearPersisted', () => {
     captureWatchIdentity('?bots=1', tab);
     clearPersisted(['a'], shared, tab);
     expect(shared.getItem('a')).toBeNull();
+  });
+});
+
+describe('mayClaimMarketingBatch', () => {
+  afterEach(() => setWatchedSeat(null));
+
+  function watchTab() {
+    const tab = new MemoryStorage();
+    captureWatchIdentity('?watch=17', tab);
+    return tab;
+  }
+
+  it('always allows a normal tab, whatever seat was stored', () => {
+    const tab = new MemoryStorage();
+    expect(mayClaimMarketingBatch(4, tab)).toBe(true);
+    expect(mayClaimMarketingBatch(null, tab)).toBe(true);
+    setWatchedSeat({ seat: 'A', teamId: 9 });
+    expect(mayClaimMarketingBatch(4, tab)).toBe(true);
+  });
+
+  it('refuses a watch tab that has not heard from the engine', () => {
+    expect(mayClaimMarketingBatch(4, watchTab())).toBe(false);
+  });
+
+  it('refuses when the engine says the bot is a Joke Maker', () => {
+    setWatchedSeat({ seat: 'A', teamId: 4 });
+    expect(mayClaimMarketingBatch(4, watchTab())).toBe(false);
+  });
+
+  it('refuses when the bot sits on a team other than the one the engine intends', () => {
+    setWatchedSeat({ seat: 'B', teamId: 4 });
+    expect(mayClaimMarketingBatch(5, watchTab())).toBe(false);
+  });
+
+  it('refuses when either team id is unknown', () => {
+    const tab = watchTab();
+    setWatchedSeat({ seat: 'B', teamId: null });
+    expect(mayClaimMarketingBatch(4, tab)).toBe(false);
+    expect(mayClaimMarketingBatch(null, tab)).toBe(false);
+    setWatchedSeat({ seat: 'B', teamId: 4 });
+    expect(mayClaimMarketingBatch(null, tab)).toBe(false);
+  });
+
+  it('allows the Marketing bot on the very team its engine intends', () => {
+    setWatchedSeat({ seat: 'B', teamId: 4 });
+    expect(mayClaimMarketingBatch(4, watchTab())).toBe(true);
+  });
+
+  it('refuses again once the seat is cleared', () => {
+    const tab = watchTab();
+    setWatchedSeat({ seat: 'B', teamId: 4 });
+    setWatchedSeat(null);
+    expect(mayClaimMarketingBatch(4, tab)).toBe(false);
   });
 });

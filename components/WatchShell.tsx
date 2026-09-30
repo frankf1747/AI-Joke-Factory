@@ -9,11 +9,15 @@
    strip shows the entries for the watched bot. */
 import React, { useEffect, useRef, useState } from 'react';
 import { useGame } from '../context';
-import { getWatchIdentity } from '../services/watchMode';
+import { getWatchIdentity, setWatchedSeat } from '../services/watchMode';
 import { PERSONAS } from '../services/bots/personas';
 import { BOT_CHANNEL, type BotMeta, type ChannelMessage, type ReasoningEntry } from '../services/bots/protocol';
 
 const MAX_ENTRIES = 200;
+/* Re-ask the owning worker for history + meta this often. Keeps the seat the
+   engine intends fresh after a Re-form (context.tsx gates queue/next on it),
+   and fills the strip in if the instructor tab opens after this one. */
+const HISTORY_REFRESH_MS = 5_000;
 
 function seatLabel(meta: BotMeta | null, role: unknown): string | null {
   if (meta) return meta.seat === 'A' ? 'Joke Maker' : 'Marketing';
@@ -52,15 +56,22 @@ export const WatchShell: React.FC<{ children: React.ReactNode }> = ({ children }
       const m = event.data;
       if (!m || typeof m !== 'object') return;
       if (m.type === 'history' && m.botUserId === botUserId) {
+        // The worker's history is authoritative, so each reply replaces ours.
         setEntries(m.entries.slice(-MAX_ENTRIES));
         setMeta(m.meta);
+        setWatchedSeat(m.meta ? { seat: m.meta.seat, teamId: m.meta.teamId } : null);
       } else if (m.type === 'log' && m.entry.botUserId === botUserId) {
         setEntries(prev => [...prev, m.entry].slice(-MAX_ENTRIES));
       }
     };
     const ask: ChannelMessage = { type: 'history-request', botUserId };
     channel.postMessage(ask);
-    return () => channel.close();
+    const refresh = setInterval(() => channel.postMessage(ask), HISTORY_REFRESH_MS);
+    return () => {
+      clearInterval(refresh);
+      channel.close();
+      setWatchedSeat(null);
+    };
   }, [botUserId]);
 
   if (!watching) return <>{children}</>;

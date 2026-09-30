@@ -27,7 +27,7 @@ import { marketingService } from './services/marketingService';
 import { customerService } from './services/customerService';
 import { sessionService } from './services/sessionService';
 import { ApiError } from './services/apiClient';
-import { clearPersisted, getWatchIdentity } from './services/watchMode';
+import { clearPersisted, getWatchIdentity, mayClaimMarketingBatch } from './services/watchMode';
 import { setMockRoundNumber } from './services/mockApi';
 import { DEFAULT_IDEAL_PROFILE } from './config/dimensions';
 import { isCompleteProfile } from './components/IdealProfilePicker';
@@ -1238,9 +1238,16 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               // This prevents unnecessary 404s and network noise while the user is actively rating.
               if (qcQueue) return;
 
+              // queue/next LOCKS the team's next batch to the caller. In a watch
+              // tab the caller is the bot, so claim only while the bot's own
+              // engine says it is Marketing on this very team — otherwise leave
+              // qcQueue as it is. Always true in a normal tab. See
+              // services/watchMode.ts mayClaimMarketingBatch.
+              const mayClaim = mayClaimMarketingBatch(teamId);
+
               // Only call queue/next if we are not in a backoff period from a recent 404.
               const now = Date.now();
-              if (now >= qcNextRetryAfterRef.current) {
+              if (mayClaim && now >= qcNextRetryAfterRef.current) {
                 try {
               const rawQ = await marketingService.queueNext(effectiveRound);
               const qAny: any = rawQ;

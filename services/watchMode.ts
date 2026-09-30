@@ -124,3 +124,38 @@ export function clearPersisted(
   if (!storage || isWatchMode(watchStore)) return;
   for (const key of keys) storage.removeItem(key);
 }
+
+/**
+ * Where the watched bot's OWN engine says it should sit, as last reported on the
+ * bot channel (WatchShell sets it from each `history` reply). In memory only:
+ * it is this tab's view of the engine, not an identity, so nothing persists it.
+ */
+export interface WatchedSeat {
+  seat: 'A' | 'B';
+  teamId: number | null;
+}
+let watchedSeat: WatchedSeat | null = null;
+
+export function setWatchedSeat(seat: WatchedSeat | null): void {
+  watchedSeat = seat ? { seat: seat.seat, teamId: seat.teamId } : null;
+}
+
+/**
+ * May this tab call `GET /v1/marketing/queue/next` for a user on `teamId`?
+ *
+ * queue/next is not a pure read: it locks the team's next batch to the caller.
+ * A watch tab calls it AS THE BOT, so it must never claim a batch the bot's
+ * engine would not. The engine stops claiming when its bot was moved off its
+ * intended seat (engine.ts checkSeat) — say, onto a human team by Auto-Assign —
+ * and a watch tab left open would otherwise keep locking that team's batches,
+ * invisibly and indefinitely. So mirror checkSeat: claim only while the engine
+ * says the bot is Marketing on the very team /session/me reports. Fail closed:
+ * no word from the engine, or an unknown team, means no claim.
+ *
+ * A normal tab is unaffected: it always may.
+ */
+export function mayClaimMarketingBatch(teamId: number | null, store: ReadStore | null = tabStore()): boolean {
+  if (!isWatchMode(store)) return true;
+  const seat = watchedSeat;
+  return seat !== null && seat.seat === 'B' && seat.teamId !== null && teamId !== null && seat.teamId === teamId;
+}
