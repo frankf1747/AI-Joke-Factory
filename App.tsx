@@ -7,6 +7,8 @@ import Customer from './views/Customer';
 import Instructor from './views/Instructor';
 import { Button } from './components';
 import DevRoleSwitcher from './components/DevRoleSwitcher';
+import { WatchShell } from './components/WatchShell';
+import { isWatchMode } from './services/watchMode';
 import { Loader2 } from 'lucide-react';
 
 const LoginScreen: React.FC = () => {
@@ -210,10 +212,11 @@ const GameRouter: React.FC = () => {
 };
 
 const App: React.FC = () => {
+  const watching = isWatchMode();
   return (
     <GameProvider>
-      <GameRouter />
-      <DevRoleSwitcher />
+      {watching ? <WatchShell><GameRouter /></WatchShell> : <GameRouter />}
+      {!watching && <DevRoleSwitcher />}
     </GameProvider>
   );
 };

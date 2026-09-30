@@ -137,9 +137,12 @@ export const RoleLayout: React.FC<{ children: React.ReactNode }> = ({ children }
                 <span className="text-sm font-medium">{user.name} ({user.role.replace('_', ' ')})</span>
              </div>
              <TutorialLauncher role={user.role} />
-             <button onClick={logout} className="text-gray-400 hover:text-red-500 transition-colors" title="Logout">
-               <LogOut size={18} />
-             </button>
+             {/* A watch tab has no session of its own to end, and logging out would only strand it on a login screen. */}
+             {!isWatchMode() && (
+               <button onClick={logout} className="text-gray-400 hover:text-red-500 transition-colors" title="Logout">
+                 <LogOut size={18} />
+               </button>
+             )}
           </div>
         </div>
       </header>
