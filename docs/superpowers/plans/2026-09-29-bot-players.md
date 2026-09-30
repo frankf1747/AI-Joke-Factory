@@ -1173,6 +1173,8 @@ interface FakeJoke { joke_id: number; joke_text: string; published: boolean }
 
 export interface FakeBatch {
   id: number;
+  /** The round it was submitted in; the queue and feedback are round-scoped. */
+  roundId: number;
   teamId: number;
   rawText: string | null;
   jokes: FakeJoke[];
@@ -1197,7 +1199,25 @@ export class FakeWorld {
   readonly batches: FakeBatch[] = [];
   readonly decisions: Decision[] = [];
   readonly calls: string[] = [];
-  private failures: Array<{ method: string; userName?: string; remaining: number }> = [];
+  /**
+   * Publishing enqueues an LLM classification, so a joke's dimensions arrive
+   * after the publish, not with it. Tests turn this off to model the lag, then
+   * call classify().
+   */
+  autoClassify = true;
+  readonly classified = new Set<number>();
+  /** Published joke ids in publish order, oldest first. */
+  readonly publishOrder: number[] = [];
+  /**
+   * The order Auto-Assign deals participants into seats, two per team. The
+   * default, newest first, puts bots and humans on each other's teams. The real
+   * assign shuffles randomly (usecase/instructor.go, r.Shuffle), so two calls
+   * rarely agree; tests that need that pass an order that changes per call.
+   */
+  assignOrder: (participants: FakeUser[], call: number) => FakeUser[] =
+    ps => [...ps].sort((a, b) => b.id - a.id);
+  private assignCalls = 0;
+  private failures: Array<{ method: string; userName?: string; remaining: number; status: number }> = [];
   private nextUserId = 100;
   private nextBatchId = 1;
   private nextJokeId = 1000;
@@ -1212,9 +1232,17 @@ export class FakeWorld {
     return [...this.users.values()].find(u => u.name === name);
   }
 
-  /** Make `method` fail with a 500, `times` times, optionally only for one user. */
-  failNext(method: string, times: number, userName?: string): void {
-    this.failures.push({ method, userName, remaining: times });
+  /**
+   * Make `method` fail `times` times, optionally only for one user. Defaults to
+   * a 500 'INTERNAL'; pass another status (e.g. 403) to test that error path.
+   */
+  failNext(method: string, times: number, userName?: string, status = 500): void {
+    this.failures.push({ method, userName, remaining: times, status });
+  }
+
+  /** Classify the given published jokes, or every published joke when none are named. */
+  classify(jokeIds?: number[]): void {
+    for (const id of jokeIds ?? this.publishOrder) this.classified.add(id);
   }
 
   api(): BotApi {
@@ -1228,7 +1256,7 @@ export class FakeWorld {
     );
     if (f) {
       f.remaining--;
-      throw new FakeApiError(500, 'INTERNAL');
+      throw new FakeApiError(f.status, f.status === 500 ? 'INTERNAL' : 'INJECTED');
     }
   }
 
@@ -1242,32 +1270,43 @@ export class FakeWorld {
     return {
       RoundID: this.round.id,
       Summary: { Waiting: unassigned.length, Assigned: ps.length - unassigned.length, Dropped: 0, TeamCount: this.teamIds.length },
-      Teams: this.teamIds.map(id => ({
-        Team: { id, name: `Team ${id}`, created_at: STAMP },
-        Members: ps.filter(u => u.teamId === id).map(u => ({ UserID: u.id, DisplayName: u.name, Role: (u.role ?? 'JM') as Role })),
-      })),
+      // real: stats_repo.go:42 — a team with no members is not listed.
+      Teams: this.teamIds
+        .map(id => ({
+          Team: { id, name: `Team ${id}`, created_at: STAMP },
+          Members: ps.filter(u => u.teamId === id).map(u => ({ UserID: u.id, DisplayName: u.name, Role: (u.role ?? 'JM') as Role })),
+        }))
+        .filter(t => t.Members.length > 0),
       Unassigned: unassigned.map(u => ({ UserID: u.id, DisplayName: u.name, Status: 'WAITING' as const })),
     };
   }
 
   newBatchId(): number { return this.nextBatchId++; }
+  nextAssignCall(): number { return ++this.assignCalls; }
   newJokeId(): number { return this.nextJokeId++; }
 
-  claimedBy(batchId: number, userId: number): FakeBatch {
+  /**
+   * real: usecase/marketing.go:143-160, repo/marketing_repo.go:228-238 — a batch
+   * of another team or held by another marketer is 403, not 409; 409 is only
+   * for a batch that is already processed.
+   */
+  claimedBy(batchId: number, user: FakeUser): FakeBatch {
     const b = this.batches.find(x => x.id === batchId);
     if (!b) throw new FakeApiError(404, 'NOT_FOUND');
-    if (b.state !== 'CLAIMED' || b.lockedBy !== userId) throw new FakeApiError(409, 'NOT_LOCKED');
+    if (b.teamId !== user.teamId) throw new FakeApiError(403, 'FORBIDDEN');
+    if (b.state === 'DONE') throw new FakeApiError(409, 'CONFLICT');
+    if (b.state !== 'CLAIMED' || b.lockedBy !== user.id) throw new FakeApiError(403, 'FORBIDDEN');
     return b;
   }
 
   envelope(b: FakeBatch): MarketingQueueEnvelope {
     return {
       batch: {
-        batch_id: b.id, round_id: this.round.id, team_id: b.teamId, status: 'SUBMITTED',
+        batch_id: b.id, round_id: b.roundId, team_id: b.teamId, status: 'SUBMITTED',
         submitted_at: STAMP, locked_at: STAMP, locked_by: b.lockedBy, raw_text: b.rawText,
       },
       jokes: b.jokes.map(j => ({ joke_id: j.joke_id, joke_text: j.joke_text })),
-      queue_size: this.batches.filter(x => x.teamId === b.teamId && x.state === 'QUEUED').length,
+      queue_size: this.batches.filter(x => x.roundId === b.roundId && x.teamId === b.teamId && x.state === 'QUEUED').length,
     };
   }
 }
@@ -1293,6 +1332,12 @@ class FakeApi implements BotApi {
 
   private requireInstructor(method: string): void {
     if (this.requireUser(method).role !== 'INSTRUCTOR') throw new FakeApiError(403, 'FORBIDDEN');
+  }
+
+  private requireMarketing(method: string): FakeUser {
+    const u = this.requireUser(method);
+    if (u.role !== 'MARKETING') throw new FakeApiError(403, 'FORBIDDEN');
+    return u;
   }
 
   private requireActive(): void {
@@ -1322,33 +1367,54 @@ class FakeApi implements BotApi {
   }
 
   async submitBatch(_roundId: number, body: BatchSubmitRequest) {
+    // real: usecase/batch.go:41-71 — validate the body, then role/team, then
+    // round status, in that order.
     const u = this.requireUser('submitBatch');
-    this.requireActive();
-    if (u.role !== 'JM' || u.teamId !== body.team_id) throw new FakeApiError(403, 'FORBIDDEN');
     const raw = 'raw_text' in body && body.raw_text ? body.raw_text : null;
-    if (!raw) throw new FakeApiError(400, 'VALIDATION_ERROR');
-    this.w.batches.push({ id: this.w.newBatchId(), teamId: u.teamId, rawText: raw, jokes: [], state: 'QUEUED', lockedBy: null });
+    if (!raw || raw.trim().length < 20) throw new FakeApiError(400, 'VALIDATION_ERROR');
+    if (u.role !== 'JM' || u.teamId !== body.team_id) throw new FakeApiError(403, 'FORBIDDEN');
+    this.requireActive();
+    this.w.batches.push({
+      id: this.w.newBatchId(), roundId: this.w.round.id, teamId: u.teamId, rawText: raw, jokes: [], state: 'QUEUED', lockedBy: null,
+    });
     return {};
   }
 
-  async teamFeedback(_roundId: number, teamId: number) {
+  async teamFeedback(roundId: number, teamId: number) {
     this.requireUser('teamFeedback');
-    const jokes: FeedbackJoke[] = this.w.batches
-      .filter(b => b.teamId === teamId && b.state === 'DONE')
-      .flatMap(b => b.jokes.filter(j => j.published))
-      .map(j => ({
-        joke_id: j.joke_id, joke_title: 't', was_bought: false,
-        good_dimensions: ['LENGTH'] as FeedbackJoke['good_dimensions'], improve_dimensions: [],
-      }));
+    // real: usecase/feedback.go:38-76 — nothing before the round has started.
+    if (this.w.round.status === 'CONFIGURED') throw new FakeApiError(409, 'ROUND_NOT_ACTIVE');
+    // real: repo/stats_repo.go:134-157 — only the latest feedback_joke_count
+    // published jokes of the team in this round (WHERE b.round_id = $1), newest
+    // first; dimensions land once classified.
+    const mine = new Set(
+      this.w.batches
+        .filter(b => b.roundId === roundId && b.teamId === teamId && b.state === 'DONE')
+        .flatMap(b => b.jokes.map(j => j.joke_id)),
+    );
+    const jokes: FeedbackJoke[] = [...this.w.publishOrder]
+      .reverse()
+      .filter(id => mine.has(id))
+      .slice(0, this.w.round.feedback_joke_count)
+      .map(id => {
+        const done = this.w.classified.has(id);
+        return {
+          joke_id: id, joke_title: 't', was_bought: false,
+          good_dimensions: (done ? ['LENGTH'] : []) as FeedbackJoke['good_dimensions'],
+          improve_dimensions: [],
+        };
+      });
     return { jokes };
   }
 
-  async marketingQueueNext(_roundId: number): Promise<MarketingQueueEnvelope> {
-    const u = this.requireUser('marketingQueueNext');
+  async marketingQueueNext(roundId: number): Promise<MarketingQueueEnvelope> {
+    // real: usecase/marketing.go:33-43 — role is checked before round status.
+    const u = this.requireMarketing('marketingQueueNext');
     this.requireActive();
-    if (u.role !== 'MARKETING') throw new FakeApiError(403, 'FORBIDDEN');
+    // real: repo/marketing_repo.go:38,52 — the queue is scoped to the round.
     const b = this.w.batches.find(
-      x => x.teamId === u.teamId && (x.state === 'QUEUED' || (x.state === 'CLAIMED' && x.lockedBy === u.id)),
+      x => x.roundId === roundId && x.teamId === u.teamId
+        && (x.state === 'QUEUED' || (x.state === 'CLAIMED' && x.lockedBy === u.id)),
     );
     if (!b) return { batch: null, jokes: [], queue_size: 0 };
     b.state = 'CLAIMED';
@@ -1357,24 +1423,49 @@ class FakeApi implements BotApi {
   }
 
   async marketingSplit(batchId: number, body: { jokes: string[] }) {
-    const u = this.requireUser('marketingSplit');
-    const b = this.w.claimedBy(batchId, u.id);
-    if (this.w.round.round_number === 1 && body.jokes.length !== this.w.round.batch_size) {
-      throw new FakeApiError(400, 'VALIDATION_ERROR');
-    }
-    b.jokes = body.jokes.map(joke_text => ({ joke_id: this.w.newJokeId(), joke_text, published: false }));
+    // real: usecase/marketing.go:236-241 — role, then round status, then the claim.
+    const u = this.requireMarketing('marketingSplit');
+    this.requireActive();
+    const b = this.w.claimedBy(batchId, u);
+    // real: usecase/marketing.go:85-102 — blanks are dropped first; round 1
+    // must split into exactly batch_size, later rounds into 1..batch_size.
+    const jokes = body.jokes.map(t => t.trim()).filter(t => t !== '');
+    const size = this.w.round.batch_size;
+    const ok = this.w.round.round_number === 1 ? jokes.length === size : jokes.length >= 1 && jokes.length <= size;
+    if (!ok) throw new FakeApiError(400, 'VALIDATION_ERROR');
+    b.jokes = jokes.map(joke_text => ({ joke_id: this.w.newJokeId(), joke_text, published: false }));
     b.rawText = null;
     return this.w.envelope(b);
   }
 
   async marketingPublish(batchId: number, body: PublishRequest) {
-    const u = this.requireUser('marketingPublish');
-    const b = this.w.claimedBy(batchId, u.id);
+    // real: usecase/marketing.go:236-241 — role, round status, then the claim.
+    const u = this.requireMarketing('marketingPublish');
+    this.requireActive();
+    const b = this.w.claimedBy(batchId, u);
+    // real: handler/marketing.go:189, usecase/marketing.go:209,
+    // repo/marketing_repo.go:254-273 — exactly one decision per joke in the
+    // batch, a title on every published one, and round 1 needs a publish.
+    const ids = body.jokes.map(d => d.joke_id);
+    const batchIds = new Set(b.jokes.map(j => j.joke_id));
+    if (
+      body.jokes.length === 0 ||
+      new Set(ids).size !== ids.length ||
+      ids.length !== batchIds.size ||
+      !ids.every(id => batchIds.has(id)) ||
+      body.jokes.some(d => d.is_published && !(d.joke_title ?? '').trim())
+    ) {
+      throw new FakeApiError(400, 'VALIDATION_ERROR');
+    }
     const published = body.jokes.filter(j => j.is_published).length;
     if (this.w.round.round_number === 1 && published === 0) throw new FakeApiError(400, 'VALIDATION_ERROR');
     for (const d of body.jokes) {
-      const joke = b.jokes.find(j => j.joke_id === d.joke_id);
-      if (joke) joke.published = d.is_published;
+      const joke = b.jokes.find(j => j.joke_id === d.joke_id) as FakeJoke;
+      joke.published = d.is_published;
+      if (d.is_published) {
+        this.w.publishOrder.push(d.joke_id);
+        if (this.w.autoClassify) this.w.classified.add(d.joke_id);
+      }
     }
     b.state = 'DONE';
     this.w.decisions.push({ teamId: b.teamId, batchId, published, total: body.jokes.length });
@@ -1388,13 +1479,17 @@ class FakeApi implements BotApi {
 
   async instructorAssign(_roundId: number, body: { team_count: number }) {
     this.requireInstructor('instructorAssign');
-    this.w.teamIds = Array.from({ length: body.team_count }, (_, i) => i + 1);
+    // real: repo/team_repo.go:20, usecase/instructor.go:114-124 — Assign only
+    // ever adds teams; existing ones (and their ids) are kept and reused.
+    while (this.w.teamIds.length < body.team_count) {
+      this.w.teamIds.push(Math.max(0, ...this.w.teamIds) + 1);
+    }
     // Deliberately scrambled, like the real shuffle: newest users first, so
     // bots and humans land on each other's teams and must be re-pinned.
-    const ps = this.w.participants().sort((a, b) => b.id - a.id);
+    const ps = this.w.assignOrder(this.w.participants(), this.w.nextAssignCall());
     ps.forEach((u, i) => {
       const t = Math.floor(i / 2);
-      if (t < body.team_count) {
+      if (t < this.w.teamIds.length) {
         u.teamId = this.w.teamIds[t];
         u.role = i % 2 === 0 ? 'JM' : 'MARKETING';
         u.status = 'ASSIGNED';
@@ -1425,6 +1520,9 @@ class FakeApi implements BotApi {
 
   async instructorStart(_roundId: number, body?: ConfigRequest) {
     this.requireInstructor('instructorStart');
+    // real: usecase/instructor.go:232-245 — status checks precede the profile check.
+    if (this.w.round.status === 'ACTIVE') throw new FakeApiError(409, 'CONFLICT');
+    if (this.w.round.status === 'ENDED') throw new FakeApiError(409, 'CONFLICT');
     const sent = body?.ideal_profile && Object.keys(body.ideal_profile).length > 0;
     if (!this.w.profileConfigured && !sent) throw new FakeApiError(409, 'IDEAL_PROFILE_REQUIRED');
     this.w.profileConfigured = true;
@@ -1462,31 +1560,40 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 // services/bots/engine.test.ts
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_IDEAL_PROFILE } from '../../config/dimensions';
-import { variedCorpus } from '../shared/jokes';
-import { BotEngine, fitPieces, splitBlob, titleOf, wallClockSteps } from './engine';
+import { seededRng, variedCorpus } from '../shared/jokes';
+import { BotEngine, SEAT_CHECK_MS, fitPieces, splitBlob, titleOf, wallClockSteps } from './engine';
 import { botName, isBotName } from './naming';
 import { BATCH_CAP_PER_ROUND } from './personas';
+import type { BotApi } from './api';
 import type { FromWorker, StartOptions } from './protocol';
-import { FakeWorld } from './testing/fakeApi';
+import { FakeWorld, type FakeUser } from './testing/fakeApi';
 
 const nextTick = () => new Promise<void>(resolve => setImmediate(resolve));
 
-function setup(humans: string[] = []) {
+interface Hooks {
+  /** Called after each message is recorded; lets a test act mid-operation. */
+  onEmit?: (message: FromWorker) => void;
+  /** Wraps the fake client, e.g. to hold a request in flight. */
+  wrapApi?: (api: BotApi) => BotApi;
+}
+
+function setup(humans: string[] = [], hooks: Hooks = {}) {
   const world = new FakeWorld();
   const instructorId = world.addUser('Instructor', 'INSTRUCTOR');
   for (const name of humans) world.addUser(name);
   let clock = 0;
   const emitted: FromWorker[] = [];
+  const api = world.api();
   const engine = new BotEngine({
-    api: world.api(),
+    api: hooks.wrapApi ? hooks.wrapApi(api) : api,
     instructorUserId: instructorId,
     // Advances fake time and yields a macrotask, so waiting tests get a turn.
     delay: ms => { clock += ms; return nextTick(); },
     now: () => clock,
-    emit: m => { emitted.push(m); },
+    emit: m => { emitted.push(m); hooks.onEmit?.(m); },
     seed: 'engine-test',
   });
-  return { world, engine, emitted };
+  return { world, engine, emitted, clock: () => clock };
 }
 
 async function until(condition: () => boolean, what: string): Promise<void> {
@@ -1512,7 +1619,81 @@ function options(overrides: Partial<StartOptions> = {}): StartOptions {
   };
 }
 
+/**
+ * Holds chosen calls in flight until release(), to model a slow network. In
+ * 'request' mode the call reaches the backend only on release; in 'response'
+ * mode it lands at once and only the reply is late.
+ */
+class Gate {
+  private held: Array<{ method: string; client: string | null; go: () => void }> = [];
+  /** Each held method keeps its own mode, so one hold() never changes another's. */
+  private modes = new Map<string, 'request' | 'response'>();
+
+  /** How many calls are held, optionally of one method and one client (the label given to `as`). */
+  count(method?: string, client?: string): number {
+    return this.held.filter(
+      h => (method === undefined || h.method === method) && (client === undefined || h.client === client),
+    ).length;
+  }
+
+  hold(method: string, mode: 'request' | 'response'): void {
+    this.modes.set(method, mode);
+  }
+
+  stopHolding(method?: string): void {
+    if (method === undefined) this.modes.clear();
+    else this.modes.delete(method);
+  }
+
+  /** Let held calls go, optionally only those of one method. */
+  release(method?: string): void {
+    const go = this.held.filter(h => method === undefined || h.method === method);
+    this.held = this.held.filter(h => !go.includes(h));
+    for (const h of go) h.go();
+  }
+
+  wrap(api: BotApi, client: string | null = null): BotApi {
+    return new Proxy(api, {
+      get: (target, prop, receiver) => {
+        const value: unknown = Reflect.get(target, prop, receiver);
+        if (prop === 'as') return (id: number, label: string) => this.wrap(target.as(id, label), label);
+        if (typeof value !== 'function') return value;
+        const method = String(prop);
+        return (...args: unknown[]) => {
+          const call = () => (value as (...a: unknown[]) => Promise<unknown>).apply(target, args);
+          const mode = this.modes.get(method);
+          if (mode === undefined) return call();
+          const released = new Promise<void>(go => this.held.push({ method, client, go }));
+          if (mode === 'request') return released.then(call);
+          const result = call();
+          result.catch(() => undefined); // observed later, after release
+          return released.then(() => result);
+        };
+      },
+    });
+  }
+}
+
 const teamOf = (world: FakeWorld, name: string) => world.userNamed(name)?.teamId ?? null;
+
+/** Every human team holds exactly one JM and one Marketing, and no bot. */
+function expectCleanHumanTeams(world: FakeWorld): void {
+  const byTeam = new Map<number, FakeUser[]>();
+  for (const u of world.participants()) {
+    if (u.teamId == null) continue;
+    byTeam.set(u.teamId, [...(byTeam.get(u.teamId) ?? []), u]);
+  }
+  for (const [teamId, members] of byTeam) {
+    if (!members.some(m => !isBotName(m.name))) continue;
+    const layout = members.map(m => `${m.name}:${m.role}`).sort();
+    expect({ teamId, layout }).toEqual({
+      teamId,
+      layout: expect.arrayContaining([expect.stringMatching(/:JM$/), expect.stringMatching(/:MARKETING$/)]),
+    });
+    expect({ teamId, size: members.length, bots: members.filter(m => isBotName(m.name)).length })
+      .toEqual({ teamId, size: 2, bots: 0 });
+  }
+}
 
 describe('BotEngine', () => {
   it('puts humans on the lowest team and each bot team on its own team', async () => {
@@ -1653,6 +1834,168 @@ describe('BotEngine', () => {
     engine.stop();
   });
 
+  it('Careful starts round 2 without waiting on a batch round 1 never published', async () => {
+    const { world, engine } = setup();
+    await engine.start(options({ teams: [{ index: 1, persona: 'CAREFUL' }], speed: 1 }));
+    const team = teamOf(world, botName(1, 'A'));
+    const jm = world.userNamed(botName(1, 'A'));
+    if (!jm) throw new Error('bot 01A missing');
+    await until(() => world.batches.some(b => b.teamId === team && b.roundId === 1), 'a round-1 batch');
+    world.round.status = 'ENDED';
+    // Marketing's dwell runs out, its split or publish meets a 409, and the
+    // round-1 batch is never published.
+    await settle(300);
+    expect(world.decisions).toHaveLength(0);
+
+    world.round = { ...world.round, id: 2, round_number: 2, status: 'ACTIVE' };
+    await until(() => world.batches.some(b => b.teamId === team && b.roundId === 2), 'a round-2 batch');
+    engine.stop();
+    expect(engine.historyFor(jm.id).map(e => e.text).join('\n')).not.toMatch(/gave up waiting/);
+  });
+
+  it('never lets a bot moved into a human team publish that team\'s batch', async () => {
+    const { world, engine } = setup(['alice', 'bob']);
+    await engine.start(options({ speed: 10 }));
+    const humanTeam = teamOf(world, 'alice');
+    if (humanTeam == null) throw new Error('human team missing');
+    const batchId = world.newBatchId();
+    world.batches.push({
+      id: batchId, roundId: world.round.id, teamId: humanTeam, state: 'QUEUED', lockedBy: null, jokes: [],
+      rawText: variedCorpus.slice(0, 5).map(j => j.text).join('\n\n'),
+    });
+    // A mid-round Auto-Assign swaps the bot marketer with the human marketer.
+    const botMarketer = world.userNamed(botName(1, 'B'));
+    const humanMarketer = [...world.users.values()].find(u => !isBotName(u.name) && u.role === 'MARKETING');
+    if (!botMarketer || !humanMarketer) throw new Error('marketers missing');
+    [botMarketer.teamId, humanMarketer.teamId] = [humanMarketer.teamId, botMarketer.teamId];
+
+    await until(() => engine.status().scrambled, 'scramble detection');
+    await settle(500);
+    engine.stop();
+    expect(world.decisions.filter(d => d.teamId === humanTeam)).toEqual([]);
+    // The claim that revealed the move still holds the batch; the instructor is told.
+    expect(engine.status().warnings).toContain(
+      `${botName(1, 'B')} picked up team ${humanTeam}'s batch #${batchId} before noticing it was moved. `
+        + `That batch stays hidden from team ${humanTeam} for up to 15 minutes; Remove bots releases it at once.`,
+    );
+  });
+
+  it('reports a batch held for a human team once, and keeps reporting it after re-forming', async () => {
+    const gate = new Gate();
+    const { world, engine } = setup(['alice', 'bob'], { wrapApi: api => gate.wrap(api) });
+    await engine.start(options({ speed: 10 }));
+    const humanTeam = teamOf(world, 'alice');
+    if (humanTeam == null) throw new Error('human team missing');
+    const batchId = world.newBatchId();
+    world.batches.push({
+      id: batchId, roundId: world.round.id, teamId: humanTeam, state: 'QUEUED', lockedBy: null, jokes: [],
+      rawText: variedCorpus.slice(0, 5).map(j => j.text).join('\n\n'),
+    });
+    const botMarketer = world.userNamed(botName(1, 'B'));
+    const humanMarketer = [...world.users.values()].find(u => !isBotName(u.name) && u.role === 'MARKETING');
+    if (!botMarketer || !humanMarketer) throw new Error('marketers missing');
+    const swap = () => { [botMarketer.teamId, humanMarketer.teamId] = [humanMarketer.teamId, botMarketer.teamId]; };
+    const reports = () => engine.historyFor(botMarketer.id).filter(e => e.text.startsWith('the queue handed me')).length;
+    swap();
+    await until(() => reports() === 1, 'the first report');
+
+    // Re-forming puts the bot back but does not release the batch it holds.
+    await engine.reform();
+    const held = () => engine.status().warnings.filter(w => w.includes(`batch #${batchId}`));
+    expect(held()).toHaveLength(1);
+    // The bot reads its seat just before a second swap and trusts that answer,
+    // so its queue hands it the same held batch again.
+    gate.hold('sessionMe', 'response');
+    await until(() => gate.count('sessionMe', 'bot 1B') >= 1, 'the bot marketer checking its seat');
+    swap();
+    gate.stopHolding();
+    gate.release();
+    await until(() => reports() === 2, 'the second report');
+    engine.stop();
+    expect(held()).toHaveLength(1);
+  });
+
+  it('stops a Marketing bot mid-dwell once any seat sees a re-shuffle', async () => {
+    // The Joke Maker is moved the moment Marketing starts reading a batch. A
+    // Joke Maker that had just submitted would rest ~45 s without checking its
+    // seat, far past the dwell, so this one never lands a batch: each refused
+    // submit brings it back to its seat check within a few seconds, while
+    // Marketing is still reading.
+    let moved = false;
+    let marketingWhenScrambled: string | null = null;
+    const { world, engine } = setup([], {
+      onEmit: m => {
+        if (m.type !== 'status' || m.status.teams.length === 0) return;
+        const marketing = m.status.teams[0].marketing.activity;
+        if (!moved && marketing.startsWith('reading batch')) {
+          moved = true;
+          const jm = world.userNamed(botName(1, 'A'));
+          if (jm) jm.teamId = 999;
+        }
+        if (m.status.scrambled && marketingWhenScrambled === null) marketingWhenScrambled = marketing;
+      },
+    });
+    world.failNext('submitBatch', 1_000_000, botName(1, 'A'), 403);
+    await engine.start(options({ speed: 1, startRound: false }));
+    const team = teamOf(world, botName(1, 'A'));
+    if (team == null) throw new Error('bot team missing');
+    world.batches.push({
+      id: world.newBatchId(), roundId: world.round.id, teamId: team, state: 'QUEUED', lockedBy: null, jokes: [],
+      rawText: variedCorpus.slice(0, 5).map(j => j.text).join('\n\n'),
+    });
+    world.round.status = 'ACTIVE';
+
+    await until(() => engine.status().scrambled, 'scramble detection');
+    await settle(300);
+    engine.stop();
+    // The re-shuffle landed while Marketing was still reading, so the dwell
+    // guard is what held the split back.
+    expect(marketingWhenScrambled).toMatch(/^reading batch/);
+    expect(world.calls).not.toContain('marketingSplit');
+    expect(world.decisions).toEqual([]);
+  });
+
+  it('shows only the new run\'s seats once a restart is under way', async () => {
+    const { engine } = setup();
+    await engine.start(options({ startRound: false }));
+    engine.stop();
+    const restart = engine.start(options({ teams: [{ index: 1, persona: 'CAREFUL' }], startRound: false }));
+    const status = engine.status();
+    expect(status.running).toBe(true);
+    expect(status.teams.map(t => [t.persona, t.jm.activity, t.marketing.activity]))
+      .toEqual([['CAREFUL', 'not started', 'not started']]);
+    await restart;
+    engine.stop();
+  });
+
+  it('keeps the new run\'s seats when a start queues behind a remove', async () => {
+    const { world, engine } = setup();
+    await engine.start(options({ startRound: false }));
+    const removing = engine.remove(1);
+    const restart = engine.start(options({ teams: [{ index: 1, persona: 'CAREFUL' }], startRound: false }));
+    await removing;
+    await restart;
+    engine.stop();
+    expect(engine.status().teams.map(t => t.persona)).toEqual(['CAREFUL']);
+    expect(world.userNamed(botName(1, 'B'))).toMatchObject({ role: 'MARKETING' });
+  });
+
+  it('Careful starts round 2 without waiting on round-1 jokes still being classified', async () => {
+    const { world, engine } = setup();
+    world.autoClassify = false;
+    await engine.start(options({ teams: [{ index: 1, persona: 'CAREFUL' }], speed: 1 }));
+    const team = teamOf(world, botName(1, 'A'));
+    const jm = world.userNamed(botName(1, 'A'));
+    if (!jm) throw new Error('bot 01A missing');
+    await until(() => world.decisions.some(d => d.teamId === team), 'a round-1 publish');
+    expect(world.classified.size).toBe(0);
+
+    world.round = { ...world.round, id: 2, round_number: 2, status: 'ACTIVE' };
+    await until(() => world.batches.some(b => b.teamId === team && b.roundId === 2), 'a round-2 batch');
+    engine.stop();
+    expect(engine.historyFor(jm.id).map(e => e.text).join('\n')).not.toMatch(/gave up waiting/);
+  });
+
   it('publishes an inherited batch that does not split cleanly into the round-1 count', async () => {
     const { world, engine } = setup();
     await engine.start(options({ startRound: false }));
@@ -1660,7 +2003,7 @@ describe('BotEngine', () => {
     if (team == null) throw new Error('bot team missing');
     // Adjust this literal to FakeBatch's required fields if the fake has grown more.
     world.batches.push({
-      id: world.newBatchId(), teamId: team, state: 'QUEUED', lockedBy: null, jokes: [],
+      id: world.newBatchId(), roundId: world.round.id, teamId: team, state: 'QUEUED', lockedBy: null, jokes: [],
       rawText: 'A joke nobody on this team wrote, told as one long rambling story\n\n!!! and a tail',
     });
     world.round.status = 'ACTIVE';
@@ -1668,6 +2011,169 @@ describe('BotEngine', () => {
     await until(() => world.decisions.some(d => d.teamId === team), 'the inherited batch to publish');
     engine.stop();
     expect(world.decisions[0]).toMatchObject({ teamId: team, total: 5 });
+  });
+
+  it('refuses a second start while the first is still starting, and stop() halts the one that ran', async () => {
+    const { world, engine } = setup();
+    const first = engine.start(options({ startRound: false }));
+    const second = engine.start(options({ startRound: false }));
+    await first;
+    await expect(second).rejects.toThrow(/already running/);
+    engine.stop();
+    await settle(200);
+    const callsAfterStop = world.calls.length;
+    await settle(2_000);
+    expect(world.calls.length).toBe(callsAfterStop);
+  });
+
+  it('stop() cancels a start that is still seating bots', async () => {
+    let stopped = false;
+    const { world, engine } = setup([], {
+      onEmit: m => {
+        if (stopped || m.type !== 'status') return;
+        if (m.status.teams.length > 0 && m.status.teams.every(t => t.jm.activity === 'joined')) {
+          stopped = true;
+          engine.stop();
+        }
+      },
+    });
+    await engine.start(options());
+    expect(stopped).toBe(true);
+    await settle(200);
+    expect(world.round.status).toBe('CONFIGURED');
+    expect(world.calls).not.toContain('instructorAssign');
+    expect(world.calls).not.toContain('sessionMe');
+    expect(engine.status().running).toBe(false);
+  });
+
+  it('runs overlapping re-forms one at a time, so no human team is left stranded', async () => {
+    const { world, engine } = setup(['alice', 'bob', 'carol', 'dave', 'erin', 'frank']);
+    // Like the real shuffle (usecase/instructor.go, r.Shuffle), each Auto-Assign
+    // deals seats in a different order. Seeded, so the interleaving is repeatable.
+    world.assignOrder = (ps, call) => {
+      const rand = seededRng(`assign:${call}`);
+      const out = [...ps].sort((a, b) => a.id - b.id);
+      for (let i = out.length - 1; i > 0; i--) {
+        const j = Math.floor(rand() * (i + 1));
+        [out[i], out[j]] = [out[j], out[i]];
+      }
+      return out;
+    };
+    await engine.start(options({ teams: [{ index: 1, persona: 'SPRAY' }, { index: 2, persona: 'SPRAY' }], startRound: false }));
+    expectCleanHumanTeams(world);
+    await Promise.all([engine.reform(), engine.reform()]);
+    engine.stop();
+    expectCleanHumanTeams(world);
+    for (const index of [1, 2]) {
+      const team = teamOf(world, botName(index, 'A'));
+      expect(world.userNamed(botName(index, 'B'))).toMatchObject({ teamId: team, role: 'MARKETING' });
+      expect(world.userNamed(botName(index, 'A'))).toMatchObject({ role: 'JM' });
+    }
+  });
+
+  it('leaves every seat exactly "stopped" after stop()', async () => {
+    const { world, engine } = setup();
+    await engine.start(options({ teams: [{ index: 1, persona: 'SPRAY' }, { index: 2, persona: 'CAREFUL' }] }));
+    await until(() => world.decisions.length >= 1, 'a first publish');
+    engine.stop();
+    await settle(200);
+    for (const team of engine.status().teams) {
+      expect([team.jm.activity, team.marketing.activity]).toEqual(['stopped', 'stopped']);
+    }
+  });
+
+  it("does not let a stopped run's in-flight seat check pause the next run", async () => {
+    const gate = new Gate();
+    const { world, engine } = setup([], { wrapApi: api => gate.wrap(api) });
+    await engine.start(options({ startRound: false }));
+    gate.hold('sessionMe', 'request');
+    await until(() => gate.count('sessionMe') >= 2, 'both actors mid seat-check');
+    engine.stop();
+    gate.stopHolding();
+    // Between runs the instructor pressed the ordinary Auto-Assign.
+    const bot = world.userNamed(botName(1, 'A'));
+    if (!bot) throw new Error('bot 01A missing');
+    bot.teamId = 999;
+    // The next run is still seating its bots when the old checks come back.
+    gate.hold('sessionJoin', 'request');
+    const restart = engine.start(options({ startRound: false }));
+    await until(() => gate.count('sessionJoin') >= 1, 'the next run joining');
+    gate.release('sessionMe');
+    await settle(5);
+    gate.stopHolding();
+    gate.release();
+    await restart;
+    await settle(50);
+    expect(engine.status().scrambled).toBe(false);
+    engine.stop();
+  });
+
+  it('does not count a publish from a stopped run in the next run', async () => {
+    const gate = new Gate();
+    const { world, engine } = setup([], { wrapApi: api => gate.wrap(api) });
+    gate.hold('marketingPublish', 'response');
+    await engine.start(options());
+    await until(() => gate.count() >= 1, 'a publish in flight');
+    expect(world.decisions).toHaveLength(1);
+    engine.stop();
+    gate.stopHolding();
+    const restart = engine.start(options({ startRound: false }));
+    gate.release();
+    await restart;
+    expect(engine.status().classificationCalls).toBe(0);
+    engine.stop();
+  });
+
+  it("does not re-add a removed bot's history from a late response", async () => {
+    const gate = new Gate();
+    const { world, engine } = setup([], { wrapApi: api => gate.wrap(api) });
+    gate.hold('marketingPublish', 'response');
+    await engine.start(options());
+    const marketer = world.userNamed(botName(1, 'B'));
+    if (!marketer) throw new Error('bot 01B missing');
+    await until(() => gate.count() >= 1, 'a publish in flight');
+    gate.stopHolding();
+    await engine.remove(1);
+    gate.release();
+    await settle(50);
+    expect(engine.historyFor(marketer.id)).toEqual([]);
+  });
+
+  it('backs off from scratch on a real error after a run of 409s', async () => {
+    const { world, engine } = setup();
+    world.failNext('submitBatch', 5, botName(1, 'A'), 409);
+    world.failNext('submitBatch', 1, botName(1, 'A'), 500);
+    await engine.start(options());
+    const jm = world.userNamed(botName(1, 'A'));
+    if (!jm) throw new Error('bot 01A missing');
+    await until(() => engine.historyFor(jm.id).some(e => e.text.startsWith('error:')), 'the 500');
+    engine.stop();
+    expect(engine.historyFor(jm.id).find(e => e.text.startsWith('error:'))?.text).toMatch(/retrying in 2s/);
+  });
+
+  it('keeps backing off while the same call keeps failing', async () => {
+    const { world, engine } = setup();
+    world.failNext('submitBatch', 1_000_000, botName(1, 'A'));
+    await engine.start(options());
+    const jm = world.userNamed(botName(1, 'A'));
+    if (!jm) throw new Error('bot 01A missing');
+    const errors = () => engine.historyFor(jm.id).filter(e => e.text.startsWith('error:'));
+    await until(() => errors().length >= 6, 'six failed submits');
+    engine.stop();
+    expect(errors().map(e => e.text.match(/retrying in (\d+)s/)?.[1])).toEqual(['2', '4', '8', '16', '30', '30']);
+  });
+
+  it('asks the backend where each seat is at most once per SEAT_CHECK_MS', async () => {
+    const { world, engine, clock } = setup();
+    await engine.start(options({ startRound: false }));
+    const seatChecks = () => world.calls.filter(c => c === 'sessionMe').length;
+    const t0 = clock();
+    const c0 = seatChecks();
+    await settle(400);
+    engine.stop();
+    const elapsed = clock() - t0;
+    expect(elapsed).toBeGreaterThan(20 * SEAT_CHECK_MS);
+    expect(seatChecks() - c0).toBeLessThanOrEqual(2 * (Math.floor(elapsed / SEAT_CHECK_MS) + 1));
   });
 
   it('treats a lost batch (403) as a re-poll, not an error', async () => {
@@ -1678,6 +2184,11 @@ describe('BotEngine', () => {
     await until(() => world.decisions.some(d => d.teamId === team), 'a publish after the lost batch');
     engine.stop();
     expect(engine.status().teams[0].marketing.error).toBeNull();
+    const marketer = world.userNamed(botName(1, 'B'));
+    if (!marketer) throw new Error('bot 01B missing');
+    const texts = engine.historyFor(marketer.id).map(e => e.text);
+    expect(texts.some(t => /refused this \(403\)/.test(t))).toBe(true);
+    expect(texts.filter(t => t.startsWith('error:'))).toEqual([]);
   });
 });
 
@@ -1805,6 +2316,12 @@ export const TICK_MS = 1_000;
 const HISTORY_PER_BOT = 50;
 const ROUND_CACHE_MS = 2_000;
 const MAX_BACKOFF_MS = 30_000;
+/**
+ * How often one seat asks the backend where it sits. Every loop pass used to
+ * ask, which at 10× with 12 bot teams is about 100 requests a second against
+ * production. A re-shuffle is still noticed within this window.
+ */
+export const SEAT_CHECK_MS = 2_000;
 
 /** A real sleep that ends early on abort. */
 export function realDelay(ms: number, signal: AbortSignal): Promise<void> {
@@ -1910,6 +2427,17 @@ function longestIndex(pieces: readonly string[], eligible: (p: string) => boolea
   return best;
 }
 
+/**
+ * The backoff counter after `err`. A 403 or 409 is the backend answering
+ * coherently — the game moved on — not the backend failing, so it resets the
+ * count rather than growing it: a 500 after a run of 409s backs off from 2 s,
+ * not 30 s. A call that keeps failing still backs off all the way.
+ */
+function nextAttempt(err: unknown, attempt: number): number {
+  const status = statusOf(err);
+  return status === 403 || status === 409 ? 0 : attempt + 1;
+}
+
 /** A bot's own user row is gone — it was removed — so its actor stops. */
 class SeatGone extends Error {
   constructor() {
@@ -1919,6 +2447,9 @@ class SeatGone extends Error {
 
 interface SeatRuntime extends SeatStatus {
   seat: Seat;
+  /** When this seat last asked the backend where it sits, and in which formation. */
+  checkedAt: number | null;
+  checkedEpoch: number;
 }
 
 interface TeamRuntime {
@@ -1927,22 +2458,29 @@ interface TeamRuntime {
   teamId: number | null;
   jm: SeatRuntime;
   marketing: SeatRuntime;
+  /**
+   * Counted per round because the backend scopes the marketing queue and team
+   * feedback to a round (repo/marketing_repo.go:38,52; repo/stats_repo.go:138-150):
+   * a batch left unpublished when a round ends is never seen again, so it must
+   * not hold up the next round.
+   */
   submittedByRound: Map<number, number>;
-  submitted: number;
+  publishedByRound: Map<number, number>;
+  /** All rounds, for the panel. */
   published: number;
-  /** Joke ids of the last publish; Careful waits for their feedback. */
-  awaitingFeedback: number[];
+  /** The last publish's joke ids; Careful waits for their feedback. */
+  awaitingFeedback: { roundId: number; jokeIds: number[] } | null;
 }
 
 function newSeat(index: number, seat: Seat): SeatRuntime {
-  return { seat, userId: null, name: botName(index, seat), activity: 'not started', error: null };
+  return { seat, userId: null, name: botName(index, seat), activity: 'not started', error: null, checkedAt: null, checkedEpoch: -1 };
 }
 
 function newTeam(spec: BotTeamSpec): TeamRuntime {
   return {
     index: spec.index, persona: spec.persona, teamId: null,
     jm: newSeat(spec.index, 'A'), marketing: newSeat(spec.index, 'B'),
-    submittedByRound: new Map(), submitted: 0, published: 0, awaitingFeedback: [],
+    submittedByRound: new Map(), publishedByRound: new Map(), published: 0, awaitingFeedback: null,
   };
 }
 
@@ -1964,11 +2502,19 @@ export class BotEngine {
   private classificationCalls = 0;
   private scrambled = false;
   private warnings: string[] = [];
+  /**
+   * Another team's batch a moved Marketing bot claimed before it noticed the
+   * move, by batch id. Kept apart from `warnings` because re-forming rewrites
+   * those but does not release the lock; start and remove clear it.
+   */
+  private heldBatches = new Map<number, string>();
   private roundId: number | null = null;
   private roundCache: { at: number; round: PublicRound | null } | null = null;
   /** Bumped at the end of every team formation; see checkSeat. */
   private formationEpoch = 0;
   private forming = false;
+  /** start, reform and remove queue here; see serialize. */
+  private opChain: Promise<unknown> = Promise.resolve();
   private readonly history = new Map<number, ReasoningEntry[]>();
 
   constructor(private readonly deps: EngineDeps) {}
@@ -1984,7 +2530,7 @@ export class BotEngine {
       teams: this.teams.map(teamStatus),
       classificationCalls: this.classificationCalls,
       scrambled: this.scrambled,
-      warnings: [...this.warnings],
+      warnings: [...this.warnings, ...this.heldBatches.values()],
     };
   }
 
@@ -2017,15 +2563,44 @@ export class BotEngine {
     return result;
   }
 
+  /**
+   * Seat the bots, form teams, optionally start the round, then launch the
+   * actors.
+   *
+   * The controller is claimed synchronously, before any await, so a second
+   * start() is refused at once and stop() can cancel a start still in progress.
+   * The new run's seats are shown from that same moment, so status() never
+   * pairs `running` with the previous run's stopped seats. The work itself runs
+   * on the op chain, never overlapping a reform or remove.
+   */
   async start(options: StartOptions): Promise<void> {
     if (this.running) throw new Error('Bots are already running — stop them first.');
     if (options.teams.length === 0) throw new Error('Choose at least one bot team.');
     if (options.teams.length > MAX_BOT_TEAMS) throw new Error(`At most ${MAX_BOT_TEAMS} bot teams.`);
+    const controller = new AbortController();
+    this.controller = controller;
+    const teams = options.teams.map(newTeam);
+    this.teams = teams;
+    try {
+      await this.serialize(() => this.startNow(options, teams, controller));
+    } catch (err) {
+      if (this.controller === controller) {
+        this.controller = null;
+        this.emitStatus();
+      }
+      throw err;
+    }
+  }
+
+  private async startNow(options: StartOptions, teams: TeamRuntime[], controller: AbortController): Promise<void> {
+    const { signal } = controller;
+    if (signal.aborted) return;
     if (options.startRound) {
       // Check BEFORE seating anyone. The backend refuses to start a round that
       // is ACTIVE or ENDED (usecase/instructor.go:232-237); bots seated for a
       // round that can never start would just sit there.
       const rounds = (await this.deps.api.roundsActive()).rounds;
+      if (signal.aborted) return;
       const round = rounds.find(r => r.id === options.roundId);
       if (!round || round.status !== 'CONFIGURED') {
         throw new Error(
@@ -2044,28 +2619,32 @@ export class BotEngine {
     this.classificationCalls = 0;
     this.scrambled = false;
     this.warnings = [];
-    this.teams = options.teams.map(newTeam);
+    this.heldBatches.clear();
+    // Again, because a remove() queued ahead of this start clears the teams.
+    this.teams = teams;
     this.emitStatus();
 
-    await this.joinBots();
+    await this.joinBots(signal);
+    if (signal.aborted) return;
     await this.formTeams();
+    if (signal.aborted) return;
     if (options.startRound) {
       const body: ConfigRequest = options.idealProfile
         ? { ideal_profile: options.idealProfile as ConfigRequest['ideal_profile'] }
         : {};
       await this.instructor().instructorStart(options.roundId, body);
       this.roundCache = null;
+      if (signal.aborted) return;
     }
 
-    const controller = new AbortController();
-    this.controller = controller;
     for (const team of this.teams) {
-      void this.runJokeMaker(team, controller.signal);
-      void this.runMarketing(team, controller.signal);
+      void this.runJokeMaker(team, signal);
+      void this.runMarketing(team, signal);
     }
     this.emitStatus();
   }
 
+  /** The kill switch: synchronous and immediate, never queued behind the op chain. */
   stop(): void {
     if (!this.controller) return;
     this.controller.abort();
@@ -2077,35 +2656,55 @@ export class BotEngine {
     this.emitStatus();
   }
 
-  async reform(): Promise<void> {
-    await this.formTeams();
-    this.scrambled = false;
-    this.emitStatus();
+  reform(): Promise<void> {
+    return this.serialize(async () => {
+      await this.formTeams();
+      this.scrambled = false;
+      this.emitStatus();
+    });
   }
 
   /** Stop, then delete every bot user — never a human. Returns how many were removed. */
-  async remove(roundId: number): Promise<number> {
+  remove(roundId: number): Promise<number> {
     this.stop();
-    const instructor = this.instructor();
-    const ids = new Set(
-      participantsOf(await instructor.instructorLobby(roundId)).filter(p => isBotName(p.name)).map(p => p.userId),
-    );
-    for (const team of this.teams) {
-      for (const seat of [team.jm, team.marketing]) if (seat.userId != null) ids.add(seat.userId);
-    }
-    for (const id of ids) {
-      try {
-        await instructor.instructorDeleteUser(roundId, id);
-      } catch (err) {
-        if (statusOf(err) !== 404) throw err;
+    return this.serialize(async () => {
+      const instructor = this.instructor();
+      const ids = new Set(
+        participantsOf(await instructor.instructorLobby(roundId)).filter(p => isBotName(p.name)).map(p => p.userId),
+      );
+      // When a start() is queued behind this remove, `this.teams` is already that
+      // new run's, not yet joined (every userId null), so this adds nothing. That
+      // is deliberate and safe: the lobby scan above finds every bot seated in
+      // the round, and the new run joins its bots only after this op finishes.
+      for (const team of this.teams) {
+        for (const seat of [team.jm, team.marketing]) if (seat.userId != null) ids.add(seat.userId);
       }
-    }
-    this.teams = [];
-    this.history.clear();
-    this.warnings = [];
-    this.scrambled = false;
-    this.emitStatus();
-    return ids.size;
+      for (const id of ids) {
+        try {
+          await instructor.instructorDeleteUser(roundId, id);
+        } catch (err) {
+          if (statusOf(err) !== 404) throw err;
+        }
+      }
+      this.teams = [];
+      this.history.clear();
+      this.warnings = [];
+      this.heldBatches.clear();
+      this.scrambled = false;
+      this.emitStatus();
+      return ids.size;
+    });
+  }
+
+  /**
+   * Run start, reform and remove one at a time. Each re-forms teams, and two
+   * formations interleaving their assign and PATCHes strand humans on broken
+   * teams, since every assign reshuffles. A failed op does not poison the chain.
+   */
+  private serialize<T>(op: () => Promise<T>): Promise<T> {
+    const run = this.opChain.then(op, op);
+    this.opChain = run.catch(() => undefined);
+    return run;
   }
 
   // ---- formation -----------------------------------------------------------
@@ -2119,10 +2718,11 @@ export class BotEngine {
     return this.roundId;
   }
 
-  private async joinBots(): Promise<void> {
+  private async joinBots(signal: AbortSignal): Promise<void> {
     for (const team of this.teams) {
       for (const seat of [team.jm, team.marketing]) {
         const joined = await this.deps.api.sessionJoin({ display_name: seat.name });
+        if (signal.aborted) return;
         seat.userId = joined.user.user_id;
         seat.activity = 'joined';
       }
@@ -2167,6 +2767,12 @@ export class BotEngine {
   }
 
   // ---- actors --------------------------------------------------------------
+  //
+  // One rule keeps a stopped run from leaking into the next: once an actor's
+  // signal is aborted it touches no engine or team state at all — no counters,
+  // no `scrambled`, no round cache, no history, no activity, no emits. It just
+  // exits. So every await in an actor is followed by an abort check before the
+  // next mutation.
 
   private async runJokeMaker(team: TeamRuntime, signal: AbortSignal): Promise<void> {
     const persona = PERSONAS[team.persona];
@@ -2178,19 +2784,22 @@ export class BotEngine {
 
     while (!signal.aborted) {
       try {
-        if (!(await this.checkSeat(me, team, seat))) {
+        const inPlace = await this.checkSeat(me, team, seat, signal);
+        if (signal.aborted) break;
+        if (!inPlace) {
           await this.pace(IDLE_POLL_MS, signal);
           continue;
         }
-        const round = await this.activeRound();
+        const round = await this.activeRound(signal);
+        if (signal.aborted) break;
         if (!round) {
-          this.setActivity(seat, 'idle — no active round');
+          this.setActivity(seat, 'idle — no active round', signal);
           await this.pace(IDLE_POLL_MS, signal);
           continue;
         }
         const submitted = team.submittedByRound.get(round.id) ?? 0;
         if (submitted >= BATCH_CAP_PER_ROUND) {
-          this.setActivity(seat, `done — ${BATCH_CAP_PER_ROUND}-batch cap reached`);
+          this.setActivity(seat, `done — ${BATCH_CAP_PER_ROUND}-batch cap reached`, signal);
           await this.pace(IDLE_POLL_MS, signal);
           continue;
         }
@@ -2198,52 +2807,57 @@ export class BotEngine {
         if (signal.aborted) break;
 
         const jokes = deck.draw(round.batch_size);
-        this.setActivity(seat, 'submitting a batch');
+        this.setActivity(seat, 'submitting a batch', signal);
         await me.submitBatch(round.id, { team_id: team.teamId as number, raw_text: asRawBlob(jokes) });
+        // A batch in flight when Stop is pressed lands but is not counted or logged.
+        if (signal.aborted) break;
         team.submittedByRound.set(round.id, submitted + 1);
-        team.submitted++;
         seat.error = null;
         attempt = 0;
-        this.log(team, seat, `submitted batch ${submitted + 1}: ${jokes.map(j => j.id).join(', ')}`);
-        this.setActivity(seat, 'resting before the next batch');
+        this.log(team, seat, `submitted batch ${submitted + 1}: ${jokes.map(j => j.id).join(', ')}`, signal);
+        this.setActivity(seat, 'resting before the next batch', signal);
         await this.pace(jitter(persona.submitIntervalMs, rand), signal);
       } catch (err) {
         if (signal.aborted) break;
-        if (!(await this.recover(team, seat, err, ++attempt, signal))) break;
+        attempt = nextAttempt(err, attempt);
+        if (!(await this.recover(team, seat, err, attempt, signal))) break;
       }
     }
   }
 
-  /** Careful only: hold the next batch until the last one is published and scored. */
+  /** Careful only: hold the next batch until this round's last one is published and scored. */
   private async waitUntilSettled(me: BotApi, team: TeamRuntime, roundId: number, signal: AbortSignal): Promise<void> {
-    if (team.submitted === 0) return;
+    const submitted = team.submittedByRound.get(roundId) ?? 0;
+    if (submitted === 0) return;
     const seat = team.jm;
     let waited = 0;
     while (!signal.aborted && waited < FEEDBACK_WAIT_MS) {
-      const published = team.published >= team.submitted;
-      if (published && team.awaitingFeedback.length === 0) return;
+      const published = (team.publishedByRound.get(roundId) ?? 0) >= submitted;
+      const awaiting = team.awaitingFeedback?.roundId === roundId ? team.awaitingFeedback.jokeIds : [];
+      if (published && awaiting.length === 0) return;
       if (published) {
         const feedback = await me.teamFeedback(roundId, team.teamId as number);
+        if (signal.aborted) return;
         const scored = feedback.jokes.some(
-          j => team.awaitingFeedback.includes(j.joke_id) && j.good_dimensions.length + j.improve_dimensions.length > 0,
+          j => awaiting.includes(j.joke_id) && j.good_dimensions.length + j.improve_dimensions.length > 0,
         );
         if (scored) {
-          team.awaitingFeedback = [];
-          this.log(team, seat, 'feedback arrived on the last batch — writing the next one');
+          team.awaitingFeedback = null;
+          this.log(team, seat, 'feedback arrived on the last batch — writing the next one', signal);
           return;
         }
       }
-      this.setActivity(seat, published ? 'waiting for customer feedback' : 'waiting for Marketing to publish');
+      this.setActivity(seat, published ? 'waiting for customer feedback' : 'waiting for Marketing to publish', signal);
       await this.pace(QUEUE_POLL_MS, signal);
       waited += QUEUE_POLL_MS;
     }
     if (!signal.aborted) {
-      team.awaitingFeedback = [];
-      // If a publish committed but its response was lost, `published` would stay
-      // one behind `submitted` for good and every later batch would wait the full
-      // timeout. Giving up is the moment to re-sync.
-      team.published = Math.max(team.published, team.submitted);
-      this.log(team, seat, 'gave up waiting for feedback — writing the next batch anyway');
+      team.awaitingFeedback = null;
+      // If a publish committed but its response was lost, this round's published
+      // count would stay one behind submitted for good and every later batch
+      // would wait the full timeout. Giving up is the moment to re-sync.
+      team.publishedByRound.set(roundId, Math.max(team.publishedByRound.get(roundId) ?? 0, submitted));
+      this.log(team, seat, 'gave up waiting for feedback — writing the next batch anyway', signal);
     }
   }
 
@@ -2256,61 +2870,88 @@ export class BotEngine {
 
     while (!signal.aborted) {
       try {
-        if (!(await this.checkSeat(me, team, seat))) {
+        const inPlace = await this.checkSeat(me, team, seat, signal);
+        if (signal.aborted) break;
+        if (!inPlace) {
           await this.pace(IDLE_POLL_MS, signal);
           continue;
         }
-        const round = await this.activeRound();
+        const round = await this.activeRound(signal);
+        if (signal.aborted) break;
         if (!round) {
-          this.setActivity(seat, 'idle — no active round');
+          this.setActivity(seat, 'idle — no active round', signal);
           await this.pace(IDLE_POLL_MS, signal);
           continue;
         }
         const envelope = await me.marketingQueueNext(round.id);
+        if (signal.aborted) break;
+        if (envelope.batch && envelope.batch.team_id !== team.teamId) {
+          // The backend hands a marketer its own team's queue, so another team's
+          // batch means this seat was moved — seen here at no extra request, and
+          // possibly before the throttled seat check would notice. Never split
+          // or publish it: that would decide a human team's jokes.
+          this.markScrambled(
+            team, seat, `the queue handed me team ${envelope.batch.team_id}'s batch, but my team is ${team.teamId ?? '—'}`, signal,
+          );
+          this.reportHeldBatch(seat, envelope.batch.batch_id, envelope.batch.team_id, signal);
+          continue;
+        }
         if (!envelope.batch) {
-          this.setActivity(seat, 'waiting for a batch');
+          this.setActivity(seat, 'waiting for a batch', signal);
           await this.pace(QUEUE_POLL_MS, signal);
           continue;
         }
 
         const batch = envelope.batch;
         let jokes = envelope.jokes;
-        this.log(team, seat, `claimed batch #${batch.batch_id}`);
-        this.setActivity(seat, `reading batch #${batch.batch_id}`);
+        this.log(team, seat, `claimed batch #${batch.batch_id}`, signal);
+        this.setActivity(seat, `reading batch #${batch.batch_id}`, signal);
         await this.pace(jitter(DWELL_MS.claim, rand), signal);
         if (signal.aborted) break;
+        // Seats can move during a dwell; never write for a team we may have left.
+        // The batch stays locked to this bot when it continues, on purpose: after
+        // Re-form the backend hands a marketer its own held batch first, so the
+        // bot resumes where it left off. Do not try to release it here.
+        if (this.scrambled) continue;
 
         if (jokes.length === 0 && batch.raw_text) {
           const pieces = fitPieces(splitBlob(batch.raw_text), round.batch_size, round.round_number);
           const split = await me.marketingSplit(batch.batch_id, { jokes: pieces });
+          if (signal.aborted) break;
           jokes = split.jokes;
-          this.log(team, seat, `split batch #${batch.batch_id} into ${jokes.length} jokes`);
-          this.setActivity(seat, `choosing from ${jokes.length} jokes`);
+          this.log(team, seat, `split batch #${batch.batch_id} into ${jokes.length} jokes`, signal);
+          this.setActivity(seat, `choosing from ${jokes.length} jokes`, signal);
           await this.pace(jitter(DWELL_MS.split, rand), signal);
           if (signal.aborted) break;
+          if (this.scrambled) continue;
         }
 
         const count = publishCount(persona, jokes.length, round.round_number, rand);
         const keep = choosePublished(jokes.map(j => j.joke_id), count, rand);
         const kept = jokes.filter(j => keep.has(j.joke_id)).map(j => `"${titleOf(j.joke_text)}"`);
-        this.log(team, seat, `${persona.label}: keeping ${keep.size} of ${jokes.length} — ${kept.join(', ') || 'none'}`);
-        this.setActivity(seat, `publishing ${keep.size} of ${jokes.length}`);
+        this.log(team, seat, `${persona.label}: keeping ${keep.size} of ${jokes.length} — ${kept.join(', ') || 'none'}`, signal);
+        this.setActivity(seat, `publishing ${keep.size} of ${jokes.length}`, signal);
         await this.pace(jitter(DWELL_MS.decide, rand), signal);
         if (signal.aborted) break;
+        if (this.scrambled) continue;
 
         await me.marketingPublish(batch.batch_id, {
           jokes: jokes.map(j => ({ joke_id: j.joke_id, joke_title: titleOf(j.joke_text), is_published: keep.has(j.joke_id) })),
         });
+        // A publish in flight when Stop is pressed lands but is not counted or logged.
+        if (signal.aborted) break;
+        team.publishedByRound.set(round.id, (team.publishedByRound.get(round.id) ?? 0) + 1);
         team.published++;
-        team.awaitingFeedback = [...keep];
+        team.awaitingFeedback = { roundId: round.id, jokeIds: [...keep] };
         this.classificationCalls += keep.size;
         seat.error = null;
         attempt = 0;
-        this.log(team, seat, `published ${keep.size}, discarded ${jokes.length - keep.size}`);
+        this.log(team, seat, `published ${keep.size}, discarded ${jokes.length - keep.size}`, signal);
         this.emitStatus();
       } catch (err) {
         if (signal.aborted) break;
-        if (!(await this.recover(team, seat, err, ++attempt, signal))) break;
+        attempt = nextAttempt(err, attempt);
+        if (!(await this.recover(team, seat, err, attempt, signal))) break;
       }
     }
   }
@@ -2321,11 +2962,22 @@ export class BotEngine {
    * the instructor re-forms teams.
    *
    * A reading taken while formation is running — or that straddled one — says
-   * nothing about the settled layout, so it is ignored rather than trusted.
+   * nothing about the settled layout, so it is ignored rather than trusted. So
+   * is one that comes back after this actor was stopped.
+   *
+   * The backend is asked at most once per SEAT_CHECK_MS per seat. In between,
+   * the last answer stands — unless any seat has since seen a re-shuffle, which
+   * pauses every bot, or teams were re-formed, which forces a fresh answer.
    */
-  private async checkSeat(me: BotApi, team: TeamRuntime, seat: SeatRuntime): Promise<boolean> {
+  private async checkSeat(me: BotApi, team: TeamRuntime, seat: SeatRuntime, signal: AbortSignal): Promise<boolean> {
     if (this.forming) return false;
     const epoch = this.formationEpoch;
+    const now = this.deps.now();
+    if (seat.checkedEpoch === epoch && seat.checkedAt !== null && now - seat.checkedAt < SEAT_CHECK_MS) {
+      if (!this.scrambled) return true;
+      this.setActivity(seat, 'paused — teams were re-shuffled', signal);
+      return false;
+    }
     let mine: SessionMeResponse;
     try {
       mine = await me.sessionMe();
@@ -2333,31 +2985,60 @@ export class BotEngine {
       if (statusOf(err) === 404) throw new SeatGone();
       throw err;
     }
+    if (signal.aborted) return false;
     if (this.forming || epoch !== this.formationEpoch) return false;
+    seat.checkedAt = now;
+    seat.checkedEpoch = epoch;
 
     const inPlace = mine.assignment.team_id === team.teamId && mine.assignment.role === SEAT_ROLE[seat.seat];
-    if (!inPlace && !this.scrambled) {
-      this.scrambled = true;
-      this.log(
-        team, seat,
-        `my seat moved (now ${mine.assignment.role ?? 'unassigned'} on team ${mine.assignment.team_id ?? '—'}) — every bot pauses until teams are re-formed`,
+    if (!inPlace) {
+      this.markScrambled(
+        team, seat, `my seat moved (now ${mine.assignment.role ?? 'unassigned'} on team ${mine.assignment.team_id ?? '—'})`, signal,
       );
-      this.emitStatus();
     }
     if (this.scrambled) {
-      this.setActivity(seat, 'paused — teams were re-shuffled');
+      this.setActivity(seat, 'paused — teams were re-shuffled', signal);
       return false;
     }
     return true;
   }
 
-  /** Returns false when the actor should stop for good. */
+  /**
+   * The queue call that revealed the move also claimed the batch, and the lock
+   * outlives the bot's return to its own team. The backend skips a batch another
+   * marketer holds (repo/marketing_repo.go:34-67), so it is hidden from its team,
+   * not blocking it, until the lock goes stale after 15 minutes
+   * (marketing_repo.go:53) or the bot user is deleted (batches.locked_by is ON
+   * DELETE SET NULL, migrations/0001_schema.sql:124).
+   */
+  private reportHeldBatch(seat: SeatRuntime, batchId: number, teamId: number, signal: AbortSignal): void {
+    if (signal.aborted || this.heldBatches.has(batchId)) return;
+    this.heldBatches.set(
+      batchId,
+      `${seat.name} picked up team ${teamId}'s batch #${batchId} before noticing it was moved. `
+        + `That batch stays hidden from team ${teamId} for up to 15 minutes; Remove bots releases it at once.`,
+    );
+    this.emitStatus();
+  }
+
+  /** Pause every bot until teams are re-formed; the first seat to notice says why. */
+  private markScrambled(team: TeamRuntime, seat: SeatRuntime, why: string, signal: AbortSignal): void {
+    if (signal.aborted) return;
+    if (!this.scrambled) {
+      this.scrambled = true;
+      this.log(team, seat, `${why} — every bot pauses until teams are re-formed`, signal);
+      this.emitStatus();
+    }
+    this.setActivity(seat, 'paused — teams were re-shuffled', signal);
+  }
+
+  /** Returns false when the actor should stop for good. Only called while not aborted. */
   private async recover(
     team: TeamRuntime, seat: SeatRuntime, err: unknown, attempt: number, signal: AbortSignal,
   ): Promise<boolean> {
     if (err instanceof SeatGone) {
       seat.error = err.message;
-      this.setActivity(seat, 'stopped');
+      this.setActivity(seat, 'stopped', signal);
       return false;
     }
     if (statusOf(err) === 403) {
@@ -2367,31 +3048,32 @@ export class BotEngine {
       // (usecase/marketing.go:143-160). Every other 403 comes from the role/team
       // fields checkSeat compares, so a genuinely mis-seated bot pauses there on
       // the next loop instead of spinning here.
-      this.log(team, seat, 'the backend refused this (403) — polling again');
-      this.setActivity(seat, 'not allowed right now — polling again');
+      this.log(team, seat, 'the backend refused this (403) — polling again', signal);
+      this.setActivity(seat, 'not allowed right now — polling again', signal);
       await this.pace(QUEUE_POLL_MS, signal);
       return true;
     }
     if (statusOf(err) === 409) {
       // ROUND_NOT_ACTIVE, or a batch already processed: the game moved on.
       this.roundCache = null;
-      this.setActivity(seat, 'idle — round not active');
+      this.setActivity(seat, 'idle — round not active', signal);
       await this.pace(IDLE_POLL_MS, signal);
       return true;
     }
     seat.error = err instanceof Error ? err.message : String(err);
     const backoff = Math.min(MAX_BACKOFF_MS, 1_000 * 2 ** Math.min(attempt, 5));
-    this.log(team, seat, `error: ${seat.error} — retrying in ${Math.round(backoff / 1000)}s`);
-    this.setActivity(seat, `retrying in ${Math.round(backoff / 1000)}s`);
+    this.log(team, seat, `error: ${seat.error} — retrying in ${Math.round(backoff / 1000)}s`, signal);
+    this.setActivity(seat, `retrying in ${Math.round(backoff / 1000)}s`, signal);
     await this.deps.delay(backoff, signal);
     return true;
   }
 
-  private async activeRound(): Promise<PublicRound | null> {
+  private async activeRound(signal: AbortSignal): Promise<PublicRound | null> {
     const now = this.deps.now();
     if (this.roundCache && now - this.roundCache.at < ROUND_CACHE_MS) return this.roundCache.round;
     const { rounds } = await this.deps.api.roundsActive();
     const round = rounds.find(r => r.status === 'ACTIVE') ?? null;
+    if (signal.aborted) return round;
     this.roundCache = { at: now, round };
     return round;
   }
@@ -2403,17 +3085,14 @@ export class BotEngine {
     }
   }
 
-  private setActivity(seat: SeatRuntime, activity: string): void {
-    // An actor can be mid-request when stop() runs; when that request returns it
-    // must not overwrite 'stopped' with a stale activity or emit after the stop.
-    if (!this.running) return;
-    if (seat.activity === activity) return;
+  private setActivity(seat: SeatRuntime, activity: string, signal: AbortSignal): void {
+    if (signal.aborted || seat.activity === activity) return;
     seat.activity = activity;
     this.emitStatus();
   }
 
-  private log(team: TeamRuntime, seat: SeatRuntime, text: string): void {
-    if (seat.userId == null) return;
+  private log(team: TeamRuntime, seat: SeatRuntime, text: string, signal: AbortSignal): void {
+    if (signal.aborted || seat.userId == null) return;
     const entry: ReasoningEntry = {
       botUserId: seat.userId, teamIndex: team.index, seat: seat.seat, persona: team.persona,
       at: this.deps.now(), text,
@@ -2434,7 +3113,14 @@ export class BotEngine {
 - [ ] **Step 4: Run it to verify it passes**
 
 Run: `npx vitest run services/bots/engine.test.ts`
-Expected: 26 passed. If a play test times out, print `world.calls.slice(-40)` and `engine.status()` inside `until`'s error path to see where the actor loop stalled — do not raise the iteration limit to make it pass.
+Expected: 43 passed.
+
+> **Revised in review.** The engine and fake above are the committed versions, not the first
+> draft. Review rounds against the Go backend and adversarial probes added: serialized
+> start/reform/remove with a stop that cancels a start in progress; per-actor abort checks so a
+> stopped run never touches the next; per-round counters for Careful; a throttled seat check
+> with an envelope `team_id` guard so a moved bot never decides another team's batch; and a
+> held-batch warning. Each fix is pinned by a mutation-checked regression test. If a play test times out, print `world.calls.slice(-40)` and `engine.status()` inside `until`'s error path to see where the actor loop stalled — do not raise the iteration limit to make it pass.
 
 - [ ] **Step 5: Full suite and typecheck**
 
