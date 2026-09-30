@@ -8,6 +8,7 @@ import {
 } from 'recharts';
 import { Role } from '../types';
 import { IdealProfilePicker } from '../components/IdealProfilePicker';
+import { BotPanel, botPanelRequested } from '../components/BotPanel';
 import type { IdealDimension } from '../config/dimensions';
 
 // Expanded Palette for more teams
@@ -1932,6 +1933,7 @@ const Instructor: React.FC = () => {
   return (
     <RoleLayout>
       <div className="space-y-8">
+        {botPanelRequested(window.location.search) && <BotPanel />}
         {/* Reset Confirm Modal */}
         <Modal
           isOpen={showResetConfirm}
