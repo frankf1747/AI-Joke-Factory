@@ -30,6 +30,8 @@ interface FakeJoke { joke_id: number; joke_text: string; published: boolean }
 
 export interface FakeBatch {
   id: number;
+  /** The round it was submitted in; the queue and feedback are round-scoped. */
+  roundId: number;
   teamId: number;
   rawText: string | null;
   jokes: FakeJoke[];
@@ -157,11 +159,11 @@ export class FakeWorld {
   envelope(b: FakeBatch): MarketingQueueEnvelope {
     return {
       batch: {
-        batch_id: b.id, round_id: this.round.id, team_id: b.teamId, status: 'SUBMITTED',
+        batch_id: b.id, round_id: b.roundId, team_id: b.teamId, status: 'SUBMITTED',
         submitted_at: STAMP, locked_at: STAMP, locked_by: b.lockedBy, raw_text: b.rawText,
       },
       jokes: b.jokes.map(j => ({ joke_id: j.joke_id, joke_text: j.joke_text })),
-      queue_size: this.batches.filter(x => x.teamId === b.teamId && x.state === 'QUEUED').length,
+      queue_size: this.batches.filter(x => x.roundId === b.roundId && x.teamId === b.teamId && x.state === 'QUEUED').length,
     };
   }
 }
@@ -229,18 +231,23 @@ class FakeApi implements BotApi {
     if (!raw || raw.trim().length < 20) throw new FakeApiError(400, 'VALIDATION_ERROR');
     if (u.role !== 'JM' || u.teamId !== body.team_id) throw new FakeApiError(403, 'FORBIDDEN');
     this.requireActive();
-    this.w.batches.push({ id: this.w.newBatchId(), teamId: u.teamId, rawText: raw, jokes: [], state: 'QUEUED', lockedBy: null });
+    this.w.batches.push({
+      id: this.w.newBatchId(), roundId: this.w.round.id, teamId: u.teamId, rawText: raw, jokes: [], state: 'QUEUED', lockedBy: null,
+    });
     return {};
   }
 
-  async teamFeedback(_roundId: number, teamId: number) {
+  async teamFeedback(roundId: number, teamId: number) {
     this.requireUser('teamFeedback');
     // real: usecase/feedback.go:38-76 — nothing before the round has started.
     if (this.w.round.status === 'CONFIGURED') throw new FakeApiError(409, 'ROUND_NOT_ACTIVE');
     // real: repo/stats_repo.go:134-157 — only the latest feedback_joke_count
-    // published jokes of the team, newest first; dimensions land once classified.
+    // published jokes of the team in this round (WHERE b.round_id = $1), newest
+    // first; dimensions land once classified.
     const mine = new Set(
-      this.w.batches.filter(b => b.teamId === teamId && b.state === 'DONE').flatMap(b => b.jokes.map(j => j.joke_id)),
+      this.w.batches
+        .filter(b => b.roundId === roundId && b.teamId === teamId && b.state === 'DONE')
+        .flatMap(b => b.jokes.map(j => j.joke_id)),
     );
     const jokes: FeedbackJoke[] = [...this.w.publishOrder]
       .reverse()
@@ -257,12 +264,14 @@ class FakeApi implements BotApi {
     return { jokes };
   }
 
-  async marketingQueueNext(_roundId: number): Promise<MarketingQueueEnvelope> {
+  async marketingQueueNext(roundId: number): Promise<MarketingQueueEnvelope> {
     // real: usecase/marketing.go:33-43 — role is checked before round status.
     const u = this.requireMarketing('marketingQueueNext');
     this.requireActive();
+    // real: repo/marketing_repo.go:38,52 — the queue is scoped to the round.
     const b = this.w.batches.find(
-      x => x.teamId === u.teamId && (x.state === 'QUEUED' || (x.state === 'CLAIMED' && x.lockedBy === u.id)),
+      x => x.roundId === roundId && x.teamId === u.teamId
+        && (x.state === 'QUEUED' || (x.state === 'CLAIMED' && x.lockedBy === u.id)),
     );
     if (!b) return { batch: null, jokes: [], queue_size: 0 };
     b.state = 'CLAIMED';

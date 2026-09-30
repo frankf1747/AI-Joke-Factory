@@ -273,6 +273,25 @@ describe('BotEngine', () => {
     engine.stop();
   });
 
+  it('Careful starts round 2 without waiting on a batch round 1 never published', async () => {
+    const { world, engine } = setup();
+    await engine.start(options({ teams: [{ index: 1, persona: 'CAREFUL' }], speed: 1 }));
+    const team = teamOf(world, botName(1, 'A'));
+    const jm = world.userNamed(botName(1, 'A'));
+    if (!jm) throw new Error('bot 01A missing');
+    await until(() => world.batches.some(b => b.teamId === team && b.roundId === 1), 'a round-1 batch');
+    world.round.status = 'ENDED';
+    // Marketing's dwell runs out, its split or publish meets a 409, and the
+    // round-1 batch is never published.
+    await settle(300);
+    expect(world.decisions).toHaveLength(0);
+
+    world.round = { ...world.round, id: 2, round_number: 2, status: 'ACTIVE' };
+    await until(() => world.batches.some(b => b.teamId === team && b.roundId === 2), 'a round-2 batch');
+    engine.stop();
+    expect(engine.historyFor(jm.id).map(e => e.text).join('\n')).not.toMatch(/gave up waiting/);
+  });
+
   it('publishes an inherited batch that does not split cleanly into the round-1 count', async () => {
     const { world, engine } = setup();
     await engine.start(options({ startRound: false }));
@@ -280,7 +299,7 @@ describe('BotEngine', () => {
     if (team == null) throw new Error('bot team missing');
     // Adjust this literal to FakeBatch's required fields if the fake has grown more.
     world.batches.push({
-      id: world.newBatchId(), teamId: team, state: 'QUEUED', lockedBy: null, jokes: [],
+      id: world.newBatchId(), roundId: world.round.id, teamId: team, state: 'QUEUED', lockedBy: null, jokes: [],
       rawText: 'A joke nobody on this team wrote, told as one long rambling story\n\n!!! and a tail',
     });
     world.round.status = 'ACTIVE';

@@ -162,11 +162,18 @@ interface TeamRuntime {
   teamId: number | null;
   jm: SeatRuntime;
   marketing: SeatRuntime;
+  /**
+   * Counted per round because the backend scopes the marketing queue and team
+   * feedback to a round (repo/marketing_repo.go:38,52; repo/stats_repo.go:138-150):
+   * a batch left unpublished when a round ends is never seen again, so it must
+   * not hold up the next round.
+   */
   submittedByRound: Map<number, number>;
-  submitted: number;
+  publishedByRound: Map<number, number>;
+  /** All rounds, for the panel. */
   published: number;
-  /** Joke ids of the last publish; Careful waits for their feedback. */
-  awaitingFeedback: number[];
+  /** The last publish's joke ids; Careful waits for their feedback. */
+  awaitingFeedback: { roundId: number; jokeIds: number[] } | null;
 }
 
 function newSeat(index: number, seat: Seat): SeatRuntime {
@@ -177,7 +184,7 @@ function newTeam(spec: BotTeamSpec): TeamRuntime {
   return {
     index: spec.index, persona: spec.persona, teamId: null,
     jm: newSeat(spec.index, 'A'), marketing: newSeat(spec.index, 'B'),
-    submittedByRound: new Map(), submitted: 0, published: 0, awaitingFeedback: [],
+    submittedByRound: new Map(), publishedByRound: new Map(), published: 0, awaitingFeedback: null,
   };
 }
 
@@ -492,7 +499,6 @@ export class BotEngine {
         // A batch in flight when Stop is pressed lands but is not counted or logged.
         if (signal.aborted) break;
         team.submittedByRound.set(round.id, submitted + 1);
-        team.submitted++;
         seat.error = null;
         attempt = 0;
         this.log(team, seat, `submitted batch ${submitted + 1}: ${jokes.map(j => j.id).join(', ')}`, signal);
@@ -505,22 +511,24 @@ export class BotEngine {
     }
   }
 
-  /** Careful only: hold the next batch until the last one is published and scored. */
+  /** Careful only: hold the next batch until this round's last one is published and scored. */
   private async waitUntilSettled(me: BotApi, team: TeamRuntime, roundId: number, signal: AbortSignal): Promise<void> {
-    if (team.submitted === 0) return;
+    const submitted = team.submittedByRound.get(roundId) ?? 0;
+    if (submitted === 0) return;
     const seat = team.jm;
     let waited = 0;
     while (!signal.aborted && waited < FEEDBACK_WAIT_MS) {
-      const published = team.published >= team.submitted;
-      if (published && team.awaitingFeedback.length === 0) return;
+      const published = (team.publishedByRound.get(roundId) ?? 0) >= submitted;
+      const awaiting = team.awaitingFeedback?.roundId === roundId ? team.awaitingFeedback.jokeIds : [];
+      if (published && awaiting.length === 0) return;
       if (published) {
         const feedback = await me.teamFeedback(roundId, team.teamId as number);
         if (signal.aborted) return;
         const scored = feedback.jokes.some(
-          j => team.awaitingFeedback.includes(j.joke_id) && j.good_dimensions.length + j.improve_dimensions.length > 0,
+          j => awaiting.includes(j.joke_id) && j.good_dimensions.length + j.improve_dimensions.length > 0,
         );
         if (scored) {
-          team.awaitingFeedback = [];
+          team.awaitingFeedback = null;
           this.log(team, seat, 'feedback arrived on the last batch — writing the next one', signal);
           return;
         }
@@ -530,11 +538,11 @@ export class BotEngine {
       waited += QUEUE_POLL_MS;
     }
     if (!signal.aborted) {
-      team.awaitingFeedback = [];
-      // If a publish committed but its response was lost, `published` would stay
-      // one behind `submitted` for good and every later batch would wait the full
-      // timeout. Giving up is the moment to re-sync.
-      team.published = Math.max(team.published, team.submitted);
+      team.awaitingFeedback = null;
+      // If a publish committed but its response was lost, this round's published
+      // count would stay one behind submitted for good and every later batch
+      // would wait the full timeout. Giving up is the moment to re-sync.
+      team.publishedByRound.set(roundId, Math.max(team.publishedByRound.get(roundId) ?? 0, submitted));
       this.log(team, seat, 'gave up waiting for feedback — writing the next batch anyway', signal);
     }
   }
@@ -600,8 +608,9 @@ export class BotEngine {
         });
         // A publish in flight when Stop is pressed lands but is not counted or logged.
         if (signal.aborted) break;
+        team.publishedByRound.set(round.id, (team.publishedByRound.get(round.id) ?? 0) + 1);
         team.published++;
-        team.awaitingFeedback = [...keep];
+        team.awaitingFeedback = { roundId: round.id, jokeIds: [...keep] };
         this.classificationCalls += keep.size;
         seat.error = null;
         attempt = 0;
