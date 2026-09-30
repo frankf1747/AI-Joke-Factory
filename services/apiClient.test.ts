@@ -216,3 +216,41 @@ describe('isMockApiMode', () => {
     expect(isMockApiMode()).toBe(true);
   });
 });
+
+describe('watch mode', () => {
+  class TabStorage {
+    private map = new Map<string, string>();
+    getItem(k: string) { return this.map.has(k) ? (this.map.get(k) as string) : null; }
+    setItem(k: string, v: string) { this.map.set(k, String(v)); }
+    removeItem(k: string) { this.map.delete(k); }
+  }
+
+  beforeEach(() => {
+    const tab = new TabStorage();
+    tab.setItem('joke_factory_watch_user_id', '17');
+    (globalThis as any).sessionStorage = tab;
+    localStorage.setItem('joke_factory_user_id', '5');
+  });
+
+  afterEach(() => {
+    delete (globalThis as any).sessionStorage;
+  });
+
+  it('sends the watched bot as X-User-Id, not the instructor in localStorage', async () => {
+    let sent: string | null = null;
+    globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+      sent = new Headers(init?.headers).get('X-User-Id');
+      return new Response(JSON.stringify({ data: { ok: true } }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    await apiRequest('/v1/rounds/active');
+    expect(sent).toBe('17');
+  });
+
+  it('refuses to send anything that is not a GET, without touching the network', async () => {
+    let called = false;
+    globalThis.fetch = (async () => { called = true; return new Response('{}'); }) as typeof fetch;
+    await expect(apiRequest('/v1/marketing/batches/1/publish', { method: 'POST', body: {} }))
+      .rejects.toMatchObject({ code: 'WATCH_READ_ONLY' });
+    expect(called).toBe(false);
+  });
+});

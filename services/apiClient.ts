@@ -1,4 +1,5 @@
 import { mockApiRequest } from './mockApi';
+import { getWatchIdentity, isWatchMode } from './watchMode';
 
 export class ApiError extends Error {
   /**
@@ -108,6 +109,10 @@ export function isMockApiMode(): boolean {
 }
 
 function getUserIdHeader(): string | undefined {
+  // A watch tab acts as the bot it is watching, from its own per-tab identity.
+  // See services/watchMode.ts for why that must never come from localStorage.
+  const watching = getWatchIdentity();
+  if (watching) return String(watching.userId);
   // Guarded: this module is also imported by Node-side tooling (the smoke
   // script, the test suite), where there is no DOM and no localStorage.
   if (typeof localStorage === 'undefined') return undefined;
@@ -170,6 +175,17 @@ async function parseErrorBody(resp: Response): Promise<ParsedError> {
 }
 
 export async function apiRequest<T>(path: string, opts: ApiClientOptions = {}): Promise<T> {
+  // Defence in depth for watch mode. Disabled buttons are the UX guarantee;
+  // this is the safety one: a watch tab cannot act for the bot at all.
+  const method = (opts.method ?? 'GET').toUpperCase();
+  if (method !== 'GET' && isWatchMode()) {
+    throw new ApiError({
+      status: 0,
+      code: 'WATCH_READ_ONLY',
+      message: 'This tab is watching a bot and is read-only.',
+    });
+  }
+
   const userId = getUserIdHeader();
   const headers: Record<string, string> = {
     Accept: 'application/json',
