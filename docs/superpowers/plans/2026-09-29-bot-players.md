@@ -4915,3 +4915,42 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - [ ] **Step 4: Hand off**
 
 Report to the user: what shipped, the spike result, both live test results, and the open decision — deploying means pushing to `main`, which triggers the Azure Static Web Apps workflow. Do not push or merge without the user's go-ahead; use superpowers:finishing-a-development-branch.
+
+---
+
+## After the plan: final-review fixes (2026-09-30)
+
+The whole-branch review of Phase 2 found one issue the per-task reviews could not see, because
+it only appears when the pieces are combined.
+
+**A watch tab could claim batches as the bot.** `GET /v1/marketing/queue/next` locks the team's
+next batch to its caller. The ordinary Marketing poll in `context.tsx` calls it on every tick, and
+in a watch tab the caller is the bot. After an ordinary Auto-Assign, the engine deliberately
+stops claiming for a bot moved onto a human team, but an open 👁 tab would have kept locking that
+team's batches, with no held-batch warning, for as long as the tab stayed open.
+
+Fixed in df82ac6 and 6eb6e4a, and proven live in 07d3f82:
+- `services/watchMode.ts` gains `setWatchedSeat` and `mayClaimMarketingBatch(teamId)`. In a normal
+  tab the check is always true. In a watch tab it is true only when all of these hold:
+  - the bot's own engine reports seat B;
+  - on the same team that `/session/me` reports;
+  - with `BotMeta.claiming` set, meaning the engine is running, not scrambled or forming teams,
+    and this Marketing loop is live;
+  - and the report is younger than 15 s.
+
+  It fails closed: with no report, or a stale one, the desk just shows no batch.
+- `WatchShell` re-requests the bot's history every 5 s, which keeps the seat fresh after
+  Re-form and fills it in when the instructor tab opens later.
+- The live watch test now also asserts that the locked desk shows the batch the bot holds, which
+  proves the gate lets the legitimate case through. It passed 3 of 3 runs.
+
+Minor items fixed in 9a37e91:
+- The Bot Panel never renders in a watch tab.
+- The tutorial "?" button is hidden in a watch tab.
+- A watch tab skips restoring the shared per-user caches.
+- Stale comments about identity storage are corrected.
+- A new test shows the WATCH_READ_ONLY refusal also holds when the mock API is forced on.
+
+Left as known, low-risk gaps:
+- A Stop or pause reaches an open watch tab only on the next 5 s refresh.
+- `SeatRuntime.live` has no dedicated test; the engine review traced it by hand.
