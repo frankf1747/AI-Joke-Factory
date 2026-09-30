@@ -447,6 +447,12 @@ export class BotEngine {
   }
 
   // ---- actors --------------------------------------------------------------
+  //
+  // One rule keeps a stopped run from leaking into the next: once an actor's
+  // signal is aborted it touches no engine or team state at all — no counters,
+  // no `scrambled`, no round cache, no history, no activity, no emits. It just
+  // exits. So every await in an actor is followed by an abort check before the
+  // next mutation.
 
   private async runJokeMaker(team: TeamRuntime, signal: AbortSignal): Promise<void> {
     const persona = PERSONAS[team.persona];
@@ -458,19 +464,22 @@ export class BotEngine {
 
     while (!signal.aborted) {
       try {
-        if (!(await this.checkSeat(me, team, seat))) {
+        const inPlace = await this.checkSeat(me, team, seat, signal);
+        if (signal.aborted) break;
+        if (!inPlace) {
           await this.pace(IDLE_POLL_MS, signal);
           continue;
         }
-        const round = await this.activeRound();
+        const round = await this.activeRound(signal);
+        if (signal.aborted) break;
         if (!round) {
-          this.setActivity(seat, 'idle — no active round');
+          this.setActivity(seat, 'idle — no active round', signal);
           await this.pace(IDLE_POLL_MS, signal);
           continue;
         }
         const submitted = team.submittedByRound.get(round.id) ?? 0;
         if (submitted >= BATCH_CAP_PER_ROUND) {
-          this.setActivity(seat, `done — ${BATCH_CAP_PER_ROUND}-batch cap reached`);
+          this.setActivity(seat, `done — ${BATCH_CAP_PER_ROUND}-batch cap reached`, signal);
           await this.pace(IDLE_POLL_MS, signal);
           continue;
         }
@@ -478,14 +487,16 @@ export class BotEngine {
         if (signal.aborted) break;
 
         const jokes = deck.draw(round.batch_size);
-        this.setActivity(seat, 'submitting a batch');
+        this.setActivity(seat, 'submitting a batch', signal);
         await me.submitBatch(round.id, { team_id: team.teamId as number, raw_text: asRawBlob(jokes) });
+        // A batch in flight when Stop is pressed lands but is not counted or logged.
+        if (signal.aborted) break;
         team.submittedByRound.set(round.id, submitted + 1);
         team.submitted++;
         seat.error = null;
         attempt = 0;
-        this.log(team, seat, `submitted batch ${submitted + 1}: ${jokes.map(j => j.id).join(', ')}`);
-        this.setActivity(seat, 'resting before the next batch');
+        this.log(team, seat, `submitted batch ${submitted + 1}: ${jokes.map(j => j.id).join(', ')}`, signal);
+        this.setActivity(seat, 'resting before the next batch', signal);
         await this.pace(jitter(persona.submitIntervalMs, rand), signal);
       } catch (err) {
         if (signal.aborted) break;
@@ -504,16 +515,17 @@ export class BotEngine {
       if (published && team.awaitingFeedback.length === 0) return;
       if (published) {
         const feedback = await me.teamFeedback(roundId, team.teamId as number);
+        if (signal.aborted) return;
         const scored = feedback.jokes.some(
           j => team.awaitingFeedback.includes(j.joke_id) && j.good_dimensions.length + j.improve_dimensions.length > 0,
         );
         if (scored) {
           team.awaitingFeedback = [];
-          this.log(team, seat, 'feedback arrived on the last batch — writing the next one');
+          this.log(team, seat, 'feedback arrived on the last batch — writing the next one', signal);
           return;
         }
       }
-      this.setActivity(seat, published ? 'waiting for customer feedback' : 'waiting for Marketing to publish');
+      this.setActivity(seat, published ? 'waiting for customer feedback' : 'waiting for Marketing to publish', signal);
       await this.pace(QUEUE_POLL_MS, signal);
       waited += QUEUE_POLL_MS;
     }
@@ -523,7 +535,7 @@ export class BotEngine {
       // one behind `submitted` for good and every later batch would wait the full
       // timeout. Giving up is the moment to re-sync.
       team.published = Math.max(team.published, team.submitted);
-      this.log(team, seat, 'gave up waiting for feedback — writing the next batch anyway');
+      this.log(team, seat, 'gave up waiting for feedback — writing the next batch anyway', signal);
     }
   }
 
@@ -536,36 +548,41 @@ export class BotEngine {
 
     while (!signal.aborted) {
       try {
-        if (!(await this.checkSeat(me, team, seat))) {
+        const inPlace = await this.checkSeat(me, team, seat, signal);
+        if (signal.aborted) break;
+        if (!inPlace) {
           await this.pace(IDLE_POLL_MS, signal);
           continue;
         }
-        const round = await this.activeRound();
+        const round = await this.activeRound(signal);
+        if (signal.aborted) break;
         if (!round) {
-          this.setActivity(seat, 'idle — no active round');
+          this.setActivity(seat, 'idle — no active round', signal);
           await this.pace(IDLE_POLL_MS, signal);
           continue;
         }
         const envelope = await me.marketingQueueNext(round.id);
+        if (signal.aborted) break;
         if (!envelope.batch) {
-          this.setActivity(seat, 'waiting for a batch');
+          this.setActivity(seat, 'waiting for a batch', signal);
           await this.pace(QUEUE_POLL_MS, signal);
           continue;
         }
 
         const batch = envelope.batch;
         let jokes = envelope.jokes;
-        this.log(team, seat, `claimed batch #${batch.batch_id}`);
-        this.setActivity(seat, `reading batch #${batch.batch_id}`);
+        this.log(team, seat, `claimed batch #${batch.batch_id}`, signal);
+        this.setActivity(seat, `reading batch #${batch.batch_id}`, signal);
         await this.pace(jitter(DWELL_MS.claim, rand), signal);
         if (signal.aborted) break;
 
         if (jokes.length === 0 && batch.raw_text) {
           const pieces = fitPieces(splitBlob(batch.raw_text), round.batch_size, round.round_number);
           const split = await me.marketingSplit(batch.batch_id, { jokes: pieces });
+          if (signal.aborted) break;
           jokes = split.jokes;
-          this.log(team, seat, `split batch #${batch.batch_id} into ${jokes.length} jokes`);
-          this.setActivity(seat, `choosing from ${jokes.length} jokes`);
+          this.log(team, seat, `split batch #${batch.batch_id} into ${jokes.length} jokes`, signal);
+          this.setActivity(seat, `choosing from ${jokes.length} jokes`, signal);
           await this.pace(jitter(DWELL_MS.split, rand), signal);
           if (signal.aborted) break;
         }
@@ -573,20 +590,22 @@ export class BotEngine {
         const count = publishCount(persona, jokes.length, round.round_number, rand);
         const keep = choosePublished(jokes.map(j => j.joke_id), count, rand);
         const kept = jokes.filter(j => keep.has(j.joke_id)).map(j => `"${titleOf(j.joke_text)}"`);
-        this.log(team, seat, `${persona.label}: keeping ${keep.size} of ${jokes.length} — ${kept.join(', ') || 'none'}`);
-        this.setActivity(seat, `publishing ${keep.size} of ${jokes.length}`);
+        this.log(team, seat, `${persona.label}: keeping ${keep.size} of ${jokes.length} — ${kept.join(', ') || 'none'}`, signal);
+        this.setActivity(seat, `publishing ${keep.size} of ${jokes.length}`, signal);
         await this.pace(jitter(DWELL_MS.decide, rand), signal);
         if (signal.aborted) break;
 
         await me.marketingPublish(batch.batch_id, {
           jokes: jokes.map(j => ({ joke_id: j.joke_id, joke_title: titleOf(j.joke_text), is_published: keep.has(j.joke_id) })),
         });
+        // A publish in flight when Stop is pressed lands but is not counted or logged.
+        if (signal.aborted) break;
         team.published++;
         team.awaitingFeedback = [...keep];
         this.classificationCalls += keep.size;
         seat.error = null;
         attempt = 0;
-        this.log(team, seat, `published ${keep.size}, discarded ${jokes.length - keep.size}`);
+        this.log(team, seat, `published ${keep.size}, discarded ${jokes.length - keep.size}`, signal);
         this.emitStatus();
       } catch (err) {
         if (signal.aborted) break;
@@ -601,9 +620,10 @@ export class BotEngine {
    * the instructor re-forms teams.
    *
    * A reading taken while formation is running — or that straddled one — says
-   * nothing about the settled layout, so it is ignored rather than trusted.
+   * nothing about the settled layout, so it is ignored rather than trusted. So
+   * is one that comes back after this actor was stopped.
    */
-  private async checkSeat(me: BotApi, team: TeamRuntime, seat: SeatRuntime): Promise<boolean> {
+  private async checkSeat(me: BotApi, team: TeamRuntime, seat: SeatRuntime, signal: AbortSignal): Promise<boolean> {
     if (this.forming) return false;
     const epoch = this.formationEpoch;
     let mine: SessionMeResponse;
@@ -613,6 +633,7 @@ export class BotEngine {
       if (statusOf(err) === 404) throw new SeatGone();
       throw err;
     }
+    if (signal.aborted) return false;
     if (this.forming || epoch !== this.formationEpoch) return false;
 
     const inPlace = mine.assignment.team_id === team.teamId && mine.assignment.role === SEAT_ROLE[seat.seat];
@@ -621,23 +642,24 @@ export class BotEngine {
       this.log(
         team, seat,
         `my seat moved (now ${mine.assignment.role ?? 'unassigned'} on team ${mine.assignment.team_id ?? '—'}) — every bot pauses until teams are re-formed`,
+        signal,
       );
       this.emitStatus();
     }
     if (this.scrambled) {
-      this.setActivity(seat, 'paused — teams were re-shuffled');
+      this.setActivity(seat, 'paused — teams were re-shuffled', signal);
       return false;
     }
     return true;
   }
 
-  /** Returns false when the actor should stop for good. */
+  /** Returns false when the actor should stop for good. Only called while not aborted. */
   private async recover(
     team: TeamRuntime, seat: SeatRuntime, err: unknown, attempt: number, signal: AbortSignal,
   ): Promise<boolean> {
     if (err instanceof SeatGone) {
       seat.error = err.message;
-      this.setActivity(seat, 'stopped');
+      this.setActivity(seat, 'stopped', signal);
       return false;
     }
     if (statusOf(err) === 403) {
@@ -647,31 +669,32 @@ export class BotEngine {
       // (usecase/marketing.go:143-160). Every other 403 comes from the role/team
       // fields checkSeat compares, so a genuinely mis-seated bot pauses there on
       // the next loop instead of spinning here.
-      this.log(team, seat, 'the backend refused this (403) — polling again');
-      this.setActivity(seat, 'not allowed right now — polling again');
+      this.log(team, seat, 'the backend refused this (403) — polling again', signal);
+      this.setActivity(seat, 'not allowed right now — polling again', signal);
       await this.pace(QUEUE_POLL_MS, signal);
       return true;
     }
     if (statusOf(err) === 409) {
       // ROUND_NOT_ACTIVE, or a batch already processed: the game moved on.
       this.roundCache = null;
-      this.setActivity(seat, 'idle — round not active');
+      this.setActivity(seat, 'idle — round not active', signal);
       await this.pace(IDLE_POLL_MS, signal);
       return true;
     }
     seat.error = err instanceof Error ? err.message : String(err);
     const backoff = Math.min(MAX_BACKOFF_MS, 1_000 * 2 ** Math.min(attempt, 5));
-    this.log(team, seat, `error: ${seat.error} — retrying in ${Math.round(backoff / 1000)}s`);
-    this.setActivity(seat, `retrying in ${Math.round(backoff / 1000)}s`);
+    this.log(team, seat, `error: ${seat.error} — retrying in ${Math.round(backoff / 1000)}s`, signal);
+    this.setActivity(seat, `retrying in ${Math.round(backoff / 1000)}s`, signal);
     await this.deps.delay(backoff, signal);
     return true;
   }
 
-  private async activeRound(): Promise<PublicRound | null> {
+  private async activeRound(signal: AbortSignal): Promise<PublicRound | null> {
     const now = this.deps.now();
     if (this.roundCache && now - this.roundCache.at < ROUND_CACHE_MS) return this.roundCache.round;
     const { rounds } = await this.deps.api.roundsActive();
     const round = rounds.find(r => r.status === 'ACTIVE') ?? null;
+    if (signal.aborted) return round;
     this.roundCache = { at: now, round };
     return round;
   }
@@ -683,17 +706,14 @@ export class BotEngine {
     }
   }
 
-  private setActivity(seat: SeatRuntime, activity: string): void {
-    // An actor can be mid-request when stop() runs; when that request returns it
-    // must not overwrite 'stopped' with a stale activity or emit after the stop.
-    if (!this.running) return;
-    if (seat.activity === activity) return;
+  private setActivity(seat: SeatRuntime, activity: string, signal: AbortSignal): void {
+    if (signal.aborted || seat.activity === activity) return;
     seat.activity = activity;
     this.emitStatus();
   }
 
-  private log(team: TeamRuntime, seat: SeatRuntime, text: string): void {
-    if (seat.userId == null) return;
+  private log(team: TeamRuntime, seat: SeatRuntime, text: string, signal: AbortSignal): void {
+    if (signal.aborted || seat.userId == null) return;
     const entry: ReasoningEntry = {
       botUserId: seat.userId, teamIndex: team.index, seat: seat.seat, persona: team.persona,
       at: this.deps.now(), text,

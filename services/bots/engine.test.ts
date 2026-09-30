@@ -60,6 +60,59 @@ function options(overrides: Partial<StartOptions> = {}): StartOptions {
   };
 }
 
+/**
+ * Holds chosen calls in flight until release(), to model a slow network. In
+ * 'request' mode the call reaches the backend only on release; in 'response'
+ * mode it lands at once and only the reply is late.
+ */
+class Gate {
+  private held: Array<{ method: string; go: () => void }> = [];
+  private methods = new Set<string>();
+  private mode: 'request' | 'response' = 'request';
+
+  /** How many calls are held, optionally of one method. */
+  count(method?: string): number {
+    return this.held.filter(h => method === undefined || h.method === method).length;
+  }
+
+  hold(method: string, mode: 'request' | 'response'): void {
+    this.methods.add(method);
+    this.mode = mode;
+  }
+
+  stopHolding(method?: string): void {
+    if (method === undefined) this.methods.clear();
+    else this.methods.delete(method);
+  }
+
+  /** Let held calls go, optionally only those of one method. */
+  release(method?: string): void {
+    const go = this.held.filter(h => method === undefined || h.method === method);
+    this.held = this.held.filter(h => !go.includes(h));
+    for (const h of go) h.go();
+  }
+
+  wrap(api: BotApi): BotApi {
+    return new Proxy(api, {
+      get: (target, prop, receiver) => {
+        const value: unknown = Reflect.get(target, prop, receiver);
+        if (prop === 'as') return (id: number, label: string) => this.wrap(target.as(id, label));
+        if (typeof value !== 'function') return value;
+        const method = String(prop);
+        return (...args: unknown[]) => {
+          const call = () => (value as (...a: unknown[]) => Promise<unknown>).apply(target, args);
+          if (!this.methods.has(method)) return call();
+          const released = new Promise<void>(go => this.held.push({ method, go }));
+          if (this.mode === 'request') return released.then(call);
+          const result = call();
+          result.catch(() => undefined); // observed later, after release
+          return released.then(() => result);
+        };
+      },
+    });
+  }
+}
+
 const teamOf = (world: FakeWorld, name: string) => world.userNamed(name)?.teamId ?? null;
 
 /** Every human team holds exactly one JM and one Marketing, and no bot. */
@@ -292,6 +345,74 @@ describe('BotEngine', () => {
       expect(world.userNamed(botName(index, 'B'))).toMatchObject({ teamId: team, role: 'MARKETING' });
       expect(world.userNamed(botName(index, 'A'))).toMatchObject({ role: 'JM' });
     }
+  });
+
+  it('leaves every seat exactly "stopped" after stop()', async () => {
+    const { world, engine } = setup();
+    await engine.start(options({ teams: [{ index: 1, persona: 'SPRAY' }, { index: 2, persona: 'CAREFUL' }] }));
+    await until(() => world.decisions.length >= 1, 'a first publish');
+    engine.stop();
+    await settle(200);
+    for (const team of engine.status().teams) {
+      expect([team.jm.activity, team.marketing.activity]).toEqual(['stopped', 'stopped']);
+    }
+  });
+
+  it("does not let a stopped run's in-flight seat check pause the next run", async () => {
+    const gate = new Gate();
+    const { world, engine } = setup([], { wrapApi: api => gate.wrap(api) });
+    await engine.start(options({ startRound: false }));
+    gate.hold('sessionMe', 'request');
+    await until(() => gate.count('sessionMe') >= 2, 'both actors mid seat-check');
+    engine.stop();
+    gate.stopHolding();
+    // Between runs the instructor pressed the ordinary Auto-Assign.
+    const bot = world.userNamed(botName(1, 'A'));
+    if (!bot) throw new Error('bot 01A missing');
+    bot.teamId = 999;
+    // The next run is still seating its bots when the old checks come back.
+    gate.hold('sessionJoin', 'request');
+    const restart = engine.start(options({ startRound: false }));
+    await until(() => gate.count('sessionJoin') >= 1, 'the next run joining');
+    gate.release('sessionMe');
+    await settle(5);
+    gate.stopHolding();
+    gate.release();
+    await restart;
+    await settle(50);
+    expect(engine.status().scrambled).toBe(false);
+    engine.stop();
+  });
+
+  it('does not count a publish from a stopped run in the next run', async () => {
+    const gate = new Gate();
+    const { world, engine } = setup([], { wrapApi: api => gate.wrap(api) });
+    gate.hold('marketingPublish', 'response');
+    await engine.start(options());
+    await until(() => gate.count() >= 1, 'a publish in flight');
+    expect(world.decisions).toHaveLength(1);
+    engine.stop();
+    gate.stopHolding();
+    const restart = engine.start(options({ startRound: false }));
+    gate.release();
+    await restart;
+    expect(engine.status().classificationCalls).toBe(0);
+    engine.stop();
+  });
+
+  it("does not re-add a removed bot's history from a late response", async () => {
+    const gate = new Gate();
+    const { world, engine } = setup([], { wrapApi: api => gate.wrap(api) });
+    gate.hold('marketingPublish', 'response');
+    await engine.start(options());
+    const marketer = world.userNamed(botName(1, 'B'));
+    if (!marketer) throw new Error('bot 01B missing');
+    await until(() => gate.count() >= 1, 'a publish in flight');
+    gate.stopHolding();
+    await engine.remove(1);
+    gate.release();
+    await settle(50);
+    expect(engine.historyFor(marketer.id)).toEqual([]);
   });
 
   it('treats a lost batch (403) as a re-poll, not an error', async () => {
