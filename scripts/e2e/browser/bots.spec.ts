@@ -13,7 +13,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { createClient, type JokeFactoryClient } from '../../../services/shared/client';
 import { isBotName } from '../../../services/bots/naming';
 import { participantsOf } from '../../../services/bots/placement';
-import { ADMIN_PASSWORD, BE_URL, FE_URL, INSTRUCTOR_NAME, seedSession, suppressTutorials } from './session';
+import { ADMIN_PASSWORD, BE_URL, FE_URL, INSTRUCTOR_NAME, readSession, seedSession, suppressTutorials } from './session';
 
 const CLASS_BUDGET_MS = 6 * 60_000;
 
@@ -97,5 +97,54 @@ test.describe('Bot players (live)', () => {
       const after = participantsOf(await s.instructor.instructorLobby(s.roundId));
       return after.filter(p => isBotName(p.name)).length;
     }, { timeout: 60_000 }).toBe(0);
+  });
+
+  test('watching a bot shows its real screen, read-only, without disturbing the instructor', async ({ page, context }) => {
+    test.setTimeout(CLASS_BUDGET_MS);
+    const s = await resetAndLogin();
+    await openPanel(page, s);
+
+    await page.getByLabel('Careful bot teams').fill('0');
+    await page.getByLabel('Balanced bot teams').fill('0');
+    await page.getByLabel('Spray bot teams').fill('1');
+    await page.getByRole('button', { name: '3×' }).click();
+    await expect(page.getByText(/Lobby: 0 humans/)).toBeVisible({ timeout: 30_000 });
+    await page.getByRole('button', { name: 'Run all-bot class' }).click();
+
+    const watchLink = page.getByRole('link', { name: '👁 Marketing for bot team 01' });
+    await expect(watchLink).toBeVisible({ timeout: 60_000 });
+    const [watch] = await Promise.all([context.waitForEvent('page'), watchLink.click()]);
+    await watch.waitForLoadState();
+
+    // The real Marketing screen, framed and locked.
+    // By test id, not role: a transient toast with role=status would trip strict mode.
+    await expect(watch.getByTestId('watch-banner')).toContainText('WATCHING');
+    await expect(watch.getByTestId('watch-banner')).toContainText('Bot 01B');
+    await expect(watch.getByText('Marketing Desk', { exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(watch.locator('fieldset[disabled]')).toHaveCount(1);
+    await expect(watch.getByTitle('Logout')).toHaveCount(0);
+    await expect(watch.locator('[draggable="true"]')).toHaveCount(0);
+
+    // The bot's reasoning arrives live over the channel.
+    await expect(watch.getByTestId('reasoning-entry').first()).toBeVisible({ timeout: 3 * 60_000 });
+
+    // Shared storage still belongs to the instructor, seen from both tabs.
+    expect((await readSession(page)).userId).toBe(String(s.instructorId));
+    expect((await readSession(watch)).userId).toBe(String(s.instructorId));
+
+    // Removing the watched bot 404s the watch tab's session. The tab must say so,
+    // and its logout must not clear the instructor's identity.
+    await page.getByRole('button', { name: 'Stop' }).click();
+    await page.getByRole('button', { name: 'Remove bots' }).click();
+    await expect.poll(async () => {
+      const after = participantsOf(await s.instructor.instructorLobby(s.roundId));
+      return after.filter(p => isBotName(p.name)).length;
+    }, { timeout: 60_000 }).toBe(0);
+    await expect(watch.getByTestId('watch-bot-left')).toBeVisible({ timeout: 60_000 });
+    expect((await readSession(page)).userId).toBe(String(s.instructorId));
+
+    // And the instructor tab is still the instructor after a reload.
+    await page.reload();
+    await expect(page.getByText('🤖 Bot players')).toBeVisible({ timeout: 30_000 });
   });
 });
