@@ -12,6 +12,7 @@
  */
 import { createClient } from '../shared/client';
 import type { BotApi } from './api';
+import { handleMessage } from './commands';
 import { BotEngine, realDelay } from './engine';
 import { BOT_CHANNEL, type ChannelMessage, type FromWorker, type ToWorker } from './protocol';
 
@@ -54,35 +55,22 @@ scope.onmessage = event => {
 };
 
 async function handle(m: ToWorker): Promise<void> {
+  if (m.type !== 'init') {
+    // Commands answer with `done` (their own failures included); see commands.ts.
+    await handleMessage(engine, m, post);
+    return;
+  }
   try {
-    if (m.type === 'init') {
-      engine?.stop();
-      // Assigning the real client to BotApi is also the compile-time proof that
-      // the engine's fake and the real thing agree on shape.
-      const api: BotApi = createClient({ baseUrl: m.baseUrl });
-      engine = new BotEngine({
-        api, instructorUserId: m.instructorUserId, delay: realDelay,
-        now: () => Date.now(), emit: post, seed: m.seed,
-      });
-      return;
-    }
-    if (!engine) throw new Error('bot engine not initialised');
-    switch (m.type) {
-      case 'probe':
-        // WHY nothing on failure: the panel polls every 5 s, so a `fatal` here
-        // would repeat the error on every blip and clear the panel's pending
-        // state mid-start. A zeroed ProbeResult would be worse: `humans: 0`
-        // would enable "Run all-bot class" for a lobby that couldn't be read.
-        // The panel keeps its last good reading instead.
-        try { await engine.probe(m.roundId); } catch { /* best-effort poll */ }
-        break;
-      case 'start': await engine.start(m.options); break;
-      case 'stop': engine.stop(); break;
-      case 'setSpeed': engine.setSpeed(m.speed); break;
-      case 'remove': await engine.remove(m.roundId); break;
-      case 'reform': await engine.reform(); break;
-    }
+    engine?.stop();
+    // Assigning the real client to BotApi is also the compile-time proof that
+    // the engine's fake and the real thing agree on shape.
+    const api: BotApi = createClient({ baseUrl: m.baseUrl });
+    engine = new BotEngine({
+      api, instructorUserId: m.instructorUserId, delay: realDelay,
+      now: () => Date.now(), emit: post, seed: m.seed,
+    });
   } catch (err) {
+    // No command waits on init, so its failure has no `done` to ride on.
     post({ type: 'fatal', message: err instanceof Error ? err.message : String(err) });
   }
 }

@@ -32,14 +32,22 @@ export interface StartOptions {
   idealProfile?: Record<string, string>;
 }
 
+/**
+ * The panel's commands. Each carries a `commandId` from a counter in the panel,
+ * and the worker answers each with exactly one `done` carrying the same id once
+ * the engine call settles. The panel's "working…" state is keyed to that id, so
+ * it never guesses completion from how the status looks.
+ */
+export type Command = 'start' | 'stop' | 'remove' | 'reform';
+
 export type ToWorker =
   | { type: 'init'; baseUrl: string; instructorUserId: number; seed: string }
   | { type: 'probe'; roundId: number }
-  | { type: 'start'; options: StartOptions }
-  | { type: 'stop' }
+  | { type: 'start'; commandId: number; options: StartOptions }
+  | { type: 'stop'; commandId: number }
   | { type: 'setSpeed'; speed: Speed }
-  | { type: 'remove'; roundId: number }
-  | { type: 'reform' };
+  | { type: 'remove'; commandId: number; roundId: number }
+  | { type: 'reform'; commandId: number };
 
 export interface SeatStatus {
   userId: number | null;
@@ -89,10 +97,16 @@ export interface BotMeta {
   teamId: number | null;
 }
 
+export type CommandDone =
+  | { type: 'done'; commandId: number; command: Command; ok: true }
+  | { type: 'done'; commandId: number; command: Command; ok: false; message: string };
+
 export type FromWorker =
   | { type: 'status'; status: EngineStatus }
   | { type: 'probe'; result: ProbeResult }
   | { type: 'log'; entry: ReasoningEntry }
+  | CommandDone
+  /** A failure outside any command: init, or a probe or speed change before init. */
   | { type: 'fatal'; message: string };
 
 export type ChannelMessage =

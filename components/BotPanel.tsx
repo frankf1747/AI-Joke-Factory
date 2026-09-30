@@ -42,6 +42,7 @@ const SeatCell: React.FC<{ seat: SeatStatus }> = ({ seat }) => (
 export const BotPanel: React.FC = () => {
   const { user, roundId, config } = useGame();
   const workerRef = useRef<Worker | null>(null);
+  const commandIdRef = useRef(0);
   const [counts, setCounts] = useState<Record<PersonaId, number>>(DEFAULT_COUNTS);
   const [speed, setSpeed] = useState<Speed>(1);
   const [status, setStatus] = useState<EngineStatus | null>(null);
@@ -63,7 +64,12 @@ export const BotPanel: React.FC = () => {
       const m = event.data;
       if (m.type === 'status') setStatus(m.status);
       else if (m.type === 'probe') setProbe(m.result);
-      else if (m.type === 'fatal') {
+      else if (m.type === 'done') {
+        if (!m.ok) {
+          setError(m.message);
+          setPending(null);
+        }
+      } else if (m.type === 'fatal') {
         setError(m.message);
         setPending(null);
       }
@@ -123,6 +129,7 @@ export const BotPanel: React.FC = () => {
     const teams = personaSequence(counts).map((persona, i) => ({ index: i + 1, persona }));
     send({
       type: 'start',
+      commandId: ++commandIdRef.current,
       options: { roundId: Number(roundId), teams, speed, startRound, idealProfile: { ...config.idealProfile } },
     });
   };
@@ -165,13 +172,13 @@ export const BotPanel: React.FC = () => {
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => start(true)} disabled={!canRunAllBots}>Run all-bot class</Button>
           <Button variant="secondary" onClick={() => start(false)} disabled={!canFill}>Fill with bot teams</Button>
-          <Button variant="secondary" onClick={() => { setPending('stop'); send({ type: 'stop' }); }} disabled={!running}>Stop</Button>
+          <Button variant="secondary" onClick={() => { setPending('stop'); send({ type: 'stop', commandId: ++commandIdRef.current }); }} disabled={!running}>Stop</Button>
           <Button
             variant="secondary"
             onClick={() => {
               if (roundId == null) return;
               setPending('remove');
-              send({ type: 'remove', roundId: Number(roundId) });
+              send({ type: 'remove', commandId: ++commandIdRef.current, roundId: Number(roundId) });
             }}
             disabled={pending !== null || nothingToRemove}
           >
@@ -181,7 +188,7 @@ export const BotPanel: React.FC = () => {
             // Disabled while any command is in flight: two overlapping re-forms each
             // reshuffle the humans and interleave their patches, which can strand a
             // human team. The engine also serializes them; this stops the double-click.
-            <Button onClick={() => { setPending('reform'); send({ type: 'reform' }); }} disabled={pending !== null}>
+            <Button onClick={() => { setPending('reform'); send({ type: 'reform', commandId: ++commandIdRef.current }); }} disabled={pending !== null}>
               Re-form teams
             </Button>
           )}
