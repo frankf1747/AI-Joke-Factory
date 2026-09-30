@@ -311,6 +311,13 @@ every page it controls, so under Playwright a page never becomes hidden and thro
 engages. That also rules out the fallback above: the Playwright live tests (Tasks 11 and 18) run
 under the same emulation and cannot measure throttling either.
 
+**ANSWERED (2026-09-29), in real Chrome.** `manual.html` in a background tab of the user's
+own Chrome, read live after 241 s hidden: main-thread control **62 ticks (26%)** — heavily
+throttled — and Web Worker **241 ticks (100%)**. The embedded Claude browser pane was also tried
+and, like Playwright, never throttled (100%/100% after 7.5 minutes hidden), so only real Chrome
+could answer. **Verdict: PASS.** Bots in the worker keep full pace while the instructor watches
+another tab, so the 👁 link opens an ordinary tab; no separate bot-host window is needed.
+
 **The question is therefore open, and answerable only in a real browser:**
 `scripts/spikes/worker-throttle/manual.html`, driven by hand in Chrome, gives the verdict on the
 page itself. Until it is run, the engine stays in a worker (no cost if unneeded). The one
