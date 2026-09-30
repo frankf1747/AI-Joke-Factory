@@ -4501,6 +4501,17 @@ git commit -m "feat(watch): make the action cards read-only in a watch tab
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
+
+> **Revised in review (af8f8aa + 66869b5).** A disabled fieldset only disables native controls,
+> so review added three guards, all keyed on the same `watching` const, which is declared at the
+> top of `QualityControl` because it is not a hook. First, the joke-card `<div>` ignores clicks
+> and drags (`draggable={!watching}`, early returns), so a watcher cannot fake a selection the bot
+> never made. Second, `batchReady` includes `!watching`, so the Marketing nudge timers never arm
+> in a watch tab. Otherwise a full-screen modal would cover the watched screen, `autoPickTop()`
+> would fake a pick, and its live Publish button would end in a WATCH_READ_ONLY alert plus a
+> false success toast. `release()` also returns early. Third, the undismissable "Meet Your Team"
+> modal is suppressed in both views.
+
 ---
 
 ## Task 16: The watch banner and reasoning strip
