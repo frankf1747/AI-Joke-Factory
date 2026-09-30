@@ -4780,6 +4780,8 @@ Add `readSession` to the `./session` import, then append inside the `test.descri
     await expect(watch.getByTestId('watch-banner')).toContainText('Bot 01B');
     await expect(watch.getByText('Marketing Desk', { exact: true })).toBeVisible({ timeout: 30_000 });
     await expect(watch.locator('fieldset[disabled]')).toHaveCount(1);
+    await expect(watch.getByTitle('Logout')).toHaveCount(0);
+    await expect(watch.locator('[draggable="true"]')).toHaveCount(0);
 
     // The bot's reasoning arrives live over the channel.
     await expect(watch.getByTestId('reasoning-entry').first()).toBeVisible({ timeout: 3 * 60_000 });
@@ -4788,15 +4790,15 @@ Add `readSession` to the `./session` import, then append inside the `test.descri
     expect((await readSession(page)).userId).toBe(String(s.instructorId));
     expect((await readSession(watch)).userId).toBe(String(s.instructorId));
 
-    // Removing the watched bot 404s the watch tab's session. Its logout must not
-    // clear the instructor's identity.
+    // Removing the watched bot 404s the watch tab's session. The tab must say so,
+    // and its logout must not clear the instructor's identity.
     await page.getByRole('button', { name: 'Stop' }).click();
     await page.getByRole('button', { name: 'Remove bots' }).click();
     await expect.poll(async () => {
       const after = participantsOf(await s.instructor.instructorLobby(s.roundId));
       return after.filter(p => isBotName(p.name)).length;
     }, { timeout: 60_000 }).toBe(0);
-    await watch.waitForTimeout(10_000);
+    await expect(watch.getByTestId('watch-bot-left')).toBeVisible({ timeout: 60_000 });
     expect((await readSession(page)).userId).toBe(String(s.instructorId));
 
     // And the instructor tab is still the instructor after a reload.
@@ -4817,7 +4819,7 @@ Start `npx vite preview --port 4173 --strictPort` in the background, confirm `cu
 E2E_FE_URL=http://localhost:4173 E2E_ADMIN_PASSWORD="$(cat ~/.jokefactory-admin-password)" npx playwright test scripts/e2e/browser/bots.spec.ts --reporter=line
 ```
 
-Expected: `2 passed`. Stop the preview server afterwards.
+Expected: `2 passed` (37.1s on 2026-09-29). Stop the preview server afterwards.
 
 - [ ] **Step 3: Commit**
 
@@ -4827,6 +4829,14 @@ git commit -m "test(e2e): prove a watch tab is read-only and leaves the instruct
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+
+
+> **Revised in review.** The test above is the committed version (b99f117). It adds three watch
+> assertions to the first draft: the Logout button is absent, no card is draggable, and the tab
+> shows `watch-bot-left` after Remove bots, in place of a blind 10-second wait. Remove bots deletes
+> the user rows, so `/session/me` 404s. Verified by hand as well: 👁 → Bot 02B's real Marketing
+> Desk, "Balanced: keeping 4 of 5 — …" in the strip, 0 enabled buttons inside the disabled
+> fieldset, and the instructor's `joke_factory_user_id` untouched throughout.
 
 ---
 
