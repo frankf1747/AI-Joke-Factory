@@ -16,8 +16,9 @@ import { isCompleteProfile } from './IdealProfilePicker';
 import { getApiBaseUrl, isMockApiMode } from '../services/apiClient';
 import { MAX_BOT_TEAMS, PERSONAS, PERSONA_ORDER, personaSequence, type PersonaId } from '../services/bots/personas';
 import {
-  SPEEDS, type EngineStatus, type FromWorker, type ProbeResult, type SeatStatus, type Speed, type ToWorker,
+  SPEEDS, type Command, type EngineStatus, type FromWorker, type ProbeResult, type SeatStatus, type Speed, type ToWorker,
 } from '../services/bots/protocol';
+import { panelControls, probeIsStale, type Pending } from './botPanelLogic';
 
 export function botPanelRequested(search: string): boolean {
   return new URLSearchParams(search).get('bots') === '1';
@@ -25,7 +26,7 @@ export function botPanelRequested(search: string): boolean {
 
 const PROBE_EVERY_MS = 5_000;
 const DEFAULT_COUNTS: Record<PersonaId, number> = { CAREFUL: 4, BALANCED: 4, SPRAY: 4 };
-type Pending = 'start' | 'stop' | 'remove' | 'reform' | null;
+const COMMAND_LABEL: Record<Command, string> = { start: 'Start', stop: 'Stop', remove: 'Remove bots', reform: 'Re-form teams' };
 
 function clampCount(raw: string): number {
   const n = Math.floor(Number(raw));
@@ -43,12 +44,18 @@ export const BotPanel: React.FC = () => {
   const { user, roundId, config } = useGame();
   const workerRef = useRef<Worker | null>(null);
   const commandIdRef = useRef(0);
+  /** For the worker's message handler, which outlives any one roundId. */
+  const roundIdRef = useRef<number | null>(null);
   const [counts, setCounts] = useState<Record<PersonaId, number>>(DEFAULT_COUNTS);
   const [speed, setSpeed] = useState<Speed>(1);
   const [status, setStatus] = useState<EngineStatus | null>(null);
   const [probe, setProbe] = useState<ProbeResult | null>(null);
+  /** When the last lobby reading arrived, or when the panel started waiting for one. */
+  const [heardAt, setHeardAt] = useState(() => Date.now());
+  /** Re-read on every probe tick, so staleness is re-evaluated without a reply. */
+  const [now, setNow] = useState(() => Date.now());
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState<Pending>(null);
+  const [pending, setPending] = useState<Pending | null>(null);
 
   const mock = isMockApiMode();
   const instructorId = user ? Number(user.user_id) : null;
@@ -58,24 +65,37 @@ export const BotPanel: React.FC = () => {
 
   useEffect(() => {
     if (instructorId == null || mock) return undefined;
+    // A new worker holds a new, idle engine: nothing from the old one applies.
+    setStatus(null);
+    setPending(null);
+    setError(null);
+    setProbe(null);
+    setHeardAt(Date.now());
     const worker = new Worker(new URL('../services/bots/worker.ts', import.meta.url), { type: 'module' });
     workerRef.current = worker;
+    const probeNow = () => {
+      if (roundIdRef.current != null) worker.postMessage({ type: 'probe', roundId: roundIdRef.current } satisfies ToWorker);
+    };
     worker.onmessage = (event: MessageEvent<FromWorker>) => {
       const m = event.data;
       if (m.type === 'status') setStatus(m.status);
-      else if (m.type === 'probe') setProbe(m.result);
-      else if (m.type === 'done') {
-        if (!m.ok) {
-          setError(m.message);
-          setPending(null);
-        }
+      else if (m.type === 'probe') {
+        setProbe(m.result);
+        setHeardAt(Date.now());
+      } else if (m.type === 'done') {
+        // Only the acknowledgement of the command still pending clears it: a
+        // start superseded by Stop must not clear Stop's pending state.
+        setPending(p => (p?.id === m.commandId ? null : p));
+        if (!m.ok) setError(`${COMMAND_LABEL[m.command]} failed: ${m.message}`);
+        // The lobby just changed; don't leave the buttons on a reading up to 5 s old.
+        probeNow();
       } else if (m.type === 'fatal') {
         setError(m.message);
-        setPending(null);
       }
     };
     const init: ToWorker = { type: 'init', baseUrl: getApiBaseUrl(), instructorUserId: instructorId, seed: `bots-${Date.now()}` };
     worker.postMessage(init);
+    probeNow();
     return () => {
       worker.terminate();
       workerRef.current = null;
@@ -83,23 +103,21 @@ export const BotPanel: React.FC = () => {
   }, [instructorId, mock]);
 
   useEffect(() => {
+    roundIdRef.current = roundId == null ? null : Number(roundId);
+    // Fail closed until this round's own reading arrives.
+    setProbe(null);
+    const started = Date.now();
+    setHeardAt(started);
+    setNow(started);
     if (roundId == null || instructorId == null || mock) return undefined;
-    const tick = () => send({ type: 'probe', roundId: Number(roundId) });
+    const tick = () => {
+      setNow(Date.now());
+      send({ type: 'probe', roundId: Number(roundId) });
+    };
     tick();
     const timer = window.setInterval(tick, PROBE_EVERY_MS);
     return () => window.clearInterval(timer);
   }, [roundId, instructorId, mock, send]);
-
-  // A command is finished when the status it was meant to produce arrives.
-  useEffect(() => {
-    if (!status || pending === null) return;
-    const done =
-      (pending === 'start' && status.running) ||
-      (pending === 'stop' && !status.running) ||
-      (pending === 'remove' && status.teams.length === 0) ||
-      (pending === 'reform' && !status.scrambled);
-    if (done) setPending(null);
-  }, [status, pending]);
 
   if (mock) {
     return (
@@ -109,29 +127,35 @@ export const BotPanel: React.FC = () => {
     );
   }
 
-  const total = PERSONA_ORDER.reduce((sum, id) => sum + counts[id], 0);
-  const running = status?.running ?? false;
-  const roundActive = probe?.roundStatus === 'ACTIVE';
-  // Only a round that has not started can take bots: the backend refuses to
-  // start an ACTIVE or ENDED one (usecase/instructor.go:232-237).
-  const roundOpen = probe?.roundStatus === 'CONFIGURED';
-  const sizeOk = total >= 1 && total <= MAX_BOT_TEAMS;
-  const profileOk = isCompleteProfile(config.idealProfile);
-  const idle = !running && pending === null;
-  const canRunAllBots = idle && sizeOk && profileOk && probe !== null && probe.humans === 0 && roundOpen;
-  const canFill = idle && sizeOk && probe !== null && roundOpen;
-  const nothingToRemove = (probe?.bots ?? 0) === 0 && (status?.teams.length ?? 0) === 0;
+  const controls = panelControls({
+    hasRound: roundId != null,
+    probe,
+    probeStale: probeIsStale(heardAt, now),
+    status,
+    pending,
+    counts,
+    profileComplete: isCompleteProfile(config.idealProfile),
+  });
+  const { idle, total } = controls;
+  const reasons = [...new Set([...controls.runAllBotsBlockedBy, ...controls.fillBlockedBy])];
+
+  /** Every command goes through here: a fresh id, a fresh error line, pending keyed to the id. */
+  const issue = (command: Command, message: (commandId: number) => ToWorker) => {
+    if (!workerRef.current) return;
+    const id = ++commandIdRef.current;
+    setError(null);
+    setPending({ id, command });
+    send(message(id));
+  };
 
   const start = (startRound: boolean) => {
     if (roundId == null) return;
-    setError(null);
-    setPending('start');
     const teams = personaSequence(counts).map((persona, i) => ({ index: i + 1, persona }));
-    send({
+    issue('start', commandId => ({
       type: 'start',
-      commandId: ++commandIdRef.current,
+      commandId,
       options: { roundId: Number(roundId), teams, speed, startRound, idealProfile: { ...config.idealProfile } },
-    });
+    }));
   };
 
   const changeSpeed = (next: Speed) => {
@@ -170,66 +194,57 @@ export const BotPanel: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => start(true)} disabled={!canRunAllBots}>Run all-bot class</Button>
-          <Button variant="secondary" onClick={() => start(false)} disabled={!canFill}>Fill with bot teams</Button>
-          <Button variant="secondary" onClick={() => { setPending('stop'); send({ type: 'stop', commandId: ++commandIdRef.current }); }} disabled={!running}>Stop</Button>
+          <Button onClick={() => start(true)} disabled={!controls.canRunAllBots}>Run all-bot class</Button>
+          <Button variant="secondary" onClick={() => start(false)} disabled={!controls.canFill}>Fill with bot teams</Button>
+          <Button
+            variant="secondary"
+            onClick={() => issue('stop', commandId => ({ type: 'stop', commandId }))}
+            disabled={!controls.canStop}
+          >
+            Stop
+          </Button>
           <Button
             variant="secondary"
             onClick={() => {
               if (roundId == null) return;
-              setPending('remove');
-              send({ type: 'remove', commandId: ++commandIdRef.current, roundId: Number(roundId) });
+              issue('remove', commandId => ({ type: 'remove', commandId, roundId: Number(roundId) }));
             }}
-            disabled={pending !== null || nothingToRemove}
+            disabled={!controls.canRemove}
           >
             Remove bots
           </Button>
           {status?.scrambled && (
-            // Disabled while any command is in flight: two overlapping re-forms each
-            // reshuffle the humans and interleave their patches, which can strand a
-            // human team. The engine also serializes them; this stops the double-click.
-            <Button onClick={() => { setPending('reform'); send({ type: 'reform', commandId: ++commandIdRef.current }); }} disabled={pending !== null}>
+            <Button onClick={() => issue('reform', commandId => ({ type: 'reform', commandId }))} disabled={!controls.canReform}>
               Re-form teams
             </Button>
           )}
         </div>
 
-        <p className="text-xs text-gray-500">
-          Lobby: {probe ? `${probe.humans} human${probe.humans === 1 ? '' : 's'}, ${probe.bots} bot${probe.bots === 1 ? '' : 's'}` : 'checking…'}
-          {' · '}Round: {probe?.roundStatus ?? '…'}
-          {' · '}Classification calls: {status?.classificationCalls ?? 0}
-          {pending ? ` · ${pending}…` : ''}
-        </p>
-        {!profileOk && (
-          <p className="text-xs text-amber-700">Set every dimension of the hidden ideal joke before running an all-bot class.</p>
-        )}
-        {probe && probe.humans > 0 && idle && (
-          <p className="text-xs text-amber-700">
-            All-bot class needs an empty lobby. Use Fill with bot teams to play alongside the {probe.humans} human{probe.humans === 1 ? '' : 's'} waiting.
+        <div aria-live="polite" className="space-y-1">
+          <p className="text-xs text-gray-500">
+            Lobby: {probe ? `${probe.humans} human${probe.humans === 1 ? '' : 's'}, ${probe.bots} bot${probe.bots === 1 ? '' : 's'}` : 'checking…'}
+            {' · '}Round: {probe?.roundStatus ?? '…'}
+            {' · '}Classification calls: {status?.classificationCalls ?? 0}
           </p>
-        )}
-        {roundActive && idle && (
-          <p className="text-xs text-amber-700">A round is active. Bots can only be added before it starts.</p>
-        )}
-        {probe?.roundStatus === 'ENDED' && idle && (
-          <p className="text-xs text-amber-700">This round has ended. Bots need a round that has not started yet.</p>
-        )}
-        {status?.warnings.map(w => <p key={w} className="text-xs text-amber-700">{w}</p>)}
-        {status?.scrambled && (
-          <p className="text-xs text-rose-700">Teams were re-shuffled — probably Auto-Assign. Bots are paused until you re-form teams.</p>
-        )}
-        {error && <p className="text-xs text-rose-700">Error: {error}</p>}
+          {reasons.map(r => <p key={r} className="text-xs text-amber-700">{r}</p>)}
+          {status?.warnings.map(w => <p key={w} className="text-xs text-amber-700">{w}</p>)}
+          {status?.scrambled && (
+            <p className="text-xs text-rose-700">Teams were re-shuffled — probably Auto-Assign. Bots are paused until you re-form teams.</p>
+          )}
+          {error && <p className="text-xs text-rose-700">Error: {error}</p>}
+        </div>
 
         {status && status.teams.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
+              <caption className="sr-only">Bot teams, and what each seat is doing</caption>
               <thead className="text-gray-500">
                 <tr>
-                  <th className="py-1 pr-3">Bot team</th>
-                  <th className="pr-3">Persona</th>
-                  <th className="pr-3">Joke Maker</th>
-                  <th className="pr-3">Marketing</th>
-                  <th className="pr-3">Published</th>
+                  <th scope="col" className="py-1 pr-3">Bot team</th>
+                  <th scope="col" className="pr-3">Persona</th>
+                  <th scope="col" className="pr-3">Joke Maker</th>
+                  <th scope="col" className="pr-3">Marketing</th>
+                  <th scope="col" className="pr-3">Published</th>
                 </tr>
               </thead>
               <tbody>
