@@ -251,7 +251,7 @@ const JokeMaker: React.FC = () => {
     <RoleLayout>
       {/* Round 2: Team popup */}
       <Modal
-        isOpen={config.round === 2 && config.showTeamPopup && !dismissedTeamPopup}
+        isOpen={!watching && config.round === 2 && config.showTeamPopup && !dismissedTeamPopup}
         onClose={() => setDismissedTeamPopup(true)}
         title="Meet Your Team"
         showCloseButton={false}

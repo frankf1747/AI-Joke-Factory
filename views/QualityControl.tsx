@@ -256,7 +256,9 @@ const BatchSplitter: React.FC<{
 
           {/* read-only textarea on top — caret still moves, but the text can't change.
               readOnly (not disabled) keeps focus, caret, selection and key handling,
-              which the mirror highlight and the floating Split button both depend on. */}
+              which the mirror highlight and the floating Split button both depend on.
+              In a watch tab the enclosing Marketing Desk fieldset disables it as well,
+              and that is intended: the watcher must not place cuts for the bot. */}
           <textarea
             ref={taRef}
             value={working}
@@ -308,6 +310,9 @@ const BatchSplitter: React.FC<{
 /* ============================ Marketing screen ============================ */
 const QualityControl: React.FC = () => {
   const { user, roster, qcQueue, publishBatch, splitBatch, unsplitBatch, config, teamSummary, teamFeedback, batches } = useGame();
+
+  /* A watch tab shows a bot's seat read-only: no nudges, no modals, no writes. */
+  const watching = isWatchMode();
 
   /* Live queue from API */
   const incomingJokes = useMemo(() => {
@@ -429,6 +434,7 @@ const QualityControl: React.FC = () => {
   );
 
   const release = async () => {
+    if (watching) return;
     if (!canRelease || !qcQueue) return;
     /* Only titles survive to the wire now. The backend stores no rating, no tag,
        no batch feedback and no topic, so the old ratings/tags/topics payloads had
@@ -475,7 +481,7 @@ const QualityControl: React.FC = () => {
      block only translates it to and from React. */
 
   // Arm on arrival at the selection view; disarm if the batch goes away.
-  const batchReady = !needsSplit && orderIds.length > 0;
+  const batchReady = !watching && !needsSplit && orderIds.length > 0;
   React.useEffect(() => {
     dispatchNudge(batchReady ? { type: 'BATCH_READY' } : { type: 'BATCH_CLEARED' });
     // queueSig, not orderIds — reordering cards must not restart the clock.
@@ -537,13 +543,11 @@ const QualityControl: React.FC = () => {
     [batches, user?.team],
   );
 
-  const watching = isWatchMode();
-
   return (
     <RoleLayout>
       {/* Round 2: Team popup */}
       <Modal
-        isOpen={config.round === 2 && config.showTeamPopup && !dismissedTeamPopup}
+        isOpen={!watching && config.round === 2 && config.showTeamPopup && !dismissedTeamPopup}
         onClose={() => setDismissedTeamPopup(true)}
         title="Meet Your Team"
         showCloseButton={false}
@@ -817,7 +821,7 @@ const QualityControl: React.FC = () => {
 
       {/* ---- Decision nudge 1: the gentle one ---- */}
       <Modal
-        isOpen={nudge.phase === 'nudge1'}
+        isOpen={!watching && nudge.phase === 'nudge1'}
         onClose={() => dispatchNudge({ type: 'DISMISS' })}
         title={mayPublishNothing ? 'Time to make a call' : 'Time to ship something'}
         maxWidth="max-w-md"
@@ -856,7 +860,7 @@ const QualityControl: React.FC = () => {
       {/* ---- Decision nudge 2: the last one. Carries the release fields so
               "publish now" is never a dead end. ---- */}
       <Modal
-        isOpen={nudge.phase === 'nudge2'}
+        isOpen={!watching && nudge.phase === 'nudge2'}
         onClose={() => dispatchNudge({ type: 'DISMISS' })}
         title={
           discardingAll
