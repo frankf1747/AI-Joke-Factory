@@ -9,8 +9,12 @@
  * less ever beat publishing more?" It cannot answer whether well-chosen jokes
  * beat more jokes; that needs a quality-aware persona, which fits this table
  * without changing the engine.
+ *
+ * The one exception is the Learner, which still cannot see fit but can see
+ * sales: a human Marketing seat reads its own team's batch list with each
+ * joke's sold_count, and the Learner reads exactly that and nothing more.
  */
-export type PersonaId = 'CAREFUL' | 'BALANCED' | 'SPRAY';
+export type PersonaId = 'CAREFUL' | 'BALANCED' | 'SPRAY' | 'LEARNER';
 
 export interface Persona {
   readonly id: PersonaId;
@@ -21,6 +25,14 @@ export interface Persona {
   readonly waitForFeedback: boolean;
   /** How many of `jokeCount` to publish, before round rules are applied. */
   readonly publish: (jokeCount: number, rand: () => number) => number;
+  /**
+   * The Joke Maker's batch size from round 2 on, capped at the round's
+   * batch_size. Round 1 always uses batch_size, because Marketing must split
+   * a round-1 batch into exactly that many jokes (usecase/marketing.go:98-102).
+   */
+  readonly leanBatchSize?: number;
+  /** Marketing remembers which joke texts sold and chooses with chooseWithMemory. */
+  readonly learns?: boolean;
 }
 
 export const PERSONAS: Readonly<Record<PersonaId, Persona>> = {
@@ -36,9 +48,14 @@ export const PERSONAS: Readonly<Record<PersonaId, Persona>> = {
     id: 'SPRAY', label: 'Spray', submitIntervalMs: 45_000, waitForFeedback: false,
     publish: n => n,
   },
+  LEARNER: {
+    id: 'LEARNER', label: 'Learner', submitIntervalMs: 60_000, waitForFeedback: true,
+    publish: n => Math.min(2, n), leanBatchSize: 3, learns: true,
+  },
 };
 
-export const PERSONA_ORDER: readonly PersonaId[] = ['CAREFUL', 'BALANCED', 'SPRAY'];
+/** Panel and team-number order. New personas go at the end so existing ones keep their slots. */
+export const PERSONA_ORDER: readonly PersonaId[] = ['CAREFUL', 'BALANCED', 'SPRAY', 'LEARNER'];
 
 /** Marketing's pause after each stage, at 1×, so a watched screen shows every state. */
 export const DWELL_MS = { claim: 10_000, split: 15_000, decide: 10_000 } as const;
@@ -70,6 +87,35 @@ export function choosePublished(
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
   return new Set(pool.slice(0, Math.max(0, Math.min(count, pool.length))));
+}
+
+/** What the Learner has seen happen to each joke text it published. */
+export type JokeMemory = Map<string, 'sold' | 'unsold'>;
+
+/**
+ * The Learner's decision: keep every joke it has seen sell, drop every one it
+ * has seen fail, and fill the remaining slots from jokes it has not seen —
+ * chosen at random, because it has nothing else to go on. It sees only what a
+ * human Marketing seat sees (sold counts on its own team's batches).
+ *
+ * Round 1 refuses a batch with nothing published (usecase/marketing.go:218),
+ * so there it publishes at least one joke, a known dud if that is all it has.
+ */
+export function chooseWithMemory(
+  jokes: readonly { joke_id: number; joke_text: string }[],
+  memory: JokeMemory, count: number, rand: () => number, roundNumber = 2,
+): Set<number> {
+  const keep = new Set<number>();
+  const unknown: number[] = [];
+  for (const j of jokes) {
+    const seen = memory.get(j.joke_text.trim());
+    if (seen === 'sold') keep.add(j.joke_id);
+    else if (seen === undefined) unknown.push(j.joke_id);
+  }
+  const want = Math.max(roundNumber === 1 ? 1 : 0, count);
+  for (const id of choosePublished(unknown, Math.max(0, want - keep.size), rand)) keep.add(id);
+  if (keep.size === 0 && roundNumber === 1 && jokes.length > 0) keep.add(jokes[0].joke_id);
+  return keep;
 }
 
 /** Spread a duration by ±`spread` so bots never move in lockstep. */

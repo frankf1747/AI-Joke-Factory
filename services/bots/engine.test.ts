@@ -6,6 +6,7 @@ import { BotEngine, SEAT_CHECK_MS, fitPieces, splitBlob, titleOf, wallClockSteps
 import { botName, isBotName } from './naming';
 import { BATCH_CAP_PER_ROUND } from './personas';
 import type { BotApi } from './api';
+import type { BatchSubmitRequest } from '../../types/api';
 import type { FromWorker, StartOptions } from './protocol';
 import { FakeWorld, type FakeUser } from './testing/fakeApi';
 
@@ -676,6 +677,94 @@ describe('BotEngine', () => {
     const texts = engine.historyFor(marketer.id).map(e => e.text);
     expect(texts.some(t => /refused this \(403\)/.test(t))).toBe(true);
     expect(texts.filter(t => t.startsWith('error:'))).toEqual([]);
+  });
+});
+
+describe('Learner bot', () => {
+  /** Wraps the client so every submitted blob is recorded with its round and joke count. */
+  function recordSubmits(into: Array<{ roundId: number; jokes: number }>): (api: BotApi) => BotApi {
+    const wrap = (api: BotApi): BotApi => new Proxy(api, {
+      get: (target, prop, receiver) => {
+        if (prop === 'as') return (id: number, label: string) => wrap(target.as(id, label));
+        if (prop === 'submitBatch') {
+          return async (roundId: number, body: BatchSubmitRequest) => {
+            const result = await target.submitBatch(roundId, body);
+            const raw = 'raw_text' in body && body.raw_text ? body.raw_text : '';
+            into.push({ roundId, jokes: splitBlob(raw).length });
+            return result;
+          };
+        }
+        const value: unknown = Reflect.get(target, prop, receiver);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+    return wrap;
+  }
+
+  it('draws batches of 3 in round 2 and of batch_size in round 1', async () => {
+    const submits: Array<{ roundId: number; jokes: number }> = [];
+    const { world, engine } = setup([], { wrapApi: recordSubmits(submits) });
+    expect(world.round.batch_size).toBe(5);
+    await engine.start(options({ teams: [{ index: 1, persona: 'LEARNER' }] }));
+    const team = teamOf(world, botName(1, 'A'));
+    await until(() => submits.some(s => s.roundId === 1), 'a round-1 batch');
+
+    world.round = { ...world.round, id: 2, round_number: 2, status: 'ACTIVE' };
+    await until(() => submits.some(s => s.roundId === 2), 'a round-2 batch');
+    const round2 = new Set(world.batches.filter(b => b.roundId === 2 && b.teamId === team).map(b => b.id));
+    await until(() => world.decisions.some(d => round2.has(d.batchId)), 'a round-2 publish');
+    engine.stop();
+
+    const r1 = submits.filter(s => s.roundId === 1).map(s => s.jokes);
+    const r2 = submits.filter(s => s.roundId === 2).map(s => s.jokes);
+    expect(r1.length).toBeGreaterThan(0);
+    expect(r1.every(n => n === 5)).toBe(true);
+    expect(r2.length).toBeGreaterThan(0);
+    expect(r2.every(n => n === 3)).toBe(true);
+    // Learner publishes two of its three.
+    expect(world.decisions.find(d => round2.has(d.batchId))).toMatchObject({ published: 2, total: 3 });
+  });
+
+  it('remembers sold jokes from the team batch list and keeps them next time', async () => {
+    const { world, engine } = setup();
+    world.round.round_number = 2; // a later round: batches of 3, two published
+    await engine.start(options({ teams: [{ index: 1, persona: 'LEARNER' }] }));
+    const team = teamOf(world, botName(1, 'A'));
+    if (team == null) throw new Error('bot team missing');
+    await until(() => world.decisions.filter(d => d.teamId === team).length >= 3, 'three processed batches');
+
+    // Batches 1 and 2 each published two jokes: one sold, one did not. Batch 3
+    // has since been processed, so neither unsold joke is merely "not sold yet".
+    const publishedIn = (n: number) => {
+      const b = world.batches.find(x => x.id === world.decisions[n].batchId);
+      const [sold, unsold] = b?.jokes.filter(j => j.published) ?? [];
+      if (!sold || !unsold) throw new Error(`batch ${n + 1} published fewer than two jokes`);
+      return { sold, unsold };
+    };
+    const one = publishedIn(0);
+    const two = publishedIn(1);
+    world.setSold(one.sold.joke_id, 3);
+    world.setSold(two.sold.joke_id, 1);
+
+    // The deck deals with replacement, so texts recur: deal all four again,
+    // with a joke the Learner has never seen, at the front of the team's queue.
+    const deal = (joke_text: string) => ({ joke_id: world.newJokeId(), joke_text, published: false });
+    const again = {
+      id: world.newBatchId(), roundId: world.round.id, teamId: team, rawText: null, state: 'QUEUED' as const, lockedBy: null,
+      jokes: [
+        deal(one.unsold.joke_text), deal(one.sold.joke_text), deal(two.unsold.joke_text), deal(two.sold.joke_text),
+        deal('A joke this team has never seen before, dealt fresh.'),
+      ],
+    };
+    world.batches.unshift(again);
+    await until(() => world.decisions.some(d => d.batchId === again.id), 'the repeat batch to publish');
+    engine.stop();
+
+    const published = again.jokes.map(j => j.published);
+    // Seen selling: kept. Seen not selling: dropped. Two slots, both filled by hits.
+    expect(published).toEqual([false, true, false, true, false]);
+    // The publish request itself said so.
+    expect(world.decisions.find(d => d.batchId === again.id)).toMatchObject({ published: 2, total: 5 });
   });
 });
 

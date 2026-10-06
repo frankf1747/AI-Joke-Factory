@@ -17,7 +17,7 @@ import { Deck } from './deck';
 import { botName, isBotName, parseBotName, SEAT_ROLE, type Seat } from './naming';
 import {
   BATCH_CAP_PER_ROUND, DWELL_MS, FEEDBACK_WAIT_MS, IDLE_POLL_MS, MAX_BOT_TEAMS, PERSONAS,
-  QUEUE_POLL_MS, choosePublished, jitter, publishCount, type PersonaId,
+  QUEUE_POLL_MS, chooseWithMemory, choosePublished, jitter, publishCount, type JokeMemory, type PersonaId,
 } from './personas';
 import { participantsOf, planPlacement, teamsNeeded } from './placement';
 import type {
@@ -196,6 +196,8 @@ interface TeamRuntime {
   published: number;
   /** The last publish's joke ids; Careful waits for their feedback. */
   awaitingFeedback: { roundId: number; jokeIds: number[] } | null;
+  /** Learner only: what each published joke text did on the market, by text. */
+  memory: JokeMemory;
 }
 
 function newSeat(index: number, seat: Seat): SeatRuntime {
@@ -207,6 +209,7 @@ function newTeam(spec: BotTeamSpec): TeamRuntime {
     index: spec.index, persona: spec.persona, teamId: null,
     jm: newSeat(spec.index, 'A'), marketing: newSeat(spec.index, 'B'),
     submittedByRound: new Map(), publishedByRound: new Map(), published: 0, awaitingFeedback: null,
+    memory: new Map(),
   };
 }
 
@@ -548,7 +551,12 @@ export class BotEngine {
         if (persona.waitForFeedback) await this.waitUntilSettled(me, team, round.id, signal);
         if (signal.aborted) break;
 
-        const jokes = deck.draw(round.batch_size);
+        // Round 1 must split into exactly batch_size, so a lean batch size
+        // applies only from round 2 (usecase/marketing.go:98-102).
+        const size = persona.leanBatchSize && round.round_number >= 2
+          ? Math.min(persona.leanBatchSize, round.batch_size)
+          : round.batch_size;
+        const jokes = deck.draw(size);
         this.setActivity(seat, 'submitting a batch', signal);
         await me.submitBatch(round.id, { team_id: team.teamId as number, raw_text: asRawBlob(jokes) });
         // A batch in flight when Stop is pressed lands but is not counted or logged.
@@ -679,7 +687,13 @@ export class BotEngine {
         }
 
         const count = publishCount(persona, jokes.length, round.round_number, rand);
-        const keep = choosePublished(jokes.map(j => j.joke_id), count, rand);
+        if (persona.learns) {
+          await this.learn(me, team, round.id, signal);
+          if (signal.aborted) break;
+        }
+        const keep = persona.learns
+          ? chooseWithMemory(jokes, team.memory, count, rand, round.round_number)
+          : choosePublished(jokes.map(j => j.joke_id), count, rand);
         const kept = jokes.filter(j => keep.has(j.joke_id)).map(j => `"${titleOf(j.joke_text)}"`);
         this.log(team, seat, `${persona.label}: keeping ${keep.size} of ${jokes.length} — ${kept.join(', ') || 'none'}`, signal);
         this.setActivity(seat, `publishing ${keep.size} of ${jokes.length}`, signal);
@@ -706,6 +720,30 @@ export class BotEngine {
         if (!(await this.recover(team, seat, err, attempt, signal))) break;
       }
     }
+  }
+
+  /**
+   * Learner only: read the team's own batch list — what a human Marketing seat
+   * sees — and remember which published joke texts have sold. A joke counts as
+   * 'unsold' only once a LATER batch has been processed, so a joke that merely
+   * has not sold yet is not written off. 'sold' always wins over 'unsold'.
+   */
+  private async learn(me: BotApi, team: TeamRuntime, roundId: number, signal: AbortSignal): Promise<void> {
+    if (team.teamId == null) return;
+    const list = (await me.teamBatches(roundId, team.teamId)).batches ?? [];
+    if (signal.aborted) return;
+    const processed = list
+      .filter(b => b.processed_at)
+      .sort((a, b) => String(a.processed_at).localeCompare(String(b.processed_at)));
+    processed.forEach((b, i) => {
+      const isLatest = i === processed.length - 1;
+      for (const j of b.jokes ?? []) {
+        if (j.publish_status !== 'PUBLISHED') continue;
+        const key = j.joke_text.trim();
+        if ((j.sold_count ?? 0) > 0) team.memory.set(key, 'sold');
+        else if (!isLatest && !team.memory.has(key)) team.memory.set(key, 'unsold');
+      }
+    });
   }
 
   /**

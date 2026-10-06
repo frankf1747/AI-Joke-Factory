@@ -26,7 +26,7 @@ export function botPanelRequested(search: string): boolean {
 }
 
 const PROBE_EVERY_MS = 5_000;
-const DEFAULT_COUNTS: Record<PersonaId, number> = { CAREFUL: 4, BALANCED: 4, SPRAY: 4 };
+const DEFAULT_COUNTS: Record<PersonaId, number> = { CAREFUL: 4, BALANCED: 4, SPRAY: 4, LEARNER: 0 };
 const COMMAND_LABEL: Record<Command, string> = { start: 'Start', stop: 'Stop', remove: 'Remove bots', reform: 'Re-form teams' };
 
 function clampCount(raw: string): number {

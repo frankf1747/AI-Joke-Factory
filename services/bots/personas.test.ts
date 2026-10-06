@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { seededRng } from '../shared/jokes';
 import {
-  PERSONAS, choosePublished, jitter, personaSequence, publishCount, type Persona,
+  PERSONAS, PERSONA_ORDER, chooseWithMemory, choosePublished, jitter, personaSequence, publishCount, type Persona,
 } from './personas';
 
 const always = (x: number) => () => x;
@@ -64,12 +64,37 @@ describe('jitter', () => {
 
 describe('personaSequence', () => {
   it('interleaves personas so each spans the team numbers', () => {
-    expect(personaSequence({ CAREFUL: 2, BALANCED: 2, SPRAY: 2 }))
+    expect(personaSequence({ CAREFUL: 2, BALANCED: 2, SPRAY: 2, LEARNER: 0 }))
       .toEqual(['CAREFUL', 'BALANCED', 'SPRAY', 'CAREFUL', 'BALANCED', 'SPRAY']);
   });
 
   it('handles uneven and empty counts', () => {
-    expect(personaSequence({ CAREFUL: 2, BALANCED: 0, SPRAY: 1 })).toEqual(['CAREFUL', 'SPRAY', 'CAREFUL']);
-    expect(personaSequence({ CAREFUL: 0, BALANCED: 0, SPRAY: 0 })).toEqual([]);
+    expect(personaSequence({ CAREFUL: 2, BALANCED: 0, SPRAY: 1, LEARNER: 0 })).toEqual(['CAREFUL', 'SPRAY', 'CAREFUL']);
+    expect(personaSequence({ CAREFUL: 0, BALANCED: 0, SPRAY: 0, LEARNER: 0 })).toEqual([]);
+  });
+});
+
+describe('Learner persona', () => {
+  it('is in the order and publishes 2 of 3 by default', () => {
+    expect(PERSONA_ORDER).toContain('LEARNER');
+    expect(PERSONAS.LEARNER.leanBatchSize).toBe(3);
+    expect(publishCount(PERSONAS.LEARNER, 3, 2, () => 0.5)).toBe(2);
+  });
+
+  it('keeps jokes it has seen sell, drops ones it has seen fail, fills from unknowns', () => {
+    const memory = new Map<string, 'sold' | 'unsold'>([['hit', 'sold'], ['dud', 'unsold']]);
+    const jokes = [
+      { joke_id: 1, joke_text: 'hit' }, { joke_id: 2, joke_text: 'dud' }, { joke_id: 3, joke_text: 'new' }, { joke_id: 4, joke_text: 'other' },
+    ];
+    const keep = chooseWithMemory(jokes, memory, 2, () => 0);
+    expect(keep.has(1)).toBe(true);
+    expect(keep.has(2)).toBe(false);
+    expect(keep.size).toBe(2); // the hit plus one unknown
+  });
+
+  it('never publishes nothing in round 1', () => {
+    const memory = new Map<string, 'sold' | 'unsold'>([['dud', 'unsold']]);
+    const keep = chooseWithMemory([{ joke_id: 2, joke_text: 'dud' }], memory, 0, () => 0, 1);
+    expect(keep.size).toBe(1);
   });
 });

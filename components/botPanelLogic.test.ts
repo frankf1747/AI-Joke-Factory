@@ -26,7 +26,7 @@ function input(over: Partial<PanelInput> = {}): PanelInput {
     probeStale: false,
     status: status(),
     pending: null,
-    counts: { CAREFUL: 1, BALANCED: 1, SPRAY: 1 },
+    counts: { CAREFUL: 1, BALANCED: 1, SPRAY: 1, LEARNER: 0 },
     profileComplete: true,
     ...over,
   };
@@ -49,8 +49,8 @@ describe('panelControls: Run all-bot class and Fill', () => {
       input({ probe: probe({ roundStatus: 'ACTIVE' }) }),
       input({ probe: probe({ roundStatus: 'ENDED' }) }),
       input({ probe: probe({ humans: 3 }) }),
-      input({ counts: { CAREFUL: 0, BALANCED: 0, SPRAY: 0 } }),
-      input({ counts: { CAREFUL: MAX_BOT_TEAMS, BALANCED: 1, SPRAY: 0 } }),
+      input({ counts: { CAREFUL: 0, BALANCED: 0, SPRAY: 0, LEARNER: 0 } }),
+      input({ counts: { CAREFUL: MAX_BOT_TEAMS, BALANCED: 1, SPRAY: 0, LEARNER: 0 } }),
       input({ profileComplete: false }),
       input({ pending: { id: 1, command: 'start' } }),
       input({ status: status({ running: true }) }),
@@ -116,14 +116,14 @@ describe('panelControls: Run all-bot class and Fill', () => {
   });
 
   it('needs at least one bot team', () => {
-    const c = panelControls(input({ counts: { CAREFUL: 0, BALANCED: 0, SPRAY: 0 } }));
+    const c = panelControls(input({ counts: { CAREFUL: 0, BALANCED: 0, SPRAY: 0, LEARNER: 0 } }));
     expect(c.runAllBotsBlockedBy).toEqual([REASONS.noTeams]);
     expect(c.fillBlockedBy).toEqual([REASONS.noTeams]);
   });
 
   it(`allows exactly ${MAX_BOT_TEAMS} bot teams and no more`, () => {
-    expect(panelControls(input({ counts: { CAREFUL: MAX_BOT_TEAMS, BALANCED: 0, SPRAY: 0 } })).canFill).toBe(true);
-    const c = panelControls(input({ counts: { CAREFUL: MAX_BOT_TEAMS, BALANCED: 1, SPRAY: 0 } }));
+    expect(panelControls(input({ counts: { CAREFUL: MAX_BOT_TEAMS, BALANCED: 0, SPRAY: 0, LEARNER: 0 } })).canFill).toBe(true);
+    const c = panelControls(input({ counts: { CAREFUL: MAX_BOT_TEAMS, BALANCED: 1, SPRAY: 0, LEARNER: 0 } }));
     expect(c.runAllBotsBlockedBy).toEqual([REASONS.tooManyTeams(MAX_BOT_TEAMS + 1)]);
     expect(c.fillBlockedBy).toEqual([REASONS.tooManyTeams(MAX_BOT_TEAMS + 1)]);
   });
@@ -137,7 +137,7 @@ describe('panelControls: Run all-bot class and Fill', () => {
   it('lists every reason that applies at once', () => {
     const c = panelControls(input({
       probe: probe({ humans: 1, roundStatus: 'ENDED' }), profileComplete: false,
-      counts: { CAREFUL: 0, BALANCED: 0, SPRAY: 0 },
+      counts: { CAREFUL: 0, BALANCED: 0, SPRAY: 0, LEARNER: 0 },
     }));
     expect(c.runAllBotsBlockedBy).toEqual([
       REASONS.roundEnded, REASONS.noTeams, REASONS.humansPresent(1), REASONS.profileIncomplete,
@@ -175,7 +175,7 @@ describe('panelControls: Run all-bot class and Fill', () => {
   });
 
   it('totals the persona counts', () => {
-    expect(panelControls(input({ counts: { CAREFUL: 2, BALANCED: 3, SPRAY: 4 } })).total).toBe(9);
+    expect(panelControls(input({ counts: { CAREFUL: 2, BALANCED: 3, SPRAY: 4, LEARNER: 0 } })).total).toBe(9);
   });
 });
 

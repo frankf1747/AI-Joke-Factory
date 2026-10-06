@@ -7,7 +7,7 @@
  */
 import type {
   BatchSubmitRequest, ConfigRequest, FeedbackJoke, LobbyResponse, MarketingQueueEnvelope,
-  PatchUserRequest, PublicRound, PublishRequest, Role, SessionMeResponse,
+  PatchUserRequest, PublicRound, PublishRequest, Role, SessionMeResponse, TeamBatchesResponse,
 } from '../../../types/api';
 import type { BotApi } from '../api';
 
@@ -37,6 +37,8 @@ export interface FakeBatch {
   jokes: FakeJoke[];
   state: 'QUEUED' | 'CLAIMED' | 'DONE';
   lockedBy: number | null;
+  /** Set when the batch is published; optional so tests can push a literal batch. */
+  processedAt?: string;
 }
 
 export interface Decision { teamId: number; batchId: number; published: number; total: number }
@@ -67,6 +69,8 @@ export class FakeWorld {
   readonly classified = new Set<number>();
   /** Published joke ids in publish order, oldest first. */
   readonly publishOrder: number[] = [];
+  /** sold_count per joke id, as the team batch list reports it; see setSold(). */
+  readonly sold = new Map<number, number>();
   /**
    * The order Auto-Assign deals participants into seats, two per team. The
    * default, newest first, puts bots and humans on each other's teams. The real
@@ -80,6 +84,7 @@ export class FakeWorld {
   private nextUserId = 100;
   private nextBatchId = 1;
   private nextJokeId = 1000;
+  private processedCount = 0;
 
   addUser(name: string, role: Role | null = null, teamId: number | null = null): number {
     const id = this.nextUserId++;
@@ -102,6 +107,16 @@ export class FakeWorld {
   /** Classify the given published jokes, or every published joke when none are named. */
   classify(jokeIds?: number[]): void {
     for (const id of jokeIds ?? this.publishOrder) this.classified.add(id);
+  }
+
+  /** Report `n` current holdings of a joke on the team batch list. */
+  setSold(jokeId: number, n: number): void {
+    this.sold.set(jokeId, n);
+  }
+
+  /** A distinct, increasing processed_at for each publish, so batches sort in publish order. */
+  nextProcessedAt(): string {
+    return new Date(Date.parse(STAMP) + 1_000 * ++this.processedCount).toISOString();
   }
 
   api(): BotApi {
@@ -266,6 +281,36 @@ class FakeApi implements BotApi {
     return { jokes };
   }
 
+  async teamBatches(roundId: number, teamId: number): Promise<TeamBatchesResponse> {
+    // real: usecase/batch.go:107-119 — the caller must be JM or MARKETING on that team.
+    const u = this.requireUser('teamBatches');
+    if (u.teamId !== teamId || (u.role !== 'JM' && u.role !== 'MARKETING')) throw new FakeApiError(403, 'FORBIDDEN');
+    // real: handler/batch.go:79-101 — null, not [], for an empty listing and
+    // for an unsplit batch's jokes.
+    const batches = this.w.batches
+      .filter(b => b.roundId === roundId && b.teamId === teamId)
+      .map(b => {
+        const done = b.state === 'DONE';
+        return {
+          batch_id: b.id,
+          status: done ? 'PROCESSED' as const : 'SUBMITTED' as const,
+          submitted_at: STAMP,
+          processed_at: b.processedAt ?? null,
+          jokes: b.jokes.length === 0 ? null : b.jokes.map(j => {
+            const sold = this.w.sold.get(j.joke_id) ?? 0;
+            return {
+              joke_id: j.joke_id, joke_text: j.joke_text, joke_title: null,
+              publish_status: !done ? 'PENDING' as const : j.published ? 'PUBLISHED' as const : 'DISCARDED' as const,
+              published_at: done && j.published ? b.processedAt ?? null : null,
+              sold_count: sold,
+              first_sold_at: sold > 0 ? b.processedAt ?? null : null,
+            };
+          }),
+        };
+      });
+    return { batches: batches.length === 0 ? null : batches };
+  }
+
   async marketingQueueNext(roundId: number): Promise<MarketingQueueEnvelope> {
     // real: usecase/marketing.go:33-43 — role is checked before round status.
     const u = this.requireMarketing('marketingQueueNext');
@@ -327,6 +372,7 @@ class FakeApi implements BotApi {
       }
     }
     b.state = 'DONE';
+    b.processedAt = this.w.nextProcessedAt();
     this.w.decisions.push({ teamId: b.teamId, batchId, published, total: body.jokes.length });
     return {};
   }

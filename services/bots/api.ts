@@ -2,7 +2,7 @@
 import type {
   AssignRequest, BatchSplitRequest, BatchSubmitRequest, ConfigRequest, LobbyResponse,
   MarketingQueueEnvelope, PatchUserRequest, PublishRequest, RoundsActiveResponse,
-  SessionJoinRequest, SessionJoinResponse, SessionMeResponse, TeamFeedbackResponse,
+  SessionJoinRequest, SessionJoinResponse, SessionMeResponse, TeamBatchesResponse, TeamFeedbackResponse,
 } from '../../types/api';
 
 /**
@@ -17,6 +17,8 @@ export interface BotApi {
   roundsActive(): Promise<RoundsActiveResponse>;
   submitBatch(roundId: number, body: BatchSubmitRequest): Promise<unknown>;
   teamFeedback(roundId: number, teamId: number): Promise<TeamFeedbackResponse>;
+  /** The team's own batch list with sold counts; the Learner's only market signal. */
+  teamBatches(roundId: number, teamId: number): Promise<TeamBatchesResponse>;
   marketingQueueNext(roundId: number): Promise<MarketingQueueEnvelope>;
   marketingSplit(batchId: number, body: BatchSplitRequest): Promise<MarketingQueueEnvelope>;
   marketingPublish(batchId: number, body: PublishRequest): Promise<unknown>;
