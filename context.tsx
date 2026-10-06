@@ -30,7 +30,7 @@ import { ApiError } from './services/apiClient';
 import { clearPersisted, getWatchIdentity, isWatchMode, mayClaimMarketingBatch } from './services/watchMode';
 import { setMockRoundNumber } from './services/mockApi';
 import { DEFAULT_IDEAL_PROFILE } from './config/dimensions';
-import { LEAN_DEFAULTS, MARKET_MODE_LOCKED_TEXT, isMarketModeLocked, leanConfigFromRound, leanConfigToBody } from './services/leanMode';
+import { LEAN_DEFAULTS, MARKET_MODE_LOCKED_TEXT, WIP_LIMIT_TEXT, isMarketModeLocked, isWipLimitReached, leanConfigFromRound, leanConfigToBody } from './services/leanMode';
 import { isCompleteProfile } from './components/IdealProfilePicker';
 
 const LS_USER_ID = 'joke_factory_user_id';
@@ -393,7 +393,8 @@ interface GameContextType {
 
   batches: Batch[];
   addBatch: (jokes: string[]) => Promise<void>;
-  submitRawBatch: (rawText: string) => Promise<void>;
+  /** Resolves true when the backend accepted the batch, false otherwise. */
+  submitRawBatch: (rawText: string) => Promise<boolean>;
   splitBatch: (batchId: string, jokes: string[]) => Promise<void>;
   unsplitBatch: (batchId: string) => Promise<void>;
   publishBatch: (
@@ -1763,6 +1764,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
       setBatches(prev => [...prev.filter(b => b.batch_id !== batch.batch_id), batch]);
     } catch (e) {
+      // Lean market mode: Marketing already has wip_limit batches waiting.
+      if (e instanceof ApiError && isWipLimitReached(e)) {
+        alert(WIP_LIMIT_TEXT);
+        return;
+      }
       if (e instanceof ApiError) {
         if (e.status === 409 && e.code === 'ROUND_NOT_ACTIVE') {
           alert('Round is not active. Please wait for the instructor to start.');
@@ -1778,19 +1784,26 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // V2: JM submits a raw text blob; Marketing splits it later.
-  const submitRawBatch = async (rawText: string) => {
-    if (!user || !roundId || !user.team_id) return;
+  const submitRawBatch = async (rawText: string): Promise<boolean> => {
+    if (!user || !roundId || !user.team_id) return false;
     const text = rawText.trim();
-    if (!text) return;
+    if (!text) return false;
     try {
       await jmService.createBatch(roundId, { team_id: user.team_id, raw_text: text });
       // Rely on poll to surface the new batch; no optimistic joke list (unsplit).
+      return true;
     } catch (e) {
+      // Lean market mode: Marketing already has wip_limit batches waiting.
+      if (e instanceof ApiError && isWipLimitReached(e)) {
+        alert(WIP_LIMIT_TEXT);
+        return false;
+      }
       if (e instanceof ApiError && e.status === 409 && e.code === 'ROUND_NOT_ACTIVE') {
         alert('Round is not active. Please wait for the instructor to start.');
-        return;
+        return false;
       }
       alert('Failed to submit batch.');
+      return false;
     }
   };
 

@@ -21,6 +21,8 @@ import { DIMENSIONS, dimById } from '../config/dimensions';
 import { toFeedbackRows } from './feedback';
 import { FeedbackCard } from '../components/FeedbackCard';
 import { isWatchMode } from '../services/watchMode';
+import { fmtMoney } from '../services/leanMode';
+import { LearningCurve } from '../components/LearningCurve';
 
 /* ---- Icons for the backend's Topic categories. Keyed by the category string
    itself so the picker stays in step with config/dimensions automatically: add
@@ -542,6 +544,14 @@ const QualityControl: React.FC = () => {
     () => computeAvgCreatedToPublishSeconds(batches.filter(b => b.team === user?.team)),
     [batches, user?.team],
   );
+  /* Lean market mode only: the team's setup and carrying costs, how long a
+     released joke waits for its first buyer, and the per-batch learning curve.
+     Nothing below renders for a CLASSIC round. */
+  const leanMode = config.marketMode === 'LEAN';
+  const lean = teamSummary?.lean ?? null;
+  const toFirstSale = lean && lean.avg_publish_to_first_sale_s > 0
+    ? Math.round(lean.avg_publish_to_first_sale_s)
+    : null;
 
   return (
     <RoleLayout>
@@ -773,7 +783,20 @@ const QualityControl: React.FC = () => {
             <StatBox label="Sold / Total" value={`${totalSales}/${jokesCreated}`} tone="sky" />
             <StatBox label="Created to Publish" value={fmtSeconds(avgLeadSec)} tone="sky" />
             <StatBox label="Content Waste" value={waste} tone="rose" />
+            {leanMode && (
+              <>
+                <StatBox label="Setup cost" value={fmtMoney(lean?.setup_cost ?? 0)} tone="rose" valueClassName="text-xl" />
+                <StatBox label="Carrying cost" value={fmtMoney(lean?.carrying_cost ?? 0)} tone="rose" valueClassName="text-xl" />
+                <StatBox label="Publish → first sale" value={fmtSeconds(toFirstSale)} tone="sky" className="col-span-2" />
+              </>
+            )}
           </div>
+
+          {leanMode && (
+            <Card title="Learning curve" subtitle="Share of each batch's released jokes that sold">
+              <LearningCurve series={lean?.batch_series ?? []} />
+            </Card>
+          )}
 
           {/* The 12 criteria — so Marketing knows what to coach the Joke Maker on. */}
           <Card title="The 12 criteria customers judge">

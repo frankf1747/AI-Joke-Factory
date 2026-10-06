@@ -71,6 +71,15 @@ export function fmtMoney(v: number): string {
 /** The backend reports a WIP refusal as 409 CONFLICT with this prefix in the message. */
 export const WIP_LIMIT_MESSAGE = 'WIP_LIMIT_REACHED';
 
+/** True for the backend's 409 refusal of a Lean submit beyond the WIP limit. */
+export function isWipLimitReached(e: unknown): boolean {
+  const err = e as { status?: unknown; message?: unknown } | null;
+  return Boolean(err) && err!.status === 409 && String(err!.message ?? '').includes(WIP_LIMIT_MESSAGE);
+}
+
+/** What the Joke Maker sees when the backend refuses a submit at the WIP limit. */
+export const WIP_LIMIT_TEXT = 'Marketing still has batches waiting. In a pull system you wait — or go help them decide.';
+
 /** The backend refuses a market-mode change after the round started with this prefix. */
 export const MARKET_MODE_LOCKED_MESSAGE = 'MARKET_MODE_LOCKED';
 
@@ -104,4 +113,21 @@ export function leanConfigToBody(c: Partial<LeanConfig>): LeanConfigBody {
   if (c.carryingCostPerJokeMinute !== undefined) body.carrying_cost_per_joke_minute = c.carryingCostPerJokeMinute;
   if (c.wipLimit !== undefined) body.wip_limit = c.wipLimit;
   return body;
+}
+
+/** One learning-curve point: a batch's sell-through (sold ÷ published). */
+export interface LearningCurvePoint { seq: number; rate: number }
+
+/**
+ * Sold ÷ published per batch, in submission order — the team's learning curve.
+ * Batches with nothing published have no sell-through and are left out; the
+ * rate is clamped to [0, 1] so a stray count can't push the line off the chart.
+ */
+export function learningCurvePoints(
+  series: ReadonlyArray<{ seq: number; published: number; sold: number }> | null | undefined,
+): LearningCurvePoint[] {
+  return [...(series ?? [])]
+    .filter(p => p.published > 0)
+    .sort((a, b) => a.seq - b.seq)
+    .map(p => ({ seq: p.seq, rate: Math.min(1, Math.max(0, p.sold / p.published)) }));
 }

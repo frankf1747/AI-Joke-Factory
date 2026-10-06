@@ -1,6 +1,6 @@
 // services/leanMode.test.ts
 import { describe, expect, it } from 'vitest';
-import { fmtMoney, isLeanRound, isMarketModeLocked, LEAN_CLASS_PRESET, leanConfigFromRound, leanConfigToBody, MARKET_MODE_LOCKED_MESSAGE, wipStatus } from './leanMode';
+import { fmtMoney, isLeanRound, isMarketModeLocked, isWipLimitReached, learningCurvePoints, WIP_LIMIT_MESSAGE, LEAN_CLASS_PRESET, leanConfigFromRound, leanConfigToBody, MARKET_MODE_LOCKED_MESSAGE, wipStatus } from './leanMode';
 
 const classic = { market_mode: 'CLASSIC', arrival_window_seconds: 900, setup_cost_per_batch: 0, carrying_cost_per_joke_minute: 0, wip_limit: 0 };
 const lean = { ...classic, market_mode: 'LEAN', setup_cost_per_batch: 3, carrying_cost_per_joke_minute: 0.02, wip_limit: 2 };
@@ -47,5 +47,25 @@ describe('lean mode helpers', () => {
     expect(isMarketModeLocked({ status: 409, message: 'WIP_LIMIT_REACHED' })).toBe(false);
     expect(isMarketModeLocked({ status: 500, message: MARKET_MODE_LOCKED_MESSAGE })).toBe(false);
     expect(isMarketModeLocked(null)).toBe(false);
+  });
+
+  it('recognises the WIP-limit refusal', () => {
+    expect(isWipLimitReached({ status: 409, message: `${WIP_LIMIT_MESSAGE}: 2 batches waiting` })).toBe(true);
+    expect(isWipLimitReached({ status: 409, message: MARKET_MODE_LOCKED_MESSAGE })).toBe(false);
+    expect(isWipLimitReached({ status: 400, message: WIP_LIMIT_MESSAGE })).toBe(false);
+    expect(isWipLimitReached(undefined)).toBe(false);
+  });
+
+  it('turns the batch series into sell-through points', () => {
+    const at = '2026-10-06T00:00:00Z';
+    const series = [
+      { seq: 3, submitted_at: at, jokes: 5, published: 4, sold: 3 },
+      { seq: 1, submitted_at: at, jokes: 5, published: 2, sold: 0 },
+      { seq: 2, submitted_at: at, jokes: 5, published: 0, sold: 0 },
+      { seq: 4, submitted_at: at, jokes: 5, published: 1, sold: 2 },
+    ];
+    expect(learningCurvePoints(series)).toEqual([{ seq: 1, rate: 0 }, { seq: 3, rate: 0.75 }, { seq: 4, rate: 1 }]);
+    expect(learningCurvePoints([])).toEqual([]);
+    expect(learningCurvePoints(undefined)).toEqual([]);
   });
 });

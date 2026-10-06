@@ -13,6 +13,8 @@ import { dimById } from '../config/dimensions';
 import { toFeedbackRows } from './feedback';
 import { FeedbackCard } from '../components/FeedbackCard';
 import { isWatchMode } from '../services/watchMode';
+import { fmtMoney, wipStatus } from '../services/leanMode';
+import { LearningCurve } from '../components/LearningCurve';
 
 /* ---- per-joke status drives the status dots ---- */
 type JokeStatus = 'reviewing' | 'market' | 'sold' | 'wasted';
@@ -181,13 +183,22 @@ const JokeMaker: React.FC = () => {
   );
 
   const trimmedLen = input.trim().length;
-  const canSubmit = config.isActive && certified && trimmedLen >= MIN_RAW_CHARS;
+  /* Lean market mode only: each batch carries a setup cost, and with a WIP
+     limit the Joke Maker may not send another batch while Marketing already
+     has that many waiting (a pull system). CLASSIC: leanMode is false, so
+     canSubmit is exactly what it was. */
+  const leanMode = config.marketMode === 'LEAN';
+  const wip = wipStatus(teamSummary?.unprocessed_batches ?? 0, config.wipLimit);
+  const canSubmit = config.isActive && certified && trimmedLen >= MIN_RAW_CHARS && !(leanMode && wip.blocked);
 
   /* V2: JM pastes the raw AI output as one blob and hands it off to Marketing,
      who reads through and splits it into individual jokes. */
   const submit = async () => {
     if (!canSubmit) return;
-    await submitRawBatch(input);
+    const sent = await submitRawBatch(input);
+    // Lean: keep the draft when the backend refused the batch (e.g. the WIP
+    // limit was reached between polls), so the Joke Maker can send it later.
+    if (leanMode && !sent) return;
     setInput('');
     setCertified(false);
     setToast('Batch sent to Marketing — they will split & rate it.');
@@ -327,6 +338,12 @@ const JokeMaker: React.FC = () => {
                   <span className="flex items-center gap-1"><span className="font-bold">Send to Marketing</span><Send size={15} /></span>
                 </Button>
               </div>
+              {leanMode && (
+                <div className="text-xs text-gray-500 text-right">
+                  Each batch costs {fmtMoney(config.setupCostPerBatch)} to set up
+                  {wip.label ? <> · <span className={wip.blocked ? 'font-semibold text-amber-700' : ''}>{wip.label}</span></> : null}
+                </div>
+              )}
             </div>
           </Card>
           </fieldset>
@@ -358,6 +375,11 @@ const JokeMaker: React.FC = () => {
             <StatBox label="Batches" value={batchesCreated} tone="slate" />
             <StatBox label="Content Waste" value={waste} tone="rose" />
           </div>
+          {leanMode && (
+            <Card title="Learning curve" subtitle="Share of each batch's released jokes that sold">
+              <LearningCurve series={teamSummary?.lean?.batch_series ?? []} />
+            </Card>
+          )}
           <Card title="Jokes by stage" subtitle="Where your output sits right now">
             <StageDots batches={myBatches} />
           </Card>
