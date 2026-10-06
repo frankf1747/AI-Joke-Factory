@@ -73,3 +73,35 @@ export const WIP_LIMIT_MESSAGE = 'WIP_LIMIT_REACHED';
 
 /** The backend refuses a market-mode change after the round started with this prefix. */
 export const MARKET_MODE_LOCKED_MESSAGE = 'MARKET_MODE_LOCKED';
+
+/** What the instructor sees when the backend refuses a market-mode change. */
+export const MARKET_MODE_LOCKED_TEXT = "The market mode can't change once a round has started.";
+
+/** True for the backend's 409 refusal to change market_mode after a round started. */
+export function isMarketModeLocked(e: unknown): boolean {
+  const err = e as { status?: unknown; message?: unknown } | null;
+  return Boolean(err) && err!.status === 409 && String(err!.message ?? '').includes(MARKET_MODE_LOCKED_MESSAGE);
+}
+
+export interface LeanConfigBody {
+  market_mode?: MarketMode;
+  arrival_window_seconds?: number;
+  setup_cost_per_batch?: number;
+  carrying_cost_per_joke_minute?: number;
+  wip_limit?: number;
+}
+
+/**
+ * GameConfig (camelCase) lean keys → the POST /config body (snake_case), the
+ * same mapping context.updateConfig uses. Absent keys stay absent so the
+ * backend keeps the round's current value.
+ */
+export function leanConfigToBody(c: Partial<LeanConfig>): LeanConfigBody {
+  const body: LeanConfigBody = {};
+  if (c.marketMode !== undefined) body.market_mode = c.marketMode;
+  if (c.arrivalWindowSeconds !== undefined) body.arrival_window_seconds = c.arrivalWindowSeconds;
+  if (c.setupCostPerBatch !== undefined) body.setup_cost_per_batch = c.setupCostPerBatch;
+  if (c.carryingCostPerJokeMinute !== undefined) body.carrying_cost_per_joke_minute = c.carryingCostPerJokeMinute;
+  if (c.wipLimit !== undefined) body.wip_limit = c.wipLimit;
+  return body;
+}

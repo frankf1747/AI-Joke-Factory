@@ -1,6 +1,6 @@
 // services/leanMode.test.ts
 import { describe, expect, it } from 'vitest';
-import { fmtMoney, isLeanRound, leanConfigFromRound, wipStatus } from './leanMode';
+import { fmtMoney, isLeanRound, isMarketModeLocked, LEAN_CLASS_PRESET, leanConfigFromRound, leanConfigToBody, MARKET_MODE_LOCKED_MESSAGE, wipStatus } from './leanMode';
 
 const classic = { market_mode: 'CLASSIC', arrival_window_seconds: 900, setup_cost_per_batch: 0, carrying_cost_per_joke_minute: 0, wip_limit: 0 };
 const lean = { ...classic, market_mode: 'LEAN', setup_cost_per_batch: 3, carrying_cost_per_joke_minute: 0.02, wip_limit: 2 };
@@ -32,5 +32,20 @@ describe('lean mode helpers', () => {
     expect(fmtMoney(3)).toBe('$3.00');
     expect(fmtMoney(-1.085)).toBe('-$1.09');
     expect(fmtMoney(1.005)).toBe('$1.01');
+  });
+
+  it('maps lean config keys onto the snake_case request body', () => {
+    expect(leanConfigToBody(LEAN_CLASS_PRESET[2])).toEqual({
+      market_mode: 'LEAN', setup_cost_per_batch: 1, carrying_cost_per_joke_minute: 0.02, wip_limit: 2,
+    });
+    expect(leanConfigToBody({ arrivalWindowSeconds: 600, wipLimit: 0 })).toEqual({ arrival_window_seconds: 600, wip_limit: 0 });
+    expect(leanConfigToBody({})).toEqual({});
+  });
+
+  it('recognises the market-mode-locked refusal', () => {
+    expect(isMarketModeLocked({ status: 409, message: `${MARKET_MODE_LOCKED_MESSAGE}: round started` })).toBe(true);
+    expect(isMarketModeLocked({ status: 409, message: 'WIP_LIMIT_REACHED' })).toBe(false);
+    expect(isMarketModeLocked({ status: 500, message: MARKET_MODE_LOCKED_MESSAGE })).toBe(false);
+    expect(isMarketModeLocked(null)).toBe(false);
   });
 });

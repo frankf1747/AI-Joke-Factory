@@ -30,7 +30,7 @@ import { ApiError } from './services/apiClient';
 import { clearPersisted, getWatchIdentity, isWatchMode, mayClaimMarketingBatch } from './services/watchMode';
 import { setMockRoundNumber } from './services/mockApi';
 import { DEFAULT_IDEAL_PROFILE } from './config/dimensions';
-import { LEAN_DEFAULTS, leanConfigFromRound } from './services/leanMode';
+import { LEAN_DEFAULTS, MARKET_MODE_LOCKED_TEXT, isMarketModeLocked, leanConfigFromRound, leanConfigToBody } from './services/leanMode';
 import { isCompleteProfile } from './components/IdealProfilePicker';
 
 const LS_USER_ID = 'joke_factory_user_id';
@@ -1564,11 +1564,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (updates.costOfDiscard !== undefined) body.cost_of_discard = updates.costOfDiscard;
     if (updates.round1BatchSize !== undefined) body.batch_size = updates.round1BatchSize;
     if (updates.idealProfile !== undefined) body.ideal_profile = updates.idealProfile;
-    if (updates.marketMode !== undefined) body.market_mode = updates.marketMode;
-    if (updates.arrivalWindowSeconds !== undefined) body.arrival_window_seconds = updates.arrivalWindowSeconds;
-    if (updates.setupCostPerBatch !== undefined) body.setup_cost_per_batch = updates.setupCostPerBatch;
-    if (updates.carryingCostPerJokeMinute !== undefined) body.carrying_cost_per_joke_minute = updates.carryingCostPerJokeMinute;
-    if (updates.wipLimit !== undefined) body.wip_limit = updates.wipLimit;
+    Object.assign(body, leanConfigToBody(updates));
 
     if (Object.keys(body).length === 0) return;
 
@@ -1576,6 +1572,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await instructorService.updateRoundConfig(roundId, body);
     } catch (e) {
       console.error('Failed to persist round config', e);
+      if (isMarketModeLocked(e)) {
+        alert(MARKET_MODE_LOCKED_TEXT);
+        return;
+      }
       alert('Settings were not saved to the server. Check the connection and try again.');
     }
   };

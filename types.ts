@@ -1,3 +1,5 @@
+import type { LeanTeamStats } from './types/api';
+
 
 /**
  * UI-facing role enum (kept backward-compatible with existing UI text rendering).
@@ -352,6 +354,8 @@ export interface ApiInstructorStatsResponse {
     profit: number;
     total_jokes: number;
     published_jokes: number;
+    /** Lean market mode only (newer backends): present on LEAN rounds. */
+    lean?: LeanTeamStats;
   }>;
   /* The four series below are NOT sent by the Go backend — GET /v1/instructor/rounds/{id}/stats
      returns {round_id, leaderboard} only (ports.RoundStats). They are optional because the

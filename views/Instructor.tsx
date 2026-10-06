@@ -11,6 +11,13 @@ import { IdealProfilePicker } from '../components/IdealProfilePicker';
 import { BotPanel, botPanelRequested } from '../components/BotPanel';
 import { isWatchMode } from '../services/watchMode';
 import type { IdealDimension } from '../config/dimensions';
+import { LeanDebrief } from '../components/LeanDebrief';
+import { instructorService } from '../services/instructorService';
+import { sessionService } from '../services/sessionService';
+import {
+  LEAN_CLASS_PRESET, MARKET_MODE_LOCKED_TEXT, isMarketModeLocked, leanConfigToBody, fmtMoney,
+  type MarketMode,
+} from '../services/leanMode';
 
 // Expanded Palette for more teams
 const PALETTE = [
@@ -23,6 +30,17 @@ const INSTRUCTOR_HIDDEN_CHARTS_SESSION_KEY = 'joke_factory_instructor_hidden_cha
 const CHART_KEYS = ['sales', 'sequence_quality', 'unrated_jokes'] as const;
 type ChartKey = typeof CHART_KEYS[number];
 
+// Lean leaderboard columns, read from row.lean on LEAN rounds only.
+type LeanSortKey = 'setup_cost' | 'carrying_cost' | 'lead_time_s' | 'sale_time_s';
+const LEAN_COLUMNS: Array<{ key: LeanSortKey; label: string; title: string }> = [
+  { key: 'setup_cost', label: 'Setup', title: 'Setup cost (per batch submitted)' },
+  { key: 'carrying_cost', label: 'Carrying', title: 'Carrying cost (jokes waiting, per minute)' },
+  { key: 'lead_time_s', label: 'Lead', title: 'Average lead time: batch submitted to joke published' },
+  { key: 'sale_time_s', label: 'Sale', title: 'Average time from publish to first sale' },
+];
+const isLeanSortKey = (k: string): k is LeanSortKey => LEAN_COLUMNS.some(c => c.key === k);
+const fmtSeconds = (s: number) => (s > 0 ? `${Math.round(s)}s` : '—');
+
 const Instructor: React.FC = () => {
   const { 
     config, updateConfig, setGameActive, setRound, resetGame, toggleTeamPopup,
@@ -34,6 +52,7 @@ const Instructor: React.FC = () => {
     , endRound
     , deleteUser
     , marketItems
+    , roundIds
   } = useGame();
 
   const [localBatchSize, setLocalBatchSize] = useState(config.round1BatchSize);
@@ -43,6 +62,14 @@ const Instructor: React.FC = () => {
   // Marketing's decision clock — how long they may deliberate before each nudge.
   const [localNudge1, setLocalNudge1] = useState(config.marketingNudge1Seconds);
   const [localNudge2, setLocalNudge2] = useState(config.marketingNudge2Seconds);
+  // Lean market mode — edits the current round, like the fields above.
+  const [localMarketMode, setLocalMarketMode] = useState<MarketMode>(config.marketMode);
+  const [localArrivalWindow, setLocalArrivalWindow] = useState(config.arrivalWindowSeconds);
+  const [localSetupCost, setLocalSetupCost] = useState(config.setupCostPerBatch);
+  const [localCarryingCost, setLocalCarryingCost] = useState(config.carryingCostPerJokeMinute);
+  const [localWipLimit, setLocalWipLimit] = useState(config.wipLimit);
+  const [presetBusy, setPresetBusy] = useState(false);
+  const [presetNotice, setPresetNotice] = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showEndRound1Confirm, setShowEndRound1Confirm] = useState(false);
 
@@ -78,6 +105,7 @@ const Instructor: React.FC = () => {
   const [deletingUserIds, setDeletingUserIds] = useState<string[]>([]);
   const [leaderboardSortKey, setLeaderboardSortKey] = useState<
     'team' | 'batches_processed' | 'published_jokes' | 'discarded_jokes' | 'unsold_jokes' | 'total_jokes' | 'total_sales' | 'profit'
+    | LeanSortKey
   >('profit');
   const [leaderboardSortDir, setLeaderboardSortDir] = useState<'asc' | 'desc'>('desc');
   const [rankUpTeamIds, setRankUpTeamIds] = useState<string[]>([]);
@@ -101,6 +129,11 @@ const Instructor: React.FC = () => {
   useEffect(() => setLocalCostOfPublishing(config.costOfPublishing), [config.costOfPublishing]);
   useEffect(() => setLocalNudge1(config.marketingNudge1Seconds), [config.marketingNudge1Seconds]);
   useEffect(() => setLocalNudge2(config.marketingNudge2Seconds), [config.marketingNudge2Seconds]);
+  useEffect(() => setLocalMarketMode(config.marketMode), [config.marketMode]);
+  useEffect(() => setLocalArrivalWindow(config.arrivalWindowSeconds), [config.arrivalWindowSeconds]);
+  useEffect(() => setLocalSetupCost(config.setupCostPerBatch), [config.setupCostPerBatch]);
+  useEffect(() => setLocalCarryingCost(config.carryingCostPerJokeMinute), [config.carryingCostPerJokeMinute]);
+  useEffect(() => setLocalWipLimit(config.wipLimit), [config.wipLimit]);
 
   const handleDeleteUser = async (userId: string, displayName?: string) => {
     const label = displayName ? `${displayName} (${userId})` : `user ${userId}`;
@@ -170,7 +203,14 @@ const Instructor: React.FC = () => {
     (canEditBatchSize && localBatchSize !== config.round1BatchSize) ||
     (canEditBudget && localBudget !== config.customerBudget) ||
     (canEditPricing && (localMarketPrice !== config.marketPrice || localCostOfPublishing !== config.costOfPublishing)) ||
-    (canEditNudges && (localNudge1 !== config.marketingNudge1Seconds || localNudge2 !== config.marketingNudge2Seconds));
+    (canEditNudges && (localNudge1 !== config.marketingNudge1Seconds || localNudge2 !== config.marketingNudge2Seconds)) ||
+    (canEditPricing && localMarketMode !== config.marketMode) ||
+    (canEditPricing && localMarketMode === 'LEAN' && (
+      localArrivalWindow !== config.arrivalWindowSeconds ||
+      localSetupCost !== config.setupCostPerBatch ||
+      localCarryingCost !== config.carryingCostPerJokeMinute ||
+      localWipLimit !== config.wipLimit
+    ));
 
   const handleUpdateSettings = () => {
     const updates: any = {};
@@ -185,8 +225,65 @@ const Instructor: React.FC = () => {
     if (canEditNudges && localNudge2 !== config.marketingNudge2Seconds) {
       updates.marketingNudge2Seconds = Math.max(5, localNudge2);
     }
+    if (canEditPricing && localMarketMode !== config.marketMode) updates.marketMode = localMarketMode;
+    if (canEditPricing && localMarketMode === 'LEAN') {
+      if (localArrivalWindow !== config.arrivalWindowSeconds) updates.arrivalWindowSeconds = localArrivalWindow;
+      if (localSetupCost !== config.setupCostPerBatch) updates.setupCostPerBatch = localSetupCost;
+      if (localCarryingCost !== config.carryingCostPerJokeMinute) updates.carryingCostPerJokeMinute = localCarryingCost;
+      if (localWipLimit !== config.wipLimit) updates.wipLimit = localWipLimit;
+    }
     if (Object.keys(updates).length === 0) return;
     updateConfig(updates);
+  };
+
+  /* One click for a Lean class: Round 1 with push rules, Round 2 with lean
+     rules. Writes both rounds directly — only rounds still CONFIGURED, since
+     the backend locks market_mode once a round starts. Statuses are read
+     fresh at click time rather than inferred from the current-round config. */
+  const presetDisabled = config.isActive || presetBusy || (roundIds[1] == null && roundIds[2] == null);
+  const handleApplyLeanPreset = async () => {
+    if (presetDisabled) return;
+    setPresetBusy(true);
+    try {
+      let statuses: Record<1 | 2, string | null> = { 1: null, 2: null };
+      try {
+        const active: any = await sessionService.activeRound();
+        const rounds: any[] = active?.rounds ?? active?.data?.rounds ?? [];
+        for (const n of [1, 2] as const) {
+          const r = rounds.find(x => Number(x?.round_number) === n);
+          statuses[n] = r ? String(r.status ?? '').toUpperCase() : null;
+        }
+      } catch {
+        alert('Could not read the round status. Check the connection and try again.');
+        return;
+      }
+      const targets = ([1, 2] as const).filter(n => roundIds[n] != null && statuses[n] === 'CONFIGURED');
+      if (targets.length === 0) {
+        alert(MARKET_MODE_LOCKED_TEXT);
+        return;
+      }
+      const applied: Array<1 | 2> = [];
+      for (const n of targets) {
+        try {
+          await instructorService.updateRoundConfig(roundIds[n]!, leanConfigToBody(LEAN_CLASS_PRESET[n]));
+          applied.push(n);
+        } catch (e) {
+          console.error(`Failed to apply the lean preset to round ${n}`, e);
+          alert(isMarketModeLocked(e)
+            ? MARKET_MODE_LOCKED_TEXT
+            : `Round ${n} settings were not saved to the server. Check the connection and try again.`);
+        }
+      }
+      if (applied.length === 0) return;
+      const parts = applied.map(n => (n === 1 ? 'Round 1: push rules' : 'Round 2: lean rules'));
+      const skipped = roundIds[1] != null && statuses[1] !== 'CONFIGURED'
+        ? ' (Round 1 has already started, so it was left as is)'
+        : '';
+      setPresetNotice(`Lean class preset applied — ${parts.join(' · ')}${skipped}`);
+      window.setTimeout(() => setPresetNotice(null), 3200);
+    } finally {
+      setPresetBusy(false);
+    }
   };
 
   // --- Lobby Logic ---
@@ -250,6 +347,26 @@ const Instructor: React.FC = () => {
   const leaderboardBase = useMemo(() => {
     return mapLeaderboard(leaderboardStatsSelected?.leaderboard || []);
   }, [leaderboardStatsSelected?.leaderboard, teamNames]);
+
+  /* Lean columns follow the round the leaderboard tab shows: the backend
+     nests `lean` on each row for LEAN rounds only, so its presence is the
+     signal. Classic leaderboards render exactly the columns they always had. */
+  const leaderboardIsLean = useMemo(
+    () => (leaderboardStatsSelected?.leaderboard ?? []).some(r => r.lean != null),
+    [leaderboardStatsSelected?.leaderboard],
+  );
+  const leanByTeam = useMemo(() => {
+    const m: Record<string, Record<LeanSortKey, number>> = {};
+    for (const r of leaderboardStatsSelected?.leaderboard ?? []) {
+      m[String(r.team.id)] = {
+        setup_cost: Number(r.lean?.setup_cost ?? 0),
+        carrying_cost: Number(r.lean?.carrying_cost ?? 0),
+        lead_time_s: Number(r.lean?.avg_submit_to_publish_s ?? 0),
+        sale_time_s: Number(r.lean?.avg_publish_to_first_sale_s ?? 0),
+      };
+    }
+    return m;
+  }, [leaderboardStatsSelected?.leaderboard]);
 
   const leaderboardBaseR1 = useMemo(() => {
     return mapLeaderboard(statsR1?.leaderboard || []);
@@ -514,11 +631,19 @@ const Instructor: React.FC = () => {
     if (leaderboardSortKey === 'team') {
       return dir * a.team_name.localeCompare(b.team_name);
     }
+    if (isLeanSortKey(leaderboardSortKey)) {
+      // A lean column picked on a Lean tab, then a switch to a Classic tab:
+      // rank by profit, as the Classic leaderboard always has.
+      if (!leaderboardIsLean) return -1 * (a.profit - b.profit);
+      const av = leanByTeam[String(a.team_id)]?.[leaderboardSortKey] ?? 0;
+      const bv = leanByTeam[String(b.team_id)]?.[leaderboardSortKey] ?? 0;
+      return dir * (av - bv);
+    }
     const av = a[leaderboardSortKey] ?? 0;
     const bv = b[leaderboardSortKey] ?? 0;
     return dir * (av - bv);
   });
-  }, [leaderboardBase, leaderboardSortKey, leaderboardSortDir]);
+  }, [leaderboardBase, leaderboardSortKey, leaderboardSortDir, leaderboardIsLean, leanByTeam]);
 
   // Flash a colorful highlight when a team moves up in the currently displayed ranking.
   useEffect(() => {
@@ -924,12 +1049,31 @@ const Instructor: React.FC = () => {
                   </span>
                 </button>
               </th>
+              {leaderboardIsLean && LEAN_COLUMNS.map(col => (
+                <th key={col.key} className="px-3 py-2 text-right font-medium text-gray-500">
+                  <button
+                    type="button"
+                    className="inline-flex items-center hover:text-gray-800"
+                    onClick={() => {
+                      setLeaderboardSortKey(col.key);
+                      // Costs and times: lower is better, so the first click sorts ascending.
+                      setLeaderboardSortDir(prev => (leaderboardSortKey === col.key ? (prev === 'asc' ? 'desc' : 'asc') : 'asc'));
+                    }}
+                    title={`Sort by ${col.title}`}
+                  >
+                    <span>{col.label}</span>
+                    <span className="ml-1 w-3 text-center">
+                      {leaderboardSortKey === col.key ? (leaderboardSortDir === 'asc' ? '▲' : '▼') : ''}
+                    </span>
+                  </button>
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {leaderboardSorted.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-3 py-6 text-center text-gray-400 italic">
+                <td colSpan={leaderboardIsLean ? 9 + LEAN_COLUMNS.length : 9} className="px-3 py-6 text-center text-gray-400 italic">
                   No leaderboard data yet.
                 </td>
               </tr>
@@ -950,6 +1094,17 @@ const Instructor: React.FC = () => {
                 <td className={`px-3 py-2 text-right font-bold ${Number(row.profit) < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
                   {Number(row.profit).toFixed(2)}
                 </td>
+                {leaderboardIsLean && (() => {
+                  const lean = leanByTeam[String(row.team_id)];
+                  return (
+                    <>
+                      <td className="px-3 py-2 text-right text-gray-800 tabular-nums">{lean ? fmtMoney(lean.setup_cost) : '—'}</td>
+                      <td className="px-3 py-2 text-right text-gray-800 tabular-nums">{lean ? fmtMoney(lean.carrying_cost) : '—'}</td>
+                      <td className="px-3 py-2 text-right text-gray-800 tabular-nums">{lean ? fmtSeconds(lean.lead_time_s) : '—'}</td>
+                      <td className="px-3 py-2 text-right text-gray-800 tabular-nums">{lean ? fmtSeconds(lean.sale_time_s) : '—'}</td>
+                    </>
+                  );
+                })()}
               </tr>
             ))}
           </tbody>
@@ -2322,6 +2477,75 @@ const Instructor: React.FC = () => {
                   className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditPricing ? 'opacity-50 cursor-not-allowed' : ''}`}
                 />
               </div>
+              <div className="flex items-center space-x-3" title="Classic: one shopping burst at round end. Lean: customers arrive steadily; setup, carrying and WIP rules apply.">
+                <label htmlFor="cfg-market-mode" className="text-sm text-gray-600 whitespace-nowrap">Market mode:</label>
+                <select
+                  id="cfg-market-mode"
+                  value={localMarketMode}
+                  onChange={e => setLocalMarketMode(e.target.value as MarketMode)}
+                  disabled={!canEditPricing}
+                  className={`p-1 border border-gray-300 rounded bg-white text-black text-sm ${!canEditPricing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <option value="CLASSIC">Classic</option>
+                  <option value="LEAN">Lean</option>
+                </select>
+              </div>
+              {localMarketMode === 'LEAN' && (
+                <>
+                  <div className="flex items-center space-x-3" title="Seconds over which customers arrive">
+                    <label htmlFor="cfg-arrival-window" className="text-sm text-gray-600 whitespace-nowrap">Arrival window (s):</label>
+                    <input
+                      id="cfg-arrival-window"
+                      type="number"
+                      step="1"
+                      min="1"
+                      value={localArrivalWindow}
+                      onChange={e => setLocalArrivalWindow(Number(e.target.value))}
+                      disabled={!canEditPricing}
+                      className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditPricing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    />
+                  </div>
+                  <div className="flex items-center space-x-3" title="Charged for every batch a team submits">
+                    <label htmlFor="cfg-setup-cost" className="text-sm text-gray-600 whitespace-nowrap">Setup cost / batch:</label>
+                    <input
+                      id="cfg-setup-cost"
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      value={localSetupCost}
+                      onChange={e => setLocalSetupCost(Number(e.target.value))}
+                      disabled={!canEditPricing}
+                      className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditPricing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    />
+                  </div>
+                  <div className="flex items-center space-x-3" title="Charged per published joke per minute it waits unsold">
+                    <label htmlFor="cfg-carrying-cost" className="text-sm text-gray-600 whitespace-nowrap">Carrying cost / joke-min:</label>
+                    <input
+                      id="cfg-carrying-cost"
+                      type="number"
+                      step="0.001"
+                      min="0"
+                      value={localCarryingCost}
+                      onChange={e => setLocalCarryingCost(Number(e.target.value))}
+                      disabled={!canEditPricing}
+                      className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditPricing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    />
+                  </div>
+                  <div className="flex items-center space-x-3" title="Batches that may wait for Marketing before the Joke Maker must stop (0 = no limit)">
+                    <label htmlFor="cfg-wip-limit" className="text-sm text-gray-600 whitespace-nowrap">WIP limit:</label>
+                    <input
+                      id="cfg-wip-limit"
+                      type="number"
+                      step="1"
+                      min="0"
+                      value={localWipLimit}
+                      onChange={e => setLocalWipLimit(Number(e.target.value))}
+                      disabled={!canEditPricing}
+                      className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditPricing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    />
+                  </div>
+                </>
+              )}
               <Button
                 type="button"
                 onClick={handleUpdateSettings}
@@ -2336,6 +2560,22 @@ const Instructor: React.FC = () => {
               >
                 Apply
               </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  onClick={handleApplyLeanPreset}
+                  aria-label="Lean class preset"
+                  variant="secondary"
+                  disabled={presetDisabled}
+                  className={`px-4 py-1 text-xs font-semibold ${presetDisabled ? 'opacity-60' : ''}`}
+                  title={`Round 1: push rules (setup ${fmtMoney(LEAN_CLASS_PRESET[1].setupCostPerBatch ?? 0)}, no WIP limit) · Round 2: lean rules (setup ${fmtMoney(LEAN_CLASS_PRESET[2].setupCostPerBatch ?? 0)}, WIP limit ${LEAN_CLASS_PRESET[2].wipLimit})`}
+                >
+                  {presetBusy ? 'Applying…' : 'Lean class preset'}
+                </Button>
+                {config.round === 2 && !config.isActive && (
+                  <span className="text-xs text-gray-500">Round 1 has started — applies to Round 2 only.</span>
+                )}
+              </div>
             </div>
 
             {/* Row 4: the hidden ideal joke. The backend will not start a round without a
@@ -2527,6 +2767,12 @@ const Instructor: React.FC = () => {
           >
             {renderLeaderboardTable({ maxHeightClass: 'max-h-80' })}
           </Card>
+
+          {statsR2 && [statsR1, statsR2].some(st => (st?.leaderboard ?? []).some(r => r.lean != null)) && (
+            <Card className="xl:col-span-2" title="Round 1 vs Round 2" subtitle="Push rules vs lean rules, per team">
+              <LeanDebrief r1={statsR1} r2={statsR2} />
+            </Card>
+          )}
           
           {!isChartHidden('sales') && (
             <Card
@@ -3097,6 +3343,12 @@ const Instructor: React.FC = () => {
 
         </div>
       </div>
+
+      {presetNotice && (
+        <div role="status" className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm px-4 py-2.5 rounded-lg shadow-xl flex items-center gap-2">
+          <CheckCircle size={16} className="text-emerald-400" /> {presetNotice}
+        </div>
+      )}
     </RoleLayout>
   );
 };

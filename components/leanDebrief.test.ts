@@ -1,0 +1,28 @@
+// components/leanDebrief.test.ts
+import { describe, expect, it } from 'vitest';
+import { debriefRows } from './LeanDebrief';
+
+const r1 = { round_id: 1, leaderboard: [
+  { rank: 1, team: { id: 7, name: 'Team 7' }, batches_processed: 8, total_sales: 60, published_jokes: 40, discarded_jokes: 0, total_jokes: 40, unsold_jokes: 20, profit: 23.2,
+    lean: { batches_submitted: 8, setup_cost: 24, carrying_cost: 8.8, avg_submit_to_publish_s: 360, avg_publish_to_first_sale_s: 200, batch_series: [] } },
+] };
+const r2 = { round_id: 2, leaderboard: [
+  { rank: 1, team: { id: 7, name: 'Team 7' }, batches_processed: 4, total_sales: 45, published_jokes: 10, discarded_jokes: 2, total_jokes: 12, unsold_jokes: 2, profit: 30.8,
+    lean: { batches_submitted: 4, setup_cost: 4, carrying_cost: 1.2, avg_submit_to_publish_s: 120, avg_publish_to_first_sale_s: 90, batch_series: [] } },
+] };
+
+describe('debriefRows', () => {
+  it('pairs each team across rounds and computes the deltas', () => {
+    const rows = debriefRows(r1 as any, r2 as any);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].team).toBe('Team 7');
+    expect(rows[0].r1?.profit).toBe(23.2);
+    expect(rows[0].r2?.profit).toBe(30.8);
+    expect(rows[0].delta.profit).toBeCloseTo(7.6);
+    expect(rows[0].delta.leadTimeS).toBe(-240);
+  });
+  it('tolerates a team present in one round only', () => {
+    const rows = debriefRows(r1 as any, { round_id: 2, leaderboard: [] } as any);
+    expect(rows[0].r2).toBeNull();
+  });
+});
