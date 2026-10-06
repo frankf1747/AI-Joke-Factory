@@ -121,26 +121,33 @@ describe('pilot report', () => {
   it('shows tuning overrides and the tag in the report', () => {
     const t = parseTuning({
       PILOT_PREFERENCE_BASE: '3', PILOT_CARRYING: '0.05', PILOT_SETUP_R1: '5', PILOT_SETUP_R2: '2',
+      PILOT_CUSTOMERS: '40', PILOT_BUDGET: '12.5',
       PILOT_PLAN: 'lean', PILOT_TAG: 'tuning 1: preference_base 3',
     });
     expect(t).toEqual({
-      preferenceBase: 3, carrying: 0.05, setupR1: 5, setupR2: 2, plan: 'lean', tag: 'tuning 1: preference_base 3',
+      preferenceBase: 3, carrying: 0.05, setupR1: 5, setupR2: 2, customers: 40, budget: 12.5, plan: 'lean', tag: 'tuning 1: preference_base 3',
     });
     const md = markdown([run('LEAN', 2, [['LEARNER', 1]])], '2026-10-06', [tuningLine(t, 10)], [], t.tag);
     expect(md).toContain('# Lean pilot — 2026-10-06\n\n_tuning 1: preference_base 3_');
     expect(md).toContain('- Tuning: preference_base 3 (PILOT_PREFERENCE_BASE); '
       + 'carrying $0.05 per joke-minute before the ×10 scaling (PILOT_CARRYING); setup R1 $5 (PILOT_SETUP_R1); '
-      + 'setup R2 $2 (PILOT_SETUP_R2); plan lean: Lean classes only (PILOT_PLAN).');
+      + 'setup R2 $2 (PILOT_SETUP_R2); 40 customers per round, all modes (PILOT_CUSTOMERS); '
+      + 'customer budget $12.5, all modes (PILOT_BUDGET); plan lean: Lean classes only (PILOT_PLAN).');
   });
 
   it('defaults to no overrides and refuses bad knob values', () => {
     const t = parseTuning({});
-    expect(t).toEqual({ plan: 'all', preferenceBase: undefined, carrying: undefined, setupR1: undefined, setupR2: undefined, tag: undefined });
+    expect(t).toEqual({
+      plan: 'all', preferenceBase: undefined, carrying: undefined, setupR1: undefined, setupR2: undefined, customers: undefined, budget: undefined, tag: undefined,
+    });
     expect(tuningLine(t, 10)).toBe(
       'Tuning: plan all: Classic and Lean classes; no overrides (preset costs, backend preference_base).',
     );
     expect(() => parseTuning({ PILOT_PREFERENCE_BASE: '1' })).toThrow(/PILOT_PREFERENCE_BASE/);
     expect(() => parseTuning({ PILOT_CARRYING: 'abc' })).toThrow(/PILOT_CARRYING/);
     expect(() => parseTuning({ PILOT_PLAN: 'classic' })).toThrow(/PILOT_PLAN/);
+    expect(() => parseTuning({ PILOT_CUSTOMERS: '0' })).toThrow(/PILOT_CUSTOMERS/);
+    expect(() => parseTuning({ PILOT_CUSTOMERS: '2.5' })).toThrow(/PILOT_CUSTOMERS/);
+    expect(() => parseTuning({ PILOT_BUDGET: '-1' })).toThrow(/PILOT_BUDGET/);
   });
 });

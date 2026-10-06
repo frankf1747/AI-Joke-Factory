@@ -62,11 +62,14 @@ export interface Tuning {
   carrying?: number;
   setupR1?: number;
   setupR2?: number;
+  /** customer_count and customer_budget, sent to every round of the class (Classic too, for a fair comparison). */
+  customers?: number;
+  budget?: number;
   plan: 'all' | 'lean';
   tag?: string;
 }
 
-/** Reads PILOT_PREFERENCE_BASE, PILOT_CARRYING, PILOT_SETUP_R1/R2, PILOT_PLAN and PILOT_TAG; throws on bad values. */
+/** Reads PILOT_PREFERENCE_BASE, PILOT_CARRYING, PILOT_SETUP_R1/R2, PILOT_CUSTOMERS, PILOT_BUDGET, PILOT_PLAN and PILOT_TAG; throws on bad values. */
 export function parseTuning(env: Record<string, string | undefined>): Tuning {
   const num = (name: string, ok: (v: number) => boolean, rule: string): number | undefined => {
     const raw = env[name];
@@ -82,6 +85,8 @@ export function parseTuning(env: Record<string, string | undefined>): Tuning {
     carrying: num('PILOT_CARRYING', v => v >= 0, 'a number >= 0'),
     setupR1: num('PILOT_SETUP_R1', v => v >= 0, 'a number >= 0'),
     setupR2: num('PILOT_SETUP_R2', v => v >= 0, 'a number >= 0'),
+    customers: num('PILOT_CUSTOMERS', v => Number.isInteger(v) && v >= 1, 'an integer >= 1'),
+    budget: num('PILOT_BUDGET', v => v >= 0, 'a number >= 0'),
     plan,
     tag: env.PILOT_TAG?.trim() || undefined,
   };
@@ -96,6 +101,8 @@ export function tuningLine(t: Tuning, speed: number): string {
   }
   if (t.setupR1 !== undefined) parts.push(`setup R1 $${t.setupR1} (PILOT_SETUP_R1)`);
   if (t.setupR2 !== undefined) parts.push(`setup R2 $${t.setupR2} (PILOT_SETUP_R2)`);
+  if (t.customers !== undefined) parts.push(`${t.customers} customers per round, all modes (PILOT_CUSTOMERS)`);
+  if (t.budget !== undefined) parts.push(`customer budget $${t.budget}, all modes (PILOT_BUDGET)`);
   parts.push(t.plan === 'lean' ? 'plan lean: Lean classes only (PILOT_PLAN)' : 'plan all: Classic and Lean classes');
   const overridden = parts.length > 1;
   return `Tuning: ${parts.join('; ')}${overridden ? '' : '; no overrides (preset costs, backend preference_base)'}.`;

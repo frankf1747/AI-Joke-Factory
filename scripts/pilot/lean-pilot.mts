@@ -24,6 +24,8 @@
      PILOT_PREFERENCE_BASE  sent as preference_base in both Lean round configs (backend default 2).
      PILOT_CARRYING         carrying per joke-minute BEFORE the x10 scaling; replaces the preset 0.02.
      PILOT_SETUP_R1/_R2     setup cost per batch for Lean round 1 / round 2.
+     PILOT_CUSTOMERS        customer_count for every round of every class (Classic too), integer >= 1.
+     PILOT_BUDGET           customer_budget for every round of every class (Classic too), >= 0.
      PILOT_PLAN             all (default: CLASSIC, LEAN, CLASSIC, LEAN) or lean (LEAN rep 1, rep 2).
      PILOT_TAG              free-text label printed under the report title.
      PILOT_SMOKE=1        a quick end-to-end check: ONE Lean class, one team per persona,
@@ -84,8 +86,15 @@ const SETTLE_MS = 15_000;
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const ideal = { ...DEFAULT_IDEAL_PROFILE } as ConfigRequest['ideal_profile'];
 
+/** Knobs that apply to every round of every class, so Classic and Lean stay comparable. */
+function withMarket(body: ConfigRequest): ConfigRequest {
+  if (TUNING.customers !== undefined) body.customer_count = TUNING.customers;
+  if (TUNING.budget !== undefined) body.customer_budget = TUNING.budget;
+  return body;
+}
+
 function configFor(mode: PilotMode, round: PilotRound): ConfigRequest {
-  if (mode === 'CLASSIC') return leanConfigToBody({ marketMode: 'CLASSIC' });
+  if (mode === 'CLASSIC') return withMarket(leanConfigToBody({ marketMode: 'CLASSIC' }));
   const preset = LEAN_CLASS_PRESET[round];
   const setup = round === 1 ? TUNING.setupR1 : TUNING.setupR2;
   const body: ConfigRequest = leanConfigToBody({
@@ -94,7 +103,7 @@ function configFor(mode: PilotMode, round: PilotRound): ConfigRequest {
     carryingCostPerJokeMinute: (TUNING.carrying ?? preset.carryingCostPerJokeMinute ?? 0) * SPEED,
   });
   if (TUNING.preferenceBase !== undefined) body.preference_base = TUNING.preferenceBase;
-  return body;
+  return withMarket(body);
 }
 
 /** The report's settings section. */
