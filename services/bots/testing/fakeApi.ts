@@ -80,7 +80,7 @@ export class FakeWorld {
   assignOrder: (participants: FakeUser[], call: number) => FakeUser[] =
     ps => [...ps].sort((a, b) => b.id - a.id);
   private assignCalls = 0;
-  private failures: Array<{ method: string; userName?: string; remaining: number; status: number }> = [];
+  private failures: Array<{ method: string; userName?: string; remaining: number; status: number; code?: string }> = [];
   private nextUserId = 100;
   private nextBatchId = 1;
   private nextJokeId = 1000;
@@ -98,10 +98,11 @@ export class FakeWorld {
 
   /**
    * Make `method` fail `times` times, optionally only for one user. Defaults to
-   * a 500 'INTERNAL'; pass another status (e.g. 403) to test that error path.
+   * a 500 'INTERNAL'; pass another status (e.g. 403) to test that error path,
+   * and a code to set the error message (e.g. 'WIP_LIMIT_REACHED: ...').
    */
-  failNext(method: string, times: number, userName?: string, status = 500): void {
-    this.failures.push({ method, userName, remaining: times, status });
+  failNext(method: string, times: number, userName?: string, status = 500, code?: string): void {
+    this.failures.push({ method, userName, remaining: times, status, code });
   }
 
   /** Classify the given published jokes, or every published joke when none are named. */
@@ -130,7 +131,7 @@ export class FakeWorld {
     );
     if (f) {
       f.remaining--;
-      throw new FakeApiError(f.status, f.status === 500 ? 'INTERNAL' : 'INJECTED');
+      throw new FakeApiError(f.status, f.code ?? (f.status === 500 ? 'INTERNAL' : 'INJECTED'));
     }
   }
 

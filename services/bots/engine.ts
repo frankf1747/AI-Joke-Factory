@@ -19,6 +19,7 @@ import {
   BATCH_CAP_PER_ROUND, DWELL_MS, FEEDBACK_WAIT_MS, IDLE_POLL_MS, MAX_BOT_TEAMS, PERSONAS,
   QUEUE_POLL_MS, chooseWithMemory, choosePublished, jitter, publishCount, type JokeMemory, type PersonaId,
 } from './personas';
+import { isWipLimitReached } from '../leanMode';
 import { participantsOf, planPlacement, teamsNeeded } from './placement';
 import type {
   BotMeta, BotTeamSpec, EngineStatus, FromWorker, ProbeResult, ReasoningEntry, SeatStatus,
@@ -37,6 +38,21 @@ export interface EngineDeps {
 }
 
 export const TICK_MS = 1_000;
+/** Every Joke Maker's activity at its per-round cap contains this; the pilot waits on it. */
+export const CAP_REACHED = 'cap reached';
+/** A Joke Maker refused by the Lean WIP limit shows this while it waits. */
+export const WIP_WAIT_ACTIVITY = 'waiting — Marketing at WIP limit';
+
+/**
+ * The per-round cap in JOKES: BATCH_CAP_PER_ROUND batches of the round's
+ * batch_size. A persona that submits full batches stops after exactly
+ * BATCH_CAP_PER_ROUND batches, as before; one that submits smaller batches
+ * (the Learner's 3 from round 2) sends more, smaller batches instead of fewer
+ * jokes. Classification calls are bounded by jokes either way.
+ */
+export function jokeCapFor(batchSize: number): number {
+  return BATCH_CAP_PER_ROUND * batchSize;
+}
 const HISTORY_PER_BOT = 50;
 const ROUND_CACHE_MS = 2_000;
 const MAX_BACKOFF_MS = 30_000;
@@ -191,6 +207,8 @@ interface TeamRuntime {
    * not hold up the next round.
    */
   submittedByRound: Map<number, number>;
+  /** Jokes submitted per round, for the per-round cap (jokeCapFor). */
+  submittedJokesByRound: Map<number, number>;
   publishedByRound: Map<number, number>;
   /** All rounds, for the panel. */
   published: number;
@@ -208,7 +226,7 @@ function newTeam(spec: BotTeamSpec): TeamRuntime {
   return {
     index: spec.index, persona: spec.persona, teamId: null,
     jm: newSeat(spec.index, 'A'), marketing: newSeat(spec.index, 'B'),
-    submittedByRound: new Map(), publishedByRound: new Map(), published: 0, awaitingFeedback: null,
+    submittedByRound: new Map(), submittedJokesByRound: new Map(), publishedByRound: new Map(), published: 0, awaitingFeedback: null,
     memory: new Map(),
   };
 }
@@ -545,8 +563,10 @@ export class BotEngine {
           continue;
         }
         const submitted = team.submittedByRound.get(round.id) ?? 0;
-        if (submitted >= BATCH_CAP_PER_ROUND) {
-          this.setActivity(seat, `done — ${BATCH_CAP_PER_ROUND}-batch cap reached`, signal);
+        const submittedJokes = team.submittedJokesByRound.get(round.id) ?? 0;
+        const cap = jokeCapFor(round.batch_size);
+        if (submittedJokes >= cap) {
+          this.setActivity(seat, `done — ${cap}-joke ${CAP_REACHED}`, signal);
           await this.pace(IDLE_POLL_MS, signal);
           continue;
         }
@@ -575,6 +595,7 @@ export class BotEngine {
         // A batch in flight when Stop is pressed lands but is not counted or logged.
         if (signal.aborted) break;
         team.submittedByRound.set(round.id, submitted + 1);
+        team.submittedJokesByRound.set(round.id, submittedJokes + jokes.length);
         seat.error = null;
         attempt = 0;
         this.log(team, seat, `submitted batch ${submitted + 1}: ${jokes.map(j => j.id).join(', ')}`, signal);
@@ -863,6 +884,12 @@ export class BotEngine {
       this.log(team, seat, 'the backend refused this (403) — polling again', signal);
       this.setActivity(seat, 'not allowed right now — polling again', signal);
       await this.pace(QUEUE_POLL_MS, signal);
+      return true;
+    }
+    if (seat.seat === 'A' && isWipLimitReached(err)) {
+      // Lean WIP limit: the round is fine, Marketing just has enough waiting.
+      this.setActivity(seat, WIP_WAIT_ACTIVITY, signal);
+      await this.pace(IDLE_POLL_MS, signal);
       return true;
     }
     if (statusOf(err) === 409) {

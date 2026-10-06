@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_IDEAL_PROFILE } from '../../config/dimensions';
 import { seededRng, variedCorpus } from '../shared/jokes';
-import { BotEngine, SEAT_CHECK_MS, fitPieces, splitBlob, titleOf, wallClockSteps } from './engine';
+import { BotEngine, CAP_REACHED, SEAT_CHECK_MS, WIP_WAIT_ACTIVITY, fitPieces, jokeCapFor, splitBlob, titleOf, wallClockSteps } from './engine';
 import { botName, isBotName } from './naming';
 import { Deck } from './deck';
 import { BATCH_CAP_PER_ROUND } from './personas';
@@ -205,13 +205,37 @@ describe('BotEngine', () => {
     expect(engine.status().teams[0].jm.error).toContain('INTERNAL');
   });
 
-  it('stops submitting at the per-round batch cap', async () => {
+  it('stops submitting at the per-round joke cap', async () => {
     const { world, engine } = setup();
     await engine.start(options());
     await until(() => engine.status().teams[0].jm.activity.includes('cap'), 'the batch cap');
     engine.stop();
     const team = teamOf(world, botName(1, 'A'));
     expect(world.batches.filter(b => b.teamId === team)).toHaveLength(BATCH_CAP_PER_ROUND);
+  });
+
+  it('caps full-batch personas at exactly BATCH_CAP_PER_ROUND batches, as the old batch cap did', async () => {
+    const { world, engine } = setup();
+    const personas = ['CAREFUL', 'BALANCED', 'SPRAY'] as const;
+    await engine.start(options({ teams: personas.map((persona, i) => ({ index: i + 1, persona })) }));
+    await until(() => engine.status().teams.every(t => t.jm.activity.includes(CAP_REACHED)), 'every cap');
+    const activity = engine.status().teams[0].jm.activity;
+    engine.stop();
+    expect(jokeCapFor(world.round.batch_size)).toBe(BATCH_CAP_PER_ROUND * 5);
+    for (let i = 1; i <= personas.length; i++) {
+      const team = teamOf(world, botName(i, 'A'));
+      expect(world.batches.filter(b => b.teamId === team)).toHaveLength(BATCH_CAP_PER_ROUND);
+    }
+    expect(activity).toBe(`done — ${BATCH_CAP_PER_ROUND * 5}-joke ${CAP_REACHED}`);
+  });
+
+  it('shows a Joke Maker refused by the WIP limit as waiting, not as an idle round', async () => {
+    const { world, engine } = setup();
+    world.failNext('submitBatch', 1_000_000, botName(1, 'A'), 409, 'WIP_LIMIT_REACHED: Marketing has 2 batches waiting');
+    await engine.start(options());
+    await until(() => engine.status().teams[0].jm.activity === WIP_WAIT_ACTIVITY, 'the WIP wait');
+    engine.stop();
+    expect(engine.status().teams[0].jm.error).toBeNull();
   });
 
   it('pauses every bot when seats are re-shuffled, and resumes after re-forming', async () => {
@@ -727,6 +751,22 @@ describe('Learner bot', () => {
     expect(r2.every(n => n === 3)).toBe(true);
     // Learner publishes two of its three.
     expect(world.decisions.find(d => round2.has(d.batchId))).toMatchObject({ published: 2, total: 3 });
+  });
+
+  it('sends more than BATCH_CAP_PER_ROUND smaller batches in round 2, stopping at the joke cap', async () => {
+    const submits: Submit[] = [];
+    const { world, engine } = setup([], { wrapApi: recordSubmits(submits) });
+    world.round.round_number = 2;
+    await engine.start(options({ teams: [{ index: 1, persona: 'LEARNER' }] }));
+    await until(() => engine.status().teams[0].jm.activity.includes(CAP_REACHED), 'the joke cap');
+    engine.stop();
+    const cap = jokeCapFor(world.round.batch_size);
+    const jokes = submits.reduce((n, s) => n + s.jokes, 0);
+    expect(submits.length).toBeGreaterThan(BATCH_CAP_PER_ROUND);
+    expect(submits.every(s => s.jokes === 3)).toBe(true);
+    expect(submits).toHaveLength(Math.ceil(cap / 3));
+    expect(jokes).toBeGreaterThanOrEqual(cap);
+    expect(jokes - 3).toBeLessThan(cap);
   });
 
   it('remembers sold jokes from the team batch list and keeps them next time', async () => {

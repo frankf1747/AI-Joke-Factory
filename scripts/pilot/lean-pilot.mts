@@ -13,6 +13,10 @@
      PILOT_INSTRUCTOR     instructor display name, default "Local Instructor".
      PILOT_WINDOW         Lean arrival window in seconds, default 180 (bots run at 10x,
                           so a 15-minute class compresses to a few minutes).
+     Carrying cost is charged per WALL-CLOCK minute, but the bots run at 10x, so a
+     compressed class would pay a tenth of a real class's inventory cost. Lean rounds
+     are therefore configured with carrying = LEAN_CLASS_PRESET carrying x SPEED (10).
+     Setup cost is per batch, not per minute, and stays unscaled; the window is as given.
      PILOT_SMOKE=1        a quick end-to-end check: ONE Lean class, one team per persona,
                           window 60 s unless PILOT_WINDOW says otherwise.
 
@@ -23,8 +27,8 @@
    caps by round id, and team assignments live on the users, so nobody re-seats. */
 import { writeFileSync } from 'node:fs';
 import { createClient } from '../../services/shared/client';
-import { BotEngine, realDelay } from '../../services/bots/engine';
-import { BATCH_CAP_PER_ROUND, personaSequence, type PersonaId } from '../../services/bots/personas';
+import { BotEngine, CAP_REACHED, realDelay } from '../../services/bots/engine';
+import { personaSequence, type PersonaId } from '../../services/bots/personas';
 import type { EngineStatus } from '../../services/bots/protocol';
 import { LEAN_CLASS_PRESET, leanConfigToBody } from '../../services/leanMode';
 import { DEFAULT_IDEAL_PROFILE } from '../../config/dimensions';
@@ -55,14 +59,29 @@ const SPEED = 10 as const;
 const POLL_MS = 5_000;
 const MAX_ROUND_MS = 8 * 60_000;
 const SETTLE_MS = 15_000;
-const CAP_TEXT = `${BATCH_CAP_PER_ROUND}-batch cap reached`;
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const ideal = { ...DEFAULT_IDEAL_PROFILE } as ConfigRequest['ideal_profile'];
 
 function configFor(mode: PilotMode, round: PilotRound): ConfigRequest {
   if (mode === 'CLASSIC') return leanConfigToBody({ marketMode: 'CLASSIC' });
-  return leanConfigToBody({ ...LEAN_CLASS_PRESET[round], arrivalWindowSeconds: WINDOW });
+  const preset = LEAN_CLASS_PRESET[round];
+  return leanConfigToBody({
+    ...preset, arrivalWindowSeconds: WINDOW,
+    carryingCostPerJokeMinute: (preset.carryingCostPerJokeMinute ?? 0) * SPEED,
+  });
 }
+
+/** The report's settings section. */
+const SETTINGS: string[] = [
+  `Backend ${BE}; bots at ${SPEED}x; ${Object.entries(COUNTS).map(([p, n]) => `${n} ${p}`).join(', ')} per class${SMOKE ? ' (PILOT_SMOKE)' : ''}.`,
+  ...([1, 2] as const).map(r => {
+    const c = configFor('LEAN', r);
+    return `Lean R${r}: setup $${c.setup_cost_per_batch} per batch, carrying $${c.carrying_cost_per_joke_minute} per joke-minute, `
+      + `WIP limit ${c.wip_limit || 'none'}, arrival window ${c.arrival_window_seconds}s.`;
+  }),
+  `Carrying scaled ×${SPEED} to match bot speed (the backend charges per wall-clock minute); setup cost unscaled.`,
+  'Bot rounds are capped by jokes (8 × batch_size), not batches, so small-batch personas are not penalised.',
+];
 
 async function runClass(mode: PilotMode, rep: number): Promise<RunResult[]> {
   const api = createClient({ baseUrl: BE });
@@ -112,7 +131,7 @@ async function playRound(
   while (Date.now() - t0 < MAX_ROUND_MS) {
     await sleep(POLL_MS);
     const s: EngineStatus = engine.status();
-    const capped = s.teams.filter(t => t.jm.activity.includes(CAP_TEXT)).length;
+    const capped = s.teams.filter(t => t.jm.activity.includes(CAP_REACHED)).length;
     const idle = s.teams.filter(t => /waiting for a batch/.test(t.marketing.activity)).length;
     const windowLeft = Math.max(0, Math.round((windowEnds - Date.now()) / 1000));
     console.log(
@@ -144,7 +163,7 @@ const results: RunResult[] = [];
 const t0 = Date.now();
 for (const step of PLAN) {
   results.push(...(await runClass(step.mode, step.rep)));
-  writeFileSync(OUT, markdown(results, TODAY));
+  writeFileSync(OUT, markdown(results, TODAY, SETTINGS));
   console.log(`wrote ${OUT}`);
 }
 console.log(`DONE in ${Math.round((Date.now() - t0) / 1000)}s`);

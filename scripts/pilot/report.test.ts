@@ -84,5 +84,11 @@ describe('pilot report', () => {
     expect(md).not.toContain('## CLASSIC R1');
     expect(md).toContain('Lean R2 vs Lean R1 mean profit: $17.50 vs $7.00 (improved)');
     expect(md).toContain('| LEAN | 1 | 2 | LEARNER | $30.00 |');
+    expect(md).not.toContain('## Settings');
+  });
+
+  it('prints the settings section when given one', () => {
+    const md = markdown([run('LEAN', 2, [['LEARNER', 1]])], '2026-10-06', ['carrying scaled x10 to match bot speed']);
+    expect(md).toContain('## Settings\n\n- carrying scaled x10 to match bot speed');
   });
 });

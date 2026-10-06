@@ -84,7 +84,7 @@ export function verdict(runs: RunResult[]): Verdict {
   };
 }
 
-export function markdown(runs: RunResult[], date: string): string {
+export function markdown(runs: RunResult[], date: string, settings: string[] = []): string {
   const s = summarise(runs);
   const v = verdict(runs);
   const has = (mode: PilotMode, round: PilotRound) => runs.some(r => r.mode === mode && r.round === round);
@@ -114,6 +114,7 @@ export function markdown(runs: RunResult[], date: string): string {
     ...contrast('Lean', v.leanR1Mean, v.leanR2Mean, has('LEAN', 1) && has('LEAN', 2)),
     ...contrast('Classic', v.classicR1Mean, v.classicR2Mean, has('CLASSIC', 1) && has('CLASSIC', 2)),
     '',
+    ...(settings.length ? ['## Settings', '', ...settings.map(x => `- ${x}`), ''] : []),
     'Means per team. Lead time is submit to publish; time to first sale is publish to first sale (Lean only).', '',
     ...GROUPS.filter(([m, r]) => has(m, r)).flatMap(([m, r]) => table(m, r)),
     '## Classes', '',
