@@ -1,6 +1,6 @@
 // services/leanMode.test.ts
 import { describe, expect, it } from 'vitest';
-import { fmtMoney, isLeanRound, isMarketModeLocked, isWipLimitReached, learningCurvePoints, WIP_LIMIT_MESSAGE, LEAN_CLASS_PRESET, leanConfigFromRound, leanConfigToBody, MARKET_MODE_LOCKED_MESSAGE, wipStatus } from './leanMode';
+import { fmtMoney, isLeanRound, isMarketModeLocked, isWipLimitReached, learningCurvePoints, WIP_LIMIT_MESSAGE, LEAN_CLASS_PRESET, neverSold, leanConfigFromRound, leanConfigToBody, MARKET_MODE_LOCKED_MESSAGE, wipStatus } from './leanMode';
 
 const classic = { market_mode: 'CLASSIC', arrival_window_seconds: 900, setup_cost_per_batch: 0, carrying_cost_per_joke_minute: 0, wip_limit: 0 };
 const lean = { ...classic, market_mode: 'LEAN', setup_cost_per_batch: 3, carrying_cost_per_joke_minute: 0.02, wip_limit: 2 };
@@ -40,6 +40,20 @@ describe('lean mode helpers', () => {
     });
     expect(leanConfigToBody({ arrivalWindowSeconds: 600, wipLimit: 0 })).toEqual({ arrival_window_seconds: 600, wip_limit: 0 });
     expect(leanConfigToBody({})).toEqual({});
+  });
+
+  it('counts never-sold jokes per batch, even when total sales exceed published', () => {
+    const series = [
+      { seq: 1, submitted_at: '', jokes: 5, published: 4, sold: 1 },
+      { seq: 2, submitted_at: '', jokes: 5, published: 3, sold: 3 },
+      { seq: 3, submitted_at: '', jokes: 5, published: 2, sold: 0 },
+    ];
+    // 9 published, 4 sold at least once; total sales could be 20 (repeat buys),
+    // which the classic max(published - sales, 0) formula would report as 0 unsold.
+    expect(neverSold({ batch_series: series })).toBe(5);
+    expect(neverSold({ batch_series: [{ published: 1, sold: 3 }] })).toBe(0);
+    expect(neverSold({ batch_series: [] })).toBe(0);
+    expect(neverSold(undefined)).toBeNull();
   });
 
   it('recognises the market-mode-locked refusal', () => {

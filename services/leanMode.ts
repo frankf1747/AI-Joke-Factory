@@ -131,3 +131,20 @@ export function learningCurvePoints(
     .sort((a, b) => a.seq - b.seq)
     .map(p => ({ seq: p.seq, rate: Math.min(1, Math.max(0, p.sold / p.published)) }));
 }
+
+/**
+ * Jokes published but never sold, for a Lean row: the sum over submitted
+ * batches of (published − sold), each floored at 0. The backend's
+ * unsold_jokes is max(published − sales, 0), and one joke can sell many
+ * times, so it reads 0 even when many jokes never sold. Returns null when the
+ * row has no lean stats (a Classic round), so callers keep the classic figure.
+ */
+export function neverSold(
+  lean: { batch_series?: Array<{ published: number; sold: number }> | null } | null | undefined,
+): number | null {
+  if (!lean) return null;
+  return (lean.batch_series ?? []).reduce(
+    (n, b) => n + Math.max(0, (Number(b.published) || 0) - (Number(b.sold) || 0)),
+    0,
+  );
+}

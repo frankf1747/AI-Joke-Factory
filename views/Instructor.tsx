@@ -15,7 +15,7 @@ import { LeanDebrief } from '../components/LeanDebrief';
 import { instructorService } from '../services/instructorService';
 import { sessionService } from '../services/sessionService';
 import {
-  LEAN_CLASS_PRESET, MARKET_MODE_LOCKED_TEXT, isMarketModeLocked, leanConfigToBody, fmtMoney,
+  LEAN_CLASS_PRESET, MARKET_MODE_LOCKED_TEXT, isMarketModeLocked, leanConfigToBody, fmtMoney, neverSold,
   type MarketMode,
 } from '../services/leanMode';
 
@@ -362,13 +362,15 @@ const Instructor: React.FC = () => {
     [leaderboardStatsSelected?.leaderboard],
   );
   const leanByTeam = useMemo(() => {
-    const m: Record<string, Record<LeanSortKey, number>> = {};
+    const m: Record<string, Record<LeanSortKey | 'never_sold', number>> = {};
     for (const r of leaderboardStatsSelected?.leaderboard ?? []) {
       m[String(r.team.id)] = {
         setup_cost: Number(r.lean?.setup_cost ?? 0),
         carrying_cost: Number(r.lean?.carrying_cost ?? 0),
         lead_time_s: Number(r.lean?.avg_submit_to_publish_s ?? 0),
         sale_time_s: Number(r.lean?.avg_publish_to_first_sale_s ?? 0),
+        // Lean rows: published-but-never-sold (see neverSold); classic unsold otherwise.
+        never_sold: neverSold(r.lean) ?? Number(r.unsold_jokes ?? 0),
       };
     }
     return m;
@@ -643,6 +645,11 @@ const Instructor: React.FC = () => {
       if (!leaderboardIsLean) return -1 * (a.profit - b.profit);
       const av = leanByTeam[String(a.team_id)]?.[leaderboardSortKey] ?? 0;
       const bv = leanByTeam[String(b.team_id)]?.[leaderboardSortKey] ?? 0;
+      return dir * (av - bv);
+    }
+    if (leaderboardSortKey === 'unsold_jokes' && leaderboardIsLean) {
+      const av = leanByTeam[String(a.team_id)]?.never_sold ?? 0;
+      const bv = leanByTeam[String(b.team_id)]?.never_sold ?? 0;
       return dir * (av - bv);
     }
     const av = a[leaderboardSortKey] ?? 0;
@@ -999,9 +1006,9 @@ const Instructor: React.FC = () => {
                     setLeaderboardSortKey('unsold_jokes');
                     setLeaderboardSortDir(prev => (leaderboardSortKey === 'unsold_jokes' ? (prev === 'asc' ? 'desc' : 'asc') : 'desc'));
                   }}
-                  title="Sort by Unsold Jokes"
+                  title={leaderboardIsLean ? 'Sort by Never Sold (published jokes with no sale)' : 'Sort by Unsold Jokes'}
                 >
-                  <span>Unsold Jokes</span>
+                  <span>{leaderboardIsLean ? 'Never Sold' : 'Unsold Jokes'}</span>
                   <span className="ml-1 w-3 text-center">
                     {leaderboardSortKey === 'unsold_jokes' ? (leaderboardSortDir === 'asc' ? '▲' : '▼') : ''}
                   </span>
@@ -1094,7 +1101,9 @@ const Instructor: React.FC = () => {
                 <td className="px-3 py-2 text-right text-gray-800">{row.batches_processed}</td>
                 <td className="px-3 py-2 text-right text-gray-800">{row.published_jokes}</td>
                 <td className="px-3 py-2 text-right text-gray-800">{row.discarded_jokes}</td>
-                <td className="px-3 py-2 text-right text-gray-800">{row.unsold_jokes}</td>
+                <td className="px-3 py-2 text-right text-gray-800">
+                  {leaderboardIsLean ? (leanByTeam[String(row.team_id)]?.never_sold ?? row.unsold_jokes) : row.unsold_jokes}
+                </td>
                 <td className="px-3 py-2 text-right text-gray-800">{row.total_jokes}</td>
                 <td className="px-3 py-2 text-right text-gray-800">{row.total_sales}</td>
                 <td className={`px-3 py-2 text-right font-bold ${Number(row.profit) < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
@@ -2483,7 +2492,7 @@ const Instructor: React.FC = () => {
                   className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditPricing ? 'opacity-50 cursor-not-allowed' : ''}`}
                 />
               </div>
-              <div className="flex items-center space-x-3" title="Classic: one shopping burst at round end. Lean: customers arrive steadily; setup, carrying and WIP rules apply.">
+              <div className="flex items-center space-x-3" title="Classic: every customer looks at each joke as soon as it is classified, buys the ones that qualify while budget lasts, and later swaps for clearly better ones. Lean: customers arrive evenly across the arrival window and shop once; setup, carrying and WIP rules apply.">
                 <label htmlFor="cfg-market-mode" className="text-sm text-gray-600 whitespace-nowrap">Market mode:</label>
                 <select
                   id="cfg-market-mode"
@@ -2524,7 +2533,7 @@ const Instructor: React.FC = () => {
                       className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditPricing ? 'opacity-50 cursor-not-allowed' : ''}`}
                     />
                   </div>
-                  <div className="flex items-center space-x-3" title="Charged per published joke per minute it waits unsold">
+                  <div className="flex items-center space-x-3" title="Charged per joke per minute it waits: jokes in batches waiting in Marketing (submitted to released; an unsplit batch counts as batch-size jokes) and published jokes until their first sale">
                     <label htmlFor="cfg-carrying-cost" className="text-sm text-gray-600 whitespace-nowrap">Carrying cost / joke-min:</label>
                     <input
                       id="cfg-carrying-cost"
