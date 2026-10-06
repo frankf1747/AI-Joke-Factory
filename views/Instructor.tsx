@@ -280,12 +280,14 @@ const Instructor: React.FC = () => {
       }
       if (applied.length === 0) return;
       const parts = applied.map(n => (n === 1 ? 'Round 1: push rules' : 'Round 2: lean rules'));
+      const customers = new Set(applied.map(n => LEAN_CLASS_PRESET[n].customerCount).filter(c => c != null));
+      const customerNote = customers.size === 1 ? ` (${[...customers][0]} customers)` : '';
       const skipped = roundIds[1] == null || statuses[1] === 'CONFIGURED'
         ? ''
         : statuses[1] == null
           ? " (Round 1's status is unknown, so it was left as is)"
           : ' (Round 1 has already started, so it was left as is)';
-      setPresetNotice(`Lean class preset applied — ${parts.join(' · ')}${skipped}`);
+      setPresetNotice(`Lean class preset applied — ${parts.join(' · ')}${customerNote}${skipped}`);
       window.setTimeout(() => setPresetNotice(null), 3200);
     } finally {
       setPresetBusy(false);

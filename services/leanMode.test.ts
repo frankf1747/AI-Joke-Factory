@@ -35,8 +35,13 @@ describe('lean mode helpers', () => {
   });
 
   it('maps lean config keys onto the snake_case request body', () => {
+    expect(leanConfigToBody(LEAN_CLASS_PRESET[1])).toEqual({
+      market_mode: 'LEAN', setup_cost_per_batch: 2, carrying_cost_per_joke_minute: 0.05, wip_limit: 0,
+      preference_base: 3, customer_count: 150,
+    });
     expect(leanConfigToBody(LEAN_CLASS_PRESET[2])).toEqual({
-      market_mode: 'LEAN', setup_cost_per_batch: 1, carrying_cost_per_joke_minute: 0.02, wip_limit: 2,
+      market_mode: 'LEAN', setup_cost_per_batch: 0.5, carrying_cost_per_joke_minute: 0.05, wip_limit: 2,
+      preference_base: 3, customer_count: 150,
     });
     expect(leanConfigToBody({ arrivalWindowSeconds: 600, wipLimit: 0 })).toEqual({ arrival_window_seconds: 600, wip_limit: 0 });
     expect(leanConfigToBody({})).toEqual({});

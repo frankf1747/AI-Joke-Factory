@@ -28,10 +28,34 @@ export const LEAN_DEFAULTS: LeanConfig = {
   marketMode: 'CLASSIC', arrivalWindowSeconds: 900, setupCostPerBatch: 0, carryingCostPerJokeMinute: 0, wipLimit: 0,
 };
 
-/** The one-click class preset from the spec: Round 1 push, Round 2 lean. */
-export const LEAN_CLASS_PRESET: Record<1 | 2, Partial<LeanConfig>> = {
-  1: { marketMode: 'LEAN', setupCostPerBatch: 3, carryingCostPerJokeMinute: 0.02, wipLimit: 0 },
-  2: { marketMode: 'LEAN', setupCostPerBatch: 1, carryingCostPerJokeMinute: 0.02, wipLimit: 2 },
+/**
+ * Round settings the class preset writes beyond the GameConfig lean fields.
+ * Only the preset sets these; context.updateConfig never sends them.
+ */
+export interface LeanPresetConfig extends Partial<LeanConfig> {
+  /** How sharply customers prefer jokes that fit the hidden ideal. */
+  preferenceBase?: number;
+  /** AI customers per round. */
+  customerCount?: number;
+}
+
+/**
+ * The one-click class preset: Round 1 push, Round 2 lean. Values come from the
+ * bot pilot (docs/pilots/2026-10-06-lean-pilot-tuning4.md), the first tuning
+ * where Round 2 beat Round 1 on mean profit (+$0.69 vs -$8.64):
+ * - setup $2.00 (R1) vs $0.50 (R2): a big-batch round pays for each changeover,
+ *   and small batches only pay off once changeovers are cheap.
+ * - carrying $0.05 per joke-minute, both rounds: inventory waiting in Marketing
+ *   or unsold on the shelf has to cost enough to be felt.
+ * - WIP 0 (R1, push) vs 2 (R2, pull): Round 2 caps batches waiting in Marketing.
+ * - preference_base 3: fit matters enough that learning what sells pays.
+ * - 150 customers: enough demand that a well-aimed small batch sells through.
+ * The arrival window keeps its 900 s default. The pilot ran bots at 10x and
+ * scaled carrying by 10 to match; these are the real-time values for a class.
+ */
+export const LEAN_CLASS_PRESET: Record<1 | 2, LeanPresetConfig> = {
+  1: { marketMode: 'LEAN', setupCostPerBatch: 2, carryingCostPerJokeMinute: 0.05, wipLimit: 0, preferenceBase: 3, customerCount: 150 },
+  2: { marketMode: 'LEAN', setupCostPerBatch: 0.5, carryingCostPerJokeMinute: 0.05, wipLimit: 2, preferenceBase: 3, customerCount: 150 },
 };
 
 export function isLeanRound(round: LeanRoundFields | null | undefined): boolean {
@@ -98,6 +122,8 @@ export interface LeanConfigBody {
   setup_cost_per_batch?: number;
   carrying_cost_per_joke_minute?: number;
   wip_limit?: number;
+  preference_base?: number;
+  customer_count?: number;
 }
 
 /**
@@ -105,13 +131,15 @@ export interface LeanConfigBody {
  * same mapping context.updateConfig uses. Absent keys stay absent so the
  * backend keeps the round's current value.
  */
-export function leanConfigToBody(c: Partial<LeanConfig>): LeanConfigBody {
+export function leanConfigToBody(c: LeanPresetConfig): LeanConfigBody {
   const body: LeanConfigBody = {};
   if (c.marketMode !== undefined) body.market_mode = c.marketMode;
   if (c.arrivalWindowSeconds !== undefined) body.arrival_window_seconds = c.arrivalWindowSeconds;
   if (c.setupCostPerBatch !== undefined) body.setup_cost_per_batch = c.setupCostPerBatch;
   if (c.carryingCostPerJokeMinute !== undefined) body.carrying_cost_per_joke_minute = c.carryingCostPerJokeMinute;
   if (c.wipLimit !== undefined) body.wip_limit = c.wipLimit;
+  if (c.preferenceBase !== undefined) body.preference_base = c.preferenceBase;
+  if (c.customerCount !== undefined) body.customer_count = c.customerCount;
   return body;
 }
 
