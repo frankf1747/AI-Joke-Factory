@@ -4,9 +4,23 @@
     {
       "name": "joke-factory",
       "runtimeExecutable": "/Users/frankfu/.nvm/versions/node/v20.19.6/bin/node",
-      "runtimeArgs": ["./node_modules/vite/bin/vite.js"],
+      "runtimeArgs": [
+        "./node_modules/vite/bin/vite.js"
+      ],
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "joke-factory-live",
+      "runtimeExecutable": "/Users/frankfu/.nvm/versions/node/v20.19.6/bin/node",
+      "runtimeArgs": [
+        "./node_modules/vite/bin/vite.js",
+        "preview",
+        "--port",
+        "4173",
+        "--strictPort"
+      ],
+      "port": 4173
     }
   ]
 }
