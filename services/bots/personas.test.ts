@@ -92,6 +92,12 @@ describe('Learner persona', () => {
     expect(keep.size).toBe(2); // the hit plus one unknown
   });
 
+  it('never publishes more than its count, even when more jokes are known to sell', () => {
+    const memory = new Map<string, 'sold' | 'unsold'>([['a', 'sold'], ['b', 'sold'], ['c', 'sold']]);
+    const jokes = [{ joke_id: 1, joke_text: 'a' }, { joke_id: 2, joke_text: 'b' }, { joke_id: 3, joke_text: 'c' }];
+    expect([...chooseWithMemory(jokes, memory, 2, () => 0)]).toEqual([1, 2]);
+  });
+
   it('never publishes nothing in round 1', () => {
     const memory = new Map<string, 'sold' | 'unsold'>([['dud', 'unsold']]);
     const keep = chooseWithMemory([{ joke_id: 2, joke_text: 'dud' }], memory, 0, () => 0, 1);

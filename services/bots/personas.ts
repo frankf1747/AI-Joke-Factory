@@ -101,8 +101,9 @@ export function choosePublished(
 export type JokeMemory = Map<string, 'sold' | 'unsold'>;
 
 /**
- * The Learner's decision: keep every joke it has seen sell, drop every one it
- * has seen fail, and fill the remaining slots from jokes it has not seen —
+ * The Learner's decision: keep jokes it has seen sell (at most `count` of
+ * them, first in batch order), drop every one it has seen fail, and fill the
+ * remaining slots from jokes it has not seen —
  * chosen at random, because it has nothing else to go on. It sees only what a
  * human Marketing seat sees (sold counts on its own team's batches).
  *
@@ -115,12 +116,14 @@ export function chooseWithMemory(
 ): Set<number> {
   const keep = new Set<number>();
   const unknown: number[] = [];
+  const want = Math.max(roundNumber === 1 ? 1 : 0, count);
   for (const j of jokes) {
     const seen = memory.get(j.joke_text.trim());
-    if (seen === 'sold') keep.add(j.joke_id);
-    else if (seen === undefined) unknown.push(j.joke_id);
+    // Never more than the persona's count: the first `want` known sellers.
+    if (seen === 'sold') {
+      if (keep.size < want) keep.add(j.joke_id);
+    } else if (seen === undefined) unknown.push(j.joke_id);
   }
-  const want = Math.max(roundNumber === 1 ? 1 : 0, count);
   for (const id of choosePublished(unknown, Math.max(0, want - keep.size), rand)) keep.add(id);
   if (keep.size === 0 && roundNumber === 1 && jokes.length > 0) keep.add(jokes[0].joke_id);
   return keep;

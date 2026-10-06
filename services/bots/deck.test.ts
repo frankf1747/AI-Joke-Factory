@@ -43,16 +43,24 @@ describe('Deck', () => {
 describe('drawLearnerBatch', () => {
   const textOf = (i: number) => variedCorpus[i].text;
 
-  it('draws exactly like the deck while no sold text is known', () => {
-    const memory: JokeMemory = new Map([[textOf(0), 'unsold']]);
+  it('draws exactly like the deck while it knows nothing', () => {
     const plain = new Deck(variedCorpus, seededRng('same'));
     const learner = new Deck(variedCorpus, seededRng('same'));
     let cursor = 0;
     for (let batch = 0; batch < 5; batch++) {
-      const out = drawLearnerBatch(learner, variedCorpus, memory, 5, cursor);
+      const out = drawLearnerBatch(learner, variedCorpus, new Map(), 5, cursor);
       cursor = out.cursor;
       expect(out.jokes.map(j => j.id)).toEqual(plain.draw(5).map(j => j.id));
     }
+  });
+
+  it('skips known duds even before anything has sold', () => {
+    const next = new Deck(variedCorpus, seededRng('duds')).draw(2);
+    const memory: JokeMemory = new Map(next.map(j => [j.text, 'unsold'] as const));
+    const out = drawLearnerBatch(new Deck(variedCorpus, seededRng('duds')), variedCorpus, memory, 5, 0);
+    expect(out.jokes).toHaveLength(5);
+    for (const j of out.jokes) expect(memory.get(j.text)).toBeUndefined();
+    expect(out.cursor).toBe(0);
   });
 
   it('reuses floor(size/2) sold texts, rotating through them', () => {

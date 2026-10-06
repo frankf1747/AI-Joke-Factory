@@ -771,39 +771,72 @@ describe('Learner bot', () => {
     expect(world.decisions.find(d => d.batchId === again.id)).toMatchObject({ published: 2, total: 5 });
   });
 
-  it("the Joke Maker resubmits a text it saw sell and leaves out one it saw fail; Spray's batches are unchanged", async () => {
+  it("the Joke Maker resubmits a text it saw sell and skips the dud its deck deals next; Spray's batches are unchanged", async () => {
     const submits: Submit[] = [];
     const { world, engine } = setup([], { wrapApi: recordSubmits(submits) });
-    await engine.start(options({ teams: [{ index: 1, persona: 'LEARNER' }, { index: 2, persona: 'SPRAY' }] }));
+    await engine.start(options({ teams: [{ index: 1, persona: 'LEARNER' }, { index: 2, persona: 'SPRAY' }], startRound: false }));
     const learner = teamOf(world, botName(1, 'A'));
     const spray = teamOf(world, botName(2, 'A'));
     if (learner == null || spray == null) throw new Error('bot teams missing');
-    const learnerDecisions = () => world.decisions.filter(d => d.teamId === learner);
-    await until(() => learnerDecisions().length >= 2, 'two processed Learner batches');
 
-    // Batch 1 published two jokes: one sold, one did not, and batch 2 has
-    // since been processed, so the unsold one counts as a failure.
-    const first = world.batches.find(b => b.id === learnerDecisions()[0].batchId);
-    const [hit, dud] = first?.jokes.filter(j => j.published) ?? [];
-    if (!hit || !dud) throw new Error('batch 1 published fewer than two jokes');
-    world.setSold(hit.joke_id, 2);
+    // The Learner's deck, seeded as the engine seeds it, deals these next.
+    const upcoming = new Deck(variedCorpus, seededRng('engine-test:jm:1')).draw(5);
+    const dud = upcoming[0];
+    const hit = variedCorpus.find(j => !upcoming.some(u => u.id === j.id)) as (typeof variedCorpus)[number];
 
-    // A batch may already be on its way; the one after it was drawn knowing.
-    const before = submits.filter(s => s.teamId === learner).length;
-    await until(() => submits.filter(s => s.teamId === learner).length >= before + 2, 'two more Learner batches');
+    // What the team's batch list already shows: the hit sold; the dud did not,
+    // and a later batch has been processed since, so it is not merely "not yet".
+    const published = (joke_text: string) => ({ joke_id: world.newJokeId(), joke_text, published: true });
+    const earlier = { ...published(dud.text) };
+    const sold = { ...published(hit.text) };
+    world.batches.push(
+      { id: world.newBatchId(), roundId: 1, teamId: learner, rawText: null, state: 'DONE', lockedBy: null,
+        jokes: [earlier, sold], processedAt: '2025-12-31T00:00:01Z' },
+      { id: world.newBatchId(), roundId: 1, teamId: learner, rawText: null, state: 'DONE', lockedBy: null,
+        jokes: [published('Some later joke that has not sold yet, but may.')], processedAt: '2025-12-31T00:00:02Z' },
+    );
+    world.setSold(sold.joke_id, 1);
+    world.profileConfigured = true;
+    world.round.status = 'ACTIVE';
+
+    await until(
+      () => submits.some(s => s.teamId === learner) && submits.some(s => s.teamId === spray),
+      'a batch from each team',
+    );
     engine.stop();
 
-    const next = submits.filter(s => s.teamId === learner)[before + 1];
-    expect(next.roundId).toBe(1);
-    expect(next.texts).toHaveLength(5);
-    expect(next.texts).toContain(hit.joke_text);
-    expect(next.texts).not.toContain(dud.joke_text);
+    const first = submits.find(s => s.teamId === learner) as Submit;
+    expect(first.texts).toHaveLength(5);
+    expect(first.texts).toContain(hit.text);
+    expect(first.texts).not.toContain(dud.text);
 
     // Spray draws straight from its own deck, as before.
+    const sprays = submits.filter(x => x.teamId === spray);
+    expect(sprays.length).toBeGreaterThan(0);
     const deck = new Deck(variedCorpus, seededRng('engine-test:jm:2'));
-    for (const s of submits.filter(x => x.teamId === spray)) {
-      expect(s.texts).toEqual(deck.draw(5).map(j => j.text));
-    }
+    for (const s of sprays) expect(s.texts).toEqual(deck.draw(5).map(j => j.text));
+  });
+
+  it('carries a sale of a round-1 joke that arrives after round 1 into round 2', async () => {
+    const submits: Submit[] = [];
+    const { world, engine } = setup([], { wrapApi: recordSubmits(submits) });
+    await engine.start(options({ teams: [{ index: 1, persona: 'LEARNER' }] }));
+    const team = teamOf(world, botName(1, 'A'));
+    await until(() => world.decisions.some(d => d.teamId === team), 'a round-1 publish');
+    world.round.status = 'ENDED';
+    await settle(300);
+
+    const first = world.batches.find(b => b.id === world.decisions[0].batchId);
+    const hit = first?.jokes.find(j => j.published);
+    if (!hit) throw new Error('round 1 published nothing');
+    world.setSold(hit.joke_id, 1);
+    world.round = { ...world.round, id: 2, round_number: 2, status: 'ACTIVE' };
+    await until(() => submits.some(s => s.roundId === 2), 'a round-2 batch');
+    engine.stop();
+
+    const next = submits.find(s => s.roundId === 2) as Submit;
+    expect(next.texts).toHaveLength(3);
+    expect(next.texts).toContain(hit.joke_text);
   });
 });
 

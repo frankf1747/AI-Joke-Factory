@@ -59,16 +59,18 @@ export const LEARNER_MAX_REDRAWS = 12;
  * seen sell, rotating through them from `cursor` so it does not resubmit only
  * one, then fills the rest with fresh draws, redrawing up to
  * LEARNER_MAX_REDRAWS times to avoid a text the team has seen not sell. If the
- * deck cannot avoid one, it accepts it. A batch never repeats a joke. With no
- * sold text known it is exactly `deck.draw(size)`.
+ * deck cannot avoid one, it accepts it. A batch never repeats a joke. With an
+ * empty memory it is exactly `deck.draw(size)`; knowing only duds, it reuses
+ * nothing but still skips them.
  *
  * Returns the batch and the cursor for the next call.
  */
 export function drawLearnerBatch(
   deck: Deck, corpus: readonly JokeFixture[], memory: JokeMemory, size: number, cursor: number,
 ): { jokes: JokeFixture[]; cursor: number } {
+  // Knowing nothing yet, it is the plain deck. Knowing only duds, it still skips them.
+  if (memory.size === 0) return { jokes: deck.draw(size), cursor };
   const sold = corpus.filter(j => memory.get(j.text.trim()) === 'sold');
-  if (sold.length === 0) return { jokes: deck.draw(size), cursor };
 
   const reuse = Math.min(Math.floor(size / 2), sold.length);
   const jokes: JokeFixture[] = [];
@@ -95,5 +97,5 @@ export function drawLearnerBatch(
     jokes.push(chosen);
     taken.add(chosen.id);
   }
-  return { jokes, cursor: (cursor + reuse) % sold.length };
+  return { jokes, cursor: sold.length === 0 ? cursor : (cursor + reuse) % sold.length };
 }

@@ -10,7 +10,7 @@
  * effect of each step on the next poll; the reasoning log explains the parts
  * that are not server state, such as why a bot kept two jokes and dropped three.
  */
-import type { ConfigRequest, PublicRound, SessionMeResponse } from '../../types/api';
+import type { ConfigRequest, PublicRound, SessionMeResponse, TeamBatch } from '../../types/api';
 import { asRawBlob, seededRng, titleFor, variedCorpus, type JokeFixture } from '../shared/jokes';
 import { statusOf, type BotApi } from './api';
 import { Deck, drawLearnerBatch } from './deck';
@@ -736,24 +736,33 @@ export class BotEngine {
   }
 
   /**
-   * Learner only: read the team's own batch list — what a human Marketing seat
-   * sees — and remember which published joke texts have sold. A joke counts as
-   * 'unsold' only once a LATER batch has been processed, so a joke that merely
-   * has not sold yet is not written off. 'sold' always wins over 'unsold'.
+   * Learner only: read the team's own batch lists — what a human team sees —
+   * for every round it has submitted in plus the current one, so a sale of a
+   * round-1 joke that lands after round 1's last read still counts in round 2.
+   *
+   * A published joke is 'sold' if it has EVER sold: sold_count counts current
+   * holdings and falls when a buyer returns it, so first_sold_at (from the
+   * append-only purchase log) is read too. It is 'unsold' only once a LATER
+   * batch has been processed, so a joke that merely has not sold yet is not
+   * written off. 'sold' always wins over 'unsold'.
    */
   private async learn(me: BotApi, team: TeamRuntime, roundId: number, signal: AbortSignal): Promise<void> {
     if (team.teamId == null) return;
-    const list = (await me.teamBatches(roundId, team.teamId)).batches ?? [];
-    if (signal.aborted) return;
+    const rounds = new Set([...team.submittedByRound.keys(), roundId]);
+    const list: TeamBatch[] = [];
+    for (const id of rounds) {
+      list.push(...((await me.teamBatches(id, team.teamId)).batches ?? []));
+      if (signal.aborted) return;
+    }
     const processed = list
-      .filter(b => b.processed_at)
-      .sort((a, b) => String(a.processed_at).localeCompare(String(b.processed_at)));
+      .filter(b => b.processed_at && !Number.isNaN(Date.parse(b.processed_at)))
+      .sort((a, b) => Date.parse(a.processed_at as string) - Date.parse(b.processed_at as string));
     processed.forEach((b, i) => {
       const isLatest = i === processed.length - 1;
       for (const j of b.jokes ?? []) {
         if (j.publish_status !== 'PUBLISHED') continue;
         const key = j.joke_text.trim();
-        if ((j.sold_count ?? 0) > 0) team.memory.set(key, 'sold');
+        if ((j.sold_count ?? 0) > 0 || j.first_sold_at != null) team.memory.set(key, 'sold');
         else if (!isLatest && !team.memory.has(key)) team.memory.set(key, 'unsold');
       }
     });
