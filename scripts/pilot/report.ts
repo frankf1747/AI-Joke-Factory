@@ -53,7 +53,53 @@ export function isLocalUrl(url: string): boolean {
 }
 
 /** Everything a run produced, written next to the markdown as JSON so it can be re-rendered. */
-export interface PilotSidecar { date: string; settings: string[]; results: RunResult[]; errors: string[]; }
+export interface PilotSidecar { date: string; settings: string[]; results: RunResult[]; errors: string[]; tag?: string; }
+
+/** Env-driven knobs for tuning re-runs of the Lean pilot. Unset means the preset / backend value. */
+export interface Tuning {
+  preferenceBase?: number;
+  /** Per joke-minute, BEFORE the bot-speed scaling. Replaces the preset for both Lean rounds. */
+  carrying?: number;
+  setupR1?: number;
+  setupR2?: number;
+  plan: 'all' | 'lean';
+  tag?: string;
+}
+
+/** Reads PILOT_PREFERENCE_BASE, PILOT_CARRYING, PILOT_SETUP_R1/R2, PILOT_PLAN and PILOT_TAG; throws on bad values. */
+export function parseTuning(env: Record<string, string | undefined>): Tuning {
+  const num = (name: string, ok: (v: number) => boolean, rule: string): number | undefined => {
+    const raw = env[name];
+    if (raw === undefined || raw.trim() === '') return undefined;
+    const v = Number(raw);
+    if (!Number.isFinite(v) || !ok(v)) throw new Error(`${name} must be ${rule}, got ${raw}`);
+    return v;
+  };
+  const plan = (env.PILOT_PLAN ?? 'all').trim().toLowerCase();
+  if (plan !== 'all' && plan !== 'lean') throw new Error(`PILOT_PLAN must be all or lean, got ${env.PILOT_PLAN}`);
+  return {
+    preferenceBase: num('PILOT_PREFERENCE_BASE', v => v > 1, 'a number > 1'),
+    carrying: num('PILOT_CARRYING', v => v >= 0, 'a number >= 0'),
+    setupR1: num('PILOT_SETUP_R1', v => v >= 0, 'a number >= 0'),
+    setupR2: num('PILOT_SETUP_R2', v => v >= 0, 'a number >= 0'),
+    plan,
+    tag: env.PILOT_TAG?.trim() || undefined,
+  };
+}
+
+/** One Settings line naming every override in force, or saying there are none. */
+export function tuningLine(t: Tuning, speed: number): string {
+  const parts: string[] = [];
+  if (t.preferenceBase !== undefined) parts.push(`preference_base ${t.preferenceBase} (PILOT_PREFERENCE_BASE)`);
+  if (t.carrying !== undefined) {
+    parts.push(`carrying $${t.carrying} per joke-minute before the ×${speed} scaling (PILOT_CARRYING)`);
+  }
+  if (t.setupR1 !== undefined) parts.push(`setup R1 $${t.setupR1} (PILOT_SETUP_R1)`);
+  if (t.setupR2 !== undefined) parts.push(`setup R2 $${t.setupR2} (PILOT_SETUP_R2)`);
+  parts.push(t.plan === 'lean' ? 'plan lean: Lean classes only (PILOT_PLAN)' : 'plan all: Classic and Lean classes');
+  const overridden = parts.length > 1;
+  return `Tuning: ${parts.join('; ')}${overridden ? '' : '; no overrides (preset costs, backend preference_base)'}.`;
+}
 const rowsOf = (runs: RunResult[], mode: PilotMode, round: PilotRound) =>
   runs.filter(r => r.mode === mode && r.round === round).flatMap(r => r.rows);
 const winnerOf = (r: RunResult) => [...r.rows].sort((a, b) => b.profit - a.profit)[0];
@@ -113,7 +159,9 @@ export function verdict(runs: RunResult[]): Verdict {
   };
 }
 
-export function markdown(runs: RunResult[], date: string, settings: string[] = [], errors: string[] = []): string {
+export function markdown(
+  runs: RunResult[], date: string, settings: string[] = [], errors: string[] = [], tag?: string,
+): string {
   const s = summarise(runs);
   const v = verdict(runs);
   const has = (mode: PilotMode, round: PilotRound) => runs.some(r => r.mode === mode && r.round === round);
@@ -139,6 +187,7 @@ export function markdown(runs: RunResult[], date: string, settings: string[] = [
   const ordered = [...runs].sort((a, b) => a.mode.localeCompare(b.mode) || a.rep - b.rep || a.round - b.round);
   return [
     `# Lean pilot — ${date}`, '',
+    ...(tag ? [`_${tag}_`, ''] : []),
     `Verdict (Lean round 2): **${v.pass ? 'PASS' : 'FAIL'}**${v.reasons.length ? ' — ' + v.reasons.join('; ') : ''}`, '',
     ...contrast('Lean', v.leanR1Mean, v.leanR2Mean, has('LEAN', 1) && has('LEAN', 2)),
     ...contrast('Classic', v.classicR1Mean, v.classicR2Mean, has('CLASSIC', 1) && has('CLASSIC', 2)),

@@ -20,6 +20,12 @@
      compressed class would pay a tenth of a real class's inventory cost. Lean rounds
      are therefore configured with carrying = LEAN_CLASS_PRESET carrying x SPEED (10).
      Setup cost is per batch, not per minute, and stays unscaled; the window is as given.
+     Tuning knobs (unset = preset / backend value; all printed in the report's Settings):
+     PILOT_PREFERENCE_BASE  sent as preference_base in both Lean round configs (backend default 2).
+     PILOT_CARRYING         carrying per joke-minute BEFORE the x10 scaling; replaces the preset 0.02.
+     PILOT_SETUP_R1/_R2     setup cost per batch for Lean round 1 / round 2.
+     PILOT_PLAN             all (default: CLASSIC, LEAN, CLASSIC, LEAN) or lean (LEAN rep 1, rep 2).
+     PILOT_TAG              free-text label printed under the report title.
      PILOT_SMOKE=1        a quick end-to-end check: ONE Lean class, one team per persona,
                           window 60 s unless PILOT_WINDOW says otherwise.
 
@@ -36,13 +42,13 @@ import type { EngineStatus } from '../../services/bots/protocol';
 import { LEAN_CLASS_PRESET, leanConfigToBody } from '../../services/leanMode';
 import { DEFAULT_IDEAL_PROFILE } from '../../config/dimensions';
 import type { ConfigRequest } from '../../types/api';
-import { isLocalUrl, markdown, neverSoldOf, type PilotMode, type PilotSidecar, type PilotRound, type RunResult, type TeamRow } from './report';
+import { isLocalUrl, markdown, neverSoldOf, parseTuning, tuningLine, type PilotMode, type PilotSidecar, type PilotRound, type RunResult, type TeamRow } from './report';
 
 const RENDER_ONLY = process.env.PILOT_RENDER_ONLY;
 if (RENDER_ONLY) {
   const side = JSON.parse(readFileSync(RENDER_ONLY, 'utf8')) as PilotSidecar;
   const out = process.argv[2] ?? RENDER_ONLY.replace(/\.json$/, '') + '.md';
-  writeFileSync(out, markdown(side.results, side.date, side.settings, side.errors));
+  writeFileSync(out, markdown(side.results, side.date, side.settings, side.errors, side.tag));
   console.log(`rendered ${out} from ${RENDER_ONLY}`);
   process.exit(0);
 }
@@ -51,6 +57,7 @@ const BE = process.env.E2E_BE_URL ?? 'http://localhost:8081';
 if (!isLocalUrl(BE) && process.env.PILOT_ALLOW_REMOTE !== '1') {
   throw new Error(`Refusing to run the pilot against ${BE}: it resets all game data. Use the local backend.`);
 }
+const TUNING = parseTuning(process.env);
 const PASSWORD = process.env.E2E_ADMIN_PASSWORD;
 if (!PASSWORD) throw new Error('E2E_ADMIN_PASSWORD not set');
 const INSTRUCTOR = process.env.PILOT_INSTRUCTOR ?? 'Local Instructor';
@@ -67,7 +74,9 @@ const COUNTS: Record<PersonaId, number> = SMOKE
 // Alternating, to spread any drift in the backend over both modes.
 const PLAN: Array<{ mode: PilotMode; rep: number }> = SMOKE
   ? [{ mode: 'LEAN', rep: 1 }]
-  : [{ mode: 'CLASSIC', rep: 1 }, { mode: 'LEAN', rep: 1 }, { mode: 'CLASSIC', rep: 2 }, { mode: 'LEAN', rep: 2 }];
+  : TUNING.plan === 'lean'
+    ? [{ mode: 'LEAN', rep: 1 }, { mode: 'LEAN', rep: 2 }]
+    : [{ mode: 'CLASSIC', rep: 1 }, { mode: 'LEAN', rep: 1 }, { mode: 'CLASSIC', rep: 2 }, { mode: 'LEAN', rep: 2 }];
 const SPEED = 10 as const;
 const POLL_MS = 5_000;
 const MAX_ROUND_MS = 8 * 60_000;
@@ -78,10 +87,14 @@ const ideal = { ...DEFAULT_IDEAL_PROFILE } as ConfigRequest['ideal_profile'];
 function configFor(mode: PilotMode, round: PilotRound): ConfigRequest {
   if (mode === 'CLASSIC') return leanConfigToBody({ marketMode: 'CLASSIC' });
   const preset = LEAN_CLASS_PRESET[round];
-  return leanConfigToBody({
+  const setup = round === 1 ? TUNING.setupR1 : TUNING.setupR2;
+  const body: ConfigRequest = leanConfigToBody({
     ...preset, arrivalWindowSeconds: WINDOW,
-    carryingCostPerJokeMinute: (preset.carryingCostPerJokeMinute ?? 0) * SPEED,
+    setupCostPerBatch: setup ?? preset.setupCostPerBatch,
+    carryingCostPerJokeMinute: (TUNING.carrying ?? preset.carryingCostPerJokeMinute ?? 0) * SPEED,
   });
+  if (TUNING.preferenceBase !== undefined) body.preference_base = TUNING.preferenceBase;
+  return body;
 }
 
 /** The report's settings section. */
@@ -90,8 +103,10 @@ const SETTINGS: string[] = [
   ...([1, 2] as const).map(r => {
     const c = configFor('LEAN', r);
     return `Lean R${r}: setup $${c.setup_cost_per_batch} per batch, carrying $${c.carrying_cost_per_joke_minute} per joke-minute, `
-      + `WIP limit ${c.wip_limit || 'none'}, arrival window ${c.arrival_window_seconds}s.`;
+      + `WIP limit ${c.wip_limit || 'none'}, arrival window ${c.arrival_window_seconds}s`
+      + `${c.preference_base !== undefined ? `, preference_base ${c.preference_base}` : ''}.`;
   }),
+  tuningLine(TUNING, SPEED),
   `Carrying scaled ×${SPEED} to match bot speed (the backend charges per wall-clock minute); setup cost unscaled.`,
   'Bot rounds are capped by jokes (8 × batch_size), not batches, so small-batch personas are not penalised.',
   `Lean carrying accrues until stats are read: each round waits for the caps and the window, then settles ${SETTLE_MS / 1000}s before reading stats.`,
@@ -183,9 +198,9 @@ for (const step of PLAN) {
     console.error(`FAILED ${message}`);
     errors.push(message);
   }
-  const sidecar: PilotSidecar = { date: TODAY, settings: SETTINGS, results, errors };
+  const sidecar: PilotSidecar = { date: TODAY, settings: SETTINGS, results, errors, tag: TUNING.tag };
   writeFileSync(SIDECAR, JSON.stringify(sidecar, null, 2));
-  writeFileSync(OUT, markdown(results, TODAY, SETTINGS, errors));
+  writeFileSync(OUT, markdown(results, TODAY, SETTINGS, errors, TUNING.tag));
   console.log(`wrote ${OUT} and ${SIDECAR}`);
 }
 console.log(`DONE in ${Math.round((Date.now() - t0) / 1000)}s`);
