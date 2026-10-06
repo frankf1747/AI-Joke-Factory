@@ -145,9 +145,10 @@ Joke Maker screen shows the current count against the limit and disables Send wi
 ## 7. What students and the instructor see
 
 ### 7.1 API additions (Lean mode only; absent in Classic)
-`TeamStats` and `TeamSummary` gain:
+`TeamStats` (leaderboard rows) and the team summary gain one nested object, `lean`, present
+only for Lean rounds, so Classic responses are byte-identical to today's:
 
-| Field | Meaning |
+| Field in `lean` | Meaning |
 |---|---|
 | `setup_cost` | `batches_submitted × setup_cost_per_batch` |
 | `carrying_cost` | as in section 5 |
@@ -155,6 +156,8 @@ Joke Maker screen shows the current count against the limit and disables Send wi
 | `avg_submit_to_publish_s` | mean over processed batches |
 | `avg_publish_to_first_sale_s` | mean over published jokes that sold |
 | `batch_series` | `[{seq, submitted_at, jokes, published, sold}]` in submission order |
+
+`profit` on those same rows already has setup and carrying subtracted in Lean mode.
 
 `PublicRound` gains `market_mode`, `arrival_window_seconds`, `setup_cost_per_batch`,
 `carrying_cost_per_joke_minute` and `wip_limit`, so student screens can show the rules they are
