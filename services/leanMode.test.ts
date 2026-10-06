@@ -31,5 +31,6 @@ describe('lean mode helpers', () => {
   it('formats money with sign and cents', () => {
     expect(fmtMoney(3)).toBe('$3.00');
     expect(fmtMoney(-1.085)).toBe('-$1.09');
+    expect(fmtMoney(1.005)).toBe('$1.01');
   });
 });

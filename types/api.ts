@@ -313,19 +313,21 @@ export interface PublicRound {
   is_popped_active: boolean;
   /**
    * Lean market mode (newer backends, dto.PublicRound). market_mode gates every
-   * Lean rule; CLASSIC rounds carry the zero/default values below. Read them
-   * through services/leanMode.ts (leanConfigFromRound), which tolerates an
-   * older backend that omits them.
+   * Lean rule; CLASSIC rounds carry the zero/default values below.
+   *
+   * OPTIONAL because a backend that predates Lean mode (the deployed `main`)
+   * omits all five keys. Read them through services/leanMode.ts
+   * (leanConfigFromRound), which treats an absent key as the Classic default.
    */
-  market_mode: 'CLASSIC' | 'LEAN';
+  market_mode?: 'CLASSIC' | 'LEAN';
   /** Lean: seconds over which the round's customers arrive. */
-  arrival_window_seconds: number;
+  arrival_window_seconds?: number;
   /** Lean: charged once per submitted batch. */
-  setup_cost_per_batch: number;
+  setup_cost_per_batch?: number;
   /** Lean: charged per joke per minute between submit and decision. */
-  carrying_cost_per_joke_minute: number;
+  carrying_cost_per_joke_minute?: number;
   /** Lean: max batches waiting for Marketing per team; 0 = no limit. */
-  wip_limit: number;
+  wip_limit?: number;
 }
 
 /**
@@ -359,8 +361,9 @@ export interface InstructorRound extends PublicRound {
   /**
    * Lean market mode (newer backends), instructor-only like buy_threshold:
    * odds multiplier per fit point when a customer picks (weight base^true_fit).
+   * Optional: a backend that predates Lean mode omits it.
    */
-  preference_base: number;
+  preference_base?: number;
 }
 
 /**

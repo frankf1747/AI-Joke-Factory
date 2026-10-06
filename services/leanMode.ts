@@ -57,11 +57,13 @@ export function wipStatus(waiting: number, limit: number): { blocked: boolean; l
 }
 
 /**
- * Money with a leading sign and two decimals. Rounds through whole cents so
- * values like 1.085 (stored as 1.08499…) still round half-up to 1.09.
+ * Money with a leading sign and two decimals, rounding half away from zero.
+ * The cent count is taken to 12 significant digits before rounding, which
+ * absorbs binary representation error: 1.005 * 100 is 100.49999999999999 in
+ * floating point, so a plain Math.round (or toFixed(2)) would give $1.00.
  */
 export function fmtMoney(v: number): string {
-  const cents = Math.round(Math.abs(v) * 100);
+  const cents = Math.round(Number((Math.abs(v) * 100).toPrecision(12)));
   const abs = (cents / 100).toFixed(2);
   return v < 0 && cents > 0 ? `-$${abs}` : `$${abs}`;
 }

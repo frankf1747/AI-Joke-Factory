@@ -23,6 +23,7 @@
  */
 
 import type { HealthResponse, RoundsActiveResponse, PublicRound } from '../types/api';
+import { checkKeys } from './smoke-keys';
 
 /** Builds a runtime key list the COMPILER ties to the interface: the Record is
  *  exhaustive and exact, so adding or renaming a field in types/api.ts breaks
@@ -33,12 +34,18 @@ function keysOf<T extends object>(spec: Record<keyof T, true>): string[] {
 
 const HEALTH_KEYS = keysOf<HealthResponse>({ status: true });
 const ROUNDS_ACTIVE_KEYS = keysOf<RoundsActiveResponse>({ rounds: true });
-const PUBLIC_ROUND_KEYS = keysOf<PublicRound>({
+/** Lean market mode fields: sent by newer backends, absent on one that predates
+ *  the feature (the deployed `main`). Declared, but not required. */
+type LeanRoundKey =
+  | 'market_mode' | 'arrival_window_seconds' | 'setup_cost_per_batch'
+  | 'carrying_cost_per_joke_minute' | 'wip_limit';
+const PUBLIC_ROUND_KEYS = keysOf<Omit<PublicRound, LeanRoundKey>>({
   id: true, round_number: true, status: true, batch_size: true, max_batch_size: true,
   customer_budget: true, market_price: true, cost_of_publishing: true, cost_of_discard: true,
   customer_count: true, feedback_joke_count: true, started_at: true, ended_at: true,
   is_popped_active: true,
-  // Lean market mode fields (newer backends; CLASSIC rounds carry defaults).
+});
+const PUBLIC_ROUND_OPTIONAL_KEYS = keysOf<Pick<PublicRound, LeanRoundKey>>({
   market_mode: true, arrival_window_seconds: true, setup_cost_per_batch: true,
   carrying_cost_per_joke_minute: true, wip_limit: true,
 });
@@ -50,7 +57,7 @@ interface Probe {
   /** Declared keys to require on the payload. Empty = parses-as-JSON only. */
   keys: string[];
   /** Optional second pass over a nested element (e.g. one round in the list). */
-  nested?: { label: string; pick: (payload: any) => unknown; keys: string[] };
+  nested?: { label: string; pick: (payload: any) => unknown; keys: string[]; optional?: string[] };
   note?: string;
 }
 
@@ -64,7 +71,7 @@ const PROBES: readonly Probe[] = Object.freeze([
   },
   {
     path: '/v1/rounds/active', envelope: 'wrapped', keys: ROUNDS_ACTIVE_KEYS,
-    nested: { label: 'rounds[0]', pick: (p) => p?.rounds?.[0], keys: PUBLIC_ROUND_KEYS },
+    nested: { label: 'rounds[0]', pick: (p) => p?.rounds?.[0], keys: PUBLIC_ROUND_KEYS, optional: PUBLIC_ROUND_OPTIONAL_KEYS },
   },
 ]);
 
@@ -88,17 +95,6 @@ function describe(err: unknown): string {
 }
 
 interface Result { ok: boolean; line: string; warnings: string[] }
-
-function checkKeys(label: string, value: unknown, keys: string[]): { missing: string[]; extra: string[] } | string {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-    return `${label} is ${Array.isArray(value) ? 'an array' : String(value)}, expected an object`;
-  }
-  const present = Object.keys(value as Record<string, unknown>);
-  return {
-    missing: keys.filter((k) => !present.includes(k)),
-    extra: keys.length ? present.filter((k) => !keys.includes(k)) : [],
-  };
-}
 
 async function probe(base: string, p: Probe): Promise<Result> {
   const url = `${base}${p.path}`;
@@ -132,18 +128,18 @@ async function probe(base: string, p: Probe): Promise<Result> {
 
   if (!p.keys.length) return { ok: true, line: `PASS ${p.path}${p.note ? ` (${p.note})` : ''}`, warnings };
 
-  const targets: Array<{ label: string; value: unknown; keys: string[] }> = [
+  const targets: Array<{ label: string; value: unknown; keys: string[]; optional?: string[] }> = [
     { label: p.path, value: payload, keys: p.keys },
   ];
   if (p.nested) {
     const v = p.nested.pick(payload);
     if (v === undefined) warnings.push(`${p.path}: no ${p.nested.label} to inspect (empty list) — fields unverified`);
-    else targets.push({ label: `${p.path} ${p.nested.label}`, value: v, keys: p.nested.keys });
+    else targets.push({ label: `${p.path} ${p.nested.label}`, value: v, keys: p.nested.keys, optional: p.nested.optional });
   }
 
   const missing: string[] = [];
   for (const t of targets) {
-    const r = checkKeys(t.label, t.value, t.keys);
+    const r = checkKeys(t.label, t.value, t.keys, t.optional);
     if (typeof r === 'string') return { ok: false, line: `FAIL ${p.path} — ${r}`, warnings };
     missing.push(...r.missing.map((k) => `${t.label}.${k}`));
     if (r.extra.length) warnings.push(`${t.label}: undeclared key(s) ${r.extra.join(', ')} — backend added a field`);
