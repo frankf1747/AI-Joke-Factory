@@ -48,6 +48,14 @@ export const PERSONAS: Readonly<Record<PersonaId, Persona>> = {
     id: 'SPRAY', label: 'Spray', submitIntervalMs: 45_000, waitForFeedback: false,
     publish: n => n,
   },
+  /**
+   * The Learner closes the loop on both seats. Its Joke Maker resubmits texts
+   * the team has seen sell (about half of each batch, rotating) and avoids
+   * texts it has seen not sell; its Marketing keeps every joke it has seen
+   * sell, drops ones it has seen fail, and fills the rest at random. Batches
+   * are 3 jokes from round 2. It is honest: all it knows is the sold_count on
+   * its own team's batch list, which every team can see. It never sees fit.
+   */
   LEARNER: {
     id: 'LEARNER', label: 'Learner', submitIntervalMs: 60_000, waitForFeedback: true,
     publish: n => Math.min(2, n), leanBatchSize: 3, learns: true,

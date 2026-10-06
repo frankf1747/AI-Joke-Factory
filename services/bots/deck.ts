@@ -1,5 +1,6 @@
 // services/bots/deck.ts
 import type { JokeFixture } from '../shared/jokes';
+import type { JokeMemory } from './personas';
 
 /**
  * Draws jokes WITH replacement.
@@ -46,4 +47,53 @@ export class Deck {
     }
     return pile;
   }
+}
+
+/** How many fresh draws the Learner spends avoiding a known dud before it accepts one. */
+export const LEARNER_MAX_REDRAWS = 12;
+
+/**
+ * The Learner's Joke Maker: "write more jokes like the ones that sold".
+ *
+ * It fills up to floor(size/2) slots with corpus jokes whose text the team has
+ * seen sell, rotating through them from `cursor` so it does not resubmit only
+ * one, then fills the rest with fresh draws, redrawing up to
+ * LEARNER_MAX_REDRAWS times to avoid a text the team has seen not sell. If the
+ * deck cannot avoid one, it accepts it. A batch never repeats a joke. With no
+ * sold text known it is exactly `deck.draw(size)`.
+ *
+ * Returns the batch and the cursor for the next call.
+ */
+export function drawLearnerBatch(
+  deck: Deck, corpus: readonly JokeFixture[], memory: JokeMemory, size: number, cursor: number,
+): { jokes: JokeFixture[]; cursor: number } {
+  const sold = corpus.filter(j => memory.get(j.text.trim()) === 'sold');
+  if (sold.length === 0) return { jokes: deck.draw(size), cursor };
+
+  const reuse = Math.min(Math.floor(size / 2), sold.length);
+  const jokes: JokeFixture[] = [];
+  for (let i = 0; i < reuse; i++) jokes.push(sold[(cursor + i) % sold.length]);
+  const taken = new Set(jokes.map(j => j.id));
+
+  // Bounded: a candidate already in the batch never counts, and a deck larger
+  // than the batch yields a new one within a couple of passes.
+  const safety = LEARNER_MAX_REDRAWS + 4 * corpus.length;
+  while (jokes.length < size) {
+    let fallback: JokeFixture | null = null;
+    let chosen: JokeFixture | null = null;
+    for (let attempt = 0; attempt < safety && !chosen; attempt++) {
+      const [candidate] = deck.draw(1);
+      if (taken.has(candidate.id)) continue;
+      if (memory.get(candidate.text.trim()) !== 'unsold') chosen = candidate;
+      else {
+        fallback ??= candidate;
+        if (attempt + 1 >= LEARNER_MAX_REDRAWS) chosen = fallback;
+      }
+    }
+    chosen ??= fallback;
+    if (!chosen) throw new RangeError(`cannot fill a batch of ${size} from ${corpus.length} jokes`);
+    jokes.push(chosen);
+    taken.add(chosen.id);
+  }
+  return { jokes, cursor: (cursor + reuse) % sold.length };
 }

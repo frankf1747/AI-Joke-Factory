@@ -4,6 +4,7 @@ import { DEFAULT_IDEAL_PROFILE } from '../../config/dimensions';
 import { seededRng, variedCorpus } from '../shared/jokes';
 import { BotEngine, SEAT_CHECK_MS, fitPieces, splitBlob, titleOf, wallClockSteps } from './engine';
 import { botName, isBotName } from './naming';
+import { Deck } from './deck';
 import { BATCH_CAP_PER_ROUND } from './personas';
 import type { BotApi } from './api';
 import type { BatchSubmitRequest } from '../../types/api';
@@ -682,7 +683,9 @@ describe('BotEngine', () => {
 
 describe('Learner bot', () => {
   /** Wraps the client so every submitted blob is recorded with its round and joke count. */
-  function recordSubmits(into: Array<{ roundId: number; jokes: number }>): (api: BotApi) => BotApi {
+  interface Submit { roundId: number; teamId: number; texts: string[]; jokes: number }
+
+  function recordSubmits(into: Submit[]): (api: BotApi) => BotApi {
     const wrap = (api: BotApi): BotApi => new Proxy(api, {
       get: (target, prop, receiver) => {
         if (prop === 'as') return (id: number, label: string) => wrap(target.as(id, label));
@@ -690,7 +693,8 @@ describe('Learner bot', () => {
           return async (roundId: number, body: BatchSubmitRequest) => {
             const result = await target.submitBatch(roundId, body);
             const raw = 'raw_text' in body && body.raw_text ? body.raw_text : '';
-            into.push({ roundId, jokes: splitBlob(raw).length });
+            const texts = splitBlob(raw);
+            into.push({ roundId, teamId: body.team_id, texts, jokes: texts.length });
             return result;
           };
         }
@@ -702,7 +706,7 @@ describe('Learner bot', () => {
   }
 
   it('draws batches of 3 in round 2 and of batch_size in round 1', async () => {
-    const submits: Array<{ roundId: number; jokes: number }> = [];
+    const submits: Submit[] = [];
     const { world, engine } = setup([], { wrapApi: recordSubmits(submits) });
     expect(world.round.batch_size).toBe(5);
     await engine.start(options({ teams: [{ index: 1, persona: 'LEARNER' }] }));
@@ -765,6 +769,41 @@ describe('Learner bot', () => {
     expect(published).toEqual([false, true, false, true, false]);
     // The publish request itself said so.
     expect(world.decisions.find(d => d.batchId === again.id)).toMatchObject({ published: 2, total: 5 });
+  });
+
+  it("the Joke Maker resubmits a text it saw sell and leaves out one it saw fail; Spray's batches are unchanged", async () => {
+    const submits: Submit[] = [];
+    const { world, engine } = setup([], { wrapApi: recordSubmits(submits) });
+    await engine.start(options({ teams: [{ index: 1, persona: 'LEARNER' }, { index: 2, persona: 'SPRAY' }] }));
+    const learner = teamOf(world, botName(1, 'A'));
+    const spray = teamOf(world, botName(2, 'A'));
+    if (learner == null || spray == null) throw new Error('bot teams missing');
+    const learnerDecisions = () => world.decisions.filter(d => d.teamId === learner);
+    await until(() => learnerDecisions().length >= 2, 'two processed Learner batches');
+
+    // Batch 1 published two jokes: one sold, one did not, and batch 2 has
+    // since been processed, so the unsold one counts as a failure.
+    const first = world.batches.find(b => b.id === learnerDecisions()[0].batchId);
+    const [hit, dud] = first?.jokes.filter(j => j.published) ?? [];
+    if (!hit || !dud) throw new Error('batch 1 published fewer than two jokes');
+    world.setSold(hit.joke_id, 2);
+
+    // A batch may already be on its way; the one after it was drawn knowing.
+    const before = submits.filter(s => s.teamId === learner).length;
+    await until(() => submits.filter(s => s.teamId === learner).length >= before + 2, 'two more Learner batches');
+    engine.stop();
+
+    const next = submits.filter(s => s.teamId === learner)[before + 1];
+    expect(next.roundId).toBe(1);
+    expect(next.texts).toHaveLength(5);
+    expect(next.texts).toContain(hit.joke_text);
+    expect(next.texts).not.toContain(dud.joke_text);
+
+    // Spray draws straight from its own deck, as before.
+    const deck = new Deck(variedCorpus, seededRng('engine-test:jm:2'));
+    for (const s of submits.filter(x => x.teamId === spray)) {
+      expect(s.texts).toEqual(deck.draw(5).map(j => j.text));
+    }
   });
 });
 

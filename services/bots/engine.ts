@@ -11,9 +11,9 @@
  * that are not server state, such as why a bot kept two jokes and dropped three.
  */
 import type { ConfigRequest, PublicRound, SessionMeResponse } from '../../types/api';
-import { asRawBlob, seededRng, titleFor, variedCorpus } from '../shared/jokes';
+import { asRawBlob, seededRng, titleFor, variedCorpus, type JokeFixture } from '../shared/jokes';
 import { statusOf, type BotApi } from './api';
-import { Deck } from './deck';
+import { Deck, drawLearnerBatch } from './deck';
 import { botName, isBotName, parseBotName, SEAT_ROLE, type Seat } from './naming';
 import {
   BATCH_CAP_PER_ROUND, DWELL_MS, FEEDBACK_WAIT_MS, IDLE_POLL_MS, MAX_BOT_TEAMS, PERSONAS,
@@ -525,6 +525,8 @@ export class BotEngine {
     const me = this.deps.api.as(seat.userId as number, `bot ${team.index}A`);
     const rand = seededRng(`${this.deps.seed}:jm:${team.index}`);
     const deck = new Deck(variedCorpus, rand);
+    /** Learner only: where its rotation through sold texts resumes. */
+    let reuseCursor = 0;
     let attempt = 0;
 
     while (!signal.aborted) {
@@ -556,7 +558,18 @@ export class BotEngine {
         const size = persona.leanBatchSize && round.round_number >= 2
           ? Math.min(persona.leanBatchSize, round.batch_size)
           : round.batch_size;
-        const jokes = deck.draw(size);
+        let jokes: JokeFixture[];
+        if (persona.learns) {
+          // The team's memory, shared with its Marketing seat, refreshed from
+          // the same batch list a human team sees.
+          await this.learn(me, team, round.id, signal);
+          if (signal.aborted) break;
+          const drawn = drawLearnerBatch(deck, variedCorpus, team.memory, size, reuseCursor);
+          jokes = drawn.jokes;
+          reuseCursor = drawn.cursor;
+        } else {
+          jokes = deck.draw(size);
+        }
         this.setActivity(seat, 'submitting a batch', signal);
         await me.submitBatch(round.id, { team_id: team.teamId as number, raw_text: asRawBlob(jokes) });
         // A batch in flight when Stop is pressed lands but is not counted or logged.
