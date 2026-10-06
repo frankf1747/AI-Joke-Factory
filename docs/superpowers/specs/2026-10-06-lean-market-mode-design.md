@@ -228,3 +228,28 @@ real classifier is run only after the user deploys the backend.
    (setup, running, debrief questions), and how to switch back to Classic.
 2. **`docs/pilots/<date>-lean-pilot.md`**: the simulated classes and the verdict.
 3. The two `feat/lean-market` branches, with Classic untouched and all tests green.
+
+## 11. Revised during implementation (2026-10-06)
+
+Where the built system differs from sections 1–10, the code is authoritative:
+
+- **Market mode locks once a round starts.** Changing `market_mode` on a round that is not CONFIGURED
+  returns 409 `MARKET_MODE_LOCKED`, because Lean customers get their arrival times at round start.
+- **Arrivals use the database clock** and are served at most once: a customer is claimed before buying, under
+  a context detached from the polling request, so an aborted poll never consumes customers.
+- **`batches_submitted`** counts submission events with `delta > 0` (Marketing's processing writes a −1 event).
+- **"Never sold"** replaces "unsold" for Lean rows: Σ(published − sold) over the batch series. The Classic
+  `unsold_jokes` (max(published − sales, 0)) reads 0 whenever a joke sells to several customers.
+- **Worked example (§5):** the Careful team also discards 10 jokes at $0.01, so its profit is $30.70.
+- **Instructor CONFIG** exposes four Lean fields (arrival window, setup cost per batch, carrying cost per
+  joke-minute, WIP limit); `preference_base` stays at its default of 2 and is settable only through the API.
+- **Debrief table** shows profit (R1, R2, Δ), never sold, setup + carrying combined, and submit→release lead
+  time per round. Leaderboard Lean columns are labelled Setup, Carrying, Lead, Sale.
+- **Joke Maker refusal text:** a refused send shows "Marketing still has batches waiting. In a pull system you
+  wait — or go help them decide."
+- **Pilot classifier:** the hash classifier gives each joke a hidden quality and picks the pilot's ideal
+  category with that probability, aligned to the frontend's default ideal profile, so fit spreads across
+  the 60-joke corpus (42 % at fit ≥ 7). Uniform hashing would have left almost no joke sellable.
+- **Pilot:** each class plays both rounds with one bot engine; Lean carrying is scaled ×10 to match bot speed;
+  bot rounds are capped by jokes (8 × batch size), not batches, so small batches are not penalised; the
+  Learner's Joke Maker also reuses texts it has seen sell and skips ones it has seen fail.
