@@ -17,19 +17,20 @@ export interface DebriefStats {
 
 export interface DebriefSide {
   profit: number; sales: number; published: number;
-  /** Published but never sold (Lean rows); the classic unsold figure for a Classic round. */
-  unsold: number;
+  /** Published but never sold (Lean rows only); null for a Classic round, whose
+      unsold figure measures something else and must not share this column. */
+  unsold: number | null;
   setup: number; carrying: number; leadTimeS: number; saleTimeS: number;
 }
 export interface DebriefRow {
   teamId: number; team: string;
   r1: DebriefSide | null; r2: DebriefSide | null;
-  delta: { profit: number; leadTimeS: number; unsold: number };
+  delta: { profit: number; leadTimeS: number; unsold: number | null };
 }
 
 function side(t: DebriefStats['leaderboard'][number]): DebriefSide {
   return {
-    profit: t.profit, sales: t.total_sales, published: t.published_jokes, unsold: neverSold(t.lean) ?? t.unsold_jokes,
+    profit: t.profit, sales: t.total_sales, published: t.published_jokes, unsold: neverSold(t.lean),
     setup: t.lean?.setup_cost ?? 0, carrying: t.lean?.carrying_cost ?? 0,
     leadTimeS: t.lean?.avg_submit_to_publish_s ?? 0, saleTimeS: t.lean?.avg_publish_to_first_sale_s ?? 0,
   };
@@ -57,7 +58,7 @@ export function debriefRows(
       row.delta = {
         profit: row.r2.profit - row.r1.profit,
         leadTimeS: row.r2.leadTimeS - row.r1.leadTimeS,
-        unsold: row.r2.unsold - row.r1.unsold,
+        unsold: row.r1.unsold != null && row.r2.unsold != null ? row.r2.unsold - row.r1.unsold : null,
       };
     }
   }
@@ -98,7 +99,7 @@ export const LeanDebrief: React.FC<{
               }`}>
                 {r.r1 && r.r2 ? fmtMoney(r.delta.profit) : '—'}
               </td>
-              <Cell s={r.r1} pick={s => String(s.unsold)} /><Cell s={r.r2} pick={s => String(s.unsold)} />
+              <Cell s={r.r1} pick={s => (s.unsold == null ? '—' : String(s.unsold))} /><Cell s={r.r2} pick={s => (s.unsold == null ? '—' : String(s.unsold))} />
               <Cell s={r.r1} pick={s => fmtMoney(s.setup + s.carrying)} /><Cell s={r.r2} pick={s => fmtMoney(s.setup + s.carrying)} />
               <Cell s={r.r1} pick={s => fmtS(s.leadTimeS)} /><Cell s={r.r2} pick={s => fmtS(s.leadTimeS)} />
             </tr>

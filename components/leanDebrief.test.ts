@@ -30,4 +30,13 @@ describe('debriefRows', () => {
     expect(rows[0].team).toBe('The Punchliners');
     expect(debriefRows(r1 as any, r2 as any, { '8': 'Someone else' })[0].team).toBe('Team 7');
   });
+  it('shows never-sold only for lean rows, never the classic unsold figure', () => {
+    const classicR1 = { round_id: 1, leaderboard: [{ ...r1.leaderboard[0], lean: undefined }] };
+    const series = [{ seq: 1, submitted_at: '', jokes: 5, published: 4, sold: 1 }];
+    const leanR2 = { round_id: 2, leaderboard: [{ ...r2.leaderboard[0], lean: { ...r2.leaderboard[0].lean, batch_series: series } }] };
+    const rows = debriefRows(classicR1 as any, leanR2 as any);
+    expect(rows[0].r1?.unsold).toBeNull();
+    expect(rows[0].r2?.unsold).toBe(3);
+    expect(rows[0].delta.unsold).toBeNull();
+  });
 });
