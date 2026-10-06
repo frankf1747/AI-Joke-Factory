@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { groupKey, markdown, summarise, verdict, type RunResult } from './report';
+import { groupKey, isLocalUrl, markdown, neverSoldOf, summarise, verdict, type RunResult } from './report';
 
 const run = (
   mode: 'CLASSIC' | 'LEAN', round: 1 | 2, rows: Array<[string, number]>, rep = 1,
 ): RunResult => ({
   mode, rep, round, durationS: 100, calls: 0,
   rows: rows.map(([persona, profit], i) => ({
-    teamId: i + 1, persona, profit, sales: 0, published: 0, unsold: 0,
+    teamId: i + 1, persona, profit, sales: 0, published: 0, neverSold: mode === 'LEAN' ? 0 : null,
     setup: 0, carrying: 0, leadTimeS: 0, saleTimeS: 0, rank: i + 1,
   })),
 });
@@ -90,5 +90,29 @@ describe('pilot report', () => {
   it('prints the settings section when given one', () => {
     const md = markdown([run('LEAN', 2, [['LEARNER', 1]])], '2026-10-06', ['carrying scaled x10 to match bot speed']);
     expect(md).toContain('## Settings\n\n- carrying scaled x10 to match bot speed');
+  });
+
+  it('counts never-sold jokes from the batch series even when sales exceed published', () => {
+    const series = [{ published: 5, sold: 1 }, { published: 5, sold: 0 }, { published: 3, sold: 3 }];
+    expect(neverSoldOf(series)).toBe(9);
+    expect(neverSoldOf(undefined)).toBeNull();
+    const r = run('LEAN', 2, [['SPRAY', 50]]);
+    r.rows[0] = { ...r.rows[0], published: 13, sales: 40, neverSold: neverSoldOf(series) };
+    const md = markdown([r, run('CLASSIC', 1, [['SPRAY', 5]])], '2026-10-06');
+    expect(md).toContain('| SPRAY | 1 | 13.0 | 40.0 | 9.0 |');
+    expect(md).toContain('| SPRAY | 1 | 0.0 | 0.0 | — |');
+  });
+
+  it('prints errors from failed classes', () => {
+    expect(markdown([], '2026-10-06', [], ['LEAN rep 2: boom'])).toContain('## Errors\n\n- LEAN rep 2: boom');
+  });
+
+  it('treats only localhost, 127.0.0.1 and [::1] as local', () => {
+    expect(isLocalUrl('http://localhost:8081')).toBe(true);
+    expect(isLocalUrl('http://127.0.0.1:8081')).toBe(true);
+    expect(isLocalUrl('http://[::1]:8081')).toBe(true);
+    expect(isLocalUrl('https://jf.example.azurecontainerapps.io')).toBe(false);
+    expect(isLocalUrl('http://localhost.evil.com')).toBe(false);
+    expect(isLocalUrl('not a url')).toBe(false);
   });
 });

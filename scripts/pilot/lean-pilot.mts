@@ -7,9 +7,12 @@
 
    Environment:
      E2E_ADMIN_PASSWORD   required.
-     E2E_BE_URL           default http://localhost:8081. A URL containing
-                          azurecontainerapps.io is refused unless PILOT_ALLOW_REMOTE=1:
-                          every class starts with an admin reset that deletes all game data.
+     E2E_BE_URL           default http://localhost:8081. Only localhost, 127.0.0.1 and [::1]
+                          are allowed unless PILOT_ALLOW_REMOTE=1: every class starts with an
+                          admin reset that deletes all game data.
+     PILOT_RENDER_ONLY    path to a JSON sidecar from an earlier run: re-render its markdown
+                          (to the output path, default the sidecar's path with .md) and exit.
+                          Calls no backend and needs no password.
      PILOT_INSTRUCTOR     instructor display name, default "Local Instructor".
      PILOT_WINDOW         Lean arrival window in seconds, default 180 (bots run at 10x,
                           so a 15-minute class compresses to a few minutes).
@@ -25,7 +28,7 @@
    The SAME engine keeps running while the script ends round 1 and starts round 2:
    the bots read the active round on every loop and keep their per-round batch
    caps by round id, and team assignments live on the users, so nobody re-seats. */
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { createClient } from '../../services/shared/client';
 import { BotEngine, CAP_REACHED, realDelay } from '../../services/bots/engine';
 import { personaSequence, type PersonaId } from '../../services/bots/personas';
@@ -33,10 +36,19 @@ import type { EngineStatus } from '../../services/bots/protocol';
 import { LEAN_CLASS_PRESET, leanConfigToBody } from '../../services/leanMode';
 import { DEFAULT_IDEAL_PROFILE } from '../../config/dimensions';
 import type { ConfigRequest } from '../../types/api';
-import { markdown, type PilotMode, type PilotRound, type RunResult, type TeamRow } from './report';
+import { isLocalUrl, markdown, neverSoldOf, type PilotMode, type PilotSidecar, type PilotRound, type RunResult, type TeamRow } from './report';
+
+const RENDER_ONLY = process.env.PILOT_RENDER_ONLY;
+if (RENDER_ONLY) {
+  const side = JSON.parse(readFileSync(RENDER_ONLY, 'utf8')) as PilotSidecar;
+  const out = process.argv[2] ?? RENDER_ONLY.replace(/\.json$/, '') + '.md';
+  writeFileSync(out, markdown(side.results, side.date, side.settings, side.errors));
+  console.log(`rendered ${out} from ${RENDER_ONLY}`);
+  process.exit(0);
+}
 
 const BE = process.env.E2E_BE_URL ?? 'http://localhost:8081';
-if (/azurecontainerapps\.io/i.test(BE) && process.env.PILOT_ALLOW_REMOTE !== '1') {
+if (!isLocalUrl(BE) && process.env.PILOT_ALLOW_REMOTE !== '1') {
   throw new Error(`Refusing to run the pilot against ${BE}: it resets all game data. Use the local backend.`);
 }
 const PASSWORD = process.env.E2E_ADMIN_PASSWORD;
@@ -47,6 +59,7 @@ const WINDOW = Number(process.env.PILOT_WINDOW ?? (SMOKE ? 60 : 180));
 if (!Number.isInteger(WINDOW) || WINDOW < 1) throw new Error(`PILOT_WINDOW must be a positive integer, got ${process.env.PILOT_WINDOW}`);
 const TODAY = new Date().toISOString().slice(0, 10);
 const OUT = process.argv[2] ?? `docs/pilots/${TODAY}-lean-pilot.md`;
+const SIDECAR = OUT.replace(/\.md$/, '') + '.json';
 
 const COUNTS: Record<PersonaId, number> = SMOKE
   ? { CAREFUL: 1, BALANCED: 1, SPRAY: 1, LEARNER: 1 }
@@ -81,9 +94,11 @@ const SETTINGS: string[] = [
   }),
   `Carrying scaled ×${SPEED} to match bot speed (the backend charges per wall-clock minute); setup cost unscaled.`,
   'Bot rounds are capped by jokes (8 × batch_size), not batches, so small-batch personas are not penalised.',
+  `Lean carrying accrues until stats are read: each round waits for the caps and the window, then settles ${SETTLE_MS / 1000}s before reading stats.`,
 ];
 
-async function runClass(mode: PilotMode, rep: number): Promise<RunResult[]> {
+/** Pushes each round's result into `results` as soon as it is read, so a later failure keeps it. */
+async function runClass(mode: PilotMode, rep: number, results: RunResult[]): Promise<void> {
   const api = createClient({ baseUrl: BE });
   const login = await api.instructorLogin({ display_name: INSTRUCTOR, password: PASSWORD as string });
   const instructor = api.as(login.user.user_id, 'instructor');
@@ -102,7 +117,6 @@ async function runClass(mode: PilotMode, rep: number): Promise<RunResult[]> {
     seed: `pilot-${mode}-${rep}`,
   });
   const teams = personaSequence(COUNTS).map((persona, i) => ({ index: i + 1, persona }));
-  const results: RunResult[] = [];
   try {
     await engine.start({ roundId: ids[1], teams, speed: SPEED, startRound: true, idealProfile: { ...DEFAULT_IDEAL_PROFILE } });
     console.log(`${mode} rep ${rep}: ${teams.length} teams, round 1 started`);
@@ -113,7 +127,6 @@ async function runClass(mode: PilotMode, rep: number): Promise<RunResult[]> {
   } finally {
     engine.stop();
   }
-  return results;
 }
 
 /** Wait for the round to play out, read its stats, end it. */
@@ -150,7 +163,7 @@ async function playRound(
   for (const t of final.teams) if (t.teamId != null) personaByTeam.set(t.teamId, t.persona);
   const rows: TeamRow[] = stats.leaderboard.map(r => ({
     teamId: r.team.id, persona: personaByTeam.get(r.team.id) ?? '?', profit: r.profit, sales: r.total_sales,
-    published: r.published_jokes, unsold: r.unsold_jokes, setup: r.lean?.setup_cost ?? 0, carrying: r.lean?.carrying_cost ?? 0,
+    published: r.published_jokes, neverSold: r.lean ? neverSoldOf(r.lean.batch_series) : null, setup: r.lean?.setup_cost ?? 0, carrying: r.lean?.carrying_cost ?? 0,
     leadTimeS: r.lean?.avg_submit_to_publish_s ?? 0, saleTimeS: r.lean?.avg_publish_to_first_sale_s ?? 0, rank: r.rank,
   }));
   await instructor.instructorEnd(roundId);
@@ -161,9 +174,18 @@ async function playRound(
 
 const results: RunResult[] = [];
 const t0 = Date.now();
+const errors: string[] = [];
 for (const step of PLAN) {
-  results.push(...(await runClass(step.mode, step.rep)));
-  writeFileSync(OUT, markdown(results, TODAY, SETTINGS));
-  console.log(`wrote ${OUT}`);
+  try {
+    await runClass(step.mode, step.rep, results);
+  } catch (err) {
+    const message = `${step.mode} rep ${step.rep}: ${err instanceof Error ? err.message : String(err)}`;
+    console.error(`FAILED ${message}`);
+    errors.push(message);
+  }
+  const sidecar: PilotSidecar = { date: TODAY, settings: SETTINGS, results, errors };
+  writeFileSync(SIDECAR, JSON.stringify(sidecar, null, 2));
+  writeFileSync(OUT, markdown(results, TODAY, SETTINGS, errors));
+  console.log(`wrote ${OUT} and ${SIDECAR}`);
 }
 console.log(`DONE in ${Math.round((Date.now() - t0) / 1000)}s`);
