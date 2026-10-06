@@ -53,6 +53,7 @@ const Instructor: React.FC = () => {
     , deleteUser
     , marketItems
     , roundIds
+    , roundStatuses
   } = useGame();
 
   const [localBatchSize, setLocalBatchSize] = useState(config.round1BatchSize);
@@ -227,7 +228,10 @@ const Instructor: React.FC = () => {
     }
     if (canEditPricing && localMarketMode !== config.marketMode) updates.marketMode = localMarketMode;
     if (canEditPricing && localMarketMode === 'LEAN') {
-      if (localArrivalWindow !== config.arrivalWindowSeconds) updates.arrivalWindowSeconds = localArrivalWindow;
+      // Clamped like the nudges: an empty or 0 window would mean every customer arrives at once.
+      if (localArrivalWindow !== config.arrivalWindowSeconds) {
+        updates.arrivalWindowSeconds = Math.max(1, Math.round(localArrivalWindow || 0));
+      }
       if (localSetupCost !== config.setupCostPerBatch) updates.setupCostPerBatch = localSetupCost;
       if (localCarryingCost !== config.carryingCostPerJokeMinute) updates.carryingCostPerJokeMinute = localCarryingCost;
       if (localWipLimit !== config.wipLimit) updates.wipLimit = localWipLimit;
@@ -276,9 +280,11 @@ const Instructor: React.FC = () => {
       }
       if (applied.length === 0) return;
       const parts = applied.map(n => (n === 1 ? 'Round 1: push rules' : 'Round 2: lean rules'));
-      const skipped = roundIds[1] != null && statuses[1] !== 'CONFIGURED'
-        ? ' (Round 1 has already started, so it was left as is)'
-        : '';
+      const skipped = roundIds[1] == null || statuses[1] === 'CONFIGURED'
+        ? ''
+        : statuses[1] == null
+          ? " (Round 1's status is unknown, so it was left as is)"
+          : ' (Round 1 has already started, so it was left as is)';
       setPresetNotice(`Lean class preset applied — ${parts.join(' · ')}${skipped}`);
       window.setTimeout(() => setPresetNotice(null), 3200);
     } finally {
@@ -2572,7 +2578,7 @@ const Instructor: React.FC = () => {
                 >
                   {presetBusy ? 'Applying…' : 'Lean class preset'}
                 </Button>
-                {config.round === 2 && !config.isActive && (
+                {config.round === 2 && !config.isActive && roundStatuses[2] === 'CONFIGURED' && (
                   <span className="text-xs text-gray-500">Round 1 has started — applies to Round 2 only.</span>
                 )}
               </div>
@@ -2770,7 +2776,7 @@ const Instructor: React.FC = () => {
 
           {statsR2 && [statsR1, statsR2].some(st => (st?.leaderboard ?? []).some(r => r.lean != null)) && (
             <Card className="xl:col-span-2" title="Round 1 vs Round 2" subtitle="Push rules vs lean rules, per team">
-              <LeanDebrief r1={statsR1} r2={statsR2} />
+              <LeanDebrief r1={statsR1} r2={statsR2} teamNames={teamNames} />
             </Card>
           )}
           

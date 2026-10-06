@@ -133,6 +133,8 @@ function makeUser(base: { user_id: UserId; display_name: string }, role: Role, t
   };
 }
 
+type RoundStatus = 'ACTIVE' | 'ENDED' | 'CONFIGURED';
+
 function normalizeRoundStatus(s: string | undefined | null): 'ACTIVE' | 'ENDED' | 'CONFIGURED' | null {
   if (!s) return null;
   const upper = String(s).toUpperCase();
@@ -406,6 +408,8 @@ interface GameContextType {
   roundId: RoundId | null;
   /** Instructor only: the backend ids of Round 1 and Round 2, from /rounds/active. */
   roundIds: { 1: RoundId | null; 2: RoundId | null };
+  /** Instructor only: each round's normalized status, from /rounds/active (null = unknown). */
+  roundStatuses: { 1: RoundStatus | null; 2: RoundStatus | null };
   marketItems: ApiMarketItem[];
   teamSummary: ApiTeamSummaryResponse | null;
   /* Per-joke pass/fail feedback for the signed-in user's team. Dimension IDS
@@ -433,6 +437,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [roundId, setRoundId] = useState<RoundId | null>(null);
   const [roundIds, setRoundIds] = useState<{ 1: RoundId | null; 2: RoundId | null }>({ 1: null, 2: null });
+  const [roundStatuses, setRoundStatuses] = useState<{ 1: RoundStatus | null; 2: RoundStatus | null }>({ 1: null, 2: null });
   const [roster, setRoster] = useState<User[]>([]);
   const [teamNames, setTeamNames] = useState<Record<string, string>>(INITIAL_TEAM_NAMES);
 
@@ -591,6 +596,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (!cancelled) {
               const ids = { 1: r1Id, 2: r2Id };
               setRoundIds(prev => (prev[1] === ids[1] && prev[2] === ids[2] ? prev : ids));
+              const sts = { 1: round1Status, 2: r2Status };
+              setRoundStatuses(prev => (prev[1] === sts[1] && prev[2] === sts[2] ? prev : sts));
             }
 
             const activeRound = rounds.find((r: any) => pickStatus(r) === 'ACTIVE') ?? null;
@@ -1541,6 +1548,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setInstructorStats(null);
     setInstructorStatsByRoundNumber({ 1: null, 2: null });
     setRoundIds({ 1: null, 2: null });
+    setRoundStatuses({ 1: null, 2: null });
     setQcQueue(null);
 
     // Clear local caches (avoid leaking state across users).
@@ -2078,6 +2086,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setInstructorStats(null);
     setInstructorStatsByRoundNumber({ 1: null, 2: null });
     setRoundIds({ 1: null, 2: null });
+    setRoundStatuses({ 1: null, 2: null });
     setQcQueue(null);
     setTeamNames(INITIAL_TEAM_NAMES);
     submittedBatchJokesRef.current = {};
@@ -2113,6 +2122,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sales,
       roundId,
       roundIds,
+      roundStatuses,
       marketItems,
       teamSummary,
       teamFeedback,

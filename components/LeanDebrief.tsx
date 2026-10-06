@@ -33,12 +33,18 @@ function side(t: DebriefStats['leaderboard'][number]): DebriefSide {
   };
 }
 
-export function debriefRows(r1: DebriefStats | null, r2: DebriefStats | null): DebriefRow[] {
+/** `teamNames` holds the instructor's renames (kept only in the browser), keyed
+    by team id — the same map the leaderboard reads, so both tables agree. */
+export function debriefRows(
+  r1: DebriefStats | null,
+  r2: DebriefStats | null,
+  teamNames: Record<string, string> = {},
+): DebriefRow[] {
   const byTeam = new Map<number, DebriefRow>();
   for (const [key, stats] of [['r1', r1], ['r2', r2]] as const) {
     for (const t of stats?.leaderboard ?? []) {
       const row = byTeam.get(t.team.id) ?? {
-        teamId: t.team.id, team: t.team.name, r1: null, r2: null, delta: { profit: 0, leadTimeS: 0, unsold: 0 },
+        teamId: t.team.id, team: teamNames[String(t.team.id)] || t.team.name, r1: null, r2: null, delta: { profit: 0, leadTimeS: 0, unsold: 0 },
       };
       row[key] = side(t);
       byTeam.set(t.team.id, row);
@@ -61,8 +67,12 @@ const Cell: React.FC<{ s: DebriefSide | null; pick: (s: DebriefSide) => string }
   <td className="px-2 py-1 text-right tabular-nums">{s ? pick(s) : '—'}</td>
 );
 
-export const LeanDebrief: React.FC<{ r1: DebriefStats | null; r2: DebriefStats | null }> = ({ r1, r2 }) => {
-  const rows = debriefRows(r1, r2);
+export const LeanDebrief: React.FC<{
+  r1: DebriefStats | null;
+  r2: DebriefStats | null;
+  teamNames?: Record<string, string>;
+}> = ({ r1, r2, teamNames }) => {
+  const rows = debriefRows(r1, r2, teamNames);
   if (rows.length === 0) return null;
   return (
     <div className="overflow-x-auto">
@@ -81,7 +91,9 @@ export const LeanDebrief: React.FC<{ r1: DebriefStats | null; r2: DebriefStats |
             <tr key={r.teamId} className="border-t border-gray-100">
               <td className="px-2 py-1 font-medium">{r.team}</td>
               <Cell s={r.r1} pick={s => fmtMoney(s.profit)} /><Cell s={r.r2} pick={s => fmtMoney(s.profit)} />
-              <td className={`px-2 py-1 text-right tabular-nums font-semibold ${r.delta.profit >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+              <td className={`px-2 py-1 text-right tabular-nums font-semibold ${
+                !(r.r1 && r.r2) ? '' : r.delta.profit >= 0 ? 'text-emerald-700' : 'text-rose-700'
+              }`}>
                 {r.r1 && r.r2 ? fmtMoney(r.delta.profit) : '—'}
               </td>
               <Cell s={r.r1} pick={s => String(s.unsold)} /><Cell s={r.r2} pick={s => String(s.unsold)} />

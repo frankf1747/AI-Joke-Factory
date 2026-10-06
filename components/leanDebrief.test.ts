@@ -25,4 +25,9 @@ describe('debriefRows', () => {
     const rows = debriefRows(r1 as any, { round_id: 2, leaderboard: [] } as any);
     expect(rows[0].r2).toBeNull();
   });
+  it('shows the instructor\'s renamed team name, as the leaderboard does', () => {
+    const rows = debriefRows(r1 as any, r2 as any, { '7': 'The Punchliners' });
+    expect(rows[0].team).toBe('The Punchliners');
+    expect(debriefRows(r1 as any, r2 as any, { '8': 'Someone else' })[0].team).toBe('Team 7');
+  });
 });
