@@ -311,6 +311,21 @@ export interface PublicRound {
   started_at: string | null;
   ended_at: string | null;
   is_popped_active: boolean;
+  /**
+   * Lean market mode (newer backends, dto.PublicRound). market_mode gates every
+   * Lean rule; CLASSIC rounds carry the zero/default values below. Read them
+   * through services/leanMode.ts (leanConfigFromRound), which tolerates an
+   * older backend that omits them.
+   */
+  market_mode: 'CLASSIC' | 'LEAN';
+  /** Lean: seconds over which the round's customers arrive. */
+  arrival_window_seconds: number;
+  /** Lean: charged once per submitted batch. */
+  setup_cost_per_batch: number;
+  /** Lean: charged per joke per minute between submit and decision. */
+  carrying_cost_per_joke_minute: number;
+  /** Lean: max batches waiting for Marketing per team; 0 = no limit. */
+  wip_limit: number;
 }
 
 /**
@@ -341,6 +356,11 @@ export interface InstructorRound extends PublicRound {
   swap_margin: number;
   feedback_pass_threshold: number;
   ideal_profile?: Record<IdealDimension, string>;
+  /**
+   * Lean market mode (newer backends), instructor-only like buy_threshold:
+   * odds multiplier per fit point when a customer picks (weight base^true_fit).
+   */
+  preference_base: number;
 }
 
 /**
@@ -550,6 +570,8 @@ export interface TeamSummaryResponse {
    * between them as meaningful, because there cannot be one.
    */
   jokes_published: number;
+  /** Lean market mode only (newer backends): absent for CLASSIC rounds. */
+  lean?: LeanTeamStats;
 }
 
 // ---- Feedback --------------------------------------------------------------
@@ -919,6 +941,17 @@ export interface ConfigRequest {
    * status/code for start, not on the field.
    */
   ideal_profile?: Record<IdealDimension, string>;
+  /**
+   * Lean market mode fields (newer backends). Changing market_mode after the
+   * round has started is refused with 409 CONFLICT whose message starts with
+   * "MARKET_MODE_LOCKED".
+   */
+  market_mode?: 'CLASSIC' | 'LEAN';
+  arrival_window_seconds?: number;
+  setup_cost_per_batch?: number;
+  carrying_cost_per_joke_minute?: number;
+  wip_limit?: number;
+  preference_base?: number;
 }
 
 /**
@@ -972,6 +1005,33 @@ export interface TeamStats {
   total_jokes: number;
   unsold_jokes: number;
   profit: number;
+  /** Lean market mode only (newer backends): absent for CLASSIC rounds. */
+  lean?: LeanTeamStats;
+}
+
+/**
+ * Lean market mode: one point per submitted batch, in submission order.
+ * Present only inside LeanTeamStats.batch_series.
+ */
+export interface BatchPoint {
+  seq: number;
+  submitted_at: string;
+  jokes: number;
+  published: number;
+  sold: number;
+}
+
+/**
+ * Lean market mode stats (newer backends), nested as `lean` on TeamStats and
+ * TeamSummaryResponse for LEAN rounds only.
+ */
+export interface LeanTeamStats {
+  batches_submitted: number;
+  setup_cost: number;
+  carrying_cost: number;
+  avg_submit_to_publish_s: number;
+  avg_publish_to_first_sale_s: number;
+  batch_series: BatchPoint[];
 }
 
 /**

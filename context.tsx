@@ -30,6 +30,7 @@ import { ApiError } from './services/apiClient';
 import { clearPersisted, getWatchIdentity, isWatchMode, mayClaimMarketingBatch } from './services/watchMode';
 import { setMockRoundNumber } from './services/mockApi';
 import { DEFAULT_IDEAL_PROFILE } from './config/dimensions';
+import { LEAN_DEFAULTS, leanConfigFromRound } from './services/leanMode';
 import { isCompleteProfile } from './components/IdealProfilePicker';
 
 const LS_USER_ID = 'joke_factory_user_id';
@@ -403,6 +404,8 @@ interface GameContextType {
 
   // API-driven view models
   roundId: RoundId | null;
+  /** Instructor only: the backend ids of Round 1 and Round 2, from /rounds/active. */
+  roundIds: { 1: RoundId | null; 2: RoundId | null };
   marketItems: ApiMarketItem[];
   teamSummary: ApiTeamSummaryResponse | null;
   /* Per-joke pass/fail feedback for the signed-in user's team. Dimension IDS
@@ -429,6 +432,7 @@ export const useGame = () => {
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [roundId, setRoundId] = useState<RoundId | null>(null);
+  const [roundIds, setRoundIds] = useState<{ 1: RoundId | null; 2: RoundId | null }>({ 1: null, 2: null });
   const [roster, setRoster] = useState<User[]>([]);
   const [teamNames, setTeamNames] = useState<Record<string, string>>(INITIAL_TEAM_NAMES);
 
@@ -477,6 +481,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     marketingNudge1Seconds: DEFAULT_MARKETING_NUDGE_1_SECONDS,
     marketingNudge2Seconds: DEFAULT_MARKETING_NUDGE_2_SECONDS,
     idealProfile: { ...DEFAULT_IDEAL_PROFILE },
+    ...LEAN_DEFAULTS,
   });
 
   const [config, setConfig] = useState<GameConfig>(initialConfig());
@@ -583,6 +588,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             r2Status = pickStatus(r2);
             r1Id = (r1?.id ?? null) as RoundId | null;
             r2Id = (r2?.id ?? null) as RoundId | null;
+            if (!cancelled) {
+              const ids = { 1: r1Id, 2: r2Id };
+              setRoundIds(prev => (prev[1] === ids[1] && prev[2] === ids[2] ? prev : ids));
+            }
 
             const activeRound = rounds.find((r: any) => pickStatus(r) === 'ACTIVE') ?? null;
             const selectedRound =
@@ -661,6 +670,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   marketPrice: nextMarketPrice,
                   costOfPublishing: nextCostOfPublishing,
                   costOfDiscard: nextCostOfDiscard,
+                  // Lean settings are read unconditionally (not gated on
+                  // shouldUseBackendConfig): the instructor picks them before
+                  // start, and a backend without them reads as CLASSIC.
+                  ...leanConfigFromRound(selectedRound),
                 };
               });
             }
@@ -1000,6 +1013,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             marketPrice: nextMarketPrice,
             costOfPublishing: nextCostOfPublishing,
             costOfDiscard: nextCostOfDiscard,
+            // Lean settings of the current round; CLASSIC when absent.
+            ...leanConfigFromRound(selectedRound),
           };
         });
 
@@ -1525,6 +1540,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setInstructorLobby(null);
     setInstructorStats(null);
     setInstructorStatsByRoundNumber({ 1: null, 2: null });
+    setRoundIds({ 1: null, 2: null });
     setQcQueue(null);
 
     // Clear local caches (avoid leaking state across users).
@@ -1548,6 +1564,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (updates.costOfDiscard !== undefined) body.cost_of_discard = updates.costOfDiscard;
     if (updates.round1BatchSize !== undefined) body.batch_size = updates.round1BatchSize;
     if (updates.idealProfile !== undefined) body.ideal_profile = updates.idealProfile;
+    if (updates.marketMode !== undefined) body.market_mode = updates.marketMode;
+    if (updates.arrivalWindowSeconds !== undefined) body.arrival_window_seconds = updates.arrivalWindowSeconds;
+    if (updates.setupCostPerBatch !== undefined) body.setup_cost_per_batch = updates.setupCostPerBatch;
+    if (updates.carryingCostPerJokeMinute !== undefined) body.carrying_cost_per_joke_minute = updates.carryingCostPerJokeMinute;
+    if (updates.wipLimit !== undefined) body.wip_limit = updates.wipLimit;
 
     if (Object.keys(body).length === 0) return;
 
@@ -2056,6 +2077,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setInstructorLobby(null);
     setInstructorStats(null);
     setInstructorStatsByRoundNumber({ 1: null, 2: null });
+    setRoundIds({ 1: null, 2: null });
     setQcQueue(null);
     setTeamNames(INITIAL_TEAM_NAMES);
     submittedBatchJokesRef.current = {};
@@ -2090,6 +2112,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       batches, addBatch, submitRawBatch, splitBatch, unsplitBatch, publishBatch,
       sales,
       roundId,
+      roundIds,
       marketItems,
       teamSummary,
       teamFeedback,

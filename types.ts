@@ -123,6 +123,14 @@ export interface GameConfig {
   marketingNudge2Seconds: number;
   /** Instructor-only. Never sent to students; the backend strips it from the public round. */
   idealProfile: Record<string, string>;
+  /* Lean market mode (newer backends). Read off the current public round via
+     services/leanMode.ts; CLASSIC with zero costs and no WIP limit otherwise. */
+  marketMode: 'CLASSIC' | 'LEAN';
+  arrivalWindowSeconds: number;
+  setupCostPerBatch: number;
+  carryingCostPerJokeMinute: number;
+  /** Max batches waiting for Marketing per team; 0 = no limit. */
+  wipLimit: number;
 }
 
 // --- API shapes (schema-aligned) ---
@@ -190,6 +198,12 @@ export interface ApiRound {
   ended_at?: string | null;
   created_at?: string;
   is_popped_active?: boolean;
+  // Lean market mode fields; absent on backends that predate the feature.
+  market_mode?: 'CLASSIC' | 'LEAN';
+  arrival_window_seconds?: number;
+  setup_cost_per_batch?: number;
+  carrying_cost_per_joke_minute?: number;
+  wip_limit?: number;
 }
 
 export interface ApiActiveRoundResponse {

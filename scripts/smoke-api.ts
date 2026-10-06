@@ -38,6 +38,9 @@ const PUBLIC_ROUND_KEYS = keysOf<PublicRound>({
   customer_budget: true, market_price: true, cost_of_publishing: true, cost_of_discard: true,
   customer_count: true, feedback_joke_count: true, started_at: true, ended_at: true,
   is_popped_active: true,
+  // Lean market mode fields (newer backends; CLASSIC rounds carry defaults).
+  market_mode: true, arrival_window_seconds: true, setup_cost_per_batch: true,
+  carrying_cost_per_joke_minute: true, wip_limit: true,
 });
 
 type Envelope = 'raw' | 'wrapped';

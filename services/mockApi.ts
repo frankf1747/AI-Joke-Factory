@@ -61,6 +61,16 @@ type MockRound = {
   is_popped_active?: boolean;
 };
 
+/* Lean market mode fields every public round carries on newer backends. The
+   mock only models Classic rounds, so it reports the Classic defaults. */
+const MOCK_ROUND_MARKET_FIELDS = {
+  market_mode: 'CLASSIC' as const,
+  arrival_window_seconds: 900,
+  setup_cost_per_batch: 0,
+  carrying_cost_per_joke_minute: 0,
+  wip_limit: 0,
+};
+
 type MockBatch = {
   batch_id: BatchId;
   round_id: RoundId;
@@ -503,6 +513,7 @@ function route(
               started_at: db.round.started_at,
               ended_at: db.round.ended_at,
               is_popped_active: db.round.is_popped_active ?? false,
+              ...MOCK_ROUND_MARKET_FIELDS,
             },
           ]
         : [],
@@ -709,6 +720,7 @@ function route(
               ended_at: db.round.ended_at,
               created_at: isoNow(),
               is_popped_active: db.round.is_popped_active ?? false,
+              ...MOCK_ROUND_MARKET_FIELDS,
             },
           },
         },
@@ -736,6 +748,7 @@ function route(
               ended_at: db.round.ended_at,
               created_at: isoNow(),
               is_popped_active: db.round.is_popped_active ?? false,
+              ...MOCK_ROUND_MARKET_FIELDS,
             },
           },
         },

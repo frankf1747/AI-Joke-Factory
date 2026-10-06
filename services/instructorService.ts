@@ -73,6 +73,14 @@ export const instructorService = {
       cost_of_discard?: number;
       customer_count?: number;
       ideal_profile?: Record<string, string>;
+      // Lean market mode (newer backends). market_mode is locked once the round
+      // starts: the backend answers 409 with a "MARKET_MODE_LOCKED" message.
+      market_mode?: 'CLASSIC' | 'LEAN';
+      arrival_window_seconds?: number;
+      setup_cost_per_batch?: number;
+      carrying_cost_per_joke_minute?: number;
+      wip_limit?: number;
+      preference_base?: number;
     },
   ): Promise<ApiInstructorRoundConfigResponse> {
     return apiRequest<ApiInstructorRoundConfigResponse>(`/v1/instructor/rounds/${round_id}/config`, { method: 'POST', body });

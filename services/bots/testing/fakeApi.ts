@@ -52,6 +52,8 @@ export class FakeWorld {
     customer_budget: 3, market_price: 1, cost_of_publishing: 0.1, cost_of_discard: 0.01,
     customer_count: 100, feedback_joke_count: 3, started_at: null, ended_at: null,
     is_popped_active: false,
+    market_mode: 'CLASSIC', arrival_window_seconds: 900, setup_cost_per_batch: 0,
+    carrying_cost_per_joke_minute: 0, wip_limit: 0,
   };
   readonly batches: FakeBatch[] = [];
   readonly decisions: Decision[] = [];

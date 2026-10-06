@@ -141,6 +141,8 @@ describe('session', () => {
           customer_budget: 100, market_price: 5, cost_of_publishing: 1, cost_of_discard: 0.5,
           customer_count: 20, feedback_joke_count: 3,
           started_at: '2026-01-12T10:05:00Z', ended_at: null, is_popped_active: false,
+          market_mode: 'CLASSIC', arrival_window_seconds: 900, setup_cost_per_batch: 0,
+          carrying_cost_per_joke_minute: 0, wip_limit: 0,
         }],
       },
     };
@@ -565,6 +567,8 @@ describe('instructor', () => {
           customer_count: 20, feedback_joke_count: 3,
           started_at: null, ended_at: null, is_popped_active: false,
           buy_threshold: 0.6, jitter: 0.05, swap_margin: 0.1, feedback_pass_threshold: 0.7,
+          market_mode: 'CLASSIC', arrival_window_seconds: 900, setup_cost_per_batch: 0,
+          carrying_cost_per_joke_minute: 0, wip_limit: 0, preference_base: 2,
         },
       },
     };
@@ -587,6 +591,8 @@ describe('instructor', () => {
           customer_count: 20, feedback_joke_count: 3,
           started_at: '2026-01-12T10:05:00Z', ended_at: null, is_popped_active: false,
           buy_threshold: 0.6, jitter: 0.05, swap_margin: 0.1, feedback_pass_threshold: 0.7,
+          market_mode: 'CLASSIC', arrival_window_seconds: 900, setup_cost_per_batch: 0,
+          carrying_cost_per_joke_minute: 0, wip_limit: 0, preference_base: 2,
           ideal_profile: idealProfile,
         },
       },
@@ -610,6 +616,8 @@ describe('instructor', () => {
           customer_count: 20, feedback_joke_count: 3,
           started_at: '2026-01-12T10:05:00Z', ended_at: '2026-01-12T11:00:00Z',
           is_popped_active: false,
+          market_mode: 'CLASSIC', arrival_window_seconds: 900, setup_cost_per_batch: 0,
+          carrying_cost_per_joke_minute: 0, wip_limit: 0,
         },
       },
     };
@@ -632,6 +640,8 @@ describe('instructor', () => {
           customer_budget: 100, market_price: 5, cost_of_publishing: 1, cost_of_discard: 0.5,
           customer_count: 20, feedback_joke_count: 3,
           started_at: '2026-01-12T10:05:00Z', ended_at: null, is_popped_active: true,
+          market_mode: 'CLASSIC', arrival_window_seconds: 900, setup_cost_per_batch: 0,
+          carrying_cost_per_joke_minute: 0, wip_limit: 0,
         },
       },
     };
