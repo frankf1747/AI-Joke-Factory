@@ -52,7 +52,7 @@ introduction and overrun):
 | Step | Time | Instructor (Instructor screen) | Joke Makers | Marketing |
 |---|---|---|---|---|
 | Setup | 10 min | Forms teams in the lobby. Presses **Lean class preset**, picks the ideal joke profile, checks both rounds show Market mode **Lean**. Explains the rules. | Log in, take their seat, read the brief. | Log in, take their seat, read "The 12 criteria customers judge". |
-| Round 1 — push | 15 min | Presses **Start** with the Round 1 tab selected. Watches the leaderboard, calls out cues (section 6). Presses **End Round** at about 15 minutes. | Write batches of exactly 5 jokes and press **Send to Marketing**. See "Each batch costs $3.00 to set up". No WIP limit. | Split each batch, choose jokes, add a Topic and title, **Release to market**. Watch the Setup cost, Carrying cost and Publish → first sale tiles. |
+| Round 1 — push | 15 min | Presses **Start** with the Round 1 tab selected. Watches the leaderboard, calls out cues (section 6). Presses **End Round** at about 15 minutes. | Write batches of exactly 5 jokes and press **Send to Marketing**. See "Each batch costs $2.00 to set up". No WIP limit. | Split each batch, choose jokes, add a Topic and title, **Release to market**. Watch the Setup cost, Carrying cost and Publish → first sale tiles. |
 | Debrief 1 | 10 min | Shows the Round 1 leaderboard with the Setup, Carrying, Lead and Sale columns. Asks what drove cost and why jokes sat unsold. | Discuss. | Discuss; read the Customer feedback panel and learning curve. |
 | Round 2 — lean | 15 min | Selects the Round 2 tab, confirms Market mode is Lean with WIP limit 2, presses **Start**, ends at about 15 minutes. | Batches may be smaller than 5 (5 is now a cap). See the WIP counter; when it reads "— wait, or go help", stop and help Marketing. | Same desk; in Round 2 Marketing may also discard a whole batch. |
 | Debrief 2 | 15+ min | Opens the **Round 1 vs Round 2** table and works through the debrief questions in section 6. | Discuss. | Discuss. |
@@ -82,11 +82,12 @@ Lean, four extra fields appear:
 Changes take effect when you press **Apply**. The other fields (R1 Batch Size, Cust. Budget,
 Market Price (p), Cost of Publishing (c), the nudges) work as in Classic.
 
-**Lean class preset.** One button writes both rounds at once: Round 1 gets Lean, setup $3, carrying
-$0.02, WIP limit 0; Round 2 gets Lean, setup $1, carrying $0.02, WIP limit 2. It does not change
-the arrival window, batch size, price or costs. It only writes rounds that have not started yet,
+**Lean class preset.** One button writes both rounds at once: Round 1 gets Lean, setup $2, carrying
+$0.05, WIP limit 0; Round 2 gets Lean, setup $0.50, carrying $0.05, WIP limit 2. Both rounds also
+get 150 customers and a customer preference base of 3 (section 4); neither appears in CONFIG. It
+does not change the arrival window, batch size, price or publishing costs. It only writes rounds that have not started yet,
 and is disabled while a round is running. A notice confirms it, for example
-"Lean class preset applied — Round 1: push rules · Round 2: lean rules". If Round 1 has already
+"Lean class preset applied — Round 1: push rules · Round 2: lean rules (150 customers)". If Round 1 has already
 started, it applies to Round 2 only and says so.
 
 **Start / End Round.** Unchanged from Classic. In Lean mode, Start also stamps each customer's
@@ -115,7 +116,7 @@ The Joke Maker writes jokes with the AI tool, pastes them in, ticks "I certify t
 offensive." and presses **Send to Marketing**, as in Classic.
 
 In a Lean round, a line under the Send button shows the setup cost:
-"Each batch costs $3.00 to set up" (or whatever the round's setup cost is). When the round has a
+"Each batch costs $2.00 to set up" (or whatever the round's setup cost is). When the round has a
 WIP limit, the same line adds the counter, for example "Marketing has 1 of 2 batches waiting".
 When the count reaches the limit the text turns amber, reads
 "Marketing has 2 of 2 batches waiting — wait, or go help", and **Send to Marketing** is disabled.
@@ -163,13 +164,13 @@ missed, never by how much.
 
 ## 4. How customers buy
 
-Each round creates its own 100 customers (the default customer count), so Round 2 starts with a
-fresh market. Each customer has a personal quality bar of 7 ± 0.3 (threshold 7, random jitter up
+Each round creates its own customers (150 under the Lean class preset, 100 by default), so Round 2
+starts with a fresh market. Each customer has a personal quality bar of 7 ± 0.3 (threshold 7, random jitter up
 to 0.3 either way) and a budget of $3. A joke's **fit** is how well it matches the hidden ideal
 profile: the sum of its scores on the 12 criteria, from 0 to 12.
 
-**Arrival.** Customers arrive evenly across the arrival window. With 100 customers and 900
-seconds, one arrives every 9 seconds, the first at 0:09 and the last at 15:00. Arrival order is
+**Arrival.** Customers arrive evenly across the arrival window. With 150 customers and 900
+seconds, one arrives every 6 seconds, the first at 0:06 and the last at 15:00. Arrival order is
 shuffled so a customer's quality bar has nothing to do with when they arrive.
 
 **Shopping once.** When a customer arrives they look at the shelf exactly once:
@@ -177,9 +178,11 @@ shuffled so a customer's quality bar has nothing to do with when they arrive.
 1. They consider every joke in the round that is published, classified, and has a fit at or above
    their personal bar.
 2. They buy up to budget ÷ price jokes — 3 at the default $3 budget and $1 price — picking one at a
-   time without replacement. Each pick is a weighted draw: a joke's weight is 2 raised to its fit.
-   One fit point higher means twice as likely to be chosen. Better jokes sell more often, but good
-   jokes still sell.
+   time without replacement. Each pick is a weighted draw: a joke's weight is the **preference
+   base** raised to its fit. The preset sets the base to 3, so one fit point higher means three
+   times as likely to be chosen (the default base, 2, means twice). Better jokes sell more often,
+   but good jokes still sell. A customer never buys two jokes with the same text, so copying a
+   joke onto the shelf twice does not double its sales.
 3. They leave and never shop again. There are no swaps.
 
 A customer who finds nothing that clears their bar leaves with their money unspent. That sale is
@@ -191,16 +194,18 @@ Customers are served whenever the round is polled (every screen refreshes every 
 whenever a batch finishes classification, so they are served within a few seconds of their
 arrival time.
 
-**Worked example.** A customer arrives at minute 6 (customer number 40 at the defaults). Their
-personal bar is 6.9. On the shelf are three qualifying jokes with fits 11, 9 and 7.
+**Worked example.** A customer arrives at minute 6 (customer number 60 under the preset). Their
+personal bar is 6.9. On the shelf are three qualifying jokes with fits 11, 9 and 7. At the preset's
+base of 3:
 
-| Joke fit | Weight (2^fit) | Odds | Chance of being the first pick |
+| Joke fit | Weight (3^fit) | Odds | Chance of being the first pick |
 |---|---|---|---|
-| 11 | 2,048 | 16 | 16/21 ≈ 76% |
-| 9 | 512 | 4 | 4/21 ≈ 19% |
-| 7 | 128 | 1 | 1/21 ≈ 5% |
+| 11 | 177,147 | 81 | 81/91 ≈ 89% |
+| 9 | 19,683 | 9 | 9/91 ≈ 10% |
+| 7 | 2,187 | 1 | 1/91 ≈ 1% |
 
-If the fit-11 joke is picked first, the second pick is between the other two at 4 : 1 (80% / 20%).
+If the fit-11 joke is picked first, the second pick is between the other two at 9 : 1 (90% / 10%).
+At the default base of 2 the same shelf gives 76% / 19% / 5%: fit still matters, but less.
 With a $3 budget and only three qualifying jokes, this customer ends up buying all three; the
 weights decide the order, and they start to matter for sales once the shelf holds more qualifying
 jokes than a customer can afford. With twenty jokes on the shelf, the fit-11 ones take most of the
@@ -237,37 +242,40 @@ All clocks stop when the round ends. Nothing is stored: costs are worked out fro
 time the screen refreshes, which is why the Carrying tile ticks up during the round. Note that the
 inventory clock starts at release, so time spent waiting for AI classification counts as inventory.
 
-The **unsold** figure on the leaderboard and the Round 1 vs Round 2 table is published jokes minus
-sales, floored at zero. Because one joke can sell many times, this is not the same as the number
-of jokes that never sold.
+In a Lean round the leaderboard's unsold column is titled **Never Sold**, and the Round 1 vs
+Round 2 table has **R1 never sold** and **R2 never sold**: published jokes with no sale at all. The
+Classic **Unsold Jokes** figure is published jokes minus sales, floored at zero; because one joke
+can sell many times, it measures something different, so the two are never shown side by side.
 
-**Worked example at the preset** ($1 price, $0.10 publishing, $0.01 discard, $3 setup, $0.02
+**Worked example at the preset** ($1 price, $0.10 publishing, $0.01 discard, $2 setup, $0.05
 carrying, Round 1):
 
-*Spray team.* Sends 8 batches of 5: setup 8 × $3 = $24. Marketing lets each batch wait 6 minutes:
-8 × 5 × 6 × $0.02 = $4.80. Publishes all 40 jokes ($4.00); 20 of them sit unsold for 10 minutes:
-20 × 10 × $0.02 = $4.00. With 60 sales: 60 − 4.00 − 24 − 8.80 = **$23.20**.
+*Spray team.* Sends 8 batches of 5: setup 8 × $2 = $16. Marketing lets each batch wait 6 minutes:
+8 × 5 × 6 × $0.05 = $12.00. Publishes all 40 jokes ($4.00); 20 of them sit unsold for 10 minutes:
+20 × 10 × $0.05 = $10.00. With 60 sales: 60 − 4.00 − 16 − 22.00 = **$18.00**.
 
-*Careful team.* Sends 4 batches ($12), each processed in 2 minutes: 4 × 5 × 2 × $0.02 = $0.80.
-Publishes 10 of its 20 jokes ($1.00) and discards 10 ($0.10); 2 go unsold for 10 minutes ($0.40).
-With 45 sales: 45 − 1.00 − 0.10 − 12 − 1.20 = **$30.70**.
+*Careful team.* Sends 4 batches ($8), each processed in 2 minutes: 4 × 5 × 2 × $0.05 = $2.00.
+Publishes 10 of its 20 jokes ($1.00) and discards 10 ($0.10); 2 go unsold for 10 minutes ($1.00).
+With 45 sales: 45 − 1.00 − 0.10 − 8 − 3.00 = **$32.90**.
 
-The careful team earns more despite selling less. (The spec's version of this example gives
-$30.80 because it leaves out the $0.10 discard cost.) Whether sales really split that way depends
-on the players; see section 9.
+The careful team earns more despite selling less. Whether sales really split that way depends on
+the players; see section 9.
 
 **The preset and why:**
 
 | Setting | Round 1 (push) | Round 2 (lean) | Reasoning |
 |---|---|---|---|
 | Market mode | Lean | Lean | Both rounds need steady arrivals and visible costs so they can be compared. |
-| Setup cost / batch | $3 | $1 | Round 1 has costly changeovers, so each batch must earn its keep. Round 2 shows the payoff of setup reduction: small batches become affordable. |
-| Carrying cost / joke-min | $0.02 | $0.02 | Kept the same so the comparison isolates the pull rule and setup. A joke left unsold for the whole 15 minutes costs $0.30 — three times its publishing cost, but less than one sale. |
+| Setup cost / batch | $2 | $0.50 | Round 1 has costly changeovers, so each batch must earn its keep. Round 2 shows the payoff of setup reduction: small batches become affordable. At $3 / $1 (the first design) every persona averaged a loss in Round 1 of the pilot. |
+| Carrying cost / joke-min | $0.05 | $0.05 | Kept the same so the comparison isolates the pull rule and setup. A joke left unsold for the whole 15 minutes costs $0.75 — less than one sale, but enough that a shelf of duds visibly eats profit. At $0.02 waste barely registered and spraying still paid. |
 | WIP limit | 0 (none) | 2 | Round 1 lets work pile up (push). Round 2 caps it at two waiting batches (pull, like a kanban). |
 | Arrival window | 900 s | 900 s | Not set by the preset; the default matches a 15-minute round. |
 | Batch size | 5, exact | 5, a cap | Unchanged from Classic: Round 2 allows smaller batches. |
+| Customers | 150 | 150 | More demand than the default 100, so a well-aimed small batch can sell through. With 100 in the pilot, every persona averaged a loss in both rounds. |
+| Preference base | 3 | 3 | Each fit point triples a joke's chance of being picked, so learning what sells pays off. At the default 2 in the pilot, the learning bot earned less than the bot that sprayed jokes. |
 
-The customer preference base (2) is fixed at its default and is not shown in CONFIG.
+Customers and preference base are not shown in CONFIG; only the preset sets them. Reset Game
+returns them to 100 and 2.
 
 ---
 
@@ -279,9 +287,9 @@ The customer preference base (2) is fixed at its default and is not shown in CON
 - [ ] Form teams in the lobby: one Joke Maker and one Marketing seat per team.
 - [ ] Press **Lean class preset**.
 - [ ] Pick the ideal joke profile in CONFIG; a round will not start without a complete profile.
-- [ ] Select the **Round 1** tab: Market mode shows **Lean**, Setup cost / batch 3, Carrying cost /
-      joke-min 0.02, WIP limit 0, Arrival window 900.
-- [ ] Select the **Round 2** tab: Market mode **Lean**, setup 1, carrying 0.02, WIP limit 2.
+- [ ] Select the **Round 1** tab: Market mode shows **Lean**, Setup cost / batch 2, Carrying cost /
+      joke-min 0.05, WIP limit 0, Arrival window 900.
+- [ ] Select the **Round 2** tab: Market mode **Lean**, setup 0.5, carrying 0.05, WIP limit 2.
 - [ ] Return to the Round 1 tab and plan to end each round at about 15 minutes.
 
 ### Cues to call out during a round
@@ -332,8 +340,8 @@ tiles, columns and debrief table are hidden, and profit is calculated exactly as
   are classified by the LLM. The numbers need one live confirmation class before they are relied
   on.
 - **Time was compressed in the pilot.** Bots played at 10× speed with a 180-second arrival window.
-  Because the server charges carrying per wall-clock minute, carrying was scaled ×10 ($0.20 per
-  joke-minute) to match; setup cost was not scaled. Human play will not match the bot numbers
+  Because the server charges carrying per wall-clock minute, carrying was scaled ×10 ($0.50 per
+  joke-minute at the preset) to match; setup cost was not scaled. Human play will not match the bot numbers
   exactly.
 - **WIP limit race.** The server counts waiting batches and then inserts the new one, so two sends
   in the same instant could both pass the check. With one Joke Maker per team this is negligible.
@@ -343,9 +351,12 @@ tiles, columns and debrief table are hidden, and profit is calculated exactly as
 
 ## 9. Pilot evidence
 
+### Baseline (the first design)
+
 The baseline pilot (`docs/pilots/2026-10-06-lean-pilot-baseline.md`) ran 2 Classic and 2 Lean
 two-round classes, each with 12 bot teams (3 Careful, 3 Balanced, 3 Spray, 3 Learner), on a local
-backend with the hash classifier, at the preset values (carrying scaled ×10 as above).
+backend with the hash classifier, at the first design's values: setup $3 / $1, carrying $0.02,
+preference base 2, 100 customers (carrying scaled ×10 as above).
 
 **Verdict: FAIL** against the strict bar set in advance — that in Lean mode, Learner and Careful
 both out-earn Spray on mean profit and Spray wins no class. In Lean Round 2, Careful averaged
@@ -360,4 +371,48 @@ But the results point the right way:
 - **Learning pays at the top.** The Learner won 3 of the 4 Lean rounds (and both Classic Round 2s),
   but its mean profit in Lean Round 2 ($0.19) trailed Spray ($3.94) and Balanced ($4.59).
 
-Tuning results: see docs/pilots/ — this section is updated after the tuning runs.
+### Tuning
+
+Four tuning runs (Lean classes only, 12 teams × 2 classes each) changed one thing at a time. Lean
+Round 2 mean profit per persona:
+
+| Run | Change | Careful | Balanced | Spray | Learner | Strict bar |
+|---|---|---|---|---|---|---|
+| Baseline | $3/$1 setup, $0.02 carrying, base 2, 100 customers | −$6.06 | $4.59 | $3.94 | $0.19 | FAIL |
+| Tuning 1 | preference base 3 | −$6.68 | $4.52 | −$0.54 | $3.78 | FAIL |
+| Tuning 2 | + carrying $0.05 | −$14.17 | −$13.20 | −$34.25 | −$10.05 | PASS |
+| Tuning 3 | + setup $2/$0.50, no duplicate jokes in one basket | −$12.09 | −$12.75 | −$24.38 | −$4.08 | PASS |
+| Tuning 4 | + 150 customers (the preset) | −$4.39 | $2.33 | −$7.22 | $12.05 | PASS |
+
+Tuning 2 made waste cost enough to matter, but every persona lost money. Tuning 3 and 4 brought
+profit back by making changeovers cheaper and adding demand, without letting spraying pay again.
+
+### Final confirmation
+
+The final run (`docs/pilots/2026-10-06-lean-pilot-final.md`) played 2 Classic and 2 Lean classes
+at the preset (12 teams each, every round 140–196 s, so the run was clean). A first attempt was
+discarded because the machine slept mid-run; it is kept as
+`2026-10-06-lean-pilot-final-INVALID-machine-slept.md`.
+
+| Persona | Classic R1 | Classic R2 | Lean R1 | Lean R2 |
+|---|---|---|---|---|
+| Careful | $18.99 | $15.33 | −$20.14 | −$7.76 |
+| Balanced | $31.72 | $27.64 | −$22.19 | $5.64 |
+| Spray | **$90.50** | **$56.17** | **$8.44** | −$5.09 |
+| Learner | −$1.84 | $39.23 | $0.24 | **$13.23** |
+
+- **Classic rewards spraying; Lean Round 2 does not.** Spray tops both Classic rounds and Lean
+  Round 1 (push rules), then drops below the Learner and Balanced teams once lean rules apply.
+- **Lean rewards improvement; Classic does not.** Lean mean profit rose from −$8.41 to +$1.50.
+  Classic stayed flat ($34.84 → $34.59).
+- **Learning pays.** The Learner won 3 of the 4 Lean rounds and averaged the highest Lean Round 2
+  profit ($13.23). It sold as much as Spray (46.7 vs 46.8 sales) from 30% fewer jokes, with less
+  than half as many never sold (12.2 vs 27.2).
+- **Lean spreads outcomes.** The best single team made $283 in Classic and $46 in Lean.
+
+**Strict bar: FAIL by a narrow margin.** Careful averaged −$7.76 in Lean Round 2 against Spray's
+−$5.09. In tuning 4, at the same settings, the order was reversed (−$4.39 vs −$7.22); pooled over
+both runs the two are tied (−$6.08 vs −$6.16). The Careful bot publishes fewer jokes but picks
+them at random, so it carries the cost of being careful without the judgement that makes care
+pay. A human careful team chooses which jokes to keep. The setting was not tuned further to make
+a random-choice bot win, because that would fit the economics to the bot rather than to students.
