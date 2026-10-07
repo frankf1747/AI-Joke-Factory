@@ -53,7 +53,7 @@ introduction and overrun):
 |---|---|---|---|---|
 | Setup | 10 min | Forms teams in the lobby. Presses **Lean class preset**, picks the ideal joke profile, checks both rounds show Market mode **Lean**. Explains the rules. | Log in, take their seat, read the brief. | Log in, take their seat, read "The 12 criteria customers judge". |
 | Round 1 — push | 15 min | Presses **Start** with the Round 1 tab selected. Watches the leaderboard, calls out cues (section 6). Presses **End Round** at about 15 minutes. | Write batches of exactly 5 jokes and press **Send to Marketing**. See "Each batch costs $2.00 to set up". No WIP limit. | Split each batch, choose jokes, add a Topic and title, **Release to market**. Watch the Setup cost, Carrying cost and Publish → first sale tiles. |
-| Debrief 1 | 10 min | Shows the Round 1 leaderboard with the Setup, Carrying, Lead and Sale columns. Asks what drove cost and why jokes sat unsold. | Discuss. | Discuss; read the Customer feedback panel and learning curve. |
+| Debrief 1 | 10 min | Shows the Round 1 leaderboard with the Setup, Carrying, Lead and Sale columns, and the lean charts (section 3). Asks what drove cost and why jokes sat unsold. | Discuss. | Discuss; read the Customer feedback panel and the two lean charts. |
 | Round 2 — lean | 15 min | Selects the Round 2 tab, confirms Market mode is Lean with WIP limit 2, presses **Start**, ends at about 15 minutes. | Batches may be smaller than 5 (5 is now a cap). See the WIP counter; when it reads "— wait, or go help", stop and help Marketing. | Same desk; in Round 2 Marketing may also discard a whole batch. |
 | Debrief 2 | 15+ min | Opens the **Round 1 vs Round 2** table and works through the debrief questions in section 6. | Discuss. | Discuss. |
 
@@ -111,6 +111,24 @@ column sorts lowest first, because lower is better.
 R1 profit, R2 profit, Δ profit (green when it went up, red when it went down), R1 never sold, R2
 never sold, R1 setup+carry, R2 setup+carry, R1 lead, R2 lead. Teams are sorted by Round 2 profit.
 
+**Lean charts.** When the round shown is Lean, the five Classic chart cards (Cumulative Sales Over
+Time, Batch Sequence vs Quality, Wasted Jokes, Scatter Plots, Unrated Jokes Over Time) are replaced
+by four lean charts in the same place. A bar above them, titled "Lean charts", holds a team picker
+("All teams" or one team) and an **R1 / R2** control. The control sets the round of the first two
+charts; the last two always compare both rounds. The picker applies to charts 2 to 4; chart 1
+always shows every team. A round that is not Lean is disabled in the control, and if the picked
+round is not Lean the charts fall back to the round that is live. The charts refresh every 10
+seconds while a round runs and are fetched once for a round that has ended. If the server cannot
+be reached three times in a row, a card says "Chart data unavailable — retrying" and keeps the
+last picture.
+
+| Chart | What it shows | How to read it |
+|---|---|---|
+| **Where the money leaked** | One bar per team, most waste first, split into Setup, Waiting at Marketing, Unsold on shelf, Published, never sold and Discarded, in dollars, with the total at the end. | Shorter bars are leaner. Setup + Waiting + Unsold is the leaderboard's Setup + Carrying for that team. While a round is live, "Published, never sold" counts released jokes that have not sold yet; it is final only when the round ends. |
+| **Jokes standing still** | For one team, the jokes waiting for Marketing (purple) and unsold on the shelf (amber) over the minutes of the round, with the class average dashed. With "All teams" it shows the team with the most idle jokes right now, and says so. In a round with a WIP limit the subtitle ends with it, for example "WIP limit: 2 batches". | A growing pile is waste: work that has cost money and has not earned any. |
+| **Smaller batches, faster feedback** | One dot per batch: jokes in the batch across, minutes from sending it to its first sale up. Round 1 circles (blue), Round 2 triangles (orange). Batches with no sale yet are hollow, in a "no sale yet" band at the top (a batch with nothing released yet is also hollow, and its tooltip says "Nothing released yet"). | Lower is better: the market answered sooner. Small batches should sit lower. |
+| **More cycles, more learning** | With "All teams": the class's sell-through (the share of released jokes that sold) over the minutes of the round, one line per round. With one team: that team's batches, one dot per batch at the minute it was sent, showing the share of its released jokes that sold, for each round. Batches with nothing released are left out. | More dots in the same time means more chances to adjust; a rising line means the team is learning what sells. |
+
 ### Joke Maker
 
 The Joke Maker writes jokes with the AI tool, pastes them in, ticks "I certify these jokes are not
@@ -129,7 +147,7 @@ screen refreshes and the server refuses the send, an alert says
 "Marketing still has batches waiting. In a pull system you wait — or go help them decide." and the
 draft is kept so it can be sent later.
 
-The Joke Maker also sees a **Learning curve** card (see Marketing) and the Customer feedback panel.
+The Joke Maker also sees the two lean charts described under Marketing and the Customer feedback panel.
 
 ### Marketing
 
@@ -153,10 +171,16 @@ Publish, Content Waste):
 | **Carrying cost** | The team's carrying cost so far; it rises every minute work waits or jokes sit unsold. |
 | **Publish → first sale** | Average seconds a sold joke waited for its first buyer. |
 
-A **Learning curve** card ("Share of each batch's released jokes that sold") plots, for each
-batch in the order it was sent, the share of its released jokes that have sold at least once.
-A rising line means the team is learning what the market wants. Batches with nothing released are
-left out.
+Two lean charts sit below the tiles (in a Lean round). They show the team's own data and an
+anonymous class average, never another team by name:
+
+- **Jokes standing still** — the team's jokes waiting for Marketing and unsold on the shelf over
+  the minutes of the round, with the class average dashed. A growing pile is waste.
+- **More cycles, more learning** — one dot per batch at the minute it was sent, showing the share
+  of its released jokes that sold; the class average is a dashed line. In Round 2 the team's
+  Round 1 batches are drawn faded behind, when Round 1 was also Lean, so the two rounds can be
+  compared. Batches with nothing released are left out. A rising line means the team is learning
+  what the market wants.
 
 The **Customer feedback** panel is unchanged: it shows which of the criteria landed and which
 missed, never by how much.
@@ -300,7 +324,8 @@ returns them to 100 and 2.
 - "Customers are arriving now. If your shelf is empty, those sales are gone."
 - Round 2: "If your Joke Maker is blocked, that is the system working. Go help."
 - Round 2: "Smaller batches are allowed now. What does that do to your lead time?"
-- "Look at the learning curve: are later batches selling better than earlier ones?"
+- "Look at More cycles, more learning: are later batches selling better than earlier ones?"
+- "Jokes standing still: whose pile is growing, and what is it waiting for?"
 
 ### Eight debrief questions
 
@@ -313,7 +338,20 @@ returns them to 100 and 2.
 | 5 | Which team had the most unsold stock in Round 1? Was publishing more worth it? | R1 unsold, R1 profit |
 | 6 | Did the WIP limit help or hurt your team? What did the Joke Maker do while blocked? | R2 lead, R2 setup+carry |
 | 7 | How long did your jokes wait for their first buyer, and what does that say about fit? | Leaderboard Sale column, per round |
-| 8 | Did your learning curve rise? How did you use the customer feedback? | Δ profit, R2 unsold, team learning curves |
+| 8 | Did your sell-through rise from batch to batch? How did you use the customer feedback? | Δ profit, R2 unsold, More cycles, more learning (pick the team) |
+
+### Debrief with the lean charts
+
+Pick the round with **R1 / R2** and, where it helps, one team in the team picker.
+
+1. **Where the money leaked**, Round 1 then Round 2: "Which colour shrank most? Was it setup
+   (fewer changeovers) or waiting (less work piled up in front of Marketing)?"
+2. **Jokes standing still**, the most idle team: "When did the pile start to grow? What was the
+   Joke Maker doing then, and what was Marketing doing?"
+3. **Smaller batches, faster feedback**: "Are the orange triangles lower than the blue circles?
+   What did a smaller batch buy you?"
+4. **More cycles, more learning**: "How many dots did your team get in Round 1, and in Round 2?
+   Did the line rise? Which feedback did you act on?"
 
 ---
 
@@ -327,7 +365,8 @@ starts. All Lean settings lock once a round has started; trying to change the ma
 ideal profile).
 
 Nothing else changes. In Classic mode the lean settings are stored but ignored, the lean fields,
-tiles, columns and debrief table are hidden, and profit is calculated exactly as before.
+tiles, columns, debrief table and lean charts are hidden (the instructor sees the five Classic
+chart cards), and profit is calculated exactly as before.
 
 ---
 
