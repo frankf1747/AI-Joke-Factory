@@ -12,6 +12,9 @@ import { BotPanel, botPanelRequested } from '../components/BotPanel';
 import { isWatchMode } from '../services/watchMode';
 import type { IdealDimension } from '../config/dimensions';
 import { LeanDebrief } from '../components/LeanDebrief';
+import { LeanChartsPanel } from '../components/leanCharts/LeanChartsPanel';
+import { useLeanCharts } from '../services/useLeanCharts';
+import { leanRoundFlags } from '../services/leanCharts';
 import { instructorService } from '../services/instructorService';
 import { sessionService } from '../services/sessionService';
 import {
@@ -94,6 +97,10 @@ const Instructor: React.FC = () => {
   const [hoveredUnratedSeriesKey, setHoveredUnratedSeriesKey] = useState<string | null>(null);
   const [leaderboardRoundTab, setLeaderboardRoundTab] = useState<1 | 2>((config.round === 2 ? 2 : 1) as 1 | 2);
   const leaderboardRoundTouchedRef = useRef(false);
+  // Lean charts: the round their R1/R2 control shows. It follows the current
+  // round until the instructor picks one, like the leaderboard tab.
+  const [leanChartsRound, setLeanChartsRound] = useState<1 | 2>((config.round === 2 ? 2 : 1) as 1 | 2);
+  const leanChartsRoundTouchedRef = useRef(false);
   const [scatterXMetric, setScatterXMetric] = useState<string>('total_sales');
   const [scatterYMode, setScatterYMode] = useState<'metric' | 'ratio'>('metric');
   const [scatterYMetric, setScatterYMetric] = useState<string>('profit');
@@ -325,6 +332,9 @@ const Instructor: React.FC = () => {
     if (!leaderboardRoundTouchedRef.current) {
       setLeaderboardRoundTab((config.round === 2 ? 2 : 1) as 1 | 2);
     }
+    if (!leanChartsRoundTouchedRef.current) {
+      setLeanChartsRound((config.round === 2 ? 2 : 1) as 1 | 2);
+    }
   }, [config.round, config.isActive]);
 
   // Clear "resume" hint once Round 2 becomes active or user switches away from Round 2.
@@ -340,6 +350,32 @@ const Instructor: React.FC = () => {
   const statsR1 = instructorStatsRound1 ?? null;
   const statsR2 = instructorStatsRound2 ?? null;
   const leaderboardStatsSelected = (leaderboardRoundTab === 1 ? statsR1 : statsR2) ?? instructorStats ?? null;
+
+  /* Lean charts replace the five Classic chart cards when the round their
+     round control shows is Lean — the leaderboard's rule: its stats rows carry
+     `lean`, or, before stats arrive, the current round's config. Both rounds
+     are loaded (charts 3 and 4 overlay them): an ACTIVE round is polled every
+     10 s, an ENDED one fetched once, a round not yet started not at all. */
+  const leanRounds = useMemo(
+    () => leanRoundFlags(statsR1?.leaderboard, statsR2?.leaderboard, config.round === 2 ? 2 : 1, config.marketMode),
+    [statsR1?.leaderboard, statsR2?.leaderboard, config.round, config.marketMode],
+  );
+  const leanChartsR1 = useLeanCharts({
+    roundId: roundIds[1],
+    teamId: null,
+    enabled: leanRounds[1] && roundStatuses[1] != null && roundStatuses[1] !== 'CONFIGURED',
+    live: roundStatuses[1] === 'ACTIVE',
+  });
+  const leanChartsR2 = useLeanCharts({
+    roundId: roundIds[2],
+    teamId: null,
+    enabled: leanRounds[2] && roundStatuses[2] != null && roundStatuses[2] !== 'CONFIGURED',
+    live: roundStatuses[2] === 'ACTIVE',
+  });
+  // A 409 NOT_LEAN_ROUND (a mode change racing the start) hides the panel
+  // until a later poll answers again.
+  const showLeanCharts =
+    leanRounds[leanChartsRound] && !(leanChartsRound === 1 ? leanChartsR1 : leanChartsR2).notLean;
 
   const mapLeaderboard = (rows: any[]) => {
     return (rows || []).map(row => {
@@ -2798,6 +2834,20 @@ const Instructor: React.FC = () => {
             </Card>
           )}
           
+          {showLeanCharts ? (
+            <LeanChartsPanel
+              round={leanChartsRound}
+              onRoundChange={(r) => {
+                leanChartsRoundTouchedRef.current = true;
+                setLeanChartsRound(r);
+              }}
+              leanRounds={leanRounds}
+              r1={leanChartsR1}
+              r2={leanChartsR2}
+              teamNames={teamNames}
+            />
+          ) : (
+          <>
           {!isChartHidden('sales') && (
             <Card
               title="Cumulative Sales Over Time"
@@ -3200,6 +3250,8 @@ const Instructor: React.FC = () => {
                 {renderChart('unrated_jokes')}
               </div>
             </Card>
+          )}
+          </>
           )}
 
           {/* Live Market (Instructor view) */}
