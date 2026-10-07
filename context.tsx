@@ -262,7 +262,7 @@ export async function pollTeamFeedback(
   }
 }
 
-function normalizeInstructorStats(raw: any): ApiInstructorStatsResponse {
+export function normalizeInstructorStats(raw: any): ApiInstructorStatsResponse {
   const data = raw?.data ?? raw ?? {};
   const normalizeTeam = (t: any) => ({
     id: Number(t?.id ?? t?.ID ?? 0) as TeamId,
@@ -285,6 +285,8 @@ function normalizeInstructorStats(raw: any): ApiInstructorStatsResponse {
     profit: Number(item.profit ?? item.Profit ?? 0),
     total_jokes: Number(item.total_jokes ?? item.TotalJokes ?? 0),
     published_jokes: Number(item.published_jokes ?? item.PublishedJokes ?? 0),
+    // Lean rounds only: the leaderboard, debrief and learning curve key off it.
+    ...(item.lean != null ? { lean: item.lean } : {}),
   }));
 
   /* rejection_by_team is NOT on the wire — ports.TeamStats has no rejection
