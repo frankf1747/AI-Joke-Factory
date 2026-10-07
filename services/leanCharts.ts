@@ -1,0 +1,388 @@
+/**
+ * Lean charts — pure transforms from GET .../lean-charts (types/api.ts
+ * LeanChartsResponse) to the rows the four recharts cards draw. The components
+ * in components/leanCharts only render; every rule is here and in
+ * services/leanCharts.test.ts.
+ */
+import type { LeanChartsClassAverage, LeanChartsResponse, LeanChartsTeam } from '../types/api';
+
+/** Same meaning, same colour, everywhere (design_handoff_joke_factory_ui/colors_and_type.css.txt). */
+export const LEAN_CHART_COLORS = {
+  setup: '#2563eb',        // --production: Joke Maker changeover
+  waiting: '#7c3aed',      // --marketing: waiting at Marketing
+  shelf: '#d97706',        // --market: unsold on the shelf
+  neverSold: '#e11d48',    // --waste: published, never sold
+  discarded: '#94a3b8',    // --fg4: discarded
+  round1: '#3B82F6',       // Round 1, as on the Wasted Jokes chart
+  round2: '#F97316',       // Round 2, as on the Wasted Jokes chart
+  classAverage: '#64748b', // --fg3, always drawn dashed
+} as const;
+
+export const LEAN_CHARTS_POLL_MS = 10_000;
+export const LEAN_CHARTS_FAILURE_LIMIT = 3;
+/** The backend refuses lean charts of a CLASSIC round: 409 CONFLICT with this in the message. */
+export const NOT_LEAN_ROUND_MESSAGE = 'NOT_LEAN_ROUND';
+export const LEAN_CHARTS_UNAVAILABLE_TEXT = 'Chart data unavailable — retrying';
+export const NO_BATCHES_TEXT = 'No batches sent yet';
+export const NO_RELEASES_TEXT = 'No jokes released yet';
+
+/** True for the backend's 409 refusal of lean charts for a CLASSIC round. */
+export function isNotLeanRound(e: unknown): boolean {
+  const err = e as { status?: unknown; message?: unknown } | null;
+  return Boolean(err) && err!.status === 409 && String(err!.message ?? '').includes(NOT_LEAN_ROUND_MESSAGE);
+}
+
+export function roundColor(round: 1 | 2): string {
+  return round === 2 ? LEAN_CHART_COLORS.round2 : LEAN_CHART_COLORS.round1;
+}
+
+/** The instructor's rename (kept in the browser, keyed by team id) wins, as on the leaderboard. */
+export function teamLabel(teamId: number, fallback: string, teamNames: Record<string, string> = {}): string {
+  return teamNames[String(teamId)] || fallback || `Team ${teamId}`;
+}
+
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+
+/** "45 s" under a minute, "1.6 min" from a minute on. */
+export function fmtMinutes(minutes: number): string {
+  if (minutes < 1) return `${Math.round(minutes * 60)} s`;
+  return `${minutes.toFixed(1)} min`;
+}
+
+/** Axis ticks: whole minutes as "3", fractions (12-second samples) as "0.2". */
+export function fmtMinuteTick(minute: number): string {
+  return Number.isInteger(minute) ? String(minute) : minute.toFixed(1);
+}
+
+/* ---- Which rounds are Lean ------------------------------------------------ */
+
+type StatsRows = ReadonlyArray<{ lean?: unknown }> | null | undefined;
+
+/**
+ * The leaderboard's rule: a round is Lean when its stats rows carry `lean`.
+ * Before any rows arrive, the current round falls back to its config.
+ */
+export function leanRoundFlags(
+  r1Rows: StatsRows,
+  r2Rows: StatsRows,
+  currentRound: 1 | 2,
+  currentMarketMode: string,
+): { 1: boolean; 2: boolean } {
+  const flag = (rows: StatsRows, n: 1 | 2) =>
+    rows && rows.length > 0 ? rows.some(r => r.lean != null) : n === currentRound && currentMarketMode === 'LEAN';
+  return { 1: flag(r1Rows, 1), 2: flag(r2Rows, 2) };
+}
+
+/** Round 1's id from /v1/rounds/active, only if Round 1 was Lean. */
+export function leanRound1Id(
+  rounds: ReadonlyArray<{ id: number; round_number: number; market_mode?: string }> | null | undefined,
+): number | null {
+  const r1 = (rounds ?? []).find(r => Number(r.round_number) === 1);
+  return r1 && r1.market_mode === 'LEAN' ? r1.id : null;
+}
+
+/** The instructor's team picker: every team in either round, by id. */
+export function teamOptions(
+  r1: LeanChartsResponse | null,
+  r2: LeanChartsResponse | null,
+  teamNames: Record<string, string> = {},
+): Array<{ id: number; name: string }> {
+  const byId = new Map<number, string>();
+  for (const res of [r1, r2]) {
+    for (const t of res?.teams ?? []) {
+      if (!byId.has(t.team_id)) byId.set(t.team_id, teamLabel(t.team_id, t.team_name, teamNames));
+    }
+  }
+  return [...byId.entries()].sort((a, b) => a[0] - b[0]).map(([id, name]) => ({ id, name }));
+}
+
+/* ---- Chart 1: Where the money leaked -------------------------------------- */
+
+export interface WasteBarRow {
+  teamId: number;
+  team: string;
+  setup: number;
+  waiting: number;
+  shelf: number;
+  neverSold: number;
+  discarded: number;
+  total: number;
+}
+
+export type WasteSegmentKey = 'setup' | 'waiting' | 'shelf' | 'neverSold' | 'discarded';
+
+/** Bar segments in stacking order, left to right. */
+export const WASTE_SEGMENTS: ReadonlyArray<{ key: WasteSegmentKey; label: string; color: string }> = [
+  { key: 'setup', label: 'Setup', color: LEAN_CHART_COLORS.setup },
+  { key: 'waiting', label: 'Waiting at Marketing', color: LEAN_CHART_COLORS.waiting },
+  { key: 'shelf', label: 'Unsold on shelf', color: LEAN_CHART_COLORS.shelf },
+  { key: 'neverSold', label: 'Published, never sold', color: LEAN_CHART_COLORS.neverSold },
+  { key: 'discarded', label: 'Discarded', color: LEAN_CHART_COLORS.discarded },
+];
+
+/** One bar per team, most waste first (ties: lowest team id first). */
+export function wasteBars(res: LeanChartsResponse | null, teamNames: Record<string, string> = {}): WasteBarRow[] {
+  return (res?.teams ?? [])
+    .map(t => ({
+      teamId: t.team_id,
+      team: teamLabel(t.team_id, t.team_name, teamNames),
+      setup: t.waste.setup,
+      waiting: t.waste.waiting,
+      shelf: t.waste.shelf,
+      neverSold: t.waste.never_sold,
+      discarded: t.waste.discarded,
+      total: t.waste.total,
+    }))
+    .sort((a, b) => b.total - a.total || a.teamId - b.teamId);
+}
+
+export function hasWaste(rows: ReadonlyArray<WasteBarRow>): boolean {
+  return rows.some(r => r.total > 0);
+}
+
+/* ---- Chart 2: Jokes standing still ---------------------------------------- */
+
+export interface IdleRow {
+  minute: number;
+  waiting: number;
+  shelf: number;
+  /** Class-average idle jokes (waiting + shelf), drawn dashed. */
+  classAverage: number;
+}
+
+export function idleRows(team: LeanChartsTeam | null, avg: LeanChartsClassAverage | null): IdleRow[] {
+  const samples = avg?.idle ?? team?.idle ?? [];
+  return samples.map((s, k) => {
+    const mine = team?.idle[k];
+    const a = avg?.idle[k];
+    return {
+      minute: s.t / 60,
+      waiting: mine?.waiting ?? 0,
+      shelf: mine?.shelf ?? 0,
+      classAverage: a ? a.waiting + a.shelf : 0,
+    };
+  });
+}
+
+export function hasIdle(rows: ReadonlyArray<IdleRow>): boolean {
+  return rows.some(r => r.waiting + r.shelf + r.classAverage > 0);
+}
+
+/** The instructor's default team for chart 2: most idle jokes at the latest sample (ties: lowest id). */
+export function defaultIdleTeamId(res: LeanChartsResponse | null): number | null {
+  let best: { id: number; idle: number } | null = null;
+  for (const t of res?.teams ?? []) {
+    const last = t.idle[t.idle.length - 1];
+    const idle = last ? last.waiting + last.shelf : 0;
+    if (!best || idle > best.idle || (idle === best.idle && t.team_id < best.id)) best = { id: t.team_id, idle };
+  }
+  return best?.id ?? null;
+}
+
+/** The limit counts batches and the chart counts jokes, so the limit is stated, not drawn. */
+export function idleSubtitle(wipLimit: number): string {
+  const base = 'Jokes waiting for Marketing or unsold on the shelf. A growing pile is waste.';
+  return wipLimit > 0 ? `${base} WIP limit: ${wipLimit} batch${wipLimit === 1 ? '' : 'es'}` : base;
+}
+
+/* ---- Chart 3: Smaller batches, faster feedback ---------------------------- */
+
+export interface BatchScatterPoint {
+  key: string;
+  teamId: number;
+  team: string;
+  round: 1 | 2;
+  seq: number;
+  jokes: number;
+  published: number;
+  sold: number;
+  /** Minutes from sending to the first sale; null while unsold. */
+  minutes: number | null;
+  noSale: boolean;
+  /** Plot position: batch size jittered sideways; minutes, or the "no sale yet" band. */
+  x: number;
+  y: number;
+}
+
+export interface BatchScatter {
+  r1: BatchScatterPoint[];
+  r2: BatchScatterPoint[];
+  xMax: number;
+  yMax: number;
+  yTicks: number[];
+  bandFrom: number;
+  bandTo: number;
+}
+
+/** 0..max in whole steps: by one up to 5, then by ceil(max / 5). */
+export function integerTicks(max: number): number[] {
+  const step = max <= 5 ? 1 : Math.ceil(max / 5);
+  const out: number[] = [];
+  for (let v = 0; v <= max; v += step) out.push(v);
+  return out;
+}
+
+export function batchScatter(
+  sources: { 1: LeanChartsResponse | null; 2: LeanChartsResponse | null },
+  teamFilter: number | null,
+  teamNames: Record<string, string> = {},
+): BatchScatter {
+  type Raw = Omit<BatchScatterPoint, 'x' | 'y'>;
+  const raw: Raw[] = [];
+  for (const round of [1, 2] as const) {
+    for (const t of sources[round]?.teams ?? []) {
+      if (teamFilter != null && t.team_id !== teamFilter) continue;
+      for (const b of t.batches) {
+        raw.push({
+          key: `${round}-${t.team_id}-${b.seq}`,
+          teamId: t.team_id,
+          team: teamLabel(t.team_id, t.team_name, teamNames),
+          round,
+          seq: b.seq,
+          jokes: b.jokes,
+          published: b.published,
+          sold: b.sold,
+          minutes: b.first_sale_s == null ? null : b.first_sale_s / 60,
+          noSale: b.first_sale_s == null,
+        });
+      }
+    }
+  }
+  const yMax = Math.max(1, Math.ceil(Math.max(0, ...raw.map(p => p.minutes ?? 0))));
+  const bandFrom = yMax * 1.08;
+  const bandTo = yMax * 1.3;
+  const bandY = (bandFrom + bandTo) / 2;
+  const xMax = Math.max(5, ...raw.map(p => p.jokes));
+
+  // Points with the same batch size spread evenly over ±0.3 so they do not stack.
+  const groups = new Map<number, Raw[]>();
+  for (const p of raw) groups.set(p.jokes, [...(groups.get(p.jokes) ?? []), p]);
+  const points: BatchScatterPoint[] = [];
+  for (const group of groups.values()) {
+    group.sort((a, b) => a.round - b.round || a.teamId - b.teamId || a.seq - b.seq);
+    group.forEach((p, i) => {
+      const offset = group.length <= 1 ? 0 : -0.3 + (0.6 * i) / (group.length - 1);
+      points.push({ ...p, x: p.jokes + offset, y: p.minutes ?? bandY });
+    });
+  }
+  return {
+    r1: points.filter(p => p.round === 1),
+    r2: points.filter(p => p.round === 2),
+    xMax,
+    yMax,
+    yTicks: integerTicks(yMax),
+    bandFrom,
+    bandTo,
+  };
+}
+
+/* ---- Chart 4: More cycles, more learning ---------------------------------- */
+
+export interface CyclesPoint {
+  minute: number;
+  /** Sell-through, 0..1. */
+  rate: number;
+  label: string;
+}
+
+export interface CyclesSeries {
+  key: string;
+  name: string;
+  color: string;
+  /** Marker shape: Round 1 circle, Round 2 triangle. */
+  round: 1 | 2;
+  dashed: boolean;
+  markers: boolean;
+  faded: boolean;
+  points: CyclesPoint[];
+}
+
+export interface CyclesModel {
+  series: CyclesSeries[];
+  /** Set when there is nothing to plot. */
+  emptyText: string | null;
+}
+
+/** One point per batch at the minute it was sent; batches with nothing published are skipped. */
+export function batchSellThrough(team: LeanChartsTeam | null | undefined): CyclesPoint[] {
+  return [...(team?.batches ?? [])]
+    .filter(b => b.published > 0)
+    .sort((a, b) => a.seq - b.seq)
+    .map(b => ({
+      minute: b.sent_s / 60,
+      rate: clamp01(b.sold / b.published),
+      label: `Batch ${b.seq}: ${b.sold} of ${b.published} sold`,
+    }));
+}
+
+/** The class's pooled sell-through per sample; samples with nothing published are dropped. */
+export function classSellThrough(avg: LeanChartsClassAverage | null | undefined): CyclesPoint[] {
+  return (avg?.sell_through ?? []).flatMap(s =>
+    s.value == null
+      ? []
+      : [{ minute: s.t / 60, rate: clamp01(s.value), label: `Class: ${Math.round(clamp01(s.value) * 100)}% sold` }],
+  );
+}
+
+function cyclesEmptyText(series: ReadonlyArray<CyclesSeries>, teams: ReadonlyArray<LeanChartsTeam>): string | null {
+  if (series.some(s => s.points.length > 0)) return null;
+  return teams.some(t => t.batches.length > 0) ? NO_RELEASES_TEXT : NO_BATCHES_TEXT;
+}
+
+/** Instructor: the class line per round, or one picked team's batches per round. */
+export function cyclesForInstructor(
+  r1: LeanChartsResponse | null,
+  r2: LeanChartsResponse | null,
+  teamFilter: number | null,
+  teamNames: Record<string, string> = {},
+): CyclesModel {
+  const series: CyclesSeries[] = [];
+  const teams: LeanChartsTeam[] = [];
+  for (const [round, res] of [[1, r1], [2, r2]] as const) {
+    if (!res) continue;
+    if (teamFilter == null) {
+      teams.push(...res.teams);
+      series.push({
+        key: `r${round}-class`, name: `Round ${round} · class`, color: roundColor(round), round,
+        dashed: false, markers: true, faded: false, points: classSellThrough(res.class_average),
+      });
+    } else {
+      const team = res.teams.find(t => t.team_id === teamFilter) ?? null;
+      if (team) teams.push(team);
+      series.push({
+        key: `r${round}-team`,
+        name: `Round ${round} · ${team ? teamLabel(team.team_id, team.team_name, teamNames) : `Team ${teamFilter}`}`,
+        color: roundColor(round), round, dashed: false, markers: true, faded: false,
+        points: batchSellThrough(team),
+      });
+    }
+  }
+  return { series, emptyText: cyclesEmptyText(series, teams) };
+}
+
+/** Student: own batches this round, the class average dashed, and in Round 2 the team's Round 1 batches faded. */
+export function cyclesForStudent(
+  current: LeanChartsResponse | null,
+  round: 1 | 2,
+  earlier: LeanChartsResponse | null,
+): CyclesModel {
+  const mine = current?.teams[0] ?? null;
+  const before = round === 2 ? earlier?.teams[0] ?? null : null;
+  const series: CyclesSeries[] = [];
+  if (before) {
+    series.push({
+      key: 'earlier', name: 'Your Round 1 batches', color: LEAN_CHART_COLORS.round1, round: 1,
+      dashed: false, markers: true, faded: true, points: batchSellThrough(before),
+    });
+  }
+  series.push({
+    key: 'mine', name: `Your batches · Round ${round}`, color: roundColor(round), round,
+    dashed: false, markers: true, faded: false, points: batchSellThrough(mine),
+  });
+  series.push({
+    key: 'class', name: 'Class average', color: LEAN_CHART_COLORS.classAverage, round,
+    dashed: true, markers: false, faded: false, points: classSellThrough(current?.class_average),
+  });
+  const teams = [mine, before].filter((t): t is LeanChartsTeam => t != null);
+  return { series, emptyText: cyclesEmptyText(series, teams) };
+}

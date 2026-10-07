@@ -1,7 +1,7 @@
 import { apiRequest } from '../apiClient';
 import type {
   BatchSubmitRequest, BatchSubmitResponse, TeamBatchesResponse,
-  TeamSummaryResponse, TeamFeedbackResponse, MarketResponse,
+  TeamSummaryResponse, TeamFeedbackResponse, MarketResponse, LeanChartsResponse,
 } from '../../types/api';
 
 export const teamApi = {
@@ -46,5 +46,13 @@ export const teamApi = {
    *  TeamBatchJoke.sold_count in types/api.ts before writing either off. */
   market(roundId: number) {
     return apiRequest<MarketResponse>(`/v1/rounds/${roundId}/market`);
+  },
+
+  /** Lean rounds only: this team's lean charts plus the anonymous class
+   *  average (jokefactory_be core/usecase/lean_charts.go). Like summary(), it
+   *  needs no X-User-Id. A CLASSIC round answers 409 NOT_LEAN_ROUND
+   *  (services/leanCharts.ts isNotLeanRound). */
+  leanCharts(roundId: number, teamId: number) {
+    return apiRequest<LeanChartsResponse>(`/v1/rounds/${roundId}/teams/${teamId}/lean-charts`);
   },
 };

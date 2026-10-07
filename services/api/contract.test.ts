@@ -12,7 +12,9 @@ import type {
   MarketingQueueNextResponse, MarketingQueueCountResponse, PublishResponse,
   LobbyResponse, InstructorRoundResponse, PublicRoundResponse, DeleteUserResponse,
   RoundStatsResponse, AdminResetResponse, ApiErrorBody, IdealDimension,
+  LeanChartsResponse,
 } from '../../types/api';
+import { isNotLeanRound } from '../leanCharts';
 
 /* ============================================================================
    CONTRACT TESTS
@@ -716,5 +718,55 @@ describe('instructor', () => {
     const res = await instructorApi.resetGame();
     expect(res.status).toBe('reset');
     expect(sentUrl(spy)).toBe('http://api.test/v1/admin/reset');
+  });
+});
+
+// ---- lean charts -------------------------------------------------------------
+
+/** core/usecase/lean_charts.go LeanCharts, served through response.OK by
+ *  InstructorHandler.LeanCharts and RoundHandler.TeamLeanCharts — wrapped. */
+describe('lean charts', () => {
+  const body: Wrapped<LeanChartsResponse> = {
+    data: {
+      round_id: 7, started_at: '2026-10-06T10:00:00Z', clock_end: '2026-10-06T10:02:00Z',
+      sample_seconds: 60, wip_limit: 2,
+      teams: [{
+        team_id: 3, team_name: 'Team 3',
+        waste: { setup: 4, waiting: 6.1, shelf: 18.3, never_sold: 2.5, discarded: 0.12, total: 31.02 },
+        idle: [{ t: 0, waiting: 0, shelf: 0 }, { t: 60, waiting: 5, shelf: 2 }, { t: 120, waiting: 0, shelf: 4 }],
+        batches: [
+          { seq: 1, sent_s: 12.4, jokes: 5, published: 4, sold: 3, first_sale_s: 95 },
+          { seq: 2, sent_s: 70, jokes: 5, published: 0, sold: 0, first_sale_s: null },
+        ],
+      }],
+      class_average: {
+        waste: { setup: 2, waiting: 3.05, shelf: 9.15, never_sold: 1.25, discarded: 0.06, total: 15.51 },
+        idle: [{ t: 0, waiting: 0, shelf: 0 }, { t: 60, waiting: 2.5, shelf: 1 }, { t: 120, waiting: 0, shelf: 2 }],
+        sell_through: [{ t: 0, value: 0.75 }, { t: 60, value: null }, { t: 120, value: null }],
+      },
+    },
+  };
+
+  it('reads every team for the instructor', async () => {
+    const spy = stub(body);
+    const res = await instructorApi.leanCharts(7);
+    expect(sentUrl(spy)).toBe('http://api.test/v1/instructor/rounds/7/lean-charts');
+    expect(res.teams[0].batches[1].first_sale_s).toBeNull();
+    expect(res.class_average.sell_through[1].value).toBeNull();
+  });
+
+  it('reads one team for a team screen', async () => {
+    const spy = stub(body);
+    const res = await teamApi.leanCharts(7, 3);
+    expect(sentUrl(spy)).toBe('http://api.test/v1/rounds/7/teams/3/lean-charts');
+    expect(res.teams).toHaveLength(1);
+  });
+
+  it('surfaces a Classic round as a 409 NOT_LEAN_ROUND', async () => {
+    stub({ error: { code: 'CONFLICT', message: 'conflict: NOT_LEAN_ROUND: lean charts exist only for LEAN rounds' } }, 409);
+    const err = await instructorApi.leanCharts(8).catch(e => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(409);
+    expect(isNotLeanRound(err)).toBe(true);
   });
 });

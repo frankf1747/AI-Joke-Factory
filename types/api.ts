@@ -103,6 +103,7 @@
      GET    /v1/rounds/{rid}/teams/{tid}/summary          TeamSummaryResponse
      GET    /v1/rounds/{rid}/teams/{tid}/feedback         TeamFeedbackResponse
      GET    /v1/rounds/{rid}/market                       MarketResponse
+     GET    /v1/rounds/{rid}/teams/{tid}/lean-charts      LeanChartsResponse
 
      POST   /v1/rounds/{rid}/batches                      BatchSubmitResponse
      GET    /v1/rounds/{rid}/teams/{tid}/batches          TeamBatchesResponse
@@ -123,6 +124,7 @@
      POST   /v1/instructor/rounds/{rid}/end               PublicRoundResponse
      POST   /v1/instructor/rounds/{rid}/popups            PublicRoundResponse
      GET    /v1/instructor/rounds/{rid}/stats             RoundStatsResponse
+     GET    /v1/instructor/rounds/{rid}/lean-charts       LeanChartsResponse
 
    Route table transcribed from app/server/server.go:115-176. The split and
    unsplit rows are new at 824655a (app/server/server.go:141-142): they were
@@ -1049,6 +1051,74 @@ export interface LeanTeamStats {
 export interface RoundStatsResponse {
   round_id: number;
   leaderboard: TeamStats[];
+}
+
+// ---- Lean charts -------------------------------------------------------------
+
+/**
+ * Lean charts — LEAN rounds only. Every time is in seconds from `started_at`.
+ *   GET /v1/instructor/rounds/{rid}/lean-charts    — wrapped; every team + class average
+ *   GET /v1/rounds/{rid}/teams/{tid}/lean-charts   — wrapped; that team only + class average
+ * A CLASSIC round answers 409 CONFLICT whose message contains "NOT_LEAN_ROUND"
+ * (services/leanCharts.ts isNotLeanRound); an unknown round or team answers 404.
+ * Built by jokefactory_be core/usecase/lean_charts.go (BuildLeanCharts).
+ */
+export interface LeanWaste {
+  setup: number;
+  waiting: number;
+  shelf: number;
+  never_sold: number;
+  discarded: number;
+  total: number;
+}
+
+/** Idle jokes at `t`. Counts for a team; means (fractions) in class_average. */
+export interface LeanIdleSample {
+  t: number;
+  waiting: number;
+  shelf: number;
+}
+
+export interface LeanChartsBatch {
+  seq: number;
+  sent_s: number;
+  /** Joke rows, or the round's batch_size while Marketing has not split it. */
+  jokes: number;
+  published: number;
+  sold: number;
+  /** Seconds from sending to the first sale; null while none of its jokes sold. */
+  first_sale_s: number | null;
+}
+
+export interface LeanChartsTeam {
+  team_id: number;
+  team_name: string;
+  waste: LeanWaste;
+  idle: LeanIdleSample[];
+  batches: LeanChartsBatch[];
+}
+
+/** Pooled sell-through of the batches sent in [t, t + sample_seconds); null when nothing was published. */
+export interface LeanSellThroughSample {
+  t: number;
+  value: number | null;
+}
+
+export interface LeanChartsClassAverage {
+  waste: LeanWaste;
+  idle: LeanIdleSample[];
+  sell_through: LeanSellThroughSample[];
+}
+
+export interface LeanChartsResponse {
+  round_id: number;
+  /** null while the round has not started (then there are no samples). */
+  started_at: string | null;
+  clock_end: string;
+  sample_seconds: number;
+  wip_limit: number;
+  teams: LeanChartsTeam[];
+  class_average: LeanChartsClassAverage;
 }
 
 // ---- Admin -----------------------------------------------------------------

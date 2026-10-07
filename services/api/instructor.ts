@@ -2,7 +2,7 @@ import { apiRequest } from '../apiClient';
 import type {
   LobbyResponse, ConfigRequest, InstructorRoundResponse, PublicRoundResponse,
   PatchUserRequest, DeleteUserResponse, RoundStatsResponse, AdminResetResponse,
-  AssignRequest, PopupStateRequest,
+  AssignRequest, PopupStateRequest, LeanChartsResponse,
 } from '../../types/api';
 
 /* AssignRequest and PopupStateRequest are built inline below rather than taken
@@ -84,6 +84,12 @@ export const instructorApi = {
    *  is {round_id, leaderboard[]}. Any dashboard chart needs a different source. */
   stats(roundId: number) {
     return apiRequest<RoundStatsResponse>(`/v1/instructor/rounds/${roundId}/stats`);
+  },
+
+  /** Lean rounds only: every team's lean charts plus the class average.
+   *  A CLASSIC round answers 409 NOT_LEAN_ROUND (services/leanCharts.ts). */
+  leanCharts(roundId: number) {
+    return apiRequest<LeanChartsResponse>(`/v1/instructor/rounds/${roundId}/lean-charts`);
   },
 
   /** Wipes all game data. Instructor-guarded. */
