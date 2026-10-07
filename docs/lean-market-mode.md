@@ -68,12 +68,13 @@ much past 15 minutes brings no new customers while carrying costs keep running.
 ### Instructor
 
 **CONFIG panel.** The CONFIG panel edits the round selected by the **Round 1 / Round 2** tabs at
-the top of the screen, and only while that round has not started. When Market mode is set to
-Lean, four extra fields appear:
+the top of the screen. The Lean settings (Market mode and the four fields below) can be changed
+only while that round has not started: once it starts they are greyed out in CONFIG, and the server
+refuses any change to them. When Market mode is set to Lean, four extra fields appear:
 
 | Label on screen | What it does |
 |---|---|
-| **Market mode:** Classic / Lean | Chooses the market. Locked once the round starts. |
+| **Market mode:** Classic / Lean | Chooses the market. |
 | **Arrival window (s):** | Customers arrive evenly over this many seconds from Start. Minimum 1. |
 | **Setup cost / batch:** | Charged every time the Joke Maker sends a batch. |
 | **Carrying cost / joke-min:** | Charged per joke per minute for work waiting in Marketing and for published jokes not yet sold (see section 5). |
@@ -107,8 +108,8 @@ column sorts lowest first, because lower is better.
 
 **Round 1 vs Round 2 table.** Once Round 2 has stats and at least one round is Lean, a card titled
 "Round 1 vs Round 2" (subtitle "Push rules vs lean rules, per team") appears. Per team it shows:
-R1 profit, R2 profit, Δ profit (green when it went up, red when it went down), R1 unsold, R2
-unsold, R1 setup+carry, R2 setup+carry, R1 lead, R2 lead. Teams are sorted by Round 2 profit.
+R1 profit, R2 profit, Δ profit (green when it went up, red when it went down), R1 never sold, R2
+never sold, R1 setup+carry, R2 setup+carry, R1 lead, R2 lead. Teams are sorted by Round 2 profit.
 
 ### Joke Maker
 
@@ -187,7 +188,7 @@ shuffled so a customer's quality bar has nothing to do with when they arrive.
 
 A customer who finds nothing that clears their bar leaves with their money unspent. That sale is
 lost for good: demand a team was not ready for does not wait. Customers who have not arrived by the
-time the round ends are never served. A joke can be bought by many different customers, but each
+time the round ends are never served; End Round does serve customers who have already arrived. A joke can be bought by many different customers, but each
 customer buys a given joke at most once.
 
 Customers are served whenever the round is polled (every screen refreshes every few seconds) and
@@ -319,7 +320,7 @@ returns them to 100 and 2.
 ## 7. Switching back to Classic
 
 Set **Market mode** to **Classic** in CONFIG and press **Apply**, for each round, before that round
-starts. The mode locks once a round has started; trying to change it then shows
+starts. All Lean settings lock once a round has started; trying to change the market mode then shows
 "The market mode can't change once a round has started."
 
 **Reset Game** also returns both rounds to the Classic defaults (and clears all game data and the

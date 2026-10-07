@@ -22,7 +22,7 @@
      Setup cost is per batch, not per minute, and stays unscaled; the window is as given.
      Tuning knobs (unset = preset / backend value; all printed in the report's Settings):
      PILOT_PREFERENCE_BASE  sent as preference_base in both Lean round configs (backend default 2).
-     PILOT_CARRYING         carrying per joke-minute BEFORE the x10 scaling; replaces the preset 0.02.
+     PILOT_CARRYING         carrying per joke-minute BEFORE the x10 scaling; replaces the preset 0.05.
      PILOT_SETUP_R1/_R2     setup cost per batch for Lean round 1 / round 2.
      PILOT_CUSTOMERS        customer_count for every round of every class (Classic too), integer >= 1.
      PILOT_BUDGET           customer_budget for every round of every class (Classic too), >= 0.
