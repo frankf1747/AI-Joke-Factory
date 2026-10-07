@@ -37,6 +37,11 @@ const LS_USER_ID = 'joke_factory_user_id';
 const LS_DISPLAY_NAME = 'joke_factory_display_name';
 const LS_ROLE = 'joke_factory_role';
 const LS_ROUND_ID = 'joke_factory_round_id';
+/** Config keys updateConfig sends to the backend besides the Lean ones (see leanConfigToBody). */
+const PERSISTED_CONFIG_KEYS = new Set<keyof GameConfig>([
+  'customerBudget', 'marketPrice', 'costOfPublishing', 'costOfDiscard', 'round1BatchSize', 'idealProfile',
+]);
+
 const LS_SUBMITTED_BATCH_JOKES = 'joke_factory_submitted_batch_jokes_v1';
 const LS_QC_RATED_HISTORY = 'joke_factory_qc_rated_history_v1';
 
@@ -1559,6 +1564,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateConfig = async (updates: Partial<GameConfig>) => {
+    const previous = config;
     setConfig(prev => ({ ...prev, ...updates }));
 
     // Client-only knobs: the marketing nudge timers are React state by design and have no
@@ -1581,6 +1587,18 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await instructorService.updateRoundConfig(roundId, body);
     } catch (e) {
       console.error('Failed to persist round config', e);
+      // The server refused (or never saw) these values: put back what was on screen before,
+      // for the persisted fields only. Client-only knobs (nudge timers) were never sent.
+      const persistedKeys = (Object.keys(updates) as (keyof GameConfig)[]).filter(
+        k => PERSISTED_CONFIG_KEYS.has(k) || Object.keys(leanConfigToBody({ [k]: updates[k] } as Partial<GameConfig>)).length > 0,
+      );
+      if (persistedKeys.length > 0) {
+        setConfig(prev => {
+          const next = { ...prev };
+          for (const k of persistedKeys) (next as Record<string, unknown>)[k] = previous[k];
+          return next;
+        });
+      }
       if (isMarketModeLocked(e)) {
         alert(MARKET_MODE_LOCKED_TEXT);
         return;
