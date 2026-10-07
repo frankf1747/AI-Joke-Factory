@@ -22,7 +22,7 @@ import { toFeedbackRows } from './feedback';
 import { FeedbackCard } from '../components/FeedbackCard';
 import { isWatchMode } from '../services/watchMode';
 import { fmtMoney } from '../services/leanMode';
-import { LearningCurve } from '../components/LearningCurve';
+import { StudentLeanCharts } from '../components/leanCharts/StudentLeanCharts';
 
 /* ---- Icons for the backend's Topic categories. Keyed by the category string
    itself so the picker stays in step with config/dimensions automatically: add
@@ -311,7 +311,7 @@ const BatchSplitter: React.FC<{
 
 /* ============================ Marketing screen ============================ */
 const QualityControl: React.FC = () => {
-  const { user, roster, qcQueue, publishBatch, splitBatch, unsplitBatch, config, teamSummary, teamFeedback, batches } = useGame();
+  const { user, roster, qcQueue, publishBatch, splitBatch, unsplitBatch, config, teamSummary, teamFeedback, batches, roundId } = useGame();
 
   /* A watch tab shows a bot's seat read-only: no nudges, no modals, no writes. */
   const watching = isWatchMode();
@@ -793,9 +793,12 @@ const QualityControl: React.FC = () => {
           </div>
 
           {leanMode && (
-            <Card title="Learning curve" subtitle="Share of each batch's released jokes that sold">
-              <LearningCurve series={lean?.batch_series ?? []} />
-            </Card>
+            <StudentLeanCharts
+              roundId={config.status === 'PLAYING' ? roundId : null}
+              teamId={user?.team_id ?? null}
+              roundNumber={config.round === 2 ? 2 : 1}
+              live={config.isActive}
+            />
           )}
 
           {/* The 12 criteria — so Marketing knows what to coach the Joke Maker on. */}

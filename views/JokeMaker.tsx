@@ -14,7 +14,7 @@ import { toFeedbackRows } from './feedback';
 import { FeedbackCard } from '../components/FeedbackCard';
 import { isWatchMode } from '../services/watchMode';
 import { fmtMoney, wipStatus } from '../services/leanMode';
-import { LearningCurve } from '../components/LearningCurve';
+import { StudentLeanCharts } from '../components/leanCharts/StudentLeanCharts';
 
 /* ---- per-joke status drives the status dots ---- */
 type JokeStatus = 'reviewing' | 'market' | 'sold' | 'wasted';
@@ -164,7 +164,7 @@ const StageDots: React.FC<{ batches: Batch[] }> = ({ batches }) => {
 const MIN_RAW_CHARS = 20;
 
 const JokeMaker: React.FC = () => {
-  const { user, roster, batches, submitRawBatch, config, teamSummary, teamFeedback } = useGame();
+  const { user, roster, batches, submitRawBatch, config, teamSummary, teamFeedback, roundId } = useGame();
 
   const [input, setInput] = useState('');
   const [certified, setCertified] = useState(false);
@@ -376,9 +376,12 @@ const JokeMaker: React.FC = () => {
             <StatBox label="Content Waste" value={waste} tone="rose" />
           </div>
           {leanMode && (
-            <Card title="Learning curve" subtitle="Share of each batch's released jokes that sold">
-              <LearningCurve series={teamSummary?.lean?.batch_series ?? []} />
-            </Card>
+            <StudentLeanCharts
+              roundId={config.status === 'PLAYING' ? roundId : null}
+              teamId={user?.team_id ?? null}
+              roundNumber={config.round === 2 ? 2 : 1}
+              live={config.isActive}
+            />
           )}
           <Card title="Jokes by stage" subtitle="Where your output sits right now">
             <StageDots batches={myBatches} />
