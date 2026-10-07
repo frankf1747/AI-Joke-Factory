@@ -3,7 +3,8 @@ import {
   LEAN_CHART_COLORS, NO_BATCHES_TEXT, NO_RELEASES_TEXT,
   batchScatter, batchSellThrough, classSellThrough, cyclesForInstructor, cyclesForStudent,
   defaultIdleTeamId, hasIdle, hasWaste, idleRows, idleSubtitle, integerTicks, isNotLeanRound,
-  leanChartsVisibility, leanRound1Id, leanRoundFlags, resolveLeanChartsRound, teamOptions, wasteBars,
+  isTooRecentToJudge, leanChartsVisibility, leanJudgeTiming, leanRound1Id, leanRoundFlags, minuteTicks,
+  resolveLeanChartsRound, teamOptions, wasteBars,
 } from './leanCharts';
 import { leanChartsFixture } from './leanCharts.testdata';
 import type { LeanChartsResponse } from '../types/api';
@@ -167,11 +168,13 @@ describe('integerTicks', () => {
 
 describe('sell-through (chart 4)', () => {
   it('skips batches with nothing published', () => {
-    expect(batchSellThrough(res.teams[0])).toEqual([{ minute: 10 / 60, rate: 0.5, label: 'Batch 1: 2 of 4 sold' }]);
+    expect(batchSellThrough(res.teams[0], leanJudgeTiming(res))).toEqual([
+      { minute: 10 / 60, rate: 0.5, label: 'Batch 1: 2 of 4 sold', pending: false },
+    ]);
     expect(batchSellThrough(null)).toEqual([]);
   });
   it('drops class samples with no value', () => {
-    const pts = classSellThrough(avg);
+    const pts = classSellThrough(avg, leanJudgeTiming(res));
     expect(pts).toHaveLength(1);
     expect(pts[0].minute).toBe(0);
     expect(pts[0].rate).toBeCloseTo(7 / 9);
@@ -229,23 +232,120 @@ describe('cyclesForStudent', () => {
 describe('resolveLeanChartsRound / leanChartsVisibility', () => {
   const both = { 1: true, 2: true };
   it('after a reset into a Lean R1, a stale R2 pick falls back to the live round', () => {
-    expect(resolveLeanChartsRound(2, { 1: true, 2: false }, 1)).toBe(1);
+    expect(resolveLeanChartsRound(2, { 1: true, 2: false }, 1, false)).toBe(1);
+    expect(resolveLeanChartsRound(2, { 1: true, 2: false }, 1, true)).toBe(1);
+  });
+  it('after a reset into a Classic R1 not yet started, shows the live round', () => {
+    expect(resolveLeanChartsRound(2, { 1: false, 2: false }, 1, false)).toBe(1);
   });
   it('keeps a pick while both rounds are Lean', () => {
-    expect(resolveLeanChartsRound(1, both, 2)).toBe(1);
+    expect(resolveLeanChartsRound(1, both, 2, true)).toBe(1);
+    expect(resolveLeanChartsRound(1, both, 2, false)).toBe(1);
+  });
+  it('between a Lean R1 and a Classic R2 not yet started, keeps R1 for the debrief', () => {
+    const flags = { 1: true, 2: false };
+    expect(resolveLeanChartsRound(1, flags, 2, false)).toBe(1);
+    // The dashboard follows the live round (pick 2) when R2 is configured: R1 still shows.
+    expect(resolveLeanChartsRound(2, flags, 2, false)).toBe(1);
+    expect(leanChartsVisibility(1, flags, { 1: false, 2: false })).toBe(true);
   });
   it('a Lean R1 followed by a Classic live R2 shows the live round (Classic cards)', () => {
-    const r = resolveLeanChartsRound(1, { 1: true, 2: false }, 2);
+    const r = resolveLeanChartsRound(1, { 1: true, 2: false }, 2, true);
     expect(r).toBe(2);
     expect(leanChartsVisibility(r, { 1: true, 2: false }, { 1: false, 2: false })).toBe(false);
   });
   it('a Classic-only game shows no panel', () => {
     const flags = { 1: false, 2: false };
-    const r = resolveLeanChartsRound(1, flags, 1);
+    const r = resolveLeanChartsRound(1, flags, 1, false);
     expect(leanChartsVisibility(r, flags, { 1: false, 2: false })).toBe(false);
   });
   it('notLean hides the panel for that round only', () => {
     expect(leanChartsVisibility(2, both, { 1: false, 2: true })).toBe(false);
     expect(leanChartsVisibility(1, both, { 1: false, 2: true })).toBe(true);
+  });
+});
+
+describe('minuteTicks', () => {
+  it('uses half minutes under three minutes', () => {
+    expect(minuteTicks(0)).toEqual([0]);
+    expect(minuteTicks(0.8)).toEqual([0, 0.5, 1]);
+    expect(minuteTicks(2.2)).toEqual([0, 0.5, 1, 1.5, 2, 2.5]);
+  });
+  it('uses whole minutes with at most eight ticks, ending at or after the max', () => {
+    expect(minuteTicks(3)).toEqual([0, 1, 2, 3]);
+    expect(minuteTicks(7)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    expect(minuteTicks(7.5)).toEqual([0, 2, 4, 6, 8]);
+    expect(minuteTicks(15)).toEqual([0, 3, 6, 9, 12, 15]);
+    expect(minuteTicks(30)).toEqual([0, 5, 10, 15, 20, 25, 30]);
+    for (const max of [3.1, 9, 14, 21, 44, 59, 61, 200]) {
+      const ticks = minuteTicks(max);
+      expect(ticks[0]).toBe(0);
+      expect(ticks.length).toBeLessThanOrEqual(8);
+      expect(ticks[ticks.length - 1]).toBeGreaterThanOrEqual(max);
+      expect(ticks.every(Number.isInteger)).toBe(true);
+    }
+  });
+});
+
+describe('too recent to judge (chart 4)', () => {
+  // Fixture: sample 60 s, so the arrival window is 900 s and a batch is judged
+  // only when at least 120 s old and sent before 840 s.
+  const at = (clockEnd: string, over: Partial<LeanChartsResponse> = {}) =>
+    leanChartsFixture({ clock_end: clockEnd, ...over });
+  const batch = (sent_s: number) => ({ seq: 1, sent_s, jokes: 4, published: 4, sold: 1, first_sale_s: null });
+  const team = (sent_s: number) => ({ ...res.teams[0], batches: [batch(sent_s)] });
+
+  it('times from the response: elapsed from started_at to clock_end, and sample_seconds', () => {
+    expect(leanJudgeTiming(res)).toEqual({ elapsed: 180, sample: 60 });
+    expect(leanJudgeTiming(leanChartsFixture({ started_at: null }))).toBeNull();
+    expect(leanJudgeTiming(null)).toBeNull();
+  });
+  it('a batch sent less than two samples ago is pending', () => {
+    const t = { elapsed: 180, sample: 60 };
+    expect(isTooRecentToJudge(61, t)).toBe(true);
+    expect(isTooRecentToJudge(60, t)).toBe(false);
+    expect(batchSellThrough(team(100), t)).toEqual([
+      { minute: 100 / 60, rate: 0.25, label: 'Batch 1: 1 of 4 sold', pending: true },
+    ]);
+  });
+  it('a batch sent in the last sample of the arrival window or after it is pending', () => {
+    const t = { elapsed: 1200, sample: 60 };
+    expect(isTooRecentToJudge(840, t)).toBe(true);
+    expect(isTooRecentToJudge(1000, t)).toBe(true);
+    expect(isTooRecentToJudge(839, t)).toBe(false);
+    expect(batchSellThrough(team(850), t)[0].pending).toBe(true);
+  });
+  it('an old batch inside the window stays solid', () => {
+    expect(batchSellThrough(team(800), { elapsed: 1200, sample: 60 })[0].pending).toBe(false);
+  });
+  it('without timing nothing is pending', () => {
+    expect(batchSellThrough(team(100))[0].pending).toBe(false);
+    expect(batchSellThrough(team(100), null)[0].pending).toBe(false);
+  });
+  it('running round (clock_end = now) vs ended round', () => {
+    const running = at('2026-10-06T10:03:00Z', { teams: [team(100)] });
+    const ended = at('2026-10-06T10:10:00Z', { teams: [team(100)] });
+    expect(cyclesForInstructor(running, null, 1).series[0].points[0].pending).toBe(true);
+    expect(cyclesForInstructor(ended, null, 1).series[0].points[0].pending).toBe(false);
+    expect(cyclesForStudent(running, 1, null).series[0].points[0].pending).toBe(true);
+    expect(cyclesForStudent(ended, 1, null).series[0].points[0].pending).toBe(false);
+    // In Round 2 the earlier round is timed by its own response.
+    const r2 = at('2026-10-06T10:03:00Z', { round_id: 8, teams: [team(100)] });
+    const m = cyclesForStudent(r2, 2, ended);
+    expect(m.series[0].points[0].pending).toBe(false);
+    expect(m.series[1].points[0].pending).toBe(true);
+  });
+  it('drops class samples whose bucket starts at or after the cut', () => {
+    const full = { ...avg, sell_through: [0, 60, 120, 180].map(t => ({ t, value: 0.5 })) };
+    // Running: cut = min(180 - 120, 900 - 60) = 60.
+    expect(classSellThrough(full, { elapsed: 180, sample: 60 }).map(p => p.minute * 60)).toEqual([0]);
+    // Ended long ago: cut = min(600 - 120, 840) = 480, so all four stay.
+    expect(classSellThrough(full, { elapsed: 600, sample: 60 })).toHaveLength(4);
+    // Window: sample 10 s, cut = min(600 - 20, 150 - 10) = 140.
+    expect(classSellThrough(full, { elapsed: 600, sample: 10 }).map(p => p.minute * 60)).toEqual([0, 60, 120]);
+    expect(classSellThrough(full).every(p => p.pending === false)).toBe(true);
+    const running = at('2026-10-06T10:03:00Z', { class_average: full });
+    expect(cyclesForInstructor(running, null, null).series[0].points).toHaveLength(1);
+    expect(cyclesForInstructor(at('2026-10-06T10:10:00Z', { class_average: full }), null, null).series[0].points).toHaveLength(4);
   });
 });

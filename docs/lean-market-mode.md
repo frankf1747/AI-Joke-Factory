@@ -124,10 +124,10 @@ last picture.
 
 | Chart | What it shows | How to read it |
 |---|---|---|
-| **Where the money leaked** | One bar per team, most waste first, split into Setup, Waiting at Marketing, Unsold on shelf, Published, never sold and Discarded, in dollars, with the total at the end. | Shorter bars are leaner. Setup + Waiting + Unsold is the leaderboard's Setup + Carrying for that team. While a round is live, "Published, never sold" counts released jokes that have not sold yet; it is final only when the round ends. |
+| **Where the money leaked** | One bar per team, most waste first, split into Setup (blue), Waiting at Marketing (purple), Unsold on shelf (amber), Published, never sold (red) and Discarded (grey), in dollars, with the total at the end. | Shorter bars are leaner. Setup + Waiting + Unsold is the leaderboard's Setup + Carrying for that team. While a round is live, "Published, never sold" counts released jokes that have not sold yet; it is final only when the round ends. |
 | **Jokes standing still** | For one team, the jokes waiting for Marketing (purple) and unsold on the shelf (amber) over the minutes of the round, with the class average dashed. With "All teams" it shows the team with the most idle jokes right now, and says so. In a round with a WIP limit the subtitle ends with it, for example "WIP limit: 2 batches". | A growing pile is waste: work that has cost money and has not earned any. |
 | **Smaller batches, faster feedback** | One dot per batch: jokes in the batch across, minutes from sending it to its first sale up. Round 1 circles (blue), Round 2 triangles (orange). Batches with no sale yet are hollow, in a "no sale yet" band at the top (a batch with nothing released yet is also hollow, and its tooltip says "Nothing released yet"). | Lower is better: the market answered sooner. Small batches should sit lower. |
-| **More cycles, more learning** | With "All teams": the class's sell-through (the share of released jokes that sold) over the minutes of the round, one line per round. With one team: that team's batches, one dot per batch at the minute it was sent, showing the share of its released jokes that sold, for each round. Batches with nothing released are left out. | More dots in the same time means more chances to adjust; a rising line means the team is learning what sells. |
+| **More cycles, more learning** | With "All teams": the class's sell-through (the share of released jokes that sold) over the minutes of the round, one line per round. With one team: that team's batches, one dot per batch at the minute it was sent, showing the share of its released jokes that sold, for each round. Batches with nothing released are left out. A batch sent too recently to judge (less than two samples ago, or in the last sample of the customers' arrival window or after it) is drawn as a hollow dot, "Too recent to judge — still selling", and the line does not run through it; the class line stops at the same point. | More dots in the same time means more chances to adjust; a rising line through the solid dots means the team is learning what sells. Hollow dots are still selling, so a low hollow dot at the end is not a drop. |
 
 ### Joke Maker
 
@@ -179,8 +179,9 @@ anonymous class average, never another team by name:
 - **More cycles, more learning** — one dot per batch at the minute it was sent, showing the share
   of its released jokes that sold; the class average is a dashed line. In Round 2 the team's
   Round 1 batches are drawn faded behind, when Round 1 was also Lean, so the two rounds can be
-  compared. Batches with nothing released are left out. A rising line means the team is learning
-  what the market wants.
+  compared. Batches with nothing released are left out. Batches sent too recently to judge are
+  hollow dots off the line, since they are still selling. A rising line through the solid dots
+  means the team is learning what the market wants.
 
 The **Customer feedback** panel is unchanged: it shows which of the criteria landed and which
 missed, never by how much.
@@ -324,7 +325,7 @@ returns them to 100 and 2.
 - "Customers are arriving now. If your shelf is empty, those sales are gone."
 - Round 2: "If your Joke Maker is blocked, that is the system working. Go help."
 - Round 2: "Smaller batches are allowed now. What does that do to your lead time?"
-- "Look at More cycles, more learning: are later batches selling better than earlier ones?"
+- "Look at More cycles, more learning: following the solid dots, are later batches selling better than earlier ones? (Hollow dots were sent too recently to judge; they are still selling.)"
 - "Jokes standing still: whose pile is growing, and what is it waiting for?"
 
 ### Eight debrief questions
@@ -338,7 +339,7 @@ returns them to 100 and 2.
 | 5 | Which team had the most unsold stock in Round 1? Was publishing more worth it? | R1 unsold, R1 profit |
 | 6 | Did the WIP limit help or hurt your team? What did the Joke Maker do while blocked? | R2 lead, R2 setup+carry |
 | 7 | How long did your jokes wait for their first buyer, and what does that say about fit? | Leaderboard Sale column, per round |
-| 8 | Did your sell-through rise from batch to batch? How did you use the customer feedback? | Δ profit, R2 unsold, More cycles, more learning (pick the team) |
+| 8 | Did your sell-through rise from batch to batch (solid dots; hollow ones are still selling)? How did you use the customer feedback? | Δ profit, R2 unsold, More cycles, more learning (pick the team) |
 
 ### Debrief with the lean charts
 
@@ -351,7 +352,8 @@ Pick the round with **R1 / R2** and, where it helps, one team in the team picker
 3. **Smaller batches, faster feedback**: "Are the orange triangles lower than the blue circles?
    What did a smaller batch buy you?"
 4. **More cycles, more learning**: "How many dots did your team get in Round 1, and in Round 2?
-   Did the line rise? Which feedback did you act on?"
+   Did the line through the solid dots rise? (Ignore the hollow dots: they were sent too late to
+   judge yet.) Which feedback did you act on?"
 
 ---
 

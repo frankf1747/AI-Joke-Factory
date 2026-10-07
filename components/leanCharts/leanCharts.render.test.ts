@@ -78,4 +78,9 @@ describe('chart 4 — More cycles, more learning', () => {
     expect(out).toContain('Round 1 · class');
     expect(out).toContain('recharts-responsive-container');
   });
+  it('explains the hollow "too recent to judge" dots', () => {
+    const out = html(createElement(LearningCyclesChart, { model: cyclesForInstructor(res, null, null) }));
+    expect(out).toContain('Too recent to judge (hollow)');
+    expect(out).toContain('Hollow dots: sent too late to judge yet.');
+  });
 });

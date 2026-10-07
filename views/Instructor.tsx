@@ -376,13 +376,17 @@ const Instructor: React.FC = () => {
   // until a later poll answers again.
   // The control never strands the instructor: a pick that is no longer showable
   // (new game, round not Lean, live round Classic) is dropped for the live round.
+  // Between rounds (the live round configured, not started) a Lean round stays
+  // on screen for the debrief, even when the next round is Classic.
+  const leanCurrentStatus = roundStatuses[config.round === 2 ? 2 : 1];
+  const leanCurrentStarted = leanCurrentStatus != null && leanCurrentStatus !== 'CONFIGURED';
   useEffect(() => {
-    const next = resolveLeanChartsRound(leanChartsRound, leanRounds, config.round === 2 ? 2 : 1);
+    const next = resolveLeanChartsRound(leanChartsRound, leanRounds, config.round === 2 ? 2 : 1, leanCurrentStarted);
     if (next !== leanChartsRound) {
       leanChartsRoundTouchedRef.current = false;
       setLeanChartsRound(next);
     }
-  }, [leanChartsRound, leanRounds, config.round]);
+  }, [leanChartsRound, leanRounds, config.round, leanCurrentStarted]);
   const showLeanCharts = leanChartsVisibility(
     leanChartsRound,
     leanRounds,

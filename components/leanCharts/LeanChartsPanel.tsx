@@ -71,6 +71,7 @@ export const LeanChartsPanel: React.FC<LeanChartsPanelProps> = ({ round, onRound
                 key={r}
                 type="button"
                 disabled={!leanRounds[r]}
+                aria-pressed={round === r}
                 title={leanRounds[r] ? `Round ${r}` : `Round ${r} is not a Lean round`}
                 className={`px-2 py-1 rounded text-xs font-bold disabled:cursor-not-allowed disabled:opacity-40 ${
                   round === r ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'

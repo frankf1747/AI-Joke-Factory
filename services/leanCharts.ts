@@ -54,6 +54,24 @@ export function fmtMinuteTick(minute: number): string {
   return Number.isInteger(minute) ? String(minute) : minute.toFixed(1);
 }
 
+/**
+ * Minute-axis ticks: half minutes under three minutes, otherwise whole minutes
+ * with the smallest step of 1, 2, 3, 5, 10, 15, 20, 30, 60 … that keeps at most
+ * eight ticks. Starts at 0 and ends at the first tick at or after `maxMinutes`.
+ */
+export function minuteTicks(maxMinutes: number): number[] {
+  const max = Number.isFinite(maxMinutes) ? Math.max(0, maxMinutes) : 0;
+  let step: number;
+  if (max < 3) {
+    step = 0.5;
+  } else {
+    const fits = (s: number) => Math.ceil(max / s) + 1 <= 8;
+    step = [1, 2, 3, 5, 10, 15, 20, 30, 60].find(fits) ?? Math.ceil(max / 7 / 60) * 60;
+  }
+  const n = Math.ceil(max / step - 1e-9);
+  return Array.from({ length: n + 1 }, (_, i) => i * step);
+}
+
 /* ---- Which rounds are Lean ------------------------------------------------ */
 
 type StatsRows = ReadonlyArray<{ lean?: unknown }> | null | undefined;
@@ -74,14 +92,22 @@ export function leanRoundFlags(
 }
 
 /** The round the instructor's lean-charts control may sit on. A pick stays only
- *  while both it and the live round are Lean; when the live round is Classic the
- *  Classic cards must show, and a pick that is not Lean falls back to the live round. */
+ *  while both it and the live round are Lean, and a pick that is not Lean falls
+ *  back to the live round. When the live round is Classic and running, the
+ *  Classic cards must show. While a Classic live round has not started yet the
+ *  instructor is between rounds (the debrief): a Lean round stays on screen. */
 export function resolveLeanChartsRound(
   selected: 1 | 2,
   flags: { 1: boolean; 2: boolean },
   currentRound: 1 | 2,
+  currentStarted: boolean,
 ): 1 | 2 {
-  if (!flags[currentRound]) return currentRound;
+  if (!flags[currentRound]) {
+    if (currentStarted) return currentRound;
+    if (flags[selected]) return selected;
+    const other: 1 | 2 = currentRound === 1 ? 2 : 1;
+    return flags[other] ? other : currentRound;
+  }
   return flags[selected] ? selected : currentRound;
 }
 
@@ -304,6 +330,37 @@ export interface CyclesPoint {
   /** Sell-through, 0..1. */
   rate: number;
   label: string;
+  /** Sent too recently to judge: drawn hollow and left out of the line. */
+  pending: boolean;
+}
+
+export const TOO_RECENT_TEXT = 'Too recent to judge — still selling';
+export const TOO_RECENT_LEGEND = 'Too recent to judge (hollow)';
+export const TOO_RECENT_CAPTION = 'Hollow dots: sent too late to judge yet.';
+
+/** Seconds elapsed (started_at → clock_end) and the sample step, from a response. */
+export interface LeanJudgeTiming {
+  elapsed: number;
+  sample: number;
+}
+
+/** The response's own clock; null when the round has not started. */
+export function leanJudgeTiming(res: LeanChartsResponse | null | undefined): LeanJudgeTiming | null {
+  if (!res?.started_at) return null;
+  const elapsed = (Date.parse(res.clock_end) - Date.parse(res.started_at)) / 1000;
+  if (!Number.isFinite(elapsed) || !(res.sample_seconds > 0)) return null;
+  return { elapsed, sample: res.sample_seconds };
+}
+
+/**
+ * Customers arrive within about 15 samples (the arrival window), so a batch
+ * sent less than two samples ago, or in the last sample of the window or after
+ * it, has not had a fair chance to sell: its sell-through is not judged yet.
+ */
+export function isTooRecentToJudge(sentS: number, timing: LeanJudgeTiming | null | undefined): boolean {
+  if (!timing) return false;
+  const window = 15 * timing.sample;
+  return timing.elapsed - sentS < 2 * timing.sample || sentS >= window - timing.sample;
 }
 
 export interface CyclesSeries {
@@ -324,8 +381,12 @@ export interface CyclesModel {
   emptyText: string | null;
 }
 
-/** One point per batch at the minute it was sent; batches with nothing published are skipped. */
-export function batchSellThrough(team: LeanChartsTeam | null | undefined): CyclesPoint[] {
+/** One point per batch at the minute it was sent; batches with nothing published
+ *  are skipped, and batches too recent to judge are marked pending. */
+export function batchSellThrough(
+  team: LeanChartsTeam | null | undefined,
+  timing: LeanJudgeTiming | null = null,
+): CyclesPoint[] {
   return [...(team?.batches ?? [])]
     .filter(b => b.published > 0)
     .sort((a, b) => a.seq - b.seq)
@@ -333,15 +394,27 @@ export function batchSellThrough(team: LeanChartsTeam | null | undefined): Cycle
       minute: b.sent_s / 60,
       rate: clamp01(b.sold / b.published),
       label: `Batch ${b.seq}: ${b.sold} of ${b.published} sold`,
+      pending: isTooRecentToJudge(b.sent_s, timing),
     }));
 }
 
-/** The class's pooled sell-through per sample; samples with nothing published are dropped. */
-export function classSellThrough(avg: LeanChartsClassAverage | null | undefined): CyclesPoint[] {
+/** The class's pooled sell-through per sample; samples with nothing published
+ *  are dropped, and so are samples too recent to judge (bucket start at or after
+ *  min(elapsed − 2 samples, window − 1 sample)). */
+export function classSellThrough(
+  avg: LeanChartsClassAverage | null | undefined,
+  timing: LeanJudgeTiming | null = null,
+): CyclesPoint[] {
+  const cut = timing ? Math.min(timing.elapsed - 2 * timing.sample, 15 * timing.sample - timing.sample) : Infinity;
   return (avg?.sell_through ?? []).flatMap(s =>
-    s.value == null
+    s.value == null || s.t >= cut
       ? []
-      : [{ minute: s.t / 60, rate: clamp01(s.value), label: `Class: ${Math.round(clamp01(s.value) * 100)}% sold` }],
+      : [{
+          minute: s.t / 60,
+          rate: clamp01(s.value),
+          label: `Class: ${Math.round(clamp01(s.value) * 100)}% sold`,
+          pending: false,
+        }],
   );
 }
 
@@ -365,7 +438,7 @@ export function cyclesForInstructor(
       teams.push(...res.teams);
       series.push({
         key: `r${round}-class`, name: `Round ${round} · class`, color: roundColor(round), round,
-        dashed: false, markers: true, faded: false, points: classSellThrough(res.class_average),
+        dashed: false, markers: true, faded: false, points: classSellThrough(res.class_average, leanJudgeTiming(res)),
       });
     } else {
       const team = res.teams.find(t => t.team_id === teamFilter) ?? null;
@@ -374,7 +447,7 @@ export function cyclesForInstructor(
         key: `r${round}-team`,
         name: `Round ${round} · ${team ? teamLabel(team.team_id, team.team_name, teamNames) : `Team ${teamFilter}`}`,
         color: roundColor(round), round, dashed: false, markers: true, faded: false,
-        points: batchSellThrough(team),
+        points: batchSellThrough(team, leanJudgeTiming(res)),
       });
     }
   }
@@ -393,16 +466,17 @@ export function cyclesForStudent(
   if (before) {
     series.push({
       key: 'earlier', name: 'Your Round 1 batches', color: LEAN_CHART_COLORS.round1, round: 1,
-      dashed: false, markers: true, faded: true, points: batchSellThrough(before),
+      dashed: false, markers: true, faded: true, points: batchSellThrough(before, leanJudgeTiming(earlier)),
     });
   }
   series.push({
     key: 'mine', name: `Your batches · Round ${round}`, color: roundColor(round), round,
-    dashed: false, markers: true, faded: false, points: batchSellThrough(mine),
+    dashed: false, markers: true, faded: false, points: batchSellThrough(mine, leanJudgeTiming(current)),
   });
   series.push({
     key: 'class', name: 'Class average', color: LEAN_CHART_COLORS.classAverage, round,
-    dashed: true, markers: false, faded: false, points: classSellThrough(current?.class_average),
+    dashed: true, markers: false, faded: false,
+    points: classSellThrough(current?.class_average, leanJudgeTiming(current)),
   });
   const teams = [mine, before].filter((t): t is LeanChartsTeam => t != null);
   return { series, emptyText: cyclesEmptyText(series, teams) };

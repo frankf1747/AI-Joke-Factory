@@ -33,4 +33,9 @@ describe('LeanChartsPanel', () => {
     expect(out).toMatch(/disabled=""[^>]*title="Round 1 is not a Lean round"/);
     expect(out).not.toMatch(/disabled=""[^>]*title="Round 2"/);
   });
+  it('marks the shown round button as pressed', () => {
+    const out = render(2, { 1: true, 2: true });
+    expect(out).toMatch(/aria-pressed="false"[^>]*title="Round 1"/);
+    expect(out).toMatch(/aria-pressed="true"[^>]*title="Round 2"/);
+  });
 });

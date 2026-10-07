@@ -8,7 +8,7 @@ import { Card } from '../ui';
 import type { LeanChartsClassAverage, LeanChartsTeam } from '../../types/api';
 import {
   LEAN_CHART_COLORS, LEAN_CHARTS_UNAVAILABLE_TEXT, NO_BATCHES_TEXT,
-  fmtMinuteTick, hasIdle, idleRows, idleSubtitle, type IdleRow,
+  fmtMinuteTick, hasIdle, idleRows, idleSubtitle, minuteTicks, type IdleRow,
 } from '../../services/leanCharts';
 import { ChartLegend, ChartNotice, ChartTooltipBox, chartHeight } from './chartParts';
 
@@ -30,6 +30,7 @@ export const IdleJokesChart: React.FC<IdleJokesChartProps> = ({
   team, classAverage, wipLimit, compact = false, teamLabel = null, unavailable = false, className = '',
 }) => {
   const rows = idleRows(team, classAverage);
+  const xTicks = minuteTicks(Math.max(0, ...rows.map(r => r.minute)));
   return (
     <Card title="Jokes standing still" subtitle={idleSubtitle(wipLimit)} className={className}>
       {unavailable && <ChartNotice text={LEAN_CHARTS_UNAVAILABLE_TEXT} tone="warn" />}
@@ -51,7 +52,8 @@ export const IdleJokesChart: React.FC<IdleJokesChartProps> = ({
               <XAxis
                 dataKey="minute"
                 type="number"
-                domain={[0, 'dataMax'] as const}
+                domain={[0, xTicks[xTicks.length - 1]]}
+                ticks={xTicks}
                 tickFormatter={(v) => fmtMinuteTick(Number(v))}
                 tick={{ fontSize: 11 }}
                 label={compact ? undefined : { value: 'Minute of the round', position: 'insideBottom', offset: -6, style: { fontSize: 11 } }}
