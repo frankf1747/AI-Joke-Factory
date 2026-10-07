@@ -14,7 +14,7 @@ import type { IdealDimension } from '../config/dimensions';
 import { LeanDebrief } from '../components/LeanDebrief';
 import { LeanChartsPanel } from '../components/leanCharts/LeanChartsPanel';
 import { useLeanCharts } from '../services/useLeanCharts';
-import { leanRoundFlags } from '../services/leanCharts';
+import { leanChartsVisibility, leanRoundFlags, resolveLeanChartsRound } from '../services/leanCharts';
 import { instructorService } from '../services/instructorService';
 import { sessionService } from '../services/sessionService';
 import {
@@ -374,8 +374,20 @@ const Instructor: React.FC = () => {
   });
   // A 409 NOT_LEAN_ROUND (a mode change racing the start) hides the panel
   // until a later poll answers again.
-  const showLeanCharts =
-    leanRounds[leanChartsRound] && !(leanChartsRound === 1 ? leanChartsR1 : leanChartsR2).notLean;
+  // The control never strands the instructor: a pick that is no longer showable
+  // (new game, round not Lean, live round Classic) is dropped for the live round.
+  useEffect(() => {
+    const next = resolveLeanChartsRound(leanChartsRound, leanRounds, config.round === 2 ? 2 : 1);
+    if (next !== leanChartsRound) {
+      leanChartsRoundTouchedRef.current = false;
+      setLeanChartsRound(next);
+    }
+  }, [leanChartsRound, leanRounds, config.round]);
+  const showLeanCharts = leanChartsVisibility(
+    leanChartsRound,
+    leanRounds,
+    { 1: leanChartsR1.notLean, 2: leanChartsR2.notLean },
+  );
 
   const mapLeaderboard = (rows: any[]) => {
     return (rows || []).map(row => {
@@ -2178,6 +2190,8 @@ const Instructor: React.FC = () => {
                   // Reset leaderboard UI state (data is cleared in resetGame()).
                   leaderboardRoundTouchedRef.current = false;
                   setLeaderboardRoundTab(1);
+                  leanChartsRoundTouchedRef.current = false;
+                  setLeanChartsRound(1);
                   setLeaderboardSortKey('profit');
                   setLeaderboardSortDir('desc');
                   setRankUpTeamIds([]);

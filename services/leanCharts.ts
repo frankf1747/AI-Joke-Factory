@@ -73,6 +73,27 @@ export function leanRoundFlags(
   return { 1: flag(r1Rows, 1), 2: flag(r2Rows, 2) };
 }
 
+/** The round the instructor's lean-charts control may sit on. A pick stays only
+ *  while both it and the live round are Lean; when the live round is Classic the
+ *  Classic cards must show, and a pick that is not Lean falls back to the live round. */
+export function resolveLeanChartsRound(
+  selected: 1 | 2,
+  flags: { 1: boolean; 2: boolean },
+  currentRound: 1 | 2,
+): 1 | 2 {
+  if (!flags[currentRound]) return currentRound;
+  return flags[selected] ? selected : currentRound;
+}
+
+/** Whether the instructor's lean panel renders, and whether each round is fetched. */
+export function leanChartsVisibility(
+  round: 1 | 2,
+  flags: { 1: boolean; 2: boolean },
+  notLean: { 1: boolean; 2: boolean },
+): boolean {
+  return flags[round] && !notLean[round];
+}
+
 /** Round 1's id from /v1/rounds/active, only if Round 1 was Lean. */
 export function leanRound1Id(
   rounds: ReadonlyArray<{ id: number; round_number: number; market_mode?: string }> | null | undefined,

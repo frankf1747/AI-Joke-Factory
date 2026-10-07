@@ -3,7 +3,7 @@ import {
   LEAN_CHART_COLORS, NO_BATCHES_TEXT, NO_RELEASES_TEXT,
   batchScatter, batchSellThrough, classSellThrough, cyclesForInstructor, cyclesForStudent,
   defaultIdleTeamId, hasIdle, hasWaste, idleRows, idleSubtitle, integerTicks, isNotLeanRound,
-  leanRound1Id, leanRoundFlags, teamOptions, wasteBars,
+  leanChartsVisibility, leanRound1Id, leanRoundFlags, resolveLeanChartsRound, teamOptions, wasteBars,
 } from './leanCharts';
 import { leanChartsFixture } from './leanCharts.testdata';
 import type { LeanChartsResponse } from '../types/api';
@@ -223,5 +223,29 @@ describe('cyclesForStudent', () => {
     const m = cyclesForStudent(current, 1, earlier);
     expect(m.series.map(s => s.key)).toEqual(['mine', 'class']);
     expect(m.series[0].color).toBe(LEAN_CHART_COLORS.round1);
+  });
+});
+
+describe('resolveLeanChartsRound / leanChartsVisibility', () => {
+  const both = { 1: true, 2: true };
+  it('after a reset into a Lean R1, a stale R2 pick falls back to the live round', () => {
+    expect(resolveLeanChartsRound(2, { 1: true, 2: false }, 1)).toBe(1);
+  });
+  it('keeps a pick while both rounds are Lean', () => {
+    expect(resolveLeanChartsRound(1, both, 2)).toBe(1);
+  });
+  it('a Lean R1 followed by a Classic live R2 shows the live round (Classic cards)', () => {
+    const r = resolveLeanChartsRound(1, { 1: true, 2: false }, 2);
+    expect(r).toBe(2);
+    expect(leanChartsVisibility(r, { 1: true, 2: false }, { 1: false, 2: false })).toBe(false);
+  });
+  it('a Classic-only game shows no panel', () => {
+    const flags = { 1: false, 2: false };
+    const r = resolveLeanChartsRound(1, flags, 1);
+    expect(leanChartsVisibility(r, flags, { 1: false, 2: false })).toBe(false);
+  });
+  it('notLean hides the panel for that round only', () => {
+    expect(leanChartsVisibility(2, both, { 1: false, 2: true })).toBe(false);
+    expect(leanChartsVisibility(1, both, { 1: false, 2: true })).toBe(true);
   });
 });
