@@ -197,6 +197,13 @@ const Instructor: React.FC = () => {
   const canEditBatchSize = !config.isActive && config.round === 1;
   const canEditBudget = !config.isActive && (config.round === 1 || config.round === 2);
   const canEditPricing = !config.isActive && (config.round === 1 || config.round === 2);
+  // Lean settings lock once the selected round has started (ACTIVE or ENDED); the server
+  // refuses them with 409 MARKET_MODE_LOCKED. Classic fields keep canEditPricing/canEditBudget.
+  // An unknown status (null) is not treated as locked: the server stays the authority.
+  const selectedRoundStatus = roundStatuses[config.round === 2 ? 2 : 1];
+  const leanLocked = selectedRoundStatus != null && selectedRoundStatus !== 'CONFIGURED';
+  const canEditLean = canEditPricing && !leanLocked;
+  const LEAN_LOCK_HINT = 'Lean settings lock once the round starts';
   // Pacing, not round-specific — editable between rounds whatever the round number.
   const canEditNudges = !config.isActive;
 
@@ -205,8 +212,8 @@ const Instructor: React.FC = () => {
     (canEditBudget && localBudget !== config.customerBudget) ||
     (canEditPricing && (localMarketPrice !== config.marketPrice || localCostOfPublishing !== config.costOfPublishing)) ||
     (canEditNudges && (localNudge1 !== config.marketingNudge1Seconds || localNudge2 !== config.marketingNudge2Seconds)) ||
-    (canEditPricing && localMarketMode !== config.marketMode) ||
-    (canEditPricing && localMarketMode === 'LEAN' && (
+    (canEditLean && localMarketMode !== config.marketMode) ||
+    (canEditLean && localMarketMode === 'LEAN' && (
       localArrivalWindow !== config.arrivalWindowSeconds ||
       localSetupCost !== config.setupCostPerBatch ||
       localCarryingCost !== config.carryingCostPerJokeMinute ||
@@ -226,8 +233,8 @@ const Instructor: React.FC = () => {
     if (canEditNudges && localNudge2 !== config.marketingNudge2Seconds) {
       updates.marketingNudge2Seconds = Math.max(5, localNudge2);
     }
-    if (canEditPricing && localMarketMode !== config.marketMode) updates.marketMode = localMarketMode;
-    if (canEditPricing && localMarketMode === 'LEAN') {
+    if (canEditLean && localMarketMode !== config.marketMode) updates.marketMode = localMarketMode;
+    if (canEditLean && localMarketMode === 'LEAN') {
       // Clamped like the nudges: an empty or 0 window would mean every customer arrives at once.
       if (localArrivalWindow !== config.arrivalWindowSeconds) {
         updates.arrivalWindowSeconds = Math.max(1, Math.round(localArrivalWindow || 0));
@@ -2494,14 +2501,14 @@ const Instructor: React.FC = () => {
                   className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditPricing ? 'opacity-50 cursor-not-allowed' : ''}`}
                 />
               </div>
-              <div className="flex items-center space-x-3" title="Classic: every customer looks at each joke as soon as it is classified, buys the ones that qualify while budget lasts, and later swaps for clearly better ones. Lean: customers arrive evenly across the arrival window and shop once; setup, carrying and WIP rules apply.">
+              <div className="flex items-center space-x-3" title={leanLocked ? LEAN_LOCK_HINT : "Classic: every customer looks at each joke as soon as it is classified, buys the ones that qualify while budget lasts, and later swaps for clearly better ones. Lean: customers arrive evenly across the arrival window and shop once; setup, carrying and WIP rules apply."}>
                 <label htmlFor="cfg-market-mode" className="text-sm text-gray-600 whitespace-nowrap">Market mode:</label>
                 <select
                   id="cfg-market-mode"
                   value={localMarketMode}
                   onChange={e => setLocalMarketMode(e.target.value as MarketMode)}
-                  disabled={!canEditPricing}
-                  className={`p-1 border border-gray-300 rounded bg-white text-black text-sm ${!canEditPricing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  disabled={!canEditLean}
+                  className={`p-1 border border-gray-300 rounded bg-white text-black text-sm ${!canEditLean ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <option value="CLASSIC">Classic</option>
                   <option value="LEAN">Lean</option>
@@ -2509,7 +2516,7 @@ const Instructor: React.FC = () => {
               </div>
               {localMarketMode === 'LEAN' && (
                 <>
-                  <div className="flex items-center space-x-3" title="Seconds over which customers arrive">
+                  <div className="flex items-center space-x-3" title={leanLocked ? LEAN_LOCK_HINT : "Seconds over which customers arrive"}>
                     <label htmlFor="cfg-arrival-window" className="text-sm text-gray-600 whitespace-nowrap">Arrival window (s):</label>
                     <input
                       id="cfg-arrival-window"
@@ -2518,11 +2525,11 @@ const Instructor: React.FC = () => {
                       min="1"
                       value={localArrivalWindow}
                       onChange={e => setLocalArrivalWindow(Number(e.target.value))}
-                      disabled={!canEditPricing}
-                      className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditPricing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      disabled={!canEditLean}
+                      className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditLean ? 'opacity-50 cursor-not-allowed' : ''}`}
                     />
                   </div>
-                  <div className="flex items-center space-x-3" title="Charged for every batch a team submits">
+                  <div className="flex items-center space-x-3" title={leanLocked ? LEAN_LOCK_HINT : "Charged for every batch a team submits"}>
                     <label htmlFor="cfg-setup-cost" className="text-sm text-gray-600 whitespace-nowrap">Setup cost / batch:</label>
                     <input
                       id="cfg-setup-cost"
@@ -2531,11 +2538,11 @@ const Instructor: React.FC = () => {
                       min="0"
                       value={localSetupCost}
                       onChange={e => setLocalSetupCost(Number(e.target.value))}
-                      disabled={!canEditPricing}
-                      className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditPricing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      disabled={!canEditLean}
+                      className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditLean ? 'opacity-50 cursor-not-allowed' : ''}`}
                     />
                   </div>
-                  <div className="flex items-center space-x-3" title="Charged per joke per minute it waits: jokes in batches waiting in Marketing (submitted to released; an unsplit batch counts as batch-size jokes) and published jokes until their first sale">
+                  <div className="flex items-center space-x-3" title={leanLocked ? LEAN_LOCK_HINT : "Charged per joke per minute it waits: jokes in batches waiting in Marketing (submitted to released; an unsplit batch counts as batch-size jokes) and published jokes until their first sale"}>
                     <label htmlFor="cfg-carrying-cost" className="text-sm text-gray-600 whitespace-nowrap">Carrying cost / joke-min:</label>
                     <input
                       id="cfg-carrying-cost"
@@ -2544,11 +2551,11 @@ const Instructor: React.FC = () => {
                       min="0"
                       value={localCarryingCost}
                       onChange={e => setLocalCarryingCost(Number(e.target.value))}
-                      disabled={!canEditPricing}
-                      className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditPricing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      disabled={!canEditLean}
+                      className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditLean ? 'opacity-50 cursor-not-allowed' : ''}`}
                     />
                   </div>
-                  <div className="flex items-center space-x-3" title="Batches that may wait for Marketing before the Joke Maker must stop (0 = no limit)">
+                  <div className="flex items-center space-x-3" title={leanLocked ? LEAN_LOCK_HINT : "Batches that may wait for Marketing before the Joke Maker must stop (0 = no limit)"}>
                     <label htmlFor="cfg-wip-limit" className="text-sm text-gray-600 whitespace-nowrap">WIP limit:</label>
                     <input
                       id="cfg-wip-limit"
@@ -2557,8 +2564,8 @@ const Instructor: React.FC = () => {
                       min="0"
                       value={localWipLimit}
                       onChange={e => setLocalWipLimit(Number(e.target.value))}
-                      disabled={!canEditPricing}
-                      className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditPricing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      disabled={!canEditLean}
+                      className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditLean ? 'opacity-50 cursor-not-allowed' : ''}`}
                     />
                   </div>
                 </>
