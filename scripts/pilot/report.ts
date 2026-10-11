@@ -28,13 +28,39 @@ export interface TeamRow {
   meanBatchSize: number | null;
   /** Mean seconds from sending a batch to its first sale, over batches that sold; null when none sold. */
   sendToFirstSaleS: number | null;
+  /** Every batch the team sent, for the batch-size table; absent in older sidecars. */
+  batchList?: BatchOutcome[];
 }
 
-/** durationS is wall seconds from the round starting to its end; classMinutes is that × bot speed / 60. */
-export interface RunResult { round: PilotRound; durationS: number; classMinutes?: number; calls: number; rows: TeamRow[] }
+/** One sent batch: its joke count (null while Marketing has not split it) and seconds to its first sale. */
+export interface BatchOutcome { size: number | null; firstSaleS: number | null }
 
-/** A round longer than this many class minutes is flagged in the report (a class round is 15). */
-export const MAX_CLASS_MINUTES = 15.5;
+/**
+ * durationS is wall seconds from the server's started_at to its ended_at;
+ * classMinutes is that × bot speed / 60; maxClassMinutes is the longest the
+ * round should have run (classMinuteLimit), above which the report flags it.
+ */
+export interface RunResult {
+  round: PilotRound; durationS: number; classMinutes?: number; maxClassMinutes?: number; calls: number; rows: TeamRow[];
+}
+
+/** Wall seconds as class minutes at the bot speed, to one decimal. */
+export function classMinutesOf(durationS: number, speed: number): number {
+  return Number(((durationS * speed) / 60).toFixed(1));
+}
+
+/** Seconds of slack on top of the arrival window and the settle, for request latency. */
+export const ROUND_SLACK_S = 2;
+
+/** The longest a round should run, in class minutes: (window + settle + slack) × speed / 60. */
+export function classMinuteLimit(windowS: number, settleS: number, speed: number): number {
+  return classMinutesOf(windowS + settleS + ROUND_SLACK_S, speed);
+}
+
+/** A round ran longer than its limit. Rounds without both figures are never flagged. */
+export function isOver(r: RunResult): boolean {
+  return r.classMinutes != null && r.maxClassMinutes != null && r.classMinutes > r.maxClassMinutes;
+}
 
 export interface PersonaSummary {
   n: number;
@@ -46,9 +72,15 @@ export interface PersonaSummary {
   feesPct: number | null;
 }
 
-export const PERSONAS = ['CAREFUL', 'BALANCED', 'SPRAY', 'LEARNER'] as const;
+/**
+ * Report order. BALANCED_HOLDS is the pilot-only contrast: Balanced in every way
+ * except that its Marketing seat holds each batch an extra 60 class-seconds.
+ */
+export const PERSONAS = ['CAREFUL', 'BALANCED', 'BALANCED_HOLDS', 'SPRAY', 'LEARNER'] as const;
+export const HOLDS = 'BALANCED_HOLDS';
 export const ROUNDS: readonly PilotRound[] = [1, 2];
 
+const money = (v: number) => (v < 0 ? `-$${Math.abs(v).toFixed(2)}` : `$${v.toFixed(2)}`);
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 const meanOrNull = (xs: Array<number | null>) => {
   const known = xs.filter((x): x is number => x != null);
@@ -114,7 +146,8 @@ export function spearman(xs: readonly number[], ys: readonly number[]): number |
   return dx === 0 || dy === 0 ? null : num / Math.sqrt(dx * dy);
 }
 
-export interface Check { name: string; pass: boolean; detail: string }
+/** notes are extra lines under a check (caveats, indicative figures); they never change pass. */
+export interface Check { name: string; pass: boolean; detail: string; notes?: string[] }
 
 /** The three success checks of spec §7, in its order. */
 export function successChecks(runs: RunResult[]): Check[] {
@@ -136,27 +169,42 @@ export function successChecks(runs: RunResult[]): Check[] {
       : `send → first sale: Learner ${Math.round(learner)} s, Spray ${Math.round(spray)} s`,
   };
 
+  faster.notes = ['Learner also differs in pacing and feedback waits; see the batch-size table'];
+
+  // Controlled contrast: the holders differ from Balanced only in how long
+  // Marketing keeps each batch, so a lower mean profit is the cost of holding.
   const parts: string[] = [];
   let holdPays = false;
   for (const round of ROUNDS) {
+    const held = s[round][HOLDS];
+    const balanced = s[round].BALANCED;
+    if (!held || !balanced) {
+      holdPays = true;
+      parts.push(`Round ${round}: no ${!held ? 'Balanced (holds)' : 'Balanced'} teams`);
+      continue;
+    }
+    if (!(held.profit < balanced.profit)) holdPays = true;
+    parts.push(`Round ${round}: ${money(held.profit)} vs ${money(balanced.profit)}`);
+  }
+  const rhos: string[] = [];
+  for (const round of ROUNDS) {
     const rows = runs.filter(r => r.round === round).flatMap(r => r.rows).filter(r => r.batches > 0);
     const rho = spearman(rows.map(r => r.storage / r.batches), rows.map(r => r.profit));
-    if (rho == null) {
-      holdPays = true;
-      parts.push(
-        rows.length < 3
+    rhos.push(
+      rho != null
+        ? `Round ${round}: ρ = ${rho.toFixed(2)}`
+        : rows.length < 3
           ? `Round ${round}: too few teams with batches to rank (${rows.length})`
           : `Round ${round}: no spread in storage per batch`,
-      );
-    } else {
-      if (rho > 0) holdPays = true;
-      parts.push(`Round ${round}: ρ = ${rho.toFixed(2)}`);
-    }
+    );
   }
   const desk: Check = {
     name: "No persona profits by leaving batches on Marketing's desk",
     pass: !holdPays,
-    detail: `rank correlation of storage fee per batch with profit, across teams (must not be positive): ${parts.join('; ')}`,
+    detail: `mean profit, Balanced (holds) vs Balanced: ${parts.join('; ')}`,
+    notes: [
+      `Indicative only (not a pass/fail): rank correlation of storage fee per batch with profit, across all teams: ${rhos.join('; ')}`,
+    ],
   };
   return [fees, faster, desk];
 }
@@ -174,11 +222,19 @@ export function teamRowFrom(
   },
   persona: string,
   prices: { market_price: number; cost_of_publishing: number; cost_of_discard: number },
-  chartBatches: ReadonlyArray<{ first_sale_s: number | null }> | undefined,
+  chartBatches: ReadonlyArray<{ seq?: number; jokes?: number; first_sale_s: number | null }> | undefined,
 ): TeamRow {
   const fees = leanFeesOf(r.lean);
   const split = (r.lean?.batch_series ?? []).filter(b => b.jokes > 0);
   const sold = (chartBatches ?? []).map(b => b.first_sale_s).filter((v): v is number => v != null);
+  // The charts report an unsplit batch as the round's batch_size; the stats
+  // series has 0 joke rows for it, so the size comes from the series.
+  const series = new Map((r.lean?.batch_series ?? []).map(b => [b.seq, b.jokes]));
+  const sizeOf = (b: { seq?: number; jokes?: number }): number | null => {
+    const rows = b.seq != null ? series.get(b.seq) : undefined;
+    if (rows !== undefined) return rows > 0 ? rows : null;
+    return r.lean ? null : b.jokes ?? null;
+  };
   return {
     teamId: r.team.id, persona,
     revenue: r.total_sales * prices.market_price,
@@ -189,7 +245,29 @@ export function teamRowFrom(
     batches: r.lean?.batches_submitted ?? 0,
     meanBatchSize: split.length ? split.reduce((n, b) => n + b.jokes, 0) / split.length : null,
     sendToFirstSaleS: sold.length ? sold.reduce((a, b) => a + b, 0) / sold.length : null,
+    batchList: (chartBatches ?? []).map(b => ({ size: sizeOf(b), firstSaleS: b.first_sale_s })),
   };
+}
+
+export interface BatchSizeRow {
+  /** Jokes in the batch; null for batches Marketing never split. */
+  size: number | null;
+  batches: number;
+  /** Share of these batches with at least one sale, 0–1. */
+  soldShare: number;
+  /** Mean send → first sale over the sold ones; null when none sold. */
+  sendToFirstSaleS: number | null;
+}
+
+/** Every batch of a round, all teams, grouped by size (ascending, unsplit last). */
+export function batchSizeTable(runs: RunResult[], round: PilotRound): BatchSizeRow[] {
+  const all = runs.filter(r => r.round === round).flatMap(r => r.rows).flatMap(r => r.batchList ?? []);
+  const sizes = [...new Set(all.map(b => b.size))].sort((a, b) => (a ?? Infinity) - (b ?? Infinity));
+  return sizes.map(size => {
+    const xs = all.filter(b => b.size === size);
+    const sold = xs.map(b => b.firstSaleS).filter((v): v is number => v != null);
+    return { size, batches: xs.length, soldShare: sold.length / xs.length, sendToFirstSaleS: sold.length ? mean(sold) : null };
+  });
 }
 
 /* ---- Settings ------------------------------------------------------------ */
@@ -294,8 +372,7 @@ export function settingsLines(t: Tuning, speed: number, counts: string): string[
 
 /* ---- Markdown ------------------------------------------------------------ */
 
-const money = (v: number) => (v < 0 ? `-$${Math.abs(v).toFixed(2)}` : `$${v.toFixed(2)}`);
-const classCell = (r: RunResult) => (r.classMinutes == null ? '—' : `${r.classMinutes}${r.classMinutes > MAX_CLASS_MINUTES ? ' (over)' : ''}`);
+const classCell = (r: RunResult) => (r.classMinutes == null ? '—' : `${r.classMinutes}${isOver(r) ? ' (over)' : ''}`);
 const winnerOf = (r: RunResult) => [...r.rows].sort((a, b) => b.profit - a.profit)[0];
 
 /** Only these hosts may be pilot targets by default: the class starts with a destructive reset. */
@@ -334,12 +411,26 @@ export function markdown(
       '',
     ];
   };
+  const batchSection = (): string[] => {
+    const t = batchSizeTable(runs, 2);
+    if (!t.length) return [];
+    return [
+      '## Round 2 batches by size', '',
+      'Every batch sent in Round 2, all teams, grouped by its number of jokes.', '',
+      '| Batch size | Batches | Sold | Send → first sale (sold batches) |',
+      '|---|---|---|---|',
+      ...t.map(b => `| ${b.size ?? 'not split'} | ${b.batches} | ${Math.round(b.soldShare * 100)} % | `
+        + `${b.sendToFirstSaleS == null ? '—' : `${Math.round(b.sendToFirstSaleS)} s`} |`),
+      '',
+    ];
+  };
   return [
     `# Lean fees pilot — ${date}`, '',
     ...(tag ? [`_${tag}_`, ''] : []),
     '## Success checks', '',
-    ...checks.map(c => `- **${c.pass ? 'PASS' : 'FAIL'}** — ${c.name}: ${c.detail}`),
+    ...checks.flatMap(c => [`- **${c.pass ? 'PASS' : 'FAIL'}** — ${c.name}: ${c.detail}`, ...(c.notes ?? []).map(n => `  - ${n}`)]),
     '',
+    ...batchSection(),
     ...(errors.length ? ['## Errors', '', ...errors.map(x => `- ${x}`), ''] : []),
     ...(settings.length ? ['## Settings', '', ...settings.map(x => `- ${x}`), ''] : []),
     'Means per team. Fees are shipping + storage + hosting + listing + discard, so profit = revenue − fees. '
@@ -353,8 +444,8 @@ export function markdown(
       return `| ${r.round} | ${w?.persona ?? '—'} | ${w ? money(w.profit) : '—'} | ${r.durationS}s | ${r.calls} | ${classCell(r)} |`;
     }),
     '',
-    ...runs.filter(r => (r.classMinutes ?? 0) > MAX_CLASS_MINUTES).map(
-      r => `**Warning:** Round ${r.round} ran ${r.classMinutes} class minutes, longer than ${MAX_CLASS_MINUTES}; its fees and sales are skewed.`,
+    ...runs.filter(isOver).map(
+      r => `**Warning:** Round ${r.round} ran ${r.classMinutes} class minutes, longer than ${r.maxClassMinutes}; its fees and sales are skewed.`,
     ),
     '',
   ].join('\n');

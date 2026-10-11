@@ -16,6 +16,12 @@ export const BOT_CHANNEL = 'jf-bots';
 export interface BotTeamSpec {
   index: number;
   persona: PersonaId;
+  /**
+   * Pilot-only persona option: Marketing holds each batch this long (at 1×,
+   * divided by speed like every wait) before deciding. Absent for every
+   * persona the instructor's Bot players panel starts.
+   */
+  marketingHoldMs?: number;
 }
 
 export interface StartOptions {
@@ -30,6 +36,8 @@ export interface StartOptions {
    * the backend refuses to start without one (usecase/instructor.go:239-245).
    */
   idealProfile?: Record<string, string>;
+  /** Pilot-only: raise the bot-team cap above MAX_BOT_TEAMS. The panel never sets it. */
+  maxTeams?: number;
 }
 
 /**

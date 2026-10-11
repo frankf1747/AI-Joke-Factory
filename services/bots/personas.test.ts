@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { seededRng } from '../shared/jokes';
 import {
-  JOKE_CAP_PER_ROUND, PERSONAS, PERSONA_ORDER, chooseWithMemory, choosePublished, jitter, personaSequence, publishCount,
+  BALANCED_HOLDS, JOKE_CAP_PER_ROUND, PERSONAS, PERSONA_ORDER, chooseWithMemory, choosePublished, jitter, personaSequence, publishCount,
   type Persona,
 } from './personas';
 
@@ -115,5 +115,13 @@ describe('Learner persona', () => {
     const memory = new Map<string, 'sold' | 'unsold'>([['dud', 'unsold']]);
     const keep = chooseWithMemory([{ joke_id: 2, joke_text: 'dud' }], memory, 0, () => 0, 1);
     expect(keep.size).toBe(1);
+  });
+});
+
+describe('the pilot-only Balanced (holds) variant', () => {
+  it('is Balanced with a 60 class-second Marketing hold, and never offered in the panel', () => {
+    expect(BALANCED_HOLDS).toEqual({ persona: 'BALANCED', label: 'Balanced (holds)', marketingHoldMs: 60_000 });
+    expect(PERSONA_ORDER as readonly string[]).not.toContain('BALANCED_HOLDS');
+    expect(Object.values(PERSONAS).map(p => p.label)).not.toContain('Balanced (holds)');
   });
 });

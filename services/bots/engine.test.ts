@@ -208,6 +208,47 @@ describe('BotEngine', () => {
     expect(engine.status().teams[0].jm.error).toContain('INTERNAL');
   });
 
+  it('a Marketing seat with marketingHoldMs holds each batch that long (scaled by speed) before deciding', async () => {
+    const at: Array<{ text: string; clock: number }> = [];
+    let clock = () => 0;
+    const t = setup([], {
+      onEmit: m => { if (m.type === 'log' && m.entry.seat === 'B') at.push({ text: m.entry.text, clock: clock() }); },
+    });
+    clock = t.clock;
+    await t.engine.start(options({ teams: [{ index: 1, persona: 'BALANCED', marketingHoldMs: 60_000 }] }));
+    await until(() => t.world.decisions.length >= 1, 'a publish');
+    t.engine.stop();
+    const hold = at.findIndex(e => /^holding batch #\d+ for 60 class-seconds before deciding$/.test(e.text));
+    const keep = at.findIndex(e => e.text.startsWith('Balanced: keeping'));
+    expect(hold).toBeGreaterThanOrEqual(0);
+    expect(keep).toBeGreaterThan(hold);
+    // 60 s at 1× is 6 s of wall time at 10×; the decide dwell adds more on top.
+    expect(at[keep].clock - at[hold].clock).toBeGreaterThanOrEqual(6_000);
+  });
+
+  it('every persona without marketingHoldMs decides without holding', async () => {
+    const { world, engine } = setup();
+    const personas = ['CAREFUL', 'BALANCED', 'SPRAY', 'LEARNER'] as const;
+    await engine.start(options({ teams: personas.map((persona, i) => ({ index: i + 1, persona })) }));
+    await until(() => world.decisions.length >= 4, 'publishes');
+    engine.stop();
+    for (let i = 1; i <= personas.length; i++) {
+      const marketer = world.userNamed(botName(i, 'B'));
+      if (!marketer) throw new Error('marketer missing');
+      expect(engine.historyFor(marketer.id).some(e => e.text.startsWith('holding'))).toBe(false);
+    }
+  });
+
+  it('allows more than MAX_BOT_TEAMS only when the start asks for a higher cap', async () => {
+    const teams = Array.from({ length: 14 }, (_, i) => ({ index: i + 1, persona: 'SPRAY' as const }));
+    const refused = setup();
+    await expect(refused.engine.start(options({ teams }))).rejects.toThrow(/At most 12 bot teams/);
+    const allowed = setup();
+    await allowed.engine.start(options({ teams, maxTeams: 14 }));
+    expect(allowed.engine.status().teams).toHaveLength(14);
+    allowed.engine.stop();
+  });
+
   it('stops submitting at the per-round joke cap', async () => {
     const { world, engine } = setup();
     await engine.start(options());

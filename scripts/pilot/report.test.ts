@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  SPEC_FEES, feesOf, isLocalUrl, markdown, parseTuning, pilotConfig, settingsLines, spearman, successChecks, summarise,
-  teamRowFrom, type RunResult, type TeamRow,
+  SPEC_FEES, batchSizeTable, classMinuteLimit, classMinutesOf, feesOf, isLocalUrl, isOver, markdown, parseTuning,
+  pilotConfig, settingsLines, spearman, successChecks, summarise, teamRowFrom, type RunResult, type TeamRow,
 } from './report';
 
 const row = (persona: string, over: Partial<TeamRow> = {}, teamId = 1): TeamRow => ({
@@ -10,17 +10,21 @@ const row = (persona: string, over: Partial<TeamRow> = {}, teamId = 1): TeamRow 
 });
 const run = (round: 1 | 2, rows: TeamRow[]): RunResult => ({ round, durationS: 100, calls: 30, rows });
 
-/** A class where every check passes: Spray pays 45 % in fees, the Learner sells soonest, holding never pays. */
+/** A class where every check passes: Spray pays 45 % in fees, the Learner sells soonest, the holders earn less than Balanced. */
 const passing = (): RunResult[] => [
   run(1, [
     row('SPRAY', { revenue: 40, shipping: 16, storage: 1, hosting: 0.5, listing: 0.5, profit: 22, batches: 8 }, 1),
     row('CAREFUL', { revenue: 20, shipping: 8, storage: 1, hosting: 1, listing: 0.2, profit: 9.8, batches: 4 }, 2),
     row('LEARNER', { revenue: 30, shipping: 12, storage: 0.5, hosting: 1, listing: 0.3, profit: 16.2, batches: 6 }, 3),
+    row('BALANCED', { revenue: 30, shipping: 12, storage: 1, hosting: 1, listing: 0.4, profit: 15.6, batches: 6 }, 4),
+    row('BALANCED_HOLDS', { revenue: 30, shipping: 12, storage: 4, hosting: 1, listing: 0.4, profit: 12.6, batches: 6 }, 5),
   ]),
   run(2, [
     row('SPRAY', { revenue: 30, shipping: 12, storage: 6, hosting: 2, listing: 4, profit: 6, batches: 4, meanBatchSize: 10, sendToFirstSaleS: 150 }, 1),
     row('CAREFUL', { revenue: 25, shipping: 8, storage: 1, hosting: 1, listing: 1, profit: 14, batches: 4, meanBatchSize: 5, sendToFirstSaleS: 120 }, 2),
     row('LEARNER', { revenue: 35, shipping: 13, storage: 0.2, hosting: 0.5, listing: 1, profit: 20.3, batches: 13, meanBatchSize: 3, sendToFirstSaleS: 60 }, 3),
+    row('BALANCED', { revenue: 30, shipping: 12, storage: 1, hosting: 1, listing: 1, profit: 15, batches: 6 }, 4),
+    row('BALANCED_HOLDS', { revenue: 30, shipping: 12, storage: 5, hosting: 1, listing: 1, profit: 11, batches: 6 }, 5),
   ]),
 ];
 
@@ -63,12 +67,20 @@ describe('a team row from the backend', () => {
     const r = teamRowFrom(
       { team: { id: 4 }, total_sales: 9, published_jokes: 6, discarded_jokes: 2, profit: 0.1, lean },
       'LEARNER', { market_price: 1, cost_of_publishing: 0.1, cost_of_discard: 0.01 },
-      [{ first_sale_s: 40 }, { first_sale_s: null }, { first_sale_s: 80 }],
+      [
+        { seq: 1, jokes: 3, first_sale_s: 40 },
+        { seq: 2, jokes: 5, first_sale_s: null },
+        { seq: 3, jokes: 10, first_sale_s: 80 },
+      ],
     );
     expect(r).toMatchObject({
       teamId: 4, persona: 'LEARNER', revenue: 9, shipping: 5, storage: 1.25, hosting: 0.5,
       discard: 0.02, profit: 0.1, batches: 3, meanBatchSize: 4, sendToFirstSaleS: 60,
     });
+    // Batch 3 has no joke rows yet: the charts' 10 is the round's batch_size, not what was sent.
+    expect(r.batchList).toEqual([
+      { size: 3, firstSaleS: 40 }, { size: 5, firstSaleS: null }, { size: null, firstSaleS: 80 },
+    ]);
     expect(r.listing).toBeCloseTo(0.6);
   });
 
@@ -108,35 +120,94 @@ describe('success checks', () => {
     expect(check.detail).toBe('no first sale for Learner in Round 2');
   });
 
-  it('fails the desk check when more storage per batch goes with more profit', () => {
+  it('passes the desk check when the holders earn less than Balanced in each round, with both means', () => {
+    const check = successChecks(passing())[2];
+    expect(check.pass).toBe(true);
+    expect(check.detail).toBe(
+      'mean profit, Balanced (holds) vs Balanced: Round 1: $12.60 vs $15.60; Round 2: $11.00 vs $15.00',
+    );
+  });
+
+  it('fails the desk check when the holders earn as much as Balanced in any round', () => {
+    const runs = passing();
+    runs[1].rows[4] = { ...runs[1].rows[4], profit: 15 };
+    expect(successChecks(runs)[2].pass).toBe(false);
+    const more = passing();
+    more[0].rows[4] = { ...more[0].rows[4], profit: 30 };
+    expect(successChecks(more)[2].pass).toBe(false);
+  });
+
+  it('fails the desk check when a round has no holders or no Balanced teams', () => {
+    const runs = passing();
+    runs[1].rows = runs[1].rows.filter(r => r.persona !== 'BALANCED_HOLDS');
+    const check = successChecks(runs)[2];
+    expect(check.pass).toBe(false);
+    expect(check.detail).toContain('Round 2: no Balanced (holds) teams');
+  });
+
+  it('keeps the rank correlation as an indicative note, not a PASS/FAIL', () => {
     const runs = passing();
     runs[1].rows = runs[1].rows.map(r => ({ ...r, storage: r.profit * r.batches }));
     const check = successChecks(runs)[2];
-    expect(check.pass).toBe(false);
-    expect(check.detail).toContain('Round 2: ρ = 1.00');
-  });
-
-  it('passes the desk check at a rank correlation of exactly 0', () => {
-    const flat = (round: 1 | 2) => run(round, [1, 2, 3, 4].map((storage, i) =>
-      row('SPRAY', { storage, batches: 1, profit: [2, 4, 1, 3][i] }, i + 1)));
-    const check = successChecks([flat(1), flat(2)])[2];
-    expect(check.detail).toContain('ρ = 0.00');
     expect(check.pass).toBe(true);
+    expect(check.notes?.join('\n')).toContain('Indicative only');
+    expect(check.notes?.join('\n')).toContain('Round 2: ρ = 1.00');
+    const few = (round: 1 | 2) => run(round, [row('SPRAY', {}, 1), row('CAREFUL', {}, 2)]);
+    expect(successChecks([few(1), few(2)])[2].notes?.join('\n')).toContain('Round 1: too few teams with batches to rank (2)');
   });
 
-  it('fails the desk check with the cause when it cannot rank', () => {
-    const few = (round: 1 | 2) => run(round, [row('SPRAY', {}, 1), row('CAREFUL', {}, 2)]);
-    const fewCheck = successChecks([few(1), few(2)])[2];
-    expect(fewCheck.pass).toBe(false);
-    expect(fewCheck.detail).toContain('Round 1: too few teams with batches to rank (2)');
-    const same = (round: 1 | 2) => run(round, [1, 2, 3].map(i => row('SPRAY', { storage: 2, batches: 4 }, i)));
-    const sameCheck = successChecks([same(1), same(2)])[2];
-    expect(sameCheck.pass).toBe(false);
-    expect(sameCheck.detail).toContain('Round 1: no spread in storage per batch');
+  it('adds the pacing caveat to the speed check', () => {
+    expect(successChecks(passing())[1].notes).toEqual([
+      'Learner also differs in pacing and feedback waits; see the batch-size table',
+    ]);
   });
 
   it('fails every check when there is nothing to judge', () => {
     expect(successChecks([]).map(c => c.pass)).toEqual([false, false, false]);
+  });
+});
+
+describe('Round 2 batches by size', () => {
+  it('groups every batch of the round by size: count, sold share and mean send → first sale over the sold ones', () => {
+    const runs = passing();
+    runs[1].rows[0] = { ...runs[1].rows[0], batchList: [{ size: 10, firstSaleS: 100 }, { size: 10, firstSaleS: null }] };
+    runs[1].rows[2] = {
+      ...runs[1].rows[2],
+      batchList: [{ size: 3, firstSaleS: 40 }, { size: 3, firstSaleS: 60 }, { size: 3, firstSaleS: 80 }, { size: null, firstSaleS: null }],
+    };
+    runs[0].rows[0] = { ...runs[0].rows[0], batchList: [{ size: 5, firstSaleS: 1 }] };
+    expect(batchSizeTable(runs, 2)).toEqual([
+      { size: 3, batches: 3, soldShare: 1, sendToFirstSaleS: 60 },
+      { size: 10, batches: 2, soldShare: 0.5, sendToFirstSaleS: 100 },
+      { size: null, batches: 1, soldShare: 0, sendToFirstSaleS: null },
+    ]);
+    const md = markdown(runs, '2026-10-12');
+    expect(md).toContain('## Round 2 batches by size');
+    expect(md).toContain('| Batch size | Batches | Sold | Send → first sale (sold batches) |');
+    expect(md).toContain('| 3 | 3 | 100 % | 60 s |');
+    expect(md).toContain('| 10 | 2 | 50 % | 100 s |');
+    expect(md).toContain('| not split | 1 | 0 % | — |');
+    expect(md).toContain('  - Learner also differs in pacing and feedback waits; see the batch-size table');
+  });
+});
+
+describe('round length', () => {
+  it('derives the limit from window + settle + 2 s slack at the bot speed', () => {
+    expect(classMinuteLimit(90, 4, 10)).toBe(16);
+    expect(classMinutesOf(94, 10)).toBe(15.7);
+  });
+
+  it('does not flag a 94 s round at 10× with a 90 s window; flags one well over', () => {
+    const limit = classMinuteLimit(90, 4, 10);
+    const ok: RunResult = { ...run(1, []), durationS: 94, classMinutes: classMinutesOf(94, 10), maxClassMinutes: limit };
+    const over: RunResult = { ...run(2, []), durationS: 110, classMinutes: classMinutesOf(110, 10), maxClassMinutes: limit };
+    expect(isOver(ok)).toBe(false);
+    expect(isOver(over)).toBe(true);
+    const md = markdown([ok, over], '2026-10-12');
+    expect(md).toContain('| 30 | 15.7 |');
+    expect(md).toContain('| 30 | 18.3 (over) |');
+    expect(md).toContain('**Warning:** Round 2 ran 18.3 class minutes, longer than 16');
+    expect(md).not.toContain('**Warning:** Round 1');
   });
 });
 
@@ -199,15 +270,15 @@ describe('pilot report', () => {
     expect(md).toContain('## Settings\n\n- Bots at 10×');
   });
 
-  it('shows each round\'s class minutes and warns about a round over 15.5', () => {
+  it('shows each round\'s class minutes and warns about a round over its limit', () => {
     const runs = passing();
-    runs[0].classMinutes = 15.2;
-    runs[1].classMinutes = 17.5;
+    runs[0] = { ...runs[0], classMinutes: 15.2, maxClassMinutes: 16 };
+    runs[1] = { ...runs[1], classMinutes: 17.5, maxClassMinutes: 16 };
     const md = markdown(runs, '2026-10-12');
     expect(md).toContain('| Round | Winner | Profit | Duration | Classification calls | Class minutes |');
     expect(md).toContain('| 30 | 15.2 |');
     expect(md).toContain('| 30 | 17.5 (over) |');
-    expect(md).toContain('**Warning:** Round 2 ran 17.5 class minutes, longer than 15.5');
+    expect(md).toContain('**Warning:** Round 2 ran 17.5 class minutes, longer than 16');
     expect(md).not.toContain('**Warning:** Round 1');
   });
 

@@ -31,19 +31,22 @@
      PILOT_TAG            free-text label printed under the report title.
 
    The class: reset (Round 1 batch size 5 exactly, Round 2 up to 10); configure both rounds
-   with the fees (pilotConfig); start the bot engine on Round 1 with 12 teams, 3 per persona
-   (Careful, Balanced, Spray, Learner). The SAME engine keeps running while the script ends
+   with the fees (pilotConfig); start the bot engine on Round 1 with 14 teams: 3 per persona
+   (Careful, Balanced, Spray, Learner) plus 2 "Balanced (holds)" — Balanced in every way except
+   that Marketing holds each batch an extra 60 class-seconds before deciding (6 s at 10×), the
+   controlled contrast for check 3. The SAME engine keeps running while the script ends
    Round 1 and starts Round 2: the bots read the active round on every loop and keep their
    40-joke cap per round id, and team assignments live on the users, so nobody re-seats. */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createClient } from '../../services/shared/client';
 import { BotEngine, CAP_REACHED, realDelay } from '../../services/bots/engine';
-import { personaSequence, type PersonaId } from '../../services/bots/personas';
+import { BALANCED_HOLDS, personaSequence, type PersonaId } from '../../services/bots/personas';
+import type { BotTeamSpec } from '../../services/bots/protocol';
 import type { EngineStatus } from '../../services/bots/protocol';
 import { DEFAULT_IDEAL_PROFILE } from '../../config/dimensions';
 import type { ConfigRequest } from '../../types/api';
 import {
-  MAX_CLASS_MINUTES, isLocalUrl, markdown, parseTuning, pilotConfig, settingsLines, teamRowFrom,
+  HOLDS, ROUND_SLACK_S, classMinuteLimit, classMinutesOf, isLocalUrl, isOver, markdown, parseTuning, pilotConfig, settingsLines, teamRowFrom,
   type PilotRound, type PilotSidecar, type RunResult,
 } from './report';
 
@@ -69,17 +72,26 @@ const OUT = process.argv[2] ?? `docs/pilots/${TODAY}-lean-fees-pilot.md`;
 const SIDECAR = OUT.replace(/\.md$/, '') + '.json';
 
 const COUNTS: Record<PersonaId, number> = { CAREFUL: 3, BALANCED: 3, SPRAY: 3, LEARNER: 3 };
+/** Extra Balanced teams whose Marketing holds each batch (BALANCED_HOLDS), reported as HOLDS. */
+const HOLD_TEAMS = 2;
 const SPEED = 10 as const;
 const POLL_MS = 5_000;
 /** After the arrival window closes: let the backend serve due arrivals, then end the round. */
 const SETTLE_MS = 4_000;
+/** The longest a round should run in class minutes; longer is flagged. */
+const MAX_CLASS_MINUTES = classMinuteLimit(TUNING.window, SETTLE_MS / 1000, SPEED);
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const ideal = { ...DEFAULT_IDEAL_PROFILE } as ConfigRequest['ideal_profile'];
 
 const SETTINGS: string[] = [
   `Backend ${BE}.`,
-  ...settingsLines(TUNING, SPEED, Object.entries(COUNTS).map(([p, n]) => `${n} ${p}`).join(', ')),
-  `Each round is ended ${SETTLE_MS / 1000} s after its arrival window closes, whatever the bots' progress (a 15-minute class ends at 15 minutes); stats and charts are read after the end, when the fee clocks have stopped. Round length is reported in class minutes (wall seconds × ${SPEED} / 60).`,
+  ...settingsLines(
+    TUNING, SPEED,
+    [...Object.entries(COUNTS).map(([p, n]) => `${n} ${p}`), `${HOLD_TEAMS} ${HOLDS}`].join(', '),
+  ),
+  `${HOLDS} ("${BALANCED_HOLDS.label}") is Balanced in every way except that its Marketing seat holds each batch an extra `
+    + `${BALANCED_HOLDS.marketingHoldMs / 1000} class-seconds (${BALANCED_HOLDS.marketingHoldMs / 1000 / SPEED} s at ${SPEED}×) before deciding: the controlled contrast for the desk check.`,
+  `Each round is ended ${SETTLE_MS / 1000} s after its arrival window closes, whatever the bots' progress (a 15-minute class ends at 15 minutes); stats and charts are read after the end, when the fee clocks have stopped. Round length is the server's started_at to ended_at, in class minutes (wall seconds × ${SPEED} / 60); a round over ${MAX_CLASS_MINUTES} (window + settle + ${ROUND_SLACK_S} s slack) is flagged.`,
 ];
 
 type Instructor = ReturnType<ReturnType<typeof createClient>['as']>;
@@ -105,21 +117,29 @@ async function runClass(results: RunResult[]): Promise<void> {
     emit: m => { if (m.type === 'fatal') console.error('FATAL', m.message); },
     seed: 'pilot-fees',
   });
-  const teams = personaSequence(COUNTS).map((persona, i) => ({ index: i + 1, persona }));
+  const teams: BotTeamSpec[] = personaSequence(COUNTS).map((persona, i) => ({ index: i + 1, persona }));
+  for (let k = 0; k < HOLD_TEAMS; k++) {
+    teams.push({ index: teams.length + 1, persona: BALANCED_HOLDS.persona, marketingHoldMs: BALANCED_HOLDS.marketingHoldMs });
+  }
+  const labelOf = new Map(teams.map(t => [t.index, t.marketingHoldMs ? HOLDS : t.persona]));
   try {
-    await engine.start({ roundId: ids[1], teams, speed: SPEED, startRound: true, idealProfile: { ...DEFAULT_IDEAL_PROFILE } });
+    await engine.start({
+      roundId: ids[1], teams, speed: SPEED, startRound: true, idealProfile: { ...DEFAULT_IDEAL_PROFILE }, maxTeams: teams.length,
+    });
     console.log(`${teams.length} teams, round 1 started`);
-    results.push(await playRound(1, ids[1], engine, instructor));
+    results.push(await playRound(1, ids[1], engine, instructor, labelOf));
     await instructor.instructorStart(ids[2], { ideal_profile: ideal });
     console.log('round 2 started');
-    results.push(await playRound(2, ids[2], engine, instructor));
+    results.push(await playRound(2, ids[2], engine, instructor, labelOf));
   } finally {
     engine.stop();
   }
 }
 
 /** Let the arrival window play out, end the round, then read its stats and lean charts. */
-async function playRound(round: PilotRound, roundId: number, engine: BotEngine, instructor: Instructor): Promise<RunResult> {
+async function playRound(
+  round: PilotRound, roundId: number, engine: BotEngine, instructor: Instructor, labelOf: ReadonlyMap<number, string>,
+): Promise<RunResult> {
   const t0 = Date.now();
   const calls0 = engine.status().classificationCalls;
   const startedAt = Date.parse(
@@ -145,7 +165,7 @@ async function playRound(round: PilotRound, roundId: number, engine: BotEngine, 
   await instructor.instructorStats(roundId);
   await sleep(SETTLE_MS / 2);
   await instructor.instructorEnd(roundId);
-  const endedAt = Date.now();
+  const localEnd = Date.now();
   const final = engine.status();
 
   const stats = await instructor.instructorStats(roundId);
@@ -153,15 +173,19 @@ async function playRound(round: PilotRound, roundId: number, engine: BotEngine, 
   const prices = (await instructor.roundsActive()).rounds.find(r => r.id === roundId);
   if (!prices) throw new Error(`round ${roundId} vanished`);
   const personaByTeam = new Map<number, string>();
-  for (const t of final.teams) if (t.teamId != null) personaByTeam.set(t.teamId, t.persona);
+  for (const t of final.teams) if (t.teamId != null) personaByTeam.set(t.teamId, labelOf.get(t.index) ?? t.persona);
   const rows = stats.leaderboard.map(r => teamRowFrom(
     r, personaByTeam.get(r.team.id) ?? '?', prices,
     charts.teams.find(t => t.team_id === r.team.id)?.batches,
   ));
+  // The server's own clock, start to end, read back after the end: the fee clocks run on it.
+  const endedAt = Date.parse(prices.ended_at ?? '') || localEnd;
   const durationS = Math.round((endedAt - startedAt) / 1000);
-  const classMinutes = Number(((durationS * SPEED) / 60).toFixed(1));
+  const classMinutes = classMinutesOf(durationS, SPEED);
   console.log(`  R${round} ended after ${durationS}s (${classMinutes} class minutes)`);
-  return { round, durationS, classMinutes, calls: final.classificationCalls - calls0, rows };
+  return {
+    round, durationS, classMinutes, maxClassMinutes: MAX_CLASS_MINUTES, calls: final.classificationCalls - calls0, rows,
+  };
 }
 
 const results: RunResult[] = [];
@@ -175,7 +199,7 @@ try {
   errors.push(message);
 }
 for (const r of results) {
-  if ((r.classMinutes ?? 0) > MAX_CLASS_MINUTES) errors.push(`Round ${r.round} ran ${r.classMinutes} class minutes (over ${MAX_CLASS_MINUTES})`);
+  if (isOver(r)) errors.push(`Round ${r.round} ran ${r.classMinutes} class minutes (over ${r.maxClassMinutes})`);
 }
 const sidecar: PilotSidecar = { date: TODAY, settings: SETTINGS, results, errors, tag: TUNING.tag };
 writeFileSync(SIDECAR, JSON.stringify(sidecar, null, 2));

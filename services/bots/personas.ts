@@ -64,6 +64,14 @@ export const PERSONAS: Readonly<Record<PersonaId, Persona>> = {
   },
 };
 
+/**
+ * Pilot-only variant "Balanced (holds)" (scripts/pilot): a BALANCED team whose
+ * Marketing seat holds each batch an extra 60 class-seconds before deciding,
+ * through BotTeamSpec.marketingHoldMs. It is not a PersonaId and not in
+ * PERSONA_ORDER, so the instructor's Bot players panel never offers it.
+ */
+export const BALANCED_HOLDS = { persona: 'BALANCED', label: 'Balanced (holds)', marketingHoldMs: 60_000 } as const;
+
 /** Panel and team-number order. New personas go at the end so existing ones keep their slots. */
 export const PERSONA_ORDER: readonly PersonaId[] = ['CAREFUL', 'BALANCED', 'SPRAY', 'LEARNER'];
 

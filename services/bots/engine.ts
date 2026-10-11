@@ -206,6 +206,8 @@ interface TeamRuntime {
   awaitingFeedback: { roundId: number; jokeIds: number[] } | null;
   /** Learner only: what each published joke text did on the market, by text. */
   memory: JokeMemory;
+  /** Extra hold on each batch before Marketing decides, at 1× (BotTeamSpec.marketingHoldMs); 0 for none. */
+  marketingHoldMs: number;
 }
 
 function newSeat(index: number, seat: Seat): SeatRuntime {
@@ -217,7 +219,7 @@ function newTeam(spec: BotTeamSpec): TeamRuntime {
     index: spec.index, persona: spec.persona, teamId: null,
     jm: newSeat(spec.index, 'A'), marketing: newSeat(spec.index, 'B'),
     submittedByRound: new Map(), submittedJokesByRound: new Map(), publishedByRound: new Map(), published: 0, awaitingFeedback: null,
-    memory: new Map(),
+    memory: new Map(), marketingHoldMs: Math.max(0, spec.marketingHoldMs ?? 0),
   };
 }
 
@@ -325,7 +327,8 @@ export class BotEngine {
   async start(options: StartOptions): Promise<void> {
     if (this.running) throw new Error('Bots are already running — stop them first.');
     if (options.teams.length === 0) throw new Error('Choose at least one bot team.');
-    if (options.teams.length > MAX_BOT_TEAMS) throw new Error(`At most ${MAX_BOT_TEAMS} bot teams.`);
+    const maxTeams = options.maxTeams ?? MAX_BOT_TEAMS;
+    if (options.teams.length > maxTeams) throw new Error(`At most ${maxTeams} bot teams.`);
     const controller = new AbortController();
     this.controller = controller;
     const teams = options.teams.map(newTeam);
@@ -727,6 +730,15 @@ export class BotEngine {
           this.log(team, seat, `split batch #${batch.batch_id} into ${jokes.length} jokes`, signal);
           this.setActivity(seat, `choosing from ${jokes.length} jokes`, signal);
           await this.pace(jitter(DWELL_MS.split, rand), signal);
+          if (signal.aborted) break;
+          if (this.scrambled) continue;
+        }
+
+        if (team.marketingHoldMs > 0) {
+          // Pilot contrast: the batch sits on the desk (and costs storage) a while longer.
+          this.log(team, seat, `holding batch #${batch.batch_id} for ${Math.round(team.marketingHoldMs / 1000)} class-seconds before deciding`, signal);
+          this.setActivity(seat, `holding batch #${batch.batch_id}`, signal);
+          await this.pace(team.marketingHoldMs, signal);
           if (signal.aborted) break;
           if (this.scrambled) continue;
         }
