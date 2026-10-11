@@ -34,14 +34,27 @@ export const FeedbackCard: React.FC<{ row: FeedbackRow }> = ({ row }) => (
       row.was_bought ? 'border-emerald-100 bg-emerald-50/40' : 'border-gray-200 bg-gray-50/60'
     }`}
   >
-    <div className="flex items-center gap-1.5 mb-2">
-      {row.was_bought
-        ? <BadgeCheck size={13} className="text-emerald-600 shrink-0" />
-        : <Minus size={13} className="text-gray-400 shrink-0" />}
-      <span className={`text-[11px] font-semibold ${row.was_bought ? 'text-emerald-700' : 'text-gray-500'}`}>
+    {/* Status badge first, then the title Marketing gave the joke on its own
+        line, so the title is never read as part of the status. */}
+    <div className="mb-2 space-y-1">
+      <span
+        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+          row.was_bought
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+            : 'border-gray-200 bg-white text-gray-500'
+        }`}
+      >
+        {row.was_bought
+          ? <BadgeCheck size={11} className="shrink-0" />
+          : <Minus size={11} className="shrink-0" />}
         {row.was_bought ? 'Sold' : 'Not sold yet'}
-        {row.joke_title ? ` · "${row.joke_title}"` : ''}
       </span>
+      {row.joke_title && (
+        <p className="text-xs text-gray-800 leading-snug">
+          <span className="text-gray-400">Title: </span>
+          <span className="font-semibold">{row.joke_title}</span>
+        </p>
+      )}
     </div>
 
     {row.good.length === 0 && row.improve.length === 0 ? (
