@@ -563,7 +563,11 @@ export class BotEngine {
           await this.pace(IDLE_POLL_MS, signal);
           continue;
         }
-        if (persona.waitForFeedback) await this.waitUntilSettled(me, team, round.id, signal);
+        if (persona.waitForFeedback && !(await this.waitUntilSettled(me, team, round.id, signal))) {
+          // The round ended while waiting: pick up the active round on the next pass.
+          if (signal.aborted) break;
+          continue;
+        }
         if (signal.aborted) break;
 
         // Round 1 must split into exactly batch_size (5), so the persona's own
@@ -602,26 +606,39 @@ export class BotEngine {
     }
   }
 
-  /** Careful only: hold the next batch until this round's last one is published and scored. */
-  private async waitUntilSettled(me: BotApi, team: TeamRuntime, roundId: number, signal: AbortSignal): Promise<void> {
+  /**
+   * Careful only: hold the next batch until this round's last one is published
+   * and scored. Returns false when the round it waits on is no longer the
+   * active round (ended, or another round started): Marketing can no longer
+   * publish into it, so the caller must re-read the active round rather than
+   * wait out FEEDBACK_WAIT_MS and submit to the stale one.
+   */
+  private async waitUntilSettled(me: BotApi, team: TeamRuntime, roundId: number, signal: AbortSignal): Promise<boolean> {
     const submitted = team.submittedByRound.get(roundId) ?? 0;
-    if (submitted === 0) return;
+    if (submitted === 0) return true;
     const seat = team.jm;
     let waited = 0;
     while (!signal.aborted && waited < FEEDBACK_WAIT_MS) {
+      const current = await this.activeRound(signal);
+      if (signal.aborted) return true;
+      if (current?.id !== roundId) {
+        if (team.awaitingFeedback?.roundId === roundId) team.awaitingFeedback = null;
+        this.log(team, seat, `round ${roundId} is over — leaving the feedback wait`, signal);
+        return false;
+      }
       const published = (team.publishedByRound.get(roundId) ?? 0) >= submitted;
       const awaiting = team.awaitingFeedback?.roundId === roundId ? team.awaitingFeedback.jokeIds : [];
-      if (published && awaiting.length === 0) return;
+      if (published && awaiting.length === 0) return true;
       if (published) {
         const feedback = await me.teamFeedback(roundId, team.teamId as number);
-        if (signal.aborted) return;
+        if (signal.aborted) return true;
         const scored = feedback.jokes.some(
           j => awaiting.includes(j.joke_id) && j.good_dimensions.length + j.improve_dimensions.length > 0,
         );
         if (scored) {
           team.awaitingFeedback = null;
           this.log(team, seat, 'feedback arrived on the last batch — writing the next one', signal);
-          return;
+          return true;
         }
       }
       this.setActivity(seat, published ? 'waiting for customer feedback' : 'waiting for Marketing to publish', signal);
@@ -636,6 +653,7 @@ export class BotEngine {
       team.publishedByRound.set(roundId, Math.max(team.publishedByRound.get(roundId) ?? 0, submitted));
       this.log(team, seat, 'gave up waiting for feedback — writing the next batch anyway', signal);
     }
+    return true;
   }
 
   /** Marks the seat live for as long as its loop runs; see claiming(). */

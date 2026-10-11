@@ -362,6 +362,26 @@ describe('BotEngine', () => {
     expect(engine.historyFor(jm.id).map(e => e.text).join('\n')).not.toMatch(/gave up waiting/);
   });
 
+  it('Careful leaves the feedback wait when its round ends, and its next batch goes to round 2', async () => {
+    const { world, engine } = setup();
+    world.autoClassify = false;
+    // Marketing never publishes: the batch stays in flight, so Careful waits.
+    world.failNext('marketingQueueNext', 1_000_000, botName(1, 'B'), 500, 'down');
+    await engine.start(options({ teams: [{ index: 1, persona: 'CAREFUL' }], speed: 10 }));
+    const team = teamOf(world, botName(1, 'A'));
+    const jm = world.userNamed(botName(1, 'A'));
+    if (!jm) throw new Error('bot 01A missing');
+    await until(() => world.batches.some(b => b.teamId === team && b.roundId === 1), 'a round-1 batch');
+    await until(() => /waiting for Marketing/.test(engine.status().teams[0].jm.activity), 'the feedback wait');
+    world.round = { ...world.round, id: 2, round_number: 2, status: 'ACTIVE' };
+    await until(() => world.batches.some(b => b.teamId === team && b.roundId === 2), 'a round-2 batch');
+    engine.stop();
+    const text = engine.historyFor(jm.id).map(e => e.text).join('\n');
+    expect(text).toMatch(/round 1 is over — leaving the feedback wait/);
+    expect(text).not.toMatch(/gave up waiting/);
+    expect(world.batches.filter(b => b.teamId === team && b.roundId === 1)).toHaveLength(1);
+  });
+
   it('never lets a bot moved into a human team publish that team\'s batch', async () => {
     const { world, engine } = setup(['alice', 'bob']);
     await engine.start(options({ speed: 10 }));
