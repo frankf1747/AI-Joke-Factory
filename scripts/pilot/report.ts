@@ -30,7 +30,11 @@ export interface TeamRow {
   sendToFirstSaleS: number | null;
 }
 
-export interface RunResult { round: PilotRound; durationS: number; calls: number; rows: TeamRow[] }
+/** durationS is wall seconds from the round starting to its end; classMinutes is that × bot speed / 60. */
+export interface RunResult { round: PilotRound; durationS: number; classMinutes?: number; calls: number; rows: TeamRow[] }
+
+/** A round longer than this many class minutes is flagged in the report (a class round is 15). */
+export const MAX_CLASS_MINUTES = 15.5;
 
 export interface PersonaSummary {
   n: number;
@@ -139,7 +143,11 @@ export function successChecks(runs: RunResult[]): Check[] {
     const rho = spearman(rows.map(r => r.storage / r.batches), rows.map(r => r.profit));
     if (rho == null) {
       holdPays = true;
-      parts.push(`Round ${round}: too few teams to rank`);
+      parts.push(
+        rows.length < 3
+          ? `Round ${round}: too few teams with batches to rank (${rows.length})`
+          : `Round ${round}: no spread in storage per batch`,
+      );
     } else {
       if (rho > 0) holdPays = true;
       parts.push(`Round ${round}: ρ = ${rho.toFixed(2)}`);
@@ -287,6 +295,7 @@ export function settingsLines(t: Tuning, speed: number, counts: string): string[
 /* ---- Markdown ------------------------------------------------------------ */
 
 const money = (v: number) => (v < 0 ? `-$${Math.abs(v).toFixed(2)}` : `$${v.toFixed(2)}`);
+const classCell = (r: RunResult) => (r.classMinutes == null ? '—' : `${r.classMinutes}${r.classMinutes > MAX_CLASS_MINUTES ? ' (over)' : ''}`);
 const winnerOf = (r: RunResult) => [...r.rows].sort((a, b) => b.profit - a.profit)[0];
 
 /** Only these hosts may be pilot targets by default: the class starts with a destructive reset. */
@@ -337,12 +346,16 @@ export function markdown(
       + 'Mean batch size counts split batches; send → first sale is per batch, over batches that sold.', '',
     ...ROUNDS.filter(r => runs.some(x => x.round === r)).flatMap(table),
     '## Rounds', '',
-    '| Round | Winner | Profit | Duration | Classification calls |',
-    '|---|---|---|---|---|',
+    '| Round | Winner | Profit | Duration | Classification calls | Class minutes |',
+    '|---|---|---|---|---|---|',
     ...[...runs].sort((a, b) => a.round - b.round).map(r => {
       const w = winnerOf(r);
-      return `| ${r.round} | ${w?.persona ?? '—'} | ${w ? money(w.profit) : '—'} | ${r.durationS}s | ${r.calls} |`;
+      return `| ${r.round} | ${w?.persona ?? '—'} | ${w ? money(w.profit) : '—'} | ${r.durationS}s | ${r.calls} | ${classCell(r)} |`;
     }),
+    '',
+    ...runs.filter(r => (r.classMinutes ?? 0) > MAX_CLASS_MINUTES).map(
+      r => `**Warning:** Round ${r.round} ran ${r.classMinutes} class minutes, longer than ${MAX_CLASS_MINUTES}; its fees and sales are skewed.`,
+    ),
     '',
   ].join('\n');
 }

@@ -13,7 +13,7 @@ const run = (round: 1 | 2, rows: TeamRow[]): RunResult => ({ round, durationS: 1
 /** A class where every check passes: Spray pays 45 % in fees, the Learner sells soonest, holding never pays. */
 const passing = (): RunResult[] => [
   run(1, [
-    row('SPRAY', { revenue: 40, shipping: 16, storage: 1, hosting: 0.5, listing: 0.5, profit: 20, batches: 8 }, 1),
+    row('SPRAY', { revenue: 40, shipping: 16, storage: 1, hosting: 0.5, listing: 0.5, profit: 22, batches: 8 }, 1),
     row('CAREFUL', { revenue: 20, shipping: 8, storage: 1, hosting: 1, listing: 0.2, profit: 9.8, batches: 4 }, 2),
     row('LEARNER', { revenue: 30, shipping: 12, storage: 0.5, hosting: 1, listing: 0.3, profit: 16.2, batches: 6 }, 3),
   ]),
@@ -116,6 +116,25 @@ describe('success checks', () => {
     expect(check.detail).toContain('Round 2: ρ = 1.00');
   });
 
+  it('passes the desk check at a rank correlation of exactly 0', () => {
+    const flat = (round: 1 | 2) => run(round, [1, 2, 3, 4].map((storage, i) =>
+      row('SPRAY', { storage, batches: 1, profit: [2, 4, 1, 3][i] }, i + 1)));
+    const check = successChecks([flat(1), flat(2)])[2];
+    expect(check.detail).toContain('ρ = 0.00');
+    expect(check.pass).toBe(true);
+  });
+
+  it('fails the desk check with the cause when it cannot rank', () => {
+    const few = (round: 1 | 2) => run(round, [row('SPRAY', {}, 1), row('CAREFUL', {}, 2)]);
+    const fewCheck = successChecks([few(1), few(2)])[2];
+    expect(fewCheck.pass).toBe(false);
+    expect(fewCheck.detail).toContain('Round 1: too few teams with batches to rank (2)');
+    const same = (round: 1 | 2) => run(round, [1, 2, 3].map(i => row('SPRAY', { storage: 2, batches: 4 }, i)));
+    const sameCheck = successChecks([same(1), same(2)])[2];
+    expect(sameCheck.pass).toBe(false);
+    expect(sameCheck.detail).toContain('Round 1: no spread in storage per batch');
+  });
+
   it('fails every check when there is nothing to judge', () => {
     expect(successChecks([]).map(c => c.pass)).toEqual([false, false, false]);
   });
@@ -178,6 +197,18 @@ describe('pilot report', () => {
     expect(md).toContain('| SPRAY | 1 | $30.00 | $12.00 | $6.00 | $2.00 | $4.00 | **$6.00** | 4.0 | 10.0 | 150 s | 80.0 % |');
     expect(md).toContain('| 2 | LEARNER | $20.30 | 100s | 30 |');
     expect(md).toContain('## Settings\n\n- Bots at 10×');
+  });
+
+  it('shows each round\'s class minutes and warns about a round over 15.5', () => {
+    const runs = passing();
+    runs[0].classMinutes = 15.2;
+    runs[1].classMinutes = 17.5;
+    const md = markdown(runs, '2026-10-12');
+    expect(md).toContain('| Round | Winner | Profit | Duration | Classification calls | Class minutes |');
+    expect(md).toContain('| 30 | 15.2 |');
+    expect(md).toContain('| 30 | 17.5 (over) |');
+    expect(md).toContain('**Warning:** Round 2 ran 17.5 class minutes, longer than 15.5');
+    expect(md).not.toContain('**Warning:** Round 1');
   });
 
   it('prints FAIL lines and errors', () => {

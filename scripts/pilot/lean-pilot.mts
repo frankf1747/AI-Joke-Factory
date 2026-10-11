@@ -6,6 +6,9 @@
      E2E_ADMIN_PASSWORD="$(grep '^APP_ADMIN_PASSWORD=' ~/Documents/GitHub/jokefactory_be/.env | cut -d= -f2-)" \
        npx tsx scripts/pilot/lean-pilot.mts docs/pilots/<date>-lean-fees-pilot.md
 
+   The stack MUST run the deterministic hash classifier (APP_LLM_MODE=hash together with
+   APP_LLM_HASH_CONFIRM=local-pilot-only); otherwise the bots make paid classification calls.
+
    Environment:
      E2E_ADMIN_PASSWORD   required.
      E2E_BE_URL           default http://localhost:8081. Only localhost, 127.0.0.1 and [::1]
@@ -40,7 +43,7 @@ import type { EngineStatus } from '../../services/bots/protocol';
 import { DEFAULT_IDEAL_PROFILE } from '../../config/dimensions';
 import type { ConfigRequest } from '../../types/api';
 import {
-  isLocalUrl, markdown, parseTuning, pilotConfig, settingsLines, teamRowFrom,
+  MAX_CLASS_MINUTES, isLocalUrl, markdown, parseTuning, pilotConfig, settingsLines, teamRowFrom,
   type PilotRound, type PilotSidecar, type RunResult,
 } from './report';
 
@@ -68,15 +71,15 @@ const SIDECAR = OUT.replace(/\.md$/, '') + '.json';
 const COUNTS: Record<PersonaId, number> = { CAREFUL: 3, BALANCED: 3, SPRAY: 3, LEARNER: 3 };
 const SPEED = 10 as const;
 const POLL_MS = 5_000;
-const MAX_ROUND_MS = 8 * 60_000;
-const SETTLE_MS = 15_000;
+/** After the arrival window closes: let the backend serve due arrivals, then end the round. */
+const SETTLE_MS = 4_000;
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const ideal = { ...DEFAULT_IDEAL_PROFILE } as ConfigRequest['ideal_profile'];
 
 const SETTINGS: string[] = [
   `Backend ${BE}.`,
   ...settingsLines(TUNING, SPEED, Object.entries(COUNTS).map(([p, n]) => `${n} ${p}`).join(', ')),
-  `Each round waits for every team's cap and the arrival window, then settles ${SETTLE_MS / 1000} s before reading stats.`,
+  `Each round is ended ${SETTLE_MS / 1000} s after its arrival window closes, whatever the bots' progress (a 15-minute class ends at 15 minutes); stats and charts are read after the end, when the fee clocks have stopped. Round length is reported in class minutes (wall seconds × ${SPEED} / 60).`,
 ];
 
 type Instructor = ReturnType<ReturnType<typeof createClient>['as']>;
@@ -115,7 +118,7 @@ async function runClass(results: RunResult[]): Promise<void> {
   }
 }
 
-/** Wait for the round to play out, read its stats and lean charts, end it. */
+/** Let the arrival window play out, end the round, then read its stats and lean charts. */
 async function playRound(round: PilotRound, roundId: number, engine: BotEngine, instructor: Instructor): Promise<RunResult> {
   const t0 = Date.now();
   const calls0 = engine.status().classificationCalls;
@@ -124,8 +127,9 @@ async function playRound(round: PilotRound, roundId: number, engine: BotEngine, 
   ) || t0;
   const windowEnds = startedAt + TUNING.window * 1000;
 
-  while (Date.now() - t0 < MAX_ROUND_MS) {
-    await sleep(POLL_MS);
+  // Bounded by the window itself, so there is no other timeout path.
+  while (Date.now() < windowEnds) {
+    await sleep(Math.min(POLL_MS, Math.max(1, windowEnds - Date.now())));
     const s: EngineStatus = engine.status();
     const capped = s.teams.filter(t => t.jm.activity.includes(CAP_REACHED)).length;
     const idle = s.teams.filter(t => /waiting for a batch/.test(t.marketing.activity)).length;
@@ -134,13 +138,16 @@ async function playRound(round: PilotRound, roundId: number, engine: BotEngine, 
       `  R${round} t=${Math.round((Date.now() - t0) / 1000)}s capped=${capped}/${s.teams.length} `
         + `marketing idle=${idle}/${s.teams.length} calls=${s.classificationCalls} window left=${windowLeft}s`,
     );
-    if (capped === s.teams.length && idle === s.teams.length && windowLeft === 0) break;
   }
-  if (Date.now() - t0 >= MAX_ROUND_MS) console.warn(`  R${round}: hit the ${MAX_ROUND_MS / 60_000}-minute cap`);
-  await sleep(SETTLE_MS);
-
-  // Reading stats also serves any Lean arrivals that are due.
+  // Reading stats serves any Lean arrivals that are due; then end the round so
+  // storage and hosting stop at the window, as a 15-minute class would.
+  await sleep(SETTLE_MS / 2);
+  await instructor.instructorStats(roundId);
+  await sleep(SETTLE_MS / 2);
+  await instructor.instructorEnd(roundId);
+  const endedAt = Date.now();
   const final = engine.status();
+
   const stats = await instructor.instructorStats(roundId);
   const charts = await instructor.instructorLeanCharts(roundId);
   const prices = (await instructor.roundsActive()).rounds.find(r => r.id === roundId);
@@ -151,10 +158,10 @@ async function playRound(round: PilotRound, roundId: number, engine: BotEngine, 
     r, personaByTeam.get(r.team.id) ?? '?', prices,
     charts.teams.find(t => t.team_id === r.team.id)?.batches,
   ));
-  await instructor.instructorEnd(roundId);
-  const durationS = Math.round((Date.now() - t0) / 1000);
-  console.log(`  R${round} ended after ${durationS}s`);
-  return { round, durationS, calls: final.classificationCalls - calls0, rows };
+  const durationS = Math.round((endedAt - startedAt) / 1000);
+  const classMinutes = Number(((durationS * SPEED) / 60).toFixed(1));
+  console.log(`  R${round} ended after ${durationS}s (${classMinutes} class minutes)`);
+  return { round, durationS, classMinutes, calls: final.classificationCalls - calls0, rows };
 }
 
 const results: RunResult[] = [];
@@ -166,6 +173,9 @@ try {
   const message = err instanceof Error ? err.message : String(err);
   console.error(`FAILED ${message}`);
   errors.push(message);
+}
+for (const r of results) {
+  if ((r.classMinutes ?? 0) > MAX_CLASS_MINUTES) errors.push(`Round ${r.round} ran ${r.classMinutes} class minutes (over ${MAX_CLASS_MINUTES})`);
 }
 const sidecar: PilotSidecar = { date: TODAY, settings: SETTINGS, results, errors, tag: TUNING.tag };
 writeFileSync(SIDECAR, JSON.stringify(sidecar, null, 2));
