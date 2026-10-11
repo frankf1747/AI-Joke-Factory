@@ -24,6 +24,8 @@ import { isWatchMode } from '../services/watchMode';
 import { feeTooltips, fmtMoney, leanFeesOf } from '../services/leanMode';
 import { MARKETING_NOTE_MAX } from '../services/marketingService';
 import { releaseOutcome } from './marketingRelease';
+import { NextStepLive } from '../components/NextStep';
+import { marketingInputFrom, marketingNextStep } from '../services/nextStep';
 
 /* ---- Icons for the backend's Topic categories. Keyed by the category string
    itself so the picker stays in step with config/dimensions automatically: add
@@ -814,6 +816,12 @@ const QualityControl: React.FC = () => {
               </>
             )}
           </div>
+          <NextStepLive
+            step={now => marketingNextStep(marketingInputFrom({
+              now, roundActive: config.isActive, storageFeePerJokeMinute: config.storageFeePerJokeMinute,
+              teamSummary, qcQueue, batches: batches.filter(b => b.team === user?.team), feedbackRows,
+            }))}
+          />
 
           {/* The 12 criteria — so Marketing knows what to coach the Joke Maker on. */}
           <Card title="The 12 criteria customers judge">

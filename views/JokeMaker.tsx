@@ -11,6 +11,8 @@ import { dimById } from '../config/dimensions';
 import { isWatchMode } from '../services/watchMode';
 import { shippingLine } from '../services/leanMode';
 import { MarketingNoteCallout, MarketingNoteIcon, marketingNoteOf } from '../components/MarketingNote';
+import { NextStepLive } from '../components/NextStep';
+import { jokeMakerInputFrom, jokeMakerNextStep } from '../services/nextStep';
 
 /* ---- per-joke status drives the status dots ---- */
 type JokeStatus = 'reviewing' | 'market' | 'sold' | 'wasted';
@@ -369,6 +371,11 @@ const JokeMaker: React.FC = () => {
             <StatBox label="Batches" value={batchesCreated} tone="slate" />
             <StatBox label="Content Waste" value={waste} tone="rose" />
           </div>
+          <NextStepLive
+            step={now => jokeMakerNextStep(jokeMakerInputFrom({
+              now, roundActive: config.isActive, round: config.round, teamSummary, batches: myBatches,
+            }))}
+          />
           <Card title="Jokes by stage" subtitle="Where your output sits right now">
             <StageDots batches={myBatches} />
           </Card>
