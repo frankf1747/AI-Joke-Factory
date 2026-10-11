@@ -3,10 +3,8 @@
    arrow and no ideal level: the team should learn WHICH dimensions missed, not
    by how much. See the note at the top of views/feedback.ts.
 
-   Shared by both team seats — Marketing (views/QualityControl.tsx) and the Joke
-   Maker (views/JokeMaker.tsx) — because they read the same per-team rows. One
-   component, so the two screens cannot drift into telling the same team two
-   different stories about the same joke.
+   Rendered on Marketing's screen only (views/QualityControl.tsx). The Joke
+   Maker no longer sees customer feedback; it hears from Marketing instead.
 
    Imports from components/ui rather than the components barrel: the barrel
    pulls in context, and context reaches back into components. */

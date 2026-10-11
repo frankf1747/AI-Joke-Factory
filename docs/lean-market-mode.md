@@ -147,8 +147,8 @@ screen refreshes and the server refuses the send, an alert says
 "Marketing still has batches waiting. In a pull system you wait — or go help them decide." and the
 draft is kept so it can be sent later.
 
-The Joke Maker also sees the Customer feedback panel. The lean charts are on the instructor's
-screen only; the student screens do not show them.
+The Joke Maker does not see the Customer feedback panel; it is on Marketing's screen only. The
+lean charts are on the instructor's screen only; the student screens do not show them.
 
 ### Marketing
 

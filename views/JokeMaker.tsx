@@ -8,10 +8,6 @@ import {
 import { Batch } from '../types';
 import { computeAvgCreatedToPublishSeconds, countJokesSold } from '../services/economics';
 import { dimById } from '../config/dimensions';
-/* The same mapper and card Marketing renders — the feedback is per TEAM, so
-   both seats must read it identically. See views/feedback.ts. */
-import { toFeedbackRows } from './feedback';
-import { FeedbackCard } from '../components/FeedbackCard';
 import { isWatchMode } from '../services/watchMode';
 import { fmtMoney, wipStatus } from '../services/leanMode';
 
@@ -151,19 +147,14 @@ const StageDots: React.FC<{ batches: Batch[] }> = ({ batches }) => {
   );
 };
 
-/* The per-batch "Marketing feedback" modal used to live here. It rendered
-   batch.feedback, which NOTHING ever persisted — the publish payload carries
-   only {joke_id, joke_title, is_published} and there is no batch feedback
-   column — so it was permanently empty, and the button that opened it promised
-   a conversation that never happened. Replaced by the team-level "Customer
-   feedback" card below, which reads the real per-team route. Don't bring the
-   modal back: the data it wanted is per TEAM, not per batch. */
+/* Customer feedback is Marketing-only: the Joke Maker hears from Marketing,
+   not from a panel both seats share (context.tsx TEAM_FEEDBACK_ROLES). */
 
 /* ============================ Joke Maker screen ============================ */
 const MIN_RAW_CHARS = 20;
 
 const JokeMaker: React.FC = () => {
-  const { user, roster, batches, submitRawBatch, config, teamSummary, teamFeedback } = useGame();
+  const { user, roster, batches, submitRawBatch, config, teamSummary } = useGame();
 
   const [input, setInput] = useState('');
   const [certified, setCertified] = useState(false);
@@ -246,11 +237,6 @@ const JokeMaker: React.FC = () => {
     () => computeAvgCreatedToPublishSeconds(myBatches),
     [myBatches],
   );
-
-  /* The team's customer feedback — the same rows Marketing sees, fetched by the
-     same poll in context.tsx. Per TEAM and capped at the round's
-     feedback_joke_count, so it is a short standing list, not a per-batch log. */
-  const feedbackRows = useMemo(() => toFeedbackRows(teamFeedback), [teamFeedback]);
 
   React.useEffect(() => {
     if (!config.showTeamPopup) setDismissedTeamPopup(false);
@@ -365,7 +351,7 @@ const JokeMaker: React.FC = () => {
           </Card>
         </div>
 
-        {/* RIGHT: stat tiles + Jokes by stage + the team's customer feedback */}
+        {/* RIGHT: stat tiles + Jokes by stage */}
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3">
             <StatBox label="Current Team Rank" value={String(myRank)} tone="rank" />
@@ -377,21 +363,6 @@ const JokeMaker: React.FC = () => {
           </div>
           <Card title="Jokes by stage" subtitle="Where your output sits right now">
             <StageDots batches={myBatches} />
-          </Card>
-          <Card
-            title="Customer feedback"
-            subtitle="Which criteria landed and which missed — the customers never say by how much"
-            accent={BRAND.sold}
-          >
-            <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
-              {feedbackRows.length === 0 ? (
-                <p className="text-sm text-gray-400 italic py-4 text-center">
-                  No feedback yet — release jokes to start uncovering the target.
-                </p>
-              ) : (
-                feedbackRows.map(r => <FeedbackCard key={r.joke_id} row={r} />)
-              )}
-            </div>
           </Card>
         </div>
       </div>

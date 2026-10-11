@@ -4,15 +4,15 @@ import { Role } from './types';
 import type { Wrapped, TeamFeedbackResponse } from './types/api';
 
 /* ============================================================================
-   Who gets to hear from the customers.
+   Who gets to hear from the customers: Marketing, and only Marketing.
 
-   GET /v1/rounds/{rid}/teams/{tid}/feedback is a TEAM route: the backend lets
-   both team roles read it and nobody else (core/usecase/feedback.go:44-49). The
-   frontend used to fetch it only inside the Marketing branch of the poll, so
-   the Joke Maker — the one seat that writes the jokes — never saw a word of it.
-   These tests pin the fix: both team roles ask for the route, the other roles
-   do not, and a failed poll never blanks a panel that already has feedback on
-   it.
+   GET /v1/rounds/{rid}/teams/{tid}/feedback is a TEAM route the backend would
+   serve to either team role (core/usecase/feedback.go:44-49). The game wants
+   the Joke Maker to hear from Marketing instead — Marketing reads the customers
+   and writes a note with each batch — so the Joke Maker's screen has no
+   feedback panel and its poll must never ask for the route. These tests pin
+   that: Marketing asks, the Joke Maker and every other role stay off the wire,
+   and a failed poll never blanks a panel that already has feedback on it.
 
    Driven through the real service and the real apiRequest over a stubbed fetch,
    the way services/api/contract.test.ts does, so what is asserted is the
@@ -73,23 +73,21 @@ afterEach(() => {
 });
 
 describe('pollTeamFeedback', () => {
-  it('asks for the team route when the poll is running as a JOKE_MAKER', async () => {
+  it('asks for the team route when the poll is running as MARKETING', async () => {
     const spy = stub(FEEDBACK);
-    const res = await pollTeamFeedback(Role.JOKE_MAKER, 7, 3, { current: false });
+    const res = await pollTeamFeedback(Role.QUALITY_CONTROL, 7, 3, { current: false });
     expect(urls(spy)).toEqual(['http://api.test/v1/rounds/7/teams/3/feedback']);
     // The {data} envelope is unwrapped by teamApi.feedback, not by the caller.
     expect(res?.jokes[0].good_dimensions).toEqual(['LENGTH', 'TOPIC']);
   });
 
-  it('asks for the identical route as MARKETING — one team, one set of rows', async () => {
+  it('never asks as the JOKE_MAKER — the Joke Maker hears from Marketing instead', async () => {
     const spy = stub(FEEDBACK);
-    await pollTeamFeedback(Role.QUALITY_CONTROL, 7, 3, { current: false });
-    expect(urls(spy)).toEqual(['http://api.test/v1/rounds/7/teams/3/feedback']);
+    expect(await pollTeamFeedback(Role.JOKE_MAKER, 7, 3, { current: false })).toBeUndefined();
+    expect(spy).not.toHaveBeenCalled();
   });
 
-  it('stays off the wire for roles the backend would reject', async () => {
-    // The handler 403s anyone who is not JM or MARKETING on the team, so asking
-    // would be a guaranteed error, not a missing feature.
+  it('stays off the wire for every other role', async () => {
     for (const role of [Role.INSTRUCTOR, Role.CUSTOMER, Role.UNASSIGNED]) {
       const spy = stub(FEEDBACK);
       expect(await pollTeamFeedback(role, 7, 3, { current: false })).toBeUndefined();
@@ -99,17 +97,17 @@ describe('pollTeamFeedback', () => {
 
   it('stays off the wire before the round or the team is known', async () => {
     const spy = stub(FEEDBACK);
-    expect(await pollTeamFeedback(Role.JOKE_MAKER, null, 3, { current: false })).toBeUndefined();
-    expect(await pollTeamFeedback(Role.JOKE_MAKER, 7, null, { current: false })).toBeUndefined();
+    expect(await pollTeamFeedback(Role.QUALITY_CONTROL, null, 3, { current: false })).toBeUndefined();
+    expect(await pollTeamFeedback(Role.QUALITY_CONTROL, 7, null, { current: false })).toBeUndefined();
     expect(spy).not.toHaveBeenCalled();
   });
 
   it('latches on a 404 so a backend without the route is asked once, not forever', async () => {
     const spy = stub({ code: 'NOT_FOUND', message: 'not found' }, 404);
     const unsupported = { current: false };
-    expect(await pollTeamFeedback(Role.JOKE_MAKER, 7, 3, unsupported)).toBeUndefined();
+    expect(await pollTeamFeedback(Role.QUALITY_CONTROL, 7, 3, unsupported)).toBeUndefined();
     expect(unsupported.current).toBe(true);
-    await pollTeamFeedback(Role.JOKE_MAKER, 7, 3, unsupported);
+    await pollTeamFeedback(Role.QUALITY_CONTROL, 7, 3, unsupported);
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
@@ -118,9 +116,9 @@ describe('pollTeamFeedback', () => {
     // rather than blanking the panel mid-round.
     const spy = stub({ code: 'INTERNAL', message: 'boom' }, 500);
     const unsupported = { current: false };
-    expect(await pollTeamFeedback(Role.JOKE_MAKER, 7, 3, unsupported)).toBeUndefined();
+    expect(await pollTeamFeedback(Role.QUALITY_CONTROL, 7, 3, unsupported)).toBeUndefined();
     expect(unsupported.current).toBe(false);
-    await pollTeamFeedback(Role.JOKE_MAKER, 7, 3, unsupported);
+    await pollTeamFeedback(Role.QUALITY_CONTROL, 7, 3, unsupported);
     expect(spy).toHaveBeenCalledTimes(2);
   });
 });

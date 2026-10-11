@@ -1,13 +1,11 @@
 /* ============================ Team customer feedback ============================
    GET /v1/rounds/{rid}/teams/{tid}/feedback, mapped for rendering.
 
-   This lives outside any view because BOTH team seats read it: Marketing
-   (views/QualityControl.tsx) and the Joke Maker (views/JokeMaker.tsx). The
-   payload is scoped to the TEAM, not to a batch or a seat — the backend returns
-   the team's latest `feedback_joke_count` published jokes
-   (core/usecase/feedback.go:38-74) and its handler accepts exactly the two team
-   roles — so the two screens are looking at the same rows and must agree on
-   what they mean.
+   Only Marketing's screen (views/QualityControl.tsx) renders it; the Joke
+   Maker no longer loads it (context.tsx TEAM_FEEDBACK_ROLES). The payload is
+   scoped to the TEAM, not to a batch or a seat — the backend returns the
+   team's latest `feedback_joke_count` published jokes
+   (core/usecase/feedback.go:38-74).
 
    Marketing's panel used to invent its own data: it scored each joke against
    config/dimensions' DEFAULT_IDEAL_PROFILE — the frontend's hardcoded default,

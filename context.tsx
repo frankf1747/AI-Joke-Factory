@@ -214,20 +214,19 @@ export function mapBatchFromTeamList(
 }
 
 /**
- * Roles allowed to read their team's customer feedback.
+ * Roles that load their team's customer feedback: Marketing only.
  *
- * Both team seats poll it, because the payload is per TEAM, not per seat:
- * FeedbackService.Get rejects anyone who is not JM or MARKETING on that team
- * (core/usecase/feedback.go:44-49). The Joke Maker used to be left out on this
- * side only — the fetch lived inside the Marketing branch of the poll — so the
- * people writing the jokes were the one role that never heard what the
- * customers thought of them.
+ * The backend would let the Joke Maker read it too (FeedbackService.Get
+ * accepts JM or MARKETING on the team, core/usecase/feedback.go:44-49), but the
+ * game wants the Joke Maker to hear from Marketing, not from a panel both
+ * seats share: Marketing reads the customers and writes a note with each
+ * batch. So the Joke Maker makes no /feedback requests at all.
  */
-const TEAM_FEEDBACK_ROLES: ReadonlySet<string> = new Set(['JOKE_MAKER', 'QUALITY_CONTROL']);
+const TEAM_FEEDBACK_ROLES: ReadonlySet<string> = new Set(['QUALITY_CONTROL']);
 
 /**
- * One poll of GET /v1/rounds/{rid}/teams/{tid}/feedback, shared by both team
- * branches so their behaviour and failure modes cannot drift apart.
+ * One poll of GET /v1/rounds/{rid}/teams/{tid}/feedback for the Marketing
+ * branch. Every other role gets `undefined` without a request.
  *
  * Returns `undefined` for "nothing to apply" — no team yet, route unsupported,
  * or a failed request. That is deliberately distinct from `null`: a transient
@@ -1192,14 +1191,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // ignore; action will surface
           }
 
-          /* The team's customer feedback, same route and same guards Marketing
-             uses (see pollTeamFeedback). The Joke Maker reads it to learn which
-             of the 12 criteria their jokes keep missing — the feedback loop the
-             per-batch "Marketing note" modal only ever pretended to close. */
-          const jmFeedback = await pollTeamFeedback(
-            role, effectiveRound, me.assignment.team_id as TeamId, teamFeedbackUnsupportedRef,
-          );
-          if (jmFeedback !== undefined && !cancelled) setTeamFeedback(jmFeedback);
+          /* No customer feedback for the Joke Maker: it is Marketing-only (see
+             TEAM_FEEDBACK_ROLES). The Joke Maker hears from Marketing instead. */
 
           // Round 2: show team popup members when backend says popup is active.
           if (popupActive) {
@@ -1342,8 +1335,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           /* Marketing's feedback panel. Gated on the user actually being on a
              team, because the route is per-team — pollTeamFeedback owns that
-             gate and the 404 latch, and the Joke Maker branch above calls the
-             same helper so both seats poll identically. */
+             gate, the Marketing-only role gate and the 404 latch. */
           const qcFeedback = await pollTeamFeedback(role, effectiveRound, qcTeamId, teamFeedbackUnsupportedRef);
           if (qcFeedback !== undefined && !cancelled) setTeamFeedback(qcFeedback);
 
