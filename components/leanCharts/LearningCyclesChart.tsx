@@ -5,7 +5,8 @@
    A batch sent too recently to judge (services/leanCharts.ts
    isTooRecentToJudge) is drawn hollow and left out of the line, so the end of
    the round does not read as learning collapsing.
-   Series come from services/leanCharts.ts cyclesForInstructor / cyclesForStudent. */
+   Series come from services/leanCharts.ts cyclesForInstructor. Instructor
+   screen only: the student screens dropped their lean charts. */
 import React from 'react';
 import { CartesianGrid, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from 'recharts';
 import { Card } from '../ui';

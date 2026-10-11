@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   LEAN_CHART_COLORS, NO_BATCHES_TEXT, NO_RELEASES_TEXT,
-  batchScatter, batchSellThrough, classSellThrough, cyclesForInstructor, cyclesForStudent,
+  batchScatter, batchSellThrough, classSellThrough, cyclesForInstructor,
   defaultIdleTeamId, hasIdle, hasWaste, idleRows, idleSubtitle, integerTicks, isNotLeanRound,
-  isTooRecentToJudge, leanChartsVisibility, leanJudgeTiming, leanRound1Id, leanRoundFlags, minuteTicks,
+  isTooRecentToJudge, leanChartsVisibility, leanJudgeTiming, leanRoundFlags, minuteTicks,
   resolveLeanChartsRound, teamOptions, wasteBars,
 } from './leanCharts';
 import { leanChartsFixture } from './leanCharts.testdata';
@@ -40,15 +40,6 @@ describe('leanRoundFlags', () => {
     expect(leanRoundFlags(undefined, [], 1, 'LEAN')).toEqual({ 1: true, 2: false });
     expect(leanRoundFlags([], null, 2, 'LEAN')).toEqual({ 1: false, 2: true });
     expect(leanRoundFlags([], [], 2, 'CLASSIC')).toEqual({ 1: false, 2: false });
-  });
-});
-
-describe('leanRound1Id', () => {
-  it('finds Round 1 only when it was Lean', () => {
-    expect(leanRound1Id([{ id: 4, round_number: 1, market_mode: 'LEAN' }, { id: 5, round_number: 2, market_mode: 'LEAN' }])).toBe(4);
-    expect(leanRound1Id([{ id: 4, round_number: 1, market_mode: 'CLASSIC' }])).toBeNull();
-    expect(leanRound1Id([{ id: 4, round_number: 1 }])).toBeNull();
-    expect(leanRound1Id(undefined)).toBeNull();
   });
 });
 
@@ -212,23 +203,6 @@ describe('cyclesForInstructor', () => {
   });
 });
 
-describe('cyclesForStudent', () => {
-  const current = leanChartsFixture({ round_id: 8, teams: [res.teams[0]] });
-  const earlier = leanChartsFixture({ teams: [res.teams[1]] });
-  it('in Round 2: faded Round 1 batches, own batches in orange, dashed class average', () => {
-    const m = cyclesForStudent(current, 2, earlier);
-    expect(m.series.map(s => s.key)).toEqual(['earlier', 'mine', 'class']);
-    expect(m.series[0]).toMatchObject({ faded: true, color: LEAN_CHART_COLORS.round1, round: 1 });
-    expect(m.series[1]).toMatchObject({ faded: false, color: LEAN_CHART_COLORS.round2, round: 2, markers: true });
-    expect(m.series[2]).toMatchObject({ dashed: true, markers: false, color: LEAN_CHART_COLORS.classAverage });
-  });
-  it('in Round 1: no earlier round, own batches in blue', () => {
-    const m = cyclesForStudent(current, 1, earlier);
-    expect(m.series.map(s => s.key)).toEqual(['mine', 'class']);
-    expect(m.series[0].color).toBe(LEAN_CHART_COLORS.round1);
-  });
-});
-
 describe('resolveLeanChartsRound / leanChartsVisibility', () => {
   const both = { 1: true, 2: true };
   it('after a reset into a Lean R1, a stale R2 pick falls back to the live round', () => {
@@ -327,13 +301,6 @@ describe('too recent to judge (chart 4)', () => {
     const ended = at('2026-10-06T10:10:00Z', { teams: [team(100)] });
     expect(cyclesForInstructor(running, null, 1).series[0].points[0].pending).toBe(true);
     expect(cyclesForInstructor(ended, null, 1).series[0].points[0].pending).toBe(false);
-    expect(cyclesForStudent(running, 1, null).series[0].points[0].pending).toBe(true);
-    expect(cyclesForStudent(ended, 1, null).series[0].points[0].pending).toBe(false);
-    // In Round 2 the earlier round is timed by its own response.
-    const r2 = at('2026-10-06T10:03:00Z', { round_id: 8, teams: [team(100)] });
-    const m = cyclesForStudent(r2, 2, ended);
-    expect(m.series[0].points[0].pending).toBe(false);
-    expect(m.series[1].points[0].pending).toBe(true);
   });
   it('drops class samples whose bucket starts at or after the cut', () => {
     const full = { ...avg, sell_through: [0, 60, 120, 180].map(t => ({ t, value: 0.5 })) };

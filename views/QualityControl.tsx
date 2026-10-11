@@ -22,7 +22,6 @@ import { toFeedbackRows } from './feedback';
 import { FeedbackCard } from '../components/FeedbackCard';
 import { isWatchMode } from '../services/watchMode';
 import { fmtMoney } from '../services/leanMode';
-import { StudentLeanCharts } from '../components/leanCharts/StudentLeanCharts';
 
 /* ---- Icons for the backend's Topic categories. Keyed by the category string
    itself so the picker stays in step with config/dimensions automatically: add
@@ -311,7 +310,7 @@ const BatchSplitter: React.FC<{
 
 /* ============================ Marketing screen ============================ */
 const QualityControl: React.FC = () => {
-  const { user, roster, qcQueue, publishBatch, splitBatch, unsplitBatch, config, teamSummary, teamFeedback, batches, roundId } = useGame();
+  const { user, roster, qcQueue, publishBatch, splitBatch, unsplitBatch, config, teamSummary, teamFeedback, batches } = useGame();
 
   /* A watch tab shows a bot's seat read-only: no nudges, no modals, no writes. */
   const watching = isWatchMode();
@@ -548,9 +547,9 @@ const QualityControl: React.FC = () => {
     () => countJokesSold(batches.filter(b => b.team === user?.team)),
     [batches, user?.team],
   );
-  /* Lean market mode only: the team's setup and carrying costs, how long a
-     released joke waits for its first buyer, and the per-batch learning curve.
-     Nothing below renders for a CLASSIC round. */
+  /* Lean market mode only: the team's setup and carrying costs and how long a
+     released joke waits for its first buyer. Nothing below renders for a
+     CLASSIC round. The lean charts are instructor-only. */
   const leanMode = config.marketMode === 'LEAN';
   const lean = teamSummary?.lean ?? null;
   const toFirstSale = lean && lean.avg_publish_to_first_sale_s > 0
@@ -795,15 +794,6 @@ const QualityControl: React.FC = () => {
               </>
             )}
           </div>
-
-          {leanMode && (
-            <StudentLeanCharts
-              roundId={config.status === 'PLAYING' ? roundId : null}
-              teamId={user?.team_id ?? null}
-              roundNumber={config.round === 2 ? 2 : 1}
-              live={config.isActive}
-            />
-          )}
 
           {/* The 12 criteria — so Marketing knows what to coach the Joke Maker on. */}
           <Card title="The 12 criteria customers judge">

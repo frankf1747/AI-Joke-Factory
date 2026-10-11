@@ -53,7 +53,7 @@ introduction and overrun):
 |---|---|---|---|---|
 | Setup | 10 min | Forms teams in the lobby. Presses **Lean class preset**, picks the ideal joke profile, checks both rounds show Market mode **Lean**. Explains the rules. | Log in, take their seat, read the brief. | Log in, take their seat, read "The 12 criteria customers judge". |
 | Round 1 — push | 15 min | Presses **Start** with the Round 1 tab selected. Watches the leaderboard, calls out cues (section 6). Presses **End Round** at about 15 minutes. | Write batches of exactly 5 jokes and press **Send to Marketing**. See "Each batch costs $2.00 to set up". No WIP limit. | Split each batch, choose jokes, add a Topic and title, **Release to market**. Watch the Setup cost, Carrying cost and Publish → first sale tiles. |
-| Debrief 1 | 10 min | Shows the Round 1 leaderboard with the Setup, Carrying, Lead and Sale columns, and the lean charts (section 3). Asks what drove cost and why jokes sat unsold. | Discuss. | Discuss; read the Customer feedback panel and the two lean charts. |
+| Debrief 1 | 10 min | Shows the Round 1 leaderboard with the Setup, Carrying, Lead and Sale columns, and the lean charts (section 3). Asks what drove cost and why jokes sat unsold. | Discuss. | Discuss; read the Customer feedback panel. |
 | Round 2 — lean | 15 min | Selects the Round 2 tab, confirms Market mode is Lean with WIP limit 2, presses **Start**, ends at about 15 minutes. | Batches may be smaller than 5 (5 is now a cap). See the WIP counter; when it reads "— wait, or go help", stop and help Marketing. | Same desk; in Round 2 Marketing may also discard a whole batch. |
 | Debrief 2 | 15+ min | Opens the **Round 1 vs Round 2** table and works through the debrief questions in section 6. | Discuss. | Discuss. |
 
@@ -147,7 +147,8 @@ screen refreshes and the server refuses the send, an alert says
 "Marketing still has batches waiting. In a pull system you wait — or go help them decide." and the
 draft is kept so it can be sent later.
 
-The Joke Maker also sees the two lean charts described under Marketing and the Customer feedback panel.
+The Joke Maker also sees the Customer feedback panel. The lean charts are on the instructor's
+screen only; the student screens do not show them.
 
 ### Marketing
 
@@ -170,18 +171,6 @@ Publish, Content Waste):
 | **Setup cost** | The team's setup cost so far. |
 | **Carrying cost** | The team's carrying cost so far; it rises every minute work waits or jokes sit unsold. |
 | **Publish → first sale** | Average seconds a sold joke waited for its first buyer. |
-
-Two lean charts sit below the tiles (in a Lean round). They show the team's own data and an
-anonymous class average, never another team by name:
-
-- **Jokes standing still** — the team's jokes waiting for Marketing and unsold on the shelf over
-  the minutes of the round, with the class average dashed. A growing pile is waste.
-- **More cycles, more learning** — one dot per batch at the minute it was sent, showing the share
-  of its released jokes that sold; the class average is a dashed line. In Round 2 the team's
-  Round 1 batches are drawn faded behind, when Round 1 was also Lean, so the two rounds can be
-  compared. Batches with nothing released are left out. Batches sent too recently to judge are
-  hollow dots off the line, since they are still selling. A rising line through the solid dots
-  means the team is learning what the market wants.
 
 The **Customer feedback** panel is unchanged: it shows which of the criteria landed and which
 missed, never by how much.

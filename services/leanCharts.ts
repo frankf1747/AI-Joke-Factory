@@ -120,14 +120,6 @@ export function leanChartsVisibility(
   return flags[round] && !notLean[round];
 }
 
-/** Round 1's id from /v1/rounds/active, only if Round 1 was Lean. */
-export function leanRound1Id(
-  rounds: ReadonlyArray<{ id: number; round_number: number; market_mode?: string }> | null | undefined,
-): number | null {
-  const r1 = (rounds ?? []).find(r => Number(r.round_number) === 1);
-  return r1 && r1.market_mode === 'LEAN' ? r1.id : null;
-}
-
 /** The instructor's team picker: every team in either round, by id. */
 export function teamOptions(
   r1: LeanChartsResponse | null,
@@ -451,33 +443,5 @@ export function cyclesForInstructor(
       });
     }
   }
-  return { series, emptyText: cyclesEmptyText(series, teams) };
-}
-
-/** Student: own batches this round, the class average dashed, and in Round 2 the team's Round 1 batches faded. */
-export function cyclesForStudent(
-  current: LeanChartsResponse | null,
-  round: 1 | 2,
-  earlier: LeanChartsResponse | null,
-): CyclesModel {
-  const mine = current?.teams[0] ?? null;
-  const before = round === 2 ? earlier?.teams[0] ?? null : null;
-  const series: CyclesSeries[] = [];
-  if (before) {
-    series.push({
-      key: 'earlier', name: 'Your Round 1 batches', color: LEAN_CHART_COLORS.round1, round: 1,
-      dashed: false, markers: true, faded: true, points: batchSellThrough(before, leanJudgeTiming(earlier)),
-    });
-  }
-  series.push({
-    key: 'mine', name: `Your batches · Round ${round}`, color: roundColor(round), round,
-    dashed: false, markers: true, faded: false, points: batchSellThrough(mine, leanJudgeTiming(current)),
-  });
-  series.push({
-    key: 'class', name: 'Class average', color: LEAN_CHART_COLORS.classAverage, round,
-    dashed: true, markers: false, faded: false,
-    points: classSellThrough(current?.class_average, leanJudgeTiming(current)),
-  });
-  const teams = [mine, before].filter((t): t is LeanChartsTeam => t != null);
   return { series, emptyText: cyclesEmptyText(series, teams) };
 }
