@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   computeProfit, selectPublishedJokeIds, computeLeadTimeSeconds,
-  computeAvgCreatedToPublishSeconds,
+  computeAvgCreatedToPublishSeconds, countJokesSold,
 } from './economics';
 
 describe('computeProfit (Marketing-only costs)', () => {
@@ -163,5 +163,21 @@ describe('computeAvgCreatedToPublishSeconds', () => {
     expect(computeAvgCreatedToPublishSeconds([
       { submitted_at: at(100), rated_at: at(40) },
     ])).toBe(0);
+  });
+});
+
+describe('countJokesSold (jokes with at least one sale)', () => {
+  it('counts each joke once however many customers bought it', () => {
+    const batches = [
+      { jokes: [{ sold_count: 20 }, { sold_count: 0 }, { sold_count: 1 }] },
+      { jokes: [{ sold_count: 79 }, {}] },
+    ];
+    // 100 sales across 5 jokes, but only 3 of the jokes ever sold.
+    expect(countJokesSold(batches)).toBe(3);
+  });
+
+  it('is 0 with no batches or no sales', () => {
+    expect(countJokesSold([])).toBe(0);
+    expect(countJokesSold([{ jokes: [] }, { jokes: [{ sold_count: 0 }] }])).toBe(0);
   });
 });

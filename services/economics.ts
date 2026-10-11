@@ -106,3 +106,16 @@ export function computeAvgCreatedToPublishSeconds(batches: BatchTimes[]): number
   if (spans.length === 0) return null;
   return Math.round(spans.reduce((a, c) => a + c, 0) / spans.length);
 }
+
+/**
+ * Jokes this team has sold at least once. A joke can be bought by many
+ * customers, so total sales can far exceed the jokes made; this counts each
+ * joke once. Read from the batch listing's per-joke `sold_count`, which is
+ * counted from purchases (the summary's `sold_jokes_count` is only
+ * min(published, sales) and cannot tell which jokes sold).
+ */
+export function countJokesSold(batches: Array<{ jokes: Array<{ sold_count?: number }> }>): number {
+  let n = 0;
+  for (const b of batches) for (const j of b.jokes) if ((j.sold_count ?? 0) > 0) n += 1;
+  return n;
+}

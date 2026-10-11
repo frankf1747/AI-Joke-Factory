@@ -6,7 +6,7 @@ import {
   Send, ChevronRight, Info, CheckCircle2,
 } from 'lucide-react';
 import { Batch } from '../types';
-import { computeAvgCreatedToPublishSeconds } from '../services/economics';
+import { computeAvgCreatedToPublishSeconds, countJokesSold } from '../services/economics';
 import { dimById } from '../config/dimensions';
 /* The same mapper and card Marketing renders — the feedback is per TEAM, so
    both seats must read it identically. See views/feedback.ts. */
@@ -218,7 +218,8 @@ const JokeMaker: React.FC = () => {
   // "Total" = every joke this team has put into the factory. Note jokes only
   // become records once Marketing splits the batch, so this reads 0 until then.
   const totalJokes = teamSummary?.jokes_created ?? 0;
-  const totalSales = teamSummary?.total_sales ?? 0;
+  // Jokes sold at least once — not total sales, which counts every customer.
+  const jokesSold = useMemo(() => countJokesSold(myBatches), [myBatches]);
   const profitRaw = teamSummary?.profit;
   const profitLabel = profitRaw == null ? '—' : fmt$(profitRaw);
   const profitTone: StatBoxTone =
@@ -369,7 +370,7 @@ const JokeMaker: React.FC = () => {
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3">
             <StatBox label="Current Team Rank" value={String(myRank)} tone="rank" />
-            <StatBox label="Sold / Total" value={`${totalSales}/${totalJokes}`} tone="blue" />
+            <StatBox label="Jokes Sold / Made" value={`${jokesSold}/${totalJokes}`} tone="blue" />
             <StatBox label="Profit" value={profitLabel} tone={profitTone} valueClassName="text-xl" />
             <StatBox label="Created to Publish" value={fmtSeconds(avgLeadSec)} tone="sky" />
             <StatBox label="Batches" value={batchesCreated} tone="slate" />

@@ -10,7 +10,7 @@ import {
   DollarSign, Plane, HeartPulse, Medal, Landmark, Coffee, Languages,
   Pencil, type LucideIcon,
 } from 'lucide-react';
-import { computeAvgCreatedToPublishSeconds } from '../services/economics';
+import { computeAvgCreatedToPublishSeconds, countJokesSold } from '../services/economics';
 import {
   INITIAL_NUDGE_STATE, nudgeReducer, isNudgeOpen,
   type NudgeEvent,
@@ -529,7 +529,6 @@ const QualityControl: React.FC = () => {
      negative. Waste = jokes the team discarded (created but never published). */
   const myRank = teamSummary?.rank ?? '—';
   const queueSize = qcQueue?.queue_size ?? incomingJokes.length;
-  const totalSales = teamSummary?.total_sales ?? 0;
   const jokesCreated = teamSummary?.jokes_created ?? 0;
   const jokesPublished = teamSummary?.jokes_published ?? 0;
   const waste = Math.max(0, jokesCreated - jokesPublished);
@@ -542,6 +541,11 @@ const QualityControl: React.FC = () => {
   // Joke Maker sees. It's Marketing's own turnaround, so it's theirs to improve.
   const avgLeadSec = useMemo(
     () => computeAvgCreatedToPublishSeconds(batches.filter(b => b.team === user?.team)),
+    [batches, user?.team],
+  );
+  // Jokes sold at least once — not total sales, which counts every customer.
+  const jokesSold = useMemo(
+    () => countJokesSold(batches.filter(b => b.team === user?.team)),
     [batches, user?.team],
   );
   /* Lean market mode only: the team's setup and carrying costs, how long a
@@ -780,7 +784,7 @@ const QualityControl: React.FC = () => {
                 jokes. Point this at the real per-team backlog endpoint when it lands. */}
             <StatBox label="Content Backlog" value={queueSize} tone="blue" />
             <StatBox label="Profit" value={profitLabel} tone={profitTone} valueClassName="text-xl" />
-            <StatBox label="Sold / Total" value={`${totalSales}/${jokesCreated}`} tone="sky" />
+            <StatBox label="Jokes Sold / Made" value={`${jokesSold}/${jokesCreated}`} tone="sky" />
             <StatBox label="Created to Publish" value={fmtSeconds(avgLeadSec)} tone="sky" />
             <StatBox label="Content Waste" value={waste} tone="rose" />
             {leanMode && (
