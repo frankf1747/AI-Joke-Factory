@@ -6,75 +6,43 @@
    Rendered on Marketing's screen only (views/QualityControl.tsx). The Joke
    Maker no longer sees customer feedback; it hears from Marketing instead.
 
-   Imports from components/ui rather than the components barrel: the barrel
-   pulls in context, and context reaches back into components. */
+   Imports nothing from the components barrel: the barrel pulls in context,
+   and context reaches back into components. */
 
 import React from 'react';
-import { Check, X as XIcon, BadgeCheck, Minus } from 'lucide-react';
-import { SectionLabel } from './ui';
 import type { FeedbackRow } from '../views/feedback';
 
-export const DimChip: React.FC<{ label: string; tone: 'good' | 'improve' }> = ({ label, tone }) => (
-  <span
-    className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border ${
-      tone === 'good'
-        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-        : 'bg-amber-50 text-amber-800 border-amber-300'
-    }`}
-  >
-    {tone === 'good' ? <Check size={11} /> : <XIcon size={11} />} {label}
-  </span>
+/* One joke, compact: its title with the sale status on the right, then one
+   line of the criteria that landed and one of those that missed. Plain text
+   at a readable size, so it scans at a glance in the floating window too. */
+const DimLine: React.FC<{ tone: 'good' | 'improve'; labels: string[] }> = ({ tone, labels }) => (
+  <p className={`text-[13px] leading-snug ${tone === 'good' ? 'text-emerald-700' : 'text-amber-700'}`}>
+    <span aria-hidden="true">{tone === 'good' ? '✓ ' : '✗ '}</span>
+    <span className="sr-only">{tone === 'good' ? 'Landed: ' : 'Needs work: '}</span>
+    {labels.join(', ')}
+  </p>
 );
 
 export const FeedbackCard: React.FC<{ row: FeedbackRow }> = ({ row }) => (
-  <div
-    className={`rounded-lg border p-3 mk-fade-in ${
-      row.was_bought ? 'border-emerald-100 bg-emerald-50/40' : 'border-gray-200 bg-gray-50/60'
-    }`}
-  >
-    {/* Status badge first, then the title Marketing gave the joke on its own
-        line, so the title is never read as part of the status. */}
-    <div className="mb-2 space-y-1">
+  <div className="py-2.5 mk-fade-in">
+    <div className="flex items-start justify-between gap-2">
+      <p className="text-sm font-semibold text-gray-900 leading-snug break-words min-w-0">
+        {row.joke_title || 'Untitled joke'}
+      </p>
       <span
-        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-          row.was_bought
-            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-            : 'border-gray-200 bg-white text-gray-500'
+        className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+          row.was_bought ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'
         }`}
       >
-        {row.was_bought
-          ? <BadgeCheck size={11} className="shrink-0" />
-          : <Minus size={11} className="shrink-0" />}
         {row.was_bought ? 'Sold' : 'Not sold yet'}
       </span>
-      {row.joke_title && (
-        <p className="text-xs text-gray-800 leading-snug">
-          <span className="text-gray-400">Title: </span>
-          <span className="font-semibold">{row.joke_title}</span>
-        </p>
-      )}
     </div>
-
     {row.good.length === 0 && row.improve.length === 0 ? (
-      <p className="text-[11px] text-gray-400 italic">No customer read on this one yet.</p>
+      <p className="mt-1 text-[13px] text-gray-400 italic">No customer read on this one yet.</p>
     ) : (
-      <div className="space-y-2">
-        {row.good.length > 0 && (
-          <div>
-            <SectionLabel className="mb-1">Landed</SectionLabel>
-            <div className="flex flex-wrap gap-1.5">
-              {row.good.map(d => <DimChip key={d.id} label={d.label} tone="good" />)}
-            </div>
-          </div>
-        )}
-        {row.improve.length > 0 && (
-          <div>
-            <SectionLabel className="mb-1">Needs work</SectionLabel>
-            <div className="flex flex-wrap gap-1.5">
-              {row.improve.map(d => <DimChip key={d.id} label={d.label} tone="improve" />)}
-            </div>
-          </div>
-        )}
+      <div className="mt-1 space-y-0.5">
+        {row.good.length > 0 && <DimLine tone="good" labels={row.good.map(d => d.label)} />}
+        {row.improve.length > 0 && <DimLine tone="improve" labels={row.improve.map(d => d.label)} />}
       </div>
     )}
   </div>

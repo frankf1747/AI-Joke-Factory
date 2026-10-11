@@ -15,19 +15,31 @@ const render = (props: Partial<Parameters<typeof CustomerFeedbackCardView>[0]> =
   }));
 
 describe('CustomerFeedbackCardView', () => {
-  it('offers Pop out on Marketing\'s own screen and shows the list inline', () => {
+  it('offers a one-line Expand button on Marketing\'s own screen and shows the list inline', () => {
     const out = render();
     expect(out).toContain('Customer feedback');
-    expect(out).toContain('Pop out');
-    expect(out).toContain('aria-pressed="false"');
+    expect(out).toContain('Expand');
+    expect(out).not.toContain('Pop out');
+    expect(out).toContain('whitespace-nowrap');
     expect(out).toContain('Corporate Comedy');
     expect(out).not.toContain('Showing in the floating window');
+    // The pattern summary lives in the floating window only.
+    expect(out).not.toContain('Keep doing');
+  });
+
+  it('shows each joke as compact landed / missed lines', () => {
+    const out = render();
+    expect(out).toContain('Landed: ');
+    expect(out).toContain('Needs work: ');
+    expect(out).toContain('Topic');
+    expect(out).toContain('Wordplay');
+    expect(out).toContain('Sold');
   });
 
   it('offers no pop-out in watch mode, even if asked to be popped', () => {
     for (const popped of [false, true]) {
       const out = render({ canPopOut: false, popped });
-      expect(out).not.toContain('Pop out');
+      expect(out).not.toContain('Expand');
       expect(out).not.toContain('Bring back');
       expect(out).not.toContain('Showing in the floating window');
       expect(out).not.toContain('role="dialog"');
@@ -35,11 +47,13 @@ describe('CustomerFeedbackCardView', () => {
     }
   });
 
-  it('while popped out, the card says so and offers Bring back; the list floats', () => {
+  it('while popped out, the card says so with exactly one Bring back; the window leads with the pattern', () => {
     const out = render({ popped: true });
     expect(out).toContain('Showing in the floating window');
-    expect(out).toContain('Bring back');
-    expect(out).toContain('aria-pressed="true"');
+    expect(out.split('Bring back')).toHaveLength(2);
+    expect(out).not.toContain('Expand');
+    expect(out).toContain('Keep doing');
+    expect(out).toContain('Fix next');
     // No Document PiP under node, so the floating copy is the in-page panel.
     expect(out).toContain('role="dialog"');
     expect(out.split('Corporate Comedy')).toHaveLength(2);
