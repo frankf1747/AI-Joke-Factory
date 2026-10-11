@@ -437,7 +437,7 @@ export interface GameContextType {
   roundId: RoundId | null;
   /** Instructor only: the backend ids of Round 1 and Round 2, from /rounds/active. */
   roundIds: { 1: RoundId | null; 2: RoundId | null };
-  /** Instructor only: each round's normalized status, from /rounds/active (null = unknown). */
+  /** Each round's normalized status, from /rounds/active (null = unknown). Polled for the instructor and for seated students. */
   roundStatuses: { 1: RoundStatus | null; 2: RoundStatus | null };
   marketItems: ApiMarketItem[];
   teamSummary: ApiTeamSummaryResponse | null;
@@ -967,6 +967,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const r1 = rounds.find(r => Number(r?.round_number) === 1) ?? null;
         const r2 = rounds.find(r => Number(r?.round_number) === 2) ?? null;
         const round1Status = pickStatus(r1);
+        // Both rounds' statuses, so a student screen can tell "between rounds" from "class over".
+        const sts = { 1: round1Status, 2: pickStatus(r2) };
+        setRoundStatuses(prev => (prev[1] === sts[1] && prev[2] === sts[2] ? prev : sts));
 
         const activeRound = rounds.find(r => pickStatus(r) === 'ACTIVE') ?? null;
         // If nothing is ACTIVE, prefer Round 2 once Round 1 has ended.

@@ -15,6 +15,8 @@ export interface NextStep { text: string; tone: NextStepTone }
 export interface JokeMakerStepInput {
   now: number;
   roundActive: boolean;
+  /** The final round has ended: the class is over and the debrief follows. */
+  classOver: boolean;
   roundNumber: 1 | 2;
   /** Batches waiting on Marketing's desk (the team summary's unprocessed_batches); null = unknown. */
   marketingBacklog: number | null;
@@ -29,6 +31,8 @@ export interface JokeMakerStepInput {
 export interface MarketingStepInput {
   now: number;
   roundActive: boolean;
+  /** The final round has ended: the class is over and the debrief follows. */
+  classOver: boolean;
   /** The round's storage fee, per joke per minute. */
   storageFeePerJokeMinute: number;
   /** ms epoch the batch on the desk was sent; null = no batch on the desk (or unknown). */
@@ -54,6 +58,17 @@ export const DISCARD_WARN_SHARE = 0.6;
 /** Notes are quoted up to this many characters. */
 export const NOTE_QUOTE_CHARS = 80;
 
+/** The game has two rounds; once this one has ended the class moves to the debrief. */
+export const FINAL_ROUND = 2;
+/** Both seats, after the final round has ended (before rule 1). */
+export const CLASS_OVER_TEXT = 'Round over — join the debrief.';
+
+type RoundStatusOf = 'CONFIGURED' | 'ACTIVE' | 'ENDED' | null;
+/** True once the final round has ENDED; between rounds (Round 1 ended, Round 2 not started) it is false. */
+function classOverFrom(roundActive: boolean, statuses: Readonly<Record<1 | 2, RoundStatusOf>> | undefined): boolean {
+  return !roundActive && statuses?.[FINAL_ROUND] === 'ENDED';
+}
+
 const info = (text: string): NextStep => ({ text, tone: 'info' });
 const warn = (text: string): NextStep => ({ text, tone: 'warn' });
 
@@ -65,6 +80,7 @@ export function quoteNote(text: string): string {
 }
 
 export function jokeMakerNextStep(i: JokeMakerStepInput): NextStep {
+  if (i.classOver) return info(CLASS_OVER_TEXT);
   if (!i.roundActive) return info('Get your AI tool ready — the round starts soon.');
   const note = i.latestNote?.text.trim() ? i.latestNote : null;
   if (note && i.now - note.notedAt <= NOTE_FRESH_MS) {
@@ -85,6 +101,7 @@ export function jokeMakerNextStep(i: JokeMakerStepInput): NextStep {
 }
 
 export function marketingNextStep(i: MarketingStepInput): NextStep {
+  if (i.classOver) return info(CLASS_OVER_TEXT);
   if (!i.roundActive) return info("Watch the desk — your Joke Maker's first batch is coming.");
   if (i.deskBatchSentAt != null) {
     const waited = Math.floor((i.now - i.deskBatchSentAt) / 1000);
@@ -130,6 +147,8 @@ export function jokeMakerInputFrom(a: {
   now: number;
   roundActive: boolean;
   round: number;
+  /** Round 1 and Round 2 statuses, when the screen knows them. */
+  roundStatuses?: Readonly<Record<1 | 2, RoundStatusOf>>;
   teamSummary: { unprocessed_batches?: number } | null;
   batches: readonly Batch[];
 }): JokeMakerStepInput {
@@ -139,6 +158,7 @@ export function jokeMakerInputFrom(a: {
   return {
     now: a.now,
     roundActive: a.roundActive,
+    classOver: classOverFrom(a.roundActive, a.roundStatuses),
     roundNumber: a.round === 2 ? 2 : 1,
     marketingBacklog: finiteOrNull(a.teamSummary?.unprocessed_batches),
     lastSentAt: lastSent?.submittedAt ?? null,
@@ -149,10 +169,22 @@ export function jokeMakerInputFrom(a: {
   };
 }
 
-/** Marketing's inputs: the desk (claimed batch), the team's batches, summary and feedback. */
+/**
+ * Marketing's inputs: the desk (claimed batch), the team's batches, summary and
+ * feedback. The batch list can include the browser's stored rated history,
+ * which may hold earlier rounds (or an earlier class), so the last decision
+ * reads only the current round's batches: by round id when known, else by
+ * round number.
+ */
 export function marketingInputFrom(a: {
   now: number;
   roundActive: boolean;
+  /** The current round's number. */
+  round: number;
+  /** The current round's id, when known. */
+  roundId?: number | null;
+  /** Round 1 and Round 2 statuses, when the screen knows them. */
+  roundStatuses?: Readonly<Record<1 | 2, RoundStatusOf>>;
   storageFeePerJokeMinute: number;
   teamSummary: { unprocessed_batches?: number } | null;
   qcQueue: { batch?: { submitted_at?: string } | null } | null;
@@ -162,11 +194,15 @@ export function marketingInputFrom(a: {
   const desk = a.qcQueue?.batch ?? null;
   const sentAt = desk?.submitted_at ? Date.parse(desk.submitted_at) : NaN;
   const backlog = finiteOrNull(a.teamSummary?.unprocessed_batches);
-  const decided = latestBy(a.batches.filter(b => isProcessed(b) && b.jokes.length > 0), b => b.ratedAt ?? b.submittedAt);
+  const thisRound = (b: Batch) => (a.roundId != null ? b.round_id === a.roundId : b.round === a.round);
+  const decided = latestBy(
+    a.batches.filter(b => thisRound(b) && isProcessed(b) && b.jokes.length > 0), b => b.ratedAt ?? b.submittedAt,
+  );
   const published = decided ? decided.jokes.filter(j => j.is_published === true).length : 0;
   return {
     now: a.now,
     roundActive: a.roundActive,
+    classOver: classOverFrom(a.roundActive, a.roundStatuses),
     storageFeePerJokeMinute: a.storageFeePerJokeMinute,
     deskBatchSentAt: Number.isFinite(sentAt) ? sentAt : null,
     deskEmpty: desk ? false : backlog == null ? null : backlog === 0,

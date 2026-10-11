@@ -166,7 +166,7 @@ const StageDots: React.FC<{ batches: Batch[] }> = ({ batches }) => {
 const MIN_RAW_CHARS = 20;
 
 const JokeMaker: React.FC = () => {
-  const { user, roster, batches, submitRawBatch, config, teamSummary } = useGame();
+  const { user, roster, batches, submitRawBatch, config, teamSummary, roundStatuses } = useGame();
 
   const [input, setInput] = useState('');
   const [certified, setCertified] = useState(false);
@@ -373,7 +373,7 @@ const JokeMaker: React.FC = () => {
           </div>
           <NextStepLive
             step={now => jokeMakerNextStep(jokeMakerInputFrom({
-              now, roundActive: config.isActive, round: config.round, teamSummary, batches: myBatches,
+              now, roundActive: config.isActive, round: config.round, roundStatuses, teamSummary, batches: myBatches,
             }))}
           />
           <Card title="Jokes by stage" subtitle="Where your output sits right now">

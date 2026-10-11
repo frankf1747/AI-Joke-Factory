@@ -10,11 +10,11 @@ const NOW = 1_000_000_000;
 const s = (seconds: number) => seconds * 1000;
 
 const jm = (over: Partial<JokeMakerStepInput> = {}): JokeMakerStepInput => ({
-  now: NOW, roundActive: true, roundNumber: 1, marketingBacklog: 1, lastSentAt: NOW - s(10), lastBatchJokes: 5,
+  now: NOW, roundActive: true, classOver: false, roundNumber: 1, marketingBacklog: 1, lastSentAt: NOW - s(10), lastBatchJokes: 5,
   latestNote: null, ...over,
 });
 const mk = (over: Partial<MarketingStepInput> = {}): MarketingStepInput => ({
-  now: NOW, roundActive: true, storageFeePerJokeMinute: 0.1, deskBatchSentAt: null, deskEmpty: false,
+  now: NOW, roundActive: true, classOver: false, storageFeePerJokeMinute: 0.1, deskBatchSentAt: null, deskEmpty: false,
   lastDecision: null, topFixNext: null, ...over,
 });
 
@@ -22,6 +22,11 @@ describe('Joke Maker next step', () => {
   it('rule 1: the round has not started', () => {
     expect(jokeMakerNextStep(jm({ roundActive: false, latestNote: { text: 'More puns', notedAt: NOW } })))
       .toEqual({ text: 'Get your AI tool ready — the round starts soon.', tone: 'info' });
+  });
+
+  it('after the final round has ended: join the debrief, whatever else is true', () => {
+    expect(jokeMakerNextStep(jm({ roundActive: false, classOver: true, roundNumber: 2, marketingBacklog: 0 })))
+      .toEqual({ text: 'Round over — join the debrief.', tone: 'info' });
   });
 
   it('rule 2: quotes Marketing\'s note on the latest processed batch for 2 minutes after it was sent', () => {
@@ -109,6 +114,11 @@ describe('Marketing next step', () => {
     });
   });
 
+  it('after the final round has ended: join the debrief, whatever else is true', () => {
+    expect(marketingNextStep(mk({ roundActive: false, classOver: true, deskBatchSentAt: NOW - s(300) })))
+      .toEqual({ text: 'Round over — join the debrief.', tone: 'info' });
+  });
+
   it('rule 2: a batch on the desk for 45 s or more, priced at the round\'s storage fee', () => {
     expect(marketingNextStep(mk({ deskBatchSentAt: NOW - s(45) }))).toEqual({
       text: "Batch waiting 45 s — release what's good enough. Storage costs 10¢ a joke each minute.", tone: 'warn',
@@ -173,7 +183,7 @@ describe('inputs from the screens\' data', () => {
     ];
     const input = jokeMakerInputFrom({ now: NOW, roundActive: true, round: 2, teamSummary: { unprocessed_batches: 1 }, batches });
     expect(input).toEqual({
-      now: NOW, roundActive: true, roundNumber: 2, marketingBacklog: 1, lastSentAt: NOW - s(20), lastBatchJokes: null,
+      now: NOW, roundActive: true, classOver: false, roundNumber: 2, marketingBacklog: 1, lastSentAt: NOW - s(20), lastBatchJokes: null,
       latestNote: { text: 'Go shorter', notedAt: NOW - s(40) },
     });
   });
@@ -202,21 +212,81 @@ describe('inputs from the screens\' data', () => {
     ];
     const desk = new Date(NOW - s(50)).toISOString();
     const input = marketingInputFrom({
-      now: NOW, roundActive: true, storageFeePerJokeMinute: 0.1, teamSummary: { unprocessed_batches: 1 },
+      now: NOW, roundActive: true, round: 1, storageFeePerJokeMinute: 0.1, teamSummary: { unprocessed_batches: 1 },
       qcQueue: { batch: { submitted_at: desk } }, batches, feedbackRows: rows,
     });
     expect(input).toEqual({
-      now: NOW, roundActive: true, storageFeePerJokeMinute: 0.1, deskBatchSentAt: NOW - s(50), deskEmpty: false,
+      now: NOW, roundActive: true, classOver: false, storageFeePerJokeMinute: 0.1, deskBatchSentAt: NOW - s(50), deskEmpty: false,
       lastDecision: { published: 1, discarded: 2 }, topFixNext: 'Wordplay',
     });
   });
 
   it('Marketing\'s desk is empty only when nothing is claimed and nothing waits; unknown before the summary loads', () => {
-    const base = { now: NOW, roundActive: true, storageFeePerJokeMinute: 0.1, batches: [], feedbackRows: [] };
+    const base = { now: NOW, roundActive: true, round: 1, storageFeePerJokeMinute: 0.1, batches: [], feedbackRows: [] };
     expect(marketingInputFrom({ ...base, teamSummary: { unprocessed_batches: 0 }, qcQueue: null }).deskEmpty).toBe(true);
     expect(marketingInputFrom({ ...base, teamSummary: { unprocessed_batches: 2 }, qcQueue: null }).deskEmpty).toBe(false);
     expect(marketingInputFrom({ ...base, teamSummary: null, qcQueue: null })).toMatchObject({
       deskEmpty: null, deskBatchSentAt: null, lastDecision: null, topFixNext: null,
     });
+  });
+});
+
+describe('the class is over only once the final round has ended', () => {
+  const statuses = {
+    beforeR1: { 1: 'CONFIGURED', 2: 'CONFIGURED' },
+    duringR1: { 1: 'ACTIVE', 2: 'CONFIGURED' },
+    betweenRounds: { 1: 'ENDED', 2: 'CONFIGURED' },
+    duringR2: { 1: 'ENDED', 2: 'ACTIVE' },
+    afterR2: { 1: 'ENDED', 2: 'ENDED' },
+    unknown: { 1: null, 2: null },
+  } as const;
+  const jmLine = (st: (typeof statuses)[keyof typeof statuses], roundActive: boolean, round: number) =>
+    jokeMakerNextStep(jokeMakerInputFrom({ now: NOW, roundActive, round, roundStatuses: st, teamSummary: null, batches: [] })).text;
+  const mkLine = (st: (typeof statuses)[keyof typeof statuses], roundActive: boolean) =>
+    marketingNextStep(marketingInputFrom({
+      now: NOW, roundActive, round: 2, roundStatuses: st, storageFeePerJokeMinute: 0.1, teamSummary: null, qcQueue: null, batches: [], feedbackRows: [],
+    })).text;
+
+  it('before Round 1 and between rounds, rule 1 stays', () => {
+    expect(jmLine(statuses.beforeR1, false, 1)).toBe('Get your AI tool ready — the round starts soon.');
+    expect(jmLine(statuses.betweenRounds, false, 2)).toBe('Get your AI tool ready — the round starts soon.');
+    expect(mkLine(statuses.betweenRounds, false)).toBe("Watch the desk — your Joke Maker's first batch is coming.");
+    expect(jmLine(statuses.unknown, false, 2)).toBe('Get your AI tool ready — the round starts soon.');
+  });
+
+  it('after Round 2 has ended, both seats are sent to the debrief', () => {
+    expect(jmLine(statuses.afterR2, false, 2)).toBe('Round over — join the debrief.');
+    expect(mkLine(statuses.afterR2, false)).toBe('Round over — join the debrief.');
+  });
+
+  it('while a round runs, the class is not over', () => {
+    expect(jmLine(statuses.duringR1, true, 1)).not.toContain('debrief');
+    expect(jmLine(statuses.duringR2, true, 2)).not.toContain('debrief');
+    expect(mkLine(statuses.duringR2, true)).not.toContain('debrief');
+  });
+});
+
+describe("Marketing's last decision comes from the current round only", () => {
+  it('ignores a decision from an earlier round (or class) in the rated history', () => {
+    const base = {
+      now: NOW, roundActive: true, storageFeePerJokeMinute: 0.1, teamSummary: { unprocessed_batches: 1 }, qcQueue: null, feedbackRows: [],
+    };
+    const r1 = batch(1, { round: 1, status: 'PROCESSED', submittedAt: NOW - s(900), ratedAt: NOW - s(800), jokes: [joke(1, false), joke(2, false), joke(3, false)] });
+    // Newer timestamp but still Round 1 (a stale entry): must not count in Round 2.
+    const staleR1 = batch(2, { round: 1, status: 'PROCESSED', submittedAt: NOW - s(50), ratedAt: NOW - s(10), jokes: [joke(4, false), joke(5, false)] });
+    const r2 = batch(3, { round: 2, status: 'PROCESSED', submittedAt: NOW - s(100), ratedAt: NOW - s(60), jokes: [joke(6, true), joke(7, true), joke(8, false)] });
+    expect(marketingInputFrom({ ...base, round: 2, batches: [r1, staleR1] }).lastDecision).toBeNull();
+    expect(marketingInputFrom({ ...base, round: 2, batches: [r1, staleR1, r2] }).lastDecision).toEqual({ published: 2, discarded: 1 });
+    expect(marketingInputFrom({ ...base, round: 1, batches: [r1, staleR1, r2] }).lastDecision).toEqual({ published: 0, discarded: 2 });
+  });
+
+  it('ignores an earlier class\'s batch of the same round number when the round id is known', () => {
+    const base = {
+      now: NOW, roundActive: true, round: 1, storageFeePerJokeMinute: 0.1, teamSummary: null, qcQueue: null, feedbackRows: [],
+    };
+    const oldClass = batch(1, { round_id: 7, round: 1, status: 'PROCESSED', submittedAt: NOW - s(20), ratedAt: NOW - s(10), jokes: [joke(1, false), joke(2, false)] });
+    const now = batch(2, { round_id: 21, round: 1, status: 'PROCESSED', submittedAt: NOW - s(90), ratedAt: NOW - s(60), jokes: [joke(3, true)] });
+    expect(marketingInputFrom({ ...base, roundId: 21, batches: [oldClass, now] }).lastDecision).toEqual({ published: 1, discarded: 0 });
+    expect(marketingInputFrom({ ...base, roundId: 21, batches: [oldClass] }).lastDecision).toBeNull();
   });
 });

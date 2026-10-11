@@ -314,7 +314,7 @@ const BatchSplitter: React.FC<{
 
 /* ============================ Marketing screen ============================ */
 const QualityControl: React.FC = () => {
-  const { user, roster, qcQueue, publishBatch, splitBatch, unsplitBatch, config, teamSummary, teamFeedback, batches } = useGame();
+  const { user, roster, qcQueue, publishBatch, splitBatch, unsplitBatch, config, teamSummary, teamFeedback, batches, roundId, roundStatuses } = useGame();
 
   /* A watch tab shows a bot's seat read-only: no nudges, no modals, no writes. */
   const watching = isWatchMode();
@@ -818,7 +818,8 @@ const QualityControl: React.FC = () => {
           </div>
           <NextStepLive
             step={now => marketingNextStep(marketingInputFrom({
-              now, roundActive: config.isActive, storageFeePerJokeMinute: config.storageFeePerJokeMinute,
+              now, roundActive: config.isActive, round: config.round, roundId, roundStatuses,
+              storageFeePerJokeMinute: config.storageFeePerJokeMinute,
               teamSummary, qcQueue, batches: batches.filter(b => b.team === user?.team), feedbackRows,
             }))}
           />

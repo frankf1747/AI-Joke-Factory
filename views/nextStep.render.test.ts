@@ -49,4 +49,19 @@ describe('the Next step line on the student screens', () => {
     expect(line).toBeLessThan(out.indexOf('The 12 criteria customers judge'));
     expect(out).toMatch(/Batch waiting (5\d) s — release what&#x27;s good enough\. Storage costs 10¢ a joke each minute\./);
   });
+
+  it('sends both seats to the debrief once Round 2 has ended, but not between rounds', () => {
+    const over = { ...TEST_CONFIG, isActive: false, round: 2 };
+    const cases = [
+      [JokeMaker, Role.JOKE_MAKER, 'Get your AI tool ready — the round starts soon.'],
+      [QualityControl, Role.QUALITY_CONTROL, 'Watch the desk — your Joke Maker&#x27;s first batch is coming.'],
+    ] as const;
+    for (const [view, role, between] of cases) {
+      const ended = renderWithGame(view, { user: testUser(role), config: over, teamSummary: summary, roundStatuses: { 1: 'ENDED', 2: 'ENDED' } });
+      expect(ended).toContain('Round over — join the debrief.');
+      const gap = renderWithGame(view, { user: testUser(role), config: over, teamSummary: summary, roundStatuses: { 1: 'ENDED', 2: 'CONFIGURED' } });
+      expect(gap).toContain(between);
+      expect(gap).not.toContain('join the debrief');
+    }
+  });
 });
