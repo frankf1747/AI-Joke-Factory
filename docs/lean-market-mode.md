@@ -110,9 +110,14 @@ not edited here), then:
 | **Storage fee per joke-minute:** | Charged while a batch waits on Marketing's desk. |
 | **Hosting fee per joke-minute:** | Charged while a released joke waits for its first sale. |
 
-Changes take effect when you press **Apply**. The fees and the window lock once that round has
-started: they are greyed out, and the server refuses a change with "Fees and Lean settings can't
-change once a round has started." The other fields (Cust. Budget, Market Price, Cost of Publishing,
+Changes take effect when you press **Apply**. The fees and the window are one set for the whole
+class: Apply writes them to every round that has not started yet (both rounds before Round 1), and
+says so next to the button, for example "Fees applied to Rounds 1 and 2". Shipping fees that fall
+with batch size are flagged under the shipping inputs ("Shipping fees must rise with batch size …")
+and are not sent; any other value the server refuses is shown with the server's own message. The
+fees and the window lock once a round has started: they are greyed out on that round's tab, and the
+server refuses a change with "Fees and Lean settings can't change once a round has started." The
+other fields (Cust. Budget, Market Price, Cost of Publishing,
 the nudges) work as before.
 
 **Leaderboard.** After Profit, five sortable columns:
@@ -153,7 +158,8 @@ shipping line quotes the round's fees: "Shipping: $2 per batch of 5" in Round 1,
 
 Under the stat tiles, the **Next step** line gives one instruction, the first that applies:
 
-1. Before the round: "Get your AI tool ready — the round starts soon."
+1. Before the round (and between rounds): "Get your AI tool ready — the round starts soon." Once
+   Round 2 has ended: "Round over — join the debrief."
 2. Marketing left a note on the latest processed batch, within 2 minutes of Marketing sending it:
    "Marketing says: “…” — use it in your next batch." (the note, up to 80 characters)
 3. Round 2, the last batch had 6 or more jokes: "Big batches wait longer for feedback — try 2 or 3
@@ -186,7 +192,8 @@ amounts:
 
 Under the tiles, the **Next step** line:
 
-1. Before the round: "Watch the desk — your Joke Maker's first batch is coming."
+1. Before the round (and between rounds): "Watch the desk — your Joke Maker's first batch is
+   coming." Once Round 2 has ended: "Round over — join the debrief."
 2. A batch has been on the desk 45 s or more: "Batch waiting {n} s — release what's good enough.
    Storage costs 10¢ a joke each minute." (amber; the round's storage fee)
 3. The last decision discarded 60 % or more of a batch: "You discarded {d} of {n} last time —
@@ -254,9 +261,17 @@ a few seconds of their arrival time.
 
 ## 7. Limits and open questions
 
-- **The amounts are starting values.** They come from the design and are confirmed by the bot pilot
-  (`scripts/pilot/lean-pilot.mts`), which plays at 10× with storage and hosting scaled ×10. Human play
-  will not match bot numbers exactly.
+- **The amounts are starting values.** They come from the design and are to be confirmed by the bot
+  pilot (`scripts/pilot/lean-pilot.mts`), which plays one class at 10× with storage and hosting scaled
+  ×10. Human play will not match bot numbers exactly. The pilot seats 14 bot teams: 3 each of
+  Careful, Balanced, Spray and Learner, plus 2 **Balanced (holds)** teams, identical to Balanced
+  except that their Marketing seat holds each batch an extra 60 class-seconds before deciding. Its
+  three checks: Spray spends 40–60 % of its revenue on fees in Round 1; in Round 2 the Learner's
+  batches of 3 reach a first sale sooner than Spray's batches of 10 (with a caveat, since the Learner
+  also paces differently, and a Round 2 table of every batch by size: count, share sold, time to
+  first sale); and holding does not pay: in each round the Balanced (holds) teams' mean profit is
+  below Balanced's. A rank correlation of storage per batch with profit is printed as an indicative
+  line only.
 - **Bots learn only from sold counts.** The Learner bot remembers which joke texts sold. It does not
   read the customer feedback panel; human teams can learn more.
 - **The pilot does not use the real classifier.** It runs with a deterministic hash classifier
