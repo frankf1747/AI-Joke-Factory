@@ -1,0 +1,32 @@
+import { describe, expect, it, vi } from 'vitest';
+import Instructor from './Instructor';
+import { TEST_CONFIG, renderWithGame, testUser } from './testing/renderWithGame';
+import { Role } from '../types';
+
+// Instructor reads window.location.search while rendering (the bot panel switch).
+vi.stubGlobal('window', { location: { search: '' } });
+
+const instructor = testUser(Role.INSTRUCTOR, null);
+
+describe('Instructor screen, one Lean rule set', () => {
+  it('shows the fee settings and the batch-size rule, and no market mode, preset or WIP limit', () => {
+    const out = renderWithGame(Instructor, { user: instructor });
+    expect(out).toContain('Shipping fee (1–4 / 5 / 6–10 jokes):');
+    expect(out).toContain('Storage fee per joke-minute:');
+    expect(out).toContain('Hosting fee per joke-minute:');
+    expect(out).toContain('R1 batch: 5 (exactly)');
+    expect(out).toContain('R2 batch: up to 10');
+    for (const gone of ['Market mode', 'Lean class preset', 'WIP limit', 'Setup cost', 'Carrying cost', 'R1 Batch Size']) {
+      expect(out).not.toContain(gone);
+    }
+  });
+
+  it('lets the instructor edit the fees between rounds, and greys them out once the selected round has started', () => {
+    const between = { ...TEST_CONFIG, isActive: false };
+    const open = renderWithGame(Instructor, { user: instructor, config: between, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' } });
+    expect(open).not.toMatch(/id="cfg-storage-fee"[^>]*disabled=""/);
+    const locked = renderWithGame(Instructor, { user: instructor, config: between, roundStatuses: { 1: 'ENDED', 2: 'CONFIGURED' } });
+    expect(locked).toMatch(/id="cfg-storage-fee"[^>]*disabled=""/);
+    expect(locked).toContain('title="Lean settings lock once the round starts"');
+  });
+});

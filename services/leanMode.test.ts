@@ -1,9 +1,18 @@
 // services/leanMode.test.ts
 import { describe, expect, it } from 'vitest';
-import { fmtMoney, isLeanRound, isMarketModeLocked, isWipLimitReached, learningCurvePoints, WIP_LIMIT_MESSAGE, LEAN_CLASS_PRESET, neverSold, leanConfigFromRound, leanConfigToBody, MARKET_MODE_LOCKED_MESSAGE, wipStatus } from './leanMode';
+import {
+  MARKET_MODE_LOCKED_MESSAGE, WIP_LIMIT_MESSAGE,
+  fmtCents, fmtFee, fmtMoney, fmtPerMinute, isLeanRound, isMarketModeLocked, isWipLimitReached,
+  leanConfigFromRound, leanConfigToBody, learningCurvePoints, neverSold, shippingFeeFor, wipStatus,
+} from './leanMode';
 
 const classic = { market_mode: 'CLASSIC', arrival_window_seconds: 900, setup_cost_per_batch: 0, carrying_cost_per_joke_minute: 0, wip_limit: 0 };
-const lean = { ...classic, market_mode: 'LEAN', setup_cost_per_batch: 3, carrying_cost_per_joke_minute: 0.02, wip_limit: 2 };
+const lean = {
+  ...classic, market_mode: 'LEAN', setup_cost_per_batch: 3, carrying_cost_per_joke_minute: 0.02, wip_limit: 0,
+  shipping_fee_small: 1, shipping_fee_standard: 2, shipping_fee_large: 3,
+  storage_fee_per_joke_minute: 0.1, hosting_fee_per_joke_minute: 0.05,
+};
+const fees = { shippingFeeSmall: 1, shippingFeeStandard: 2, shippingFeeLarge: 3 };
 
 describe('lean mode helpers', () => {
   it('detects the mode, defaulting to classic', () => {
@@ -13,12 +22,14 @@ describe('lean mode helpers', () => {
     expect(isLeanRound({})).toBe(false);
   });
 
-  it('maps round fields onto GameConfig keys with defaults for old backends', () => {
+  it('maps round fields onto GameConfig keys, fees included, with defaults for old backends', () => {
     expect(leanConfigFromRound(lean)).toEqual({
-      marketMode: 'LEAN', arrivalWindowSeconds: 900, setupCostPerBatch: 3, carryingCostPerJokeMinute: 0.02, wipLimit: 2,
+      marketMode: 'LEAN', arrivalWindowSeconds: 900, setupCostPerBatch: 3, carryingCostPerJokeMinute: 0.02, wipLimit: 0,
+      shippingFeeSmall: 1, shippingFeeStandard: 2, shippingFeeLarge: 3, storageFeePerJokeMinute: 0.1, hostingFeePerJokeMinute: 0.05,
     });
     expect(leanConfigFromRound({})).toEqual({
       marketMode: 'CLASSIC', arrivalWindowSeconds: 900, setupCostPerBatch: 0, carryingCostPerJokeMinute: 0, wipLimit: 0,
+      shippingFeeSmall: 0, shippingFeeStandard: 0, shippingFeeLarge: 0, storageFeePerJokeMinute: 0, hostingFeePerJokeMinute: 0,
     });
   });
 
@@ -28,22 +39,48 @@ describe('lean mode helpers', () => {
     expect(wipStatus(2, 2)).toEqual({ blocked: true, label: 'Marketing has 2 of 2 batches waiting — wait, or go help' });
   });
 
+  it('prices a batch by its size, an unsplit batch as the standard 5', () => {
+    expect(shippingFeeFor(1, fees)).toBe(1);
+    expect(shippingFeeFor(4, fees)).toBe(1);
+    expect(shippingFeeFor(5, fees)).toBe(2);
+    expect(shippingFeeFor(6, fees)).toBe(3);
+    expect(shippingFeeFor(10, fees)).toBe(3);
+    for (const unknown of [0, -2, Number.NaN]) expect(shippingFeeFor(unknown, fees)).toBe(2);
+  });
+
   it('formats money with sign and cents', () => {
     expect(fmtMoney(3)).toBe('$3.00');
     expect(fmtMoney(-1.085)).toBe('-$1.09');
     expect(fmtMoney(1.005)).toBe('$1.01');
   });
 
-  it('maps lean config keys onto the snake_case request body', () => {
-    expect(leanConfigToBody(LEAN_CLASS_PRESET[1])).toEqual({
-      market_mode: 'LEAN', setup_cost_per_batch: 2, carrying_cost_per_joke_minute: 0.05, wip_limit: 0,
-      preference_base: 3, customer_count: 150,
+  it('formats fees for copy: whole dollars bare, per-minute rates in cents', () => {
+    expect(fmtFee(2)).toBe('$2');
+    expect(fmtFee(1)).toBe('$1');
+    expect(fmtFee(0.5)).toBe('$0.50');
+    expect(fmtFee(1.25)).toBe('$1.25');
+    expect(fmtCents(0.1)).toBe('10¢');
+    expect(fmtCents(0.05)).toBe('5¢');
+    expect(fmtCents(0.025)).toBe('2.5¢');
+    expect(fmtCents(1)).toBe('$1.00');
+    expect(fmtPerMinute(0.1)).toBe('10¢ a joke each minute');
+    expect(fmtPerMinute(0.05)).toBe('5¢ a joke each minute');
+    expect(fmtPerMinute(1.5)).toBe('$1.50 a joke each minute');
+  });
+
+  it('maps lean config keys, the five fees included, onto the snake_case request body', () => {
+    expect(leanConfigToBody({
+      shippingFeeSmall: 1, shippingFeeStandard: 2, shippingFeeLarge: 3, storageFeePerJokeMinute: 0.1, hostingFeePerJokeMinute: 0.05,
+    })).toEqual({
+      shipping_fee_small: 1, shipping_fee_standard: 2, shipping_fee_large: 3,
+      storage_fee_per_joke_minute: 0.1, hosting_fee_per_joke_minute: 0.05,
     });
-    expect(leanConfigToBody(LEAN_CLASS_PRESET[2])).toEqual({
-      market_mode: 'LEAN', setup_cost_per_batch: 0.5, carrying_cost_per_joke_minute: 0.05, wip_limit: 2,
-      preference_base: 3, customer_count: 150,
+    expect(leanConfigToBody({ marketMode: 'LEAN', preferenceBase: 3, customerCount: 150 })).toEqual({
+      market_mode: 'LEAN', preference_base: 3, customer_count: 150,
     });
-    expect(leanConfigToBody({ arrivalWindowSeconds: 600, wipLimit: 0 })).toEqual({ arrival_window_seconds: 600, wip_limit: 0 });
+    expect(leanConfigToBody({ arrivalWindowSeconds: 600, storageFeePerJokeMinute: 0 })).toEqual({
+      arrival_window_seconds: 600, storage_fee_per_joke_minute: 0,
+    });
     expect(leanConfigToBody({})).toEqual({});
   });
 
@@ -61,7 +98,7 @@ describe('lean mode helpers', () => {
     expect(neverSold(undefined)).toBeNull();
   });
 
-  it('recognises the market-mode-locked refusal', () => {
+  it('recognises the locked-settings refusal', () => {
     expect(isMarketModeLocked({ status: 409, message: `${MARKET_MODE_LOCKED_MESSAGE}: round started` })).toBe(true);
     expect(isMarketModeLocked({ status: 409, message: 'WIP_LIMIT_REACHED' })).toBe(false);
     expect(isMarketModeLocked({ status: 500, message: MARKET_MODE_LOCKED_MESSAGE })).toBe(false);

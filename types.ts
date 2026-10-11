@@ -136,6 +136,14 @@ export interface GameConfig {
   carryingCostPerJokeMinute: number;
   /** Max batches waiting for Marketing per team; 0 = no limit. */
   wipLimit: number;
+  /* Lean fees (newer backends), read off the current public round the same
+     way; 0 when absent. Shipping per sent batch by size (1–4 / 5 / 6+ jokes),
+     storage and hosting per joke per minute. */
+  shippingFeeSmall: number;
+  shippingFeeStandard: number;
+  shippingFeeLarge: number;
+  storageFeePerJokeMinute: number;
+  hostingFeePerJokeMinute: number;
 }
 
 // --- API shapes (schema-aligned) ---
@@ -209,6 +217,12 @@ export interface ApiRound {
   setup_cost_per_batch?: number;
   carrying_cost_per_joke_minute?: number;
   wip_limit?: number;
+  // Lean fees; absent on backends before migration 0005.
+  shipping_fee_small?: number;
+  shipping_fee_standard?: number;
+  shipping_fee_large?: number;
+  storage_fee_per_joke_minute?: number;
+  hosting_fee_per_joke_minute?: number;
 }
 
 export interface ApiActiveRoundResponse {

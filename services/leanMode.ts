@@ -1,10 +1,12 @@
 /**
  * Lean market mode — pure helpers shared by the views.
  *
- * The backend decides the rules (jokefactory_be: market_mode on the round).
- * The frontend only reads them off the public round and renders lean
- * controls and tiles when the round is LEAN. Everything here tolerates a
- * backend that predates the feature: missing fields read as CLASSIC.
+ * The backend decides the rules (jokefactory_be: market_mode and the fees on
+ * the round). Lean is the only mode this branch plays: one rule set and one
+ * set of fees for both rounds; only the batch size differs (Round 1 exactly
+ * 5, Round 2 up to 10). The frontend reads the rules off the public round.
+ * Everything here tolerates a backend that predates a field: a missing mode
+ * reads as CLASSIC and a missing fee as 0 (that backend does not charge it).
  */
 export type MarketMode = 'CLASSIC' | 'LEAN';
 
@@ -14,25 +16,51 @@ export interface LeanRoundFields {
   setup_cost_per_batch?: number;
   carrying_cost_per_joke_minute?: number;
   wip_limit?: number;
+  shipping_fee_small?: number;
+  shipping_fee_standard?: number;
+  shipping_fee_large?: number;
+  storage_fee_per_joke_minute?: number;
+  hosting_fee_per_joke_minute?: number;
 }
 
-export interface LeanConfig {
+/** The shipping tiers: small 1–4 jokes, standard exactly 5, large 6 or more. */
+export interface ShippingFees {
+  shippingFeeSmall: number;
+  shippingFeeStandard: number;
+  shippingFeeLarge: number;
+}
+
+/** The five Lean fees, as GameConfig carries them. */
+export interface LeanFeeConfig extends ShippingFees {
+  /** Per joke per minute a batch waits on Marketing's desk. */
+  storageFeePerJokeMinute: number;
+  /** Per joke per minute a released joke waits for its first sale. */
+  hostingFeePerJokeMinute: number;
+}
+
+export interface LeanConfig extends LeanFeeConfig {
   marketMode: MarketMode;
   arrivalWindowSeconds: number;
+  /** Stored by the backend but no longer charged (replaced by the fees). */
   setupCostPerBatch: number;
+  /** Stored by the backend but no longer charged (replaced by the fees). */
   carryingCostPerJokeMinute: number;
   wipLimit: number;
 }
 
 export const LEAN_DEFAULTS: LeanConfig = {
   marketMode: 'CLASSIC', arrivalWindowSeconds: 900, setupCostPerBatch: 0, carryingCostPerJokeMinute: 0, wipLimit: 0,
+  shippingFeeSmall: 0, shippingFeeStandard: 0, shippingFeeLarge: 0, storageFeePerJokeMinute: 0, hostingFeePerJokeMinute: 0,
 };
 
+/** The standard shipment: an unsplit batch counts as this many jokes for its fees. */
+export const STANDARD_SHIPMENT_JOKES = 5;
+
 /**
- * Round settings the class preset writes beyond the GameConfig lean fields.
- * Only the preset sets these; context.updateConfig never sends them.
+ * Round settings a caller may send beyond the GameConfig lean fields. The bot
+ * pilot sets these; context.updateConfig never sends them.
  */
-export interface LeanPresetConfig extends Partial<LeanConfig> {
+export interface LeanConfigUpdate extends Partial<LeanConfig> {
   /** How sharply customers prefer jokes that fit the hidden ideal. */
   preferenceBase?: number;
   /** AI customers per round. */
@@ -40,20 +68,11 @@ export interface LeanPresetConfig extends Partial<LeanConfig> {
 }
 
 /**
- * The one-click class preset: Round 1 push, Round 2 lean. Values come from the
- * bot pilot (docs/pilots/2026-10-06-lean-pilot-tuning4.md), the first tuning
- * where Round 2 beat Round 1 on mean profit (+$0.69 vs -$8.64):
- * - setup $2.00 (R1) vs $0.50 (R2): a big-batch round pays for each changeover,
- *   and small batches only pay off once changeovers are cheap.
- * - carrying $0.05 per joke-minute, both rounds: inventory waiting in Marketing
- *   or unsold on the shelf has to cost enough to be felt.
- * - WIP 0 (R1, push) vs 2 (R2, pull): Round 2 caps batches waiting in Marketing.
- * - preference_base 3: fit matters enough that learning what sells pays.
- * - 150 customers: enough demand that a well-aimed small batch sells through.
- * The arrival window keeps its 900 s default. The pilot ran bots at 10x and
- * scaled carrying by 10 to match; these are the real-time values for a class.
+ * @deprecated The two-rule-set class preset of the first Lean design (Round 1
+ * push, Round 2 WIP-limited pull). Only scripts/pilot/lean-pilot.mts still
+ * reads it; the instructor screen no longer offers it.
  */
-export const LEAN_CLASS_PRESET: Record<1 | 2, LeanPresetConfig> = {
+export const LEAN_CLASS_PRESET: Record<1 | 2, LeanConfigUpdate> = {
   1: { marketMode: 'LEAN', setupCostPerBatch: 2, carryingCostPerJokeMinute: 0.05, wipLimit: 0, preferenceBase: 3, customerCount: 150 },
   2: { marketMode: 'LEAN', setupCostPerBatch: 0.5, carryingCostPerJokeMinute: 0.05, wipLimit: 2, preferenceBase: 3, customerCount: 150 },
 };
@@ -70,6 +89,11 @@ export function leanConfigFromRound(round: LeanRoundFields | null | undefined): 
     setupCostPerBatch: num(round?.setup_cost_per_batch, LEAN_DEFAULTS.setupCostPerBatch),
     carryingCostPerJokeMinute: num(round?.carrying_cost_per_joke_minute, LEAN_DEFAULTS.carryingCostPerJokeMinute),
     wipLimit: num(round?.wip_limit, LEAN_DEFAULTS.wipLimit),
+    shippingFeeSmall: num(round?.shipping_fee_small, LEAN_DEFAULTS.shippingFeeSmall),
+    shippingFeeStandard: num(round?.shipping_fee_standard, LEAN_DEFAULTS.shippingFeeStandard),
+    shippingFeeLarge: num(round?.shipping_fee_large, LEAN_DEFAULTS.shippingFeeLarge),
+    storageFeePerJokeMinute: num(round?.storage_fee_per_joke_minute, LEAN_DEFAULTS.storageFeePerJokeMinute),
+    hostingFeePerJokeMinute: num(round?.hosting_fee_per_joke_minute, LEAN_DEFAULTS.hostingFeePerJokeMinute),
   };
 }
 
@@ -78,6 +102,18 @@ export function wipStatus(waiting: number, limit: number): { blocked: boolean; l
   const blocked = waiting >= limit;
   const base = `Marketing has ${waiting} of ${limit} batches waiting`;
   return { blocked, label: blocked ? `${base} — wait, or go help` : base };
+}
+
+/**
+ * The shipping fee of one batch with this many jokes: small for 1–4, standard
+ * for exactly 5, large for 6 or more. An unknown count (a batch Marketing has
+ * not split: 0, negative or not a number) ships as the standard 5.
+ */
+export function shippingFeeFor(jokes: number, c: ShippingFees): number {
+  const n = Number.isFinite(jokes) && jokes > 0 ? jokes : STANDARD_SHIPMENT_JOKES;
+  if (n < STANDARD_SHIPMENT_JOKES) return c.shippingFeeSmall;
+  if (n === STANDARD_SHIPMENT_JOKES) return c.shippingFeeStandard;
+  return c.shippingFeeLarge;
 }
 
 /**
@@ -92,6 +128,27 @@ export function fmtMoney(v: number): string {
   return v < 0 && cents > 0 ? `-$${abs}` : `$${abs}`;
 }
 
+/** A fee in copy: whole dollars without cents ("$2"), otherwise as fmtMoney ("$0.50"). */
+export function fmtFee(v: number): string {
+  const cents = Math.round(Number((Math.abs(v) * 100).toPrecision(12)));
+  return cents % 100 === 0 ? `${v < 0 && cents > 0 ? '-' : ''}$${cents / 100}` : fmtMoney(v);
+}
+
+/**
+ * A per-minute rate: in cents below $1 ("10¢", "5¢", "2.5¢"), in dollars from
+ * $1 up ("$1.00"). Never more than two decimals of a cent.
+ */
+export function fmtCents(v: number): string {
+  if (Math.abs(v) >= 1) return fmtMoney(v);
+  const cents = Number((v * 100).toFixed(2));
+  return `${cents}¢`;
+}
+
+/** "10¢ a joke each minute" — the storage or hosting fee as students read it. */
+export function fmtPerMinute(v: number): string {
+  return `${fmtCents(v)} a joke each minute`;
+}
+
 /** The backend reports a WIP refusal as 409 CONFLICT with this prefix in the message. */
 export const WIP_LIMIT_MESSAGE = 'WIP_LIMIT_REACHED';
 
@@ -104,13 +161,13 @@ export function isWipLimitReached(e: unknown): boolean {
 /** What the Joke Maker sees when the backend refuses a submit at the WIP limit. */
 export const WIP_LIMIT_TEXT = 'Marketing still has batches waiting. In a pull system you wait — or go help them decide.';
 
-/** The backend refuses a market-mode change after the round started with this prefix. */
+/** The backend refuses a Lean setting change after the round started with this prefix. */
 export const MARKET_MODE_LOCKED_MESSAGE = 'MARKET_MODE_LOCKED';
 
-/** What the instructor sees when the backend refuses a market-mode change. */
-export const MARKET_MODE_LOCKED_TEXT = "The market mode can't change once a round has started.";
+/** What the instructor sees when the backend refuses a fee or market change after the start. */
+export const MARKET_MODE_LOCKED_TEXT = "Fees and Lean settings can't change once a round has started.";
 
-/** True for the backend's 409 refusal to change market_mode after a round started. */
+/** True for the backend's 409 refusal to change Lean settings after a round started. */
 export function isMarketModeLocked(e: unknown): boolean {
   const err = e as { status?: unknown; message?: unknown } | null;
   return Boolean(err) && err!.status === 409 && String(err!.message ?? '').includes(MARKET_MODE_LOCKED_MESSAGE);
@@ -124,6 +181,11 @@ export interface LeanConfigBody {
   wip_limit?: number;
   preference_base?: number;
   customer_count?: number;
+  shipping_fee_small?: number;
+  shipping_fee_standard?: number;
+  shipping_fee_large?: number;
+  storage_fee_per_joke_minute?: number;
+  hosting_fee_per_joke_minute?: number;
 }
 
 /**
@@ -131,7 +193,7 @@ export interface LeanConfigBody {
  * same mapping context.updateConfig uses. Absent keys stay absent so the
  * backend keeps the round's current value.
  */
-export function leanConfigToBody(c: LeanPresetConfig): LeanConfigBody {
+export function leanConfigToBody(c: LeanConfigUpdate): LeanConfigBody {
   const body: LeanConfigBody = {};
   if (c.marketMode !== undefined) body.market_mode = c.marketMode;
   if (c.arrivalWindowSeconds !== undefined) body.arrival_window_seconds = c.arrivalWindowSeconds;
@@ -140,6 +202,11 @@ export function leanConfigToBody(c: LeanPresetConfig): LeanConfigBody {
   if (c.wipLimit !== undefined) body.wip_limit = c.wipLimit;
   if (c.preferenceBase !== undefined) body.preference_base = c.preferenceBase;
   if (c.customerCount !== undefined) body.customer_count = c.customerCount;
+  if (c.shippingFeeSmall !== undefined) body.shipping_fee_small = c.shippingFeeSmall;
+  if (c.shippingFeeStandard !== undefined) body.shipping_fee_standard = c.shippingFeeStandard;
+  if (c.shippingFeeLarge !== undefined) body.shipping_fee_large = c.shippingFeeLarge;
+  if (c.storageFeePerJokeMinute !== undefined) body.storage_fee_per_joke_minute = c.storageFeePerJokeMinute;
+  if (c.hostingFeePerJokeMinute !== undefined) body.hosting_fee_per_joke_minute = c.hostingFeePerJokeMinute;
   return body;
 }
 

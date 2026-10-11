@@ -330,6 +330,17 @@ export interface PublicRound {
   carrying_cost_per_joke_minute?: number;
   /** Lean: max batches waiting for Marketing per team; 0 = no limit. */
   wip_limit?: number;
+  /**
+   * Lean fees (backends with migration 0005; absent before). Shipping is
+   * charged per sent batch by its size: small 1–4 jokes, standard 5, large
+   * 6+ (an unsplit batch ships as 5). Storage and hosting are per joke per
+   * minute: on Marketing's desk, and released but unsold.
+   */
+  shipping_fee_small?: number;
+  shipping_fee_standard?: number;
+  shipping_fee_large?: number;
+  storage_fee_per_joke_minute?: number;
+  hosting_fee_per_joke_minute?: number;
 }
 
 /**
@@ -964,6 +975,12 @@ export interface ConfigRequest {
   carrying_cost_per_joke_minute?: number;
   wip_limit?: number;
   preference_base?: number;
+  /** Lean fees: each >= 0, and shipping small <= standard <= large, or 400 on the field. Locked once the round starts. */
+  shipping_fee_small?: number;
+  shipping_fee_standard?: number;
+  shipping_fee_large?: number;
+  storage_fee_per_joke_minute?: number;
+  hosting_fee_per_joke_minute?: number;
 }
 
 /**

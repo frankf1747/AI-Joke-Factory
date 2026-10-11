@@ -81,6 +81,11 @@ export const instructorService = {
       carrying_cost_per_joke_minute?: number;
       wip_limit?: number;
       preference_base?: number;
+      shipping_fee_small?: number;
+      shipping_fee_standard?: number;
+      shipping_fee_large?: number;
+      storage_fee_per_joke_minute?: number;
+      hosting_fee_per_joke_minute?: number;
     },
   ): Promise<ApiInstructorRoundConfigResponse> {
     return apiRequest<ApiInstructorRoundConfigResponse>(`/v1/instructor/rounds/${round_id}/config`, { method: 'POST', body });

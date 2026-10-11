@@ -15,12 +15,8 @@ import { LeanDebrief } from '../components/LeanDebrief';
 import { LeanChartsPanel } from '../components/leanCharts/LeanChartsPanel';
 import { useLeanCharts } from '../services/useLeanCharts';
 import { leanChartsVisibility, leanRoundFlags, resolveLeanChartsRound } from '../services/leanCharts';
-import { instructorService } from '../services/instructorService';
-import { sessionService } from '../services/sessionService';
-import {
-  LEAN_CLASS_PRESET, MARKET_MODE_LOCKED_TEXT, isMarketModeLocked, leanConfigToBody, fmtMoney, neverSold,
-  type MarketMode,
-} from '../services/leanMode';
+import { FeeConfigFields, changedFees, feeValuesOf, type FeeConfigValues } from '../components/FeeConfigFields';
+import { fmtMoney, neverSold } from '../services/leanMode';
 
 // Expanded Palette for more teams
 const PALETTE = [
@@ -59,21 +55,14 @@ const Instructor: React.FC = () => {
     , roundStatuses
   } = useGame();
 
-  const [localBatchSize, setLocalBatchSize] = useState(config.round1BatchSize);
   const [localBudget, setLocalBudget] = useState(config.customerBudget);
   const [localMarketPrice, setLocalMarketPrice] = useState(config.marketPrice);
   const [localCostOfPublishing, setLocalCostOfPublishing] = useState(config.costOfPublishing);
   // Marketing's decision clock — how long they may deliberate before each nudge.
   const [localNudge1, setLocalNudge1] = useState(config.marketingNudge1Seconds);
   const [localNudge2, setLocalNudge2] = useState(config.marketingNudge2Seconds);
-  // Lean market mode — edits the current round, like the fields above.
-  const [localMarketMode, setLocalMarketMode] = useState<MarketMode>(config.marketMode);
-  const [localArrivalWindow, setLocalArrivalWindow] = useState(config.arrivalWindowSeconds);
-  const [localSetupCost, setLocalSetupCost] = useState(config.setupCostPerBatch);
-  const [localCarryingCost, setLocalCarryingCost] = useState(config.carryingCostPerJokeMinute);
-  const [localWipLimit, setLocalWipLimit] = useState(config.wipLimit);
-  const [presetBusy, setPresetBusy] = useState(false);
-  const [presetNotice, setPresetNotice] = useState<string | null>(null);
+  // The Lean fees and arrival window — edit the current round, like the fields above.
+  const [localFees, setLocalFees] = useState<FeeConfigValues>(() => feeValuesOf(config));
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showEndRound1Confirm, setShowEndRound1Confirm] = useState(false);
 
@@ -131,17 +120,16 @@ const Instructor: React.FC = () => {
   const salesEventIndexRef = useRef<number>(0);
 
   // Keep local inputs aligned with server-driven config changes (polling/reset).
-  useEffect(() => setLocalBatchSize(config.round1BatchSize), [config.round1BatchSize]);
   useEffect(() => setLocalBudget(config.customerBudget), [config.customerBudget]);
   useEffect(() => setLocalMarketPrice(config.marketPrice), [config.marketPrice]);
   useEffect(() => setLocalCostOfPublishing(config.costOfPublishing), [config.costOfPublishing]);
   useEffect(() => setLocalNudge1(config.marketingNudge1Seconds), [config.marketingNudge1Seconds]);
   useEffect(() => setLocalNudge2(config.marketingNudge2Seconds), [config.marketingNudge2Seconds]);
-  useEffect(() => setLocalMarketMode(config.marketMode), [config.marketMode]);
-  useEffect(() => setLocalArrivalWindow(config.arrivalWindowSeconds), [config.arrivalWindowSeconds]);
-  useEffect(() => setLocalSetupCost(config.setupCostPerBatch), [config.setupCostPerBatch]);
-  useEffect(() => setLocalCarryingCost(config.carryingCostPerJokeMinute), [config.carryingCostPerJokeMinute]);
-  useEffect(() => setLocalWipLimit(config.wipLimit), [config.wipLimit]);
+  useEffect(
+    () => setLocalFees(feeValuesOf(config)),
+    [config.arrivalWindowSeconds, config.shippingFeeSmall, config.shippingFeeStandard, config.shippingFeeLarge,
+      config.storageFeePerJokeMinute, config.hostingFeePerJokeMinute],
+  );
 
   const handleDeleteUser = async (userId: string, displayName?: string) => {
     const label = displayName ? `${displayName} (${userId})` : `user ${userId}`;
@@ -200,8 +188,7 @@ const Instructor: React.FC = () => {
 
 // Config edit rules:
 // - While a round is active: config is not editable.
-// - In round 2: only customer budget + pricing are editable.
-  const canEditBatchSize = !config.isActive && config.round === 1;
+// - Batch sizes are not editable: Round 1 is exactly 5, Round 2 up to 10 (Reset Game sets them).
   const canEditBudget = !config.isActive && (config.round === 1 || config.round === 2);
   const canEditPricing = !config.isActive && (config.round === 1 || config.round === 2);
   // Lean settings lock once the selected round has started (ACTIVE or ENDED); the server
@@ -215,21 +202,13 @@ const Instructor: React.FC = () => {
   const canEditNudges = !config.isActive;
 
   const hasPendingConfigChanges =
-    (canEditBatchSize && localBatchSize !== config.round1BatchSize) ||
     (canEditBudget && localBudget !== config.customerBudget) ||
     (canEditPricing && (localMarketPrice !== config.marketPrice || localCostOfPublishing !== config.costOfPublishing)) ||
     (canEditNudges && (localNudge1 !== config.marketingNudge1Seconds || localNudge2 !== config.marketingNudge2Seconds)) ||
-    (canEditLean && localMarketMode !== config.marketMode) ||
-    (canEditLean && localMarketMode === 'LEAN' && (
-      localArrivalWindow !== config.arrivalWindowSeconds ||
-      localSetupCost !== config.setupCostPerBatch ||
-      localCarryingCost !== config.carryingCostPerJokeMinute ||
-      localWipLimit !== config.wipLimit
-    ));
+    (canEditLean && Object.keys(changedFees(localFees, config)).length > 0);
 
   const handleUpdateSettings = () => {
     const updates: any = {};
-    if (canEditBatchSize && localBatchSize !== config.round1BatchSize) updates.round1BatchSize = localBatchSize;
     if (canEditBudget && localBudget !== config.customerBudget) updates.customerBudget = localBudget;
     if (canEditPricing && localMarketPrice !== config.marketPrice) updates.marketPrice = localMarketPrice;
     if (canEditPricing && localCostOfPublishing !== config.costOfPublishing) updates.costOfPublishing = localCostOfPublishing;
@@ -240,72 +219,10 @@ const Instructor: React.FC = () => {
     if (canEditNudges && localNudge2 !== config.marketingNudge2Seconds) {
       updates.marketingNudge2Seconds = Math.max(5, localNudge2);
     }
-    if (canEditLean && localMarketMode !== config.marketMode) updates.marketMode = localMarketMode;
-    if (canEditLean && localMarketMode === 'LEAN') {
-      // Clamped like the nudges: an empty or 0 window would mean every customer arrives at once.
-      if (localArrivalWindow !== config.arrivalWindowSeconds) {
-        updates.arrivalWindowSeconds = Math.max(1, Math.round(localArrivalWindow || 0));
-      }
-      if (localSetupCost !== config.setupCostPerBatch) updates.setupCostPerBatch = localSetupCost;
-      if (localCarryingCost !== config.carryingCostPerJokeMinute) updates.carryingCostPerJokeMinute = localCarryingCost;
-      if (localWipLimit !== config.wipLimit) updates.wipLimit = localWipLimit;
-    }
+    // The fees and the arrival window (clamped to at least 1 s: 0 would bring every customer at once).
+    if (canEditLean) Object.assign(updates, changedFees(localFees, config));
     if (Object.keys(updates).length === 0) return;
     updateConfig(updates);
-  };
-
-  /* One click for a Lean class: Round 1 with push rules, Round 2 with lean
-     rules. Writes both rounds directly — only rounds still CONFIGURED, since
-     the backend locks market_mode once a round starts. Statuses are read
-     fresh at click time rather than inferred from the current-round config. */
-  const presetDisabled = config.isActive || presetBusy || (roundIds[1] == null && roundIds[2] == null);
-  const handleApplyLeanPreset = async () => {
-    if (presetDisabled) return;
-    setPresetBusy(true);
-    try {
-      let statuses: Record<1 | 2, string | null> = { 1: null, 2: null };
-      try {
-        const active: any = await sessionService.activeRound();
-        const rounds: any[] = active?.rounds ?? active?.data?.rounds ?? [];
-        for (const n of [1, 2] as const) {
-          const r = rounds.find(x => Number(x?.round_number) === n);
-          statuses[n] = r ? String(r.status ?? '').toUpperCase() : null;
-        }
-      } catch {
-        alert('Could not read the round status. Check the connection and try again.');
-        return;
-      }
-      const targets = ([1, 2] as const).filter(n => roundIds[n] != null && statuses[n] === 'CONFIGURED');
-      if (targets.length === 0) {
-        alert(MARKET_MODE_LOCKED_TEXT);
-        return;
-      }
-      const applied: Array<1 | 2> = [];
-      for (const n of targets) {
-        try {
-          await instructorService.updateRoundConfig(roundIds[n]!, leanConfigToBody(LEAN_CLASS_PRESET[n]));
-          applied.push(n);
-        } catch (e) {
-          console.error(`Failed to apply the lean preset to round ${n}`, e);
-          alert(isMarketModeLocked(e)
-            ? MARKET_MODE_LOCKED_TEXT
-            : `Round ${n} settings were not saved to the server. Check the connection and try again.`);
-        }
-      }
-      if (applied.length === 0) return;
-      const parts = applied.map(n => (n === 1 ? 'Round 1: push rules' : 'Round 2: lean rules'));
-      const customers = new Set(applied.map(n => LEAN_CLASS_PRESET[n].customerCount).filter(c => c != null));
-      const customerNote = customers.size === 1 ? ` (${[...customers][0]} customers)` : '';
-      const skipped = roundIds[1] == null || statuses[1] === 'CONFIGURED'
-        ? ''
-        : statuses[1] == null
-          ? " (Round 1's status is unknown, so it was left as is)"
-          : ' (Round 1 has already started, so it was left as is)';
-      setPresetNotice(`Lean class preset applied — ${parts.join(' · ')}${customerNote}${skipped}`);
-      window.setTimeout(() => setPresetNotice(null), 3200);
-    } finally {
-      setPresetBusy(false);
-    }
   };
 
   // --- Lobby Logic ---
@@ -2489,16 +2406,6 @@ const Instructor: React.FC = () => {
                 <Settings size={16} className="text-gray-400" />
                 <span className="text-sm font-bold text-gray-700 uppercase">Config:</span>
               </div>
-              <div className="flex items-center space-x-3">
-                <label className="text-sm text-gray-600 whitespace-nowrap">R1 Batch Size:</label>
-                <input
-                  type="number"
-                  value={localBatchSize}
-                  onChange={e => setLocalBatchSize(Number(e.target.value))}
-                  disabled={!canEditBatchSize}
-                  className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditBatchSize ? 'opacity-50 cursor-not-allowed' : ''}`}
-                />
-              </div>
               <div className="flex items-center space-x-3" title="Seconds Marketing may deliberate before the first publish reminder">
                 <label className="text-sm text-gray-600 whitespace-nowrap">Nudge 1 (s):</label>
                 <input
@@ -2555,75 +2462,14 @@ const Instructor: React.FC = () => {
                   className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditPricing ? 'opacity-50 cursor-not-allowed' : ''}`}
                 />
               </div>
-              <div className="flex items-center space-x-3" title={leanLocked ? LEAN_LOCK_HINT : "Classic: every customer looks at each joke as soon as it is classified, buys the ones that qualify while budget lasts, and later swaps for clearly better ones. Lean: customers arrive evenly across the arrival window and shop once; setup, carrying and WIP rules apply."}>
-                <label htmlFor="cfg-market-mode" className="text-sm text-gray-600 whitespace-nowrap">Market mode:</label>
-                <select
-                  id="cfg-market-mode"
-                  value={localMarketMode}
-                  onChange={e => setLocalMarketMode(e.target.value as MarketMode)}
-                  disabled={!canEditLean}
-                  className={`p-1 border border-gray-300 rounded bg-white text-black text-sm ${!canEditLean ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  <option value="CLASSIC">Classic</option>
-                  <option value="LEAN">Lean</option>
-                </select>
-              </div>
-              {localMarketMode === 'LEAN' && (
-                <>
-                  <div className="flex items-center space-x-3" title={leanLocked ? LEAN_LOCK_HINT : "Seconds over which customers arrive"}>
-                    <label htmlFor="cfg-arrival-window" className="text-sm text-gray-600 whitespace-nowrap">Arrival window (s):</label>
-                    <input
-                      id="cfg-arrival-window"
-                      type="number"
-                      step="1"
-                      min="1"
-                      value={localArrivalWindow}
-                      onChange={e => setLocalArrivalWindow(Number(e.target.value))}
-                      disabled={!canEditLean}
-                      className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditLean ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    />
-                  </div>
-                  <div className="flex items-center space-x-3" title={leanLocked ? LEAN_LOCK_HINT : "Charged for every batch a team submits"}>
-                    <label htmlFor="cfg-setup-cost" className="text-sm text-gray-600 whitespace-nowrap">Setup cost / batch:</label>
-                    <input
-                      id="cfg-setup-cost"
-                      type="number"
-                      step="0.5"
-                      min="0"
-                      value={localSetupCost}
-                      onChange={e => setLocalSetupCost(Number(e.target.value))}
-                      disabled={!canEditLean}
-                      className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditLean ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    />
-                  </div>
-                  <div className="flex items-center space-x-3" title={leanLocked ? LEAN_LOCK_HINT : "Charged per joke per minute it waits: jokes in batches waiting in Marketing (submitted to released; an unsplit batch counts as batch-size jokes) and published jokes until their first sale"}>
-                    <label htmlFor="cfg-carrying-cost" className="text-sm text-gray-600 whitespace-nowrap">Carrying cost / joke-min:</label>
-                    <input
-                      id="cfg-carrying-cost"
-                      type="number"
-                      step="0.001"
-                      min="0"
-                      value={localCarryingCost}
-                      onChange={e => setLocalCarryingCost(Number(e.target.value))}
-                      disabled={!canEditLean}
-                      className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditLean ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    />
-                  </div>
-                  <div className="flex items-center space-x-3" title={leanLocked ? LEAN_LOCK_HINT : "Batches that may wait for Marketing before the Joke Maker must stop (0 = no limit)"}>
-                    <label htmlFor="cfg-wip-limit" className="text-sm text-gray-600 whitespace-nowrap">WIP limit:</label>
-                    <input
-                      id="cfg-wip-limit"
-                      type="number"
-                      step="1"
-                      min="0"
-                      value={localWipLimit}
-                      onChange={e => setLocalWipLimit(Number(e.target.value))}
-                      disabled={!canEditLean}
-                      className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditLean ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    />
-                  </div>
-                </>
-              )}
+              <FeeConfigFields
+                values={localFees}
+                onChange={setLocalFees}
+                disabled={!canEditLean}
+                lockHint={LEAN_LOCK_HINT}
+                round1BatchSize={config.round1BatchSize}
+                round2BatchLimit={config.round2BatchLimit}
+              />
               <Button
                 type="button"
                 onClick={handleUpdateSettings}
@@ -2638,22 +2484,6 @@ const Instructor: React.FC = () => {
               >
                 Apply
               </Button>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  onClick={handleApplyLeanPreset}
-                  aria-label="Lean class preset"
-                  variant="secondary"
-                  disabled={presetDisabled}
-                  className={`px-4 py-1 text-xs font-semibold ${presetDisabled ? 'opacity-60' : ''}`}
-                  title={`Round 1: push rules (setup ${fmtMoney(LEAN_CLASS_PRESET[1].setupCostPerBatch ?? 0)}, no WIP limit) · Round 2: lean rules (setup ${fmtMoney(LEAN_CLASS_PRESET[2].setupCostPerBatch ?? 0)}, WIP limit ${LEAN_CLASS_PRESET[2].wipLimit})`}
-                >
-                  {presetBusy ? 'Applying…' : 'Lean class preset'}
-                </Button>
-                {config.round === 2 && !config.isActive && roundStatuses[2] === 'CONFIGURED' && (
-                  <span className="text-xs text-gray-500">Round 1 has started — applies to Round 2 only.</span>
-                )}
-              </div>
             </div>
 
             {/* Row 4: the hidden ideal joke. The backend will not start a round without a
@@ -3438,11 +3268,6 @@ const Instructor: React.FC = () => {
         </div>
       </div>
 
-      {presetNotice && (
-        <div role="status" className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm px-4 py-2.5 rounded-lg shadow-xl flex items-center gap-2">
-          <CheckCircle size={16} className="text-emerald-400" /> {presetNotice}
-        </div>
-      )}
     </RoleLayout>
   );
 };

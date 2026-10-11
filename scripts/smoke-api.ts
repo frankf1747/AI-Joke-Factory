@@ -38,7 +38,9 @@ const ROUNDS_ACTIVE_KEYS = keysOf<RoundsActiveResponse>({ rounds: true });
  *  the feature (the deployed `main`). Declared, but not required. */
 type LeanRoundKey =
   | 'market_mode' | 'arrival_window_seconds' | 'setup_cost_per_batch'
-  | 'carrying_cost_per_joke_minute' | 'wip_limit';
+  | 'carrying_cost_per_joke_minute' | 'wip_limit'
+  | 'shipping_fee_small' | 'shipping_fee_standard' | 'shipping_fee_large'
+  | 'storage_fee_per_joke_minute' | 'hosting_fee_per_joke_minute';
 const PUBLIC_ROUND_KEYS = keysOf<Omit<PublicRound, LeanRoundKey>>({
   id: true, round_number: true, status: true, batch_size: true, max_batch_size: true,
   customer_budget: true, market_price: true, cost_of_publishing: true, cost_of_discard: true,
@@ -48,6 +50,8 @@ const PUBLIC_ROUND_KEYS = keysOf<Omit<PublicRound, LeanRoundKey>>({
 const PUBLIC_ROUND_OPTIONAL_KEYS = keysOf<Pick<PublicRound, LeanRoundKey>>({
   market_mode: true, arrival_window_seconds: true, setup_cost_per_batch: true,
   carrying_cost_per_joke_minute: true, wip_limit: true,
+  shipping_fee_small: true, shipping_fee_standard: true, shipping_fee_large: true,
+  storage_fee_per_joke_minute: true, hosting_fee_per_joke_minute: true,
 });
 
 type Envelope = 'raw' | 'wrapped';

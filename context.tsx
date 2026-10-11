@@ -37,9 +37,11 @@ const LS_USER_ID = 'joke_factory_user_id';
 const LS_DISPLAY_NAME = 'joke_factory_display_name';
 const LS_ROLE = 'joke_factory_role';
 const LS_ROUND_ID = 'joke_factory_round_id';
-/** Config keys updateConfig sends to the backend besides the Lean ones (see leanConfigToBody). */
+/** Config keys updateConfig sends to the backend besides the Lean ones (see leanConfigToBody).
+    Batch sizes are not among them: Reset Game sets Round 1 to exactly 5 and
+    Round 2 to up to 10, and the instructor screen no longer edits them. */
 const PERSISTED_CONFIG_KEYS = new Set<keyof GameConfig>([
-  'customerBudget', 'marketPrice', 'costOfPublishing', 'costOfDiscard', 'round1BatchSize', 'idealProfile',
+  'customerBudget', 'marketPrice', 'costOfPublishing', 'costOfDiscard', 'idealProfile',
 ]);
 
 const LS_SUBMITTED_BATCH_JOKES = 'joke_factory_submitted_batch_jokes_v1';
@@ -375,7 +377,7 @@ export function normalizeInstructorStats(raw: any): ApiInstructorStatsResponse {
   };
 }
 
-interface GameContextType {
+export interface GameContextType {
   user: User | null;
   roster: User[]; // Instructor: lobby; JM/QC: teammates
   login: (name: string, role: Role) => Promise<void>;
@@ -440,7 +442,8 @@ interface GameContextType {
   qcQueue: ApiQcQueueNextResponse | null;
 }
 
-const GameContext = createContext<GameContextType | undefined>(undefined);
+/** Exported so view tests can render a screen with a fake game (views/testing/renderWithGame.ts). */
+export const GameContext = createContext<GameContextType | undefined>(undefined);
 
 export const useGame = () => {
   const context = useContext(GameContext);
@@ -1579,7 +1582,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (updates.marketPrice !== undefined) body.market_price = updates.marketPrice;
     if (updates.costOfPublishing !== undefined) body.cost_of_publishing = updates.costOfPublishing;
     if (updates.costOfDiscard !== undefined) body.cost_of_discard = updates.costOfDiscard;
-    if (updates.round1BatchSize !== undefined) body.batch_size = updates.round1BatchSize;
     if (updates.idealProfile !== undefined) body.ideal_profile = updates.idealProfile;
     Object.assign(body, leanConfigToBody(updates));
 
