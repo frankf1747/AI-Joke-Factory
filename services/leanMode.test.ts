@@ -1,9 +1,9 @@
 // services/leanMode.test.ts
 import { describe, expect, it } from 'vitest';
 import {
-  MARKET_MODE_LOCKED_MESSAGE, WIP_LIMIT_MESSAGE,
+  LEAN_LEADERBOARD_COLUMNS, MARKET_MODE_LOCKED_MESSAGE, WIP_LIMIT_MESSAGE,
   fmtCents, fmtFee, fmtMoney, fmtPerMinute, isLeanRound, isMarketModeLocked, isWipLimitReached,
-  leanConfigFromRound, leanConfigToBody, learningCurvePoints, neverSold, shippingFeeFor, wipStatus,
+  leanConfigFromRound, leanConfigToBody, leanFeesOf, learningCurvePoints, neverSold, shippingFeeFor, wipStatus,
 } from './leanMode';
 
 const classic = { market_mode: 'CLASSIC', arrival_window_seconds: 900, setup_cost_per_batch: 0, carrying_cost_per_joke_minute: 0, wip_limit: 0 };
@@ -82,6 +82,20 @@ describe('lean mode helpers', () => {
       arrival_window_seconds: 600, storage_fee_per_joke_minute: 0,
     });
     expect(leanConfigToBody({})).toEqual({});
+  });
+
+  it('reads the three fees off a lean block, falling back to the old aliases without NaN', () => {
+    expect(leanFeesOf({ shipping_cost: 8, storage_cost: 1.5, hosting_cost: 0.2, setup_cost: 8, carrying_cost: 1.7 }))
+      .toEqual({ shipping: 8, storage: 1.5, hosting: 0.2 });
+    // An older backend: only setup_cost and carrying_cost.
+    expect(leanFeesOf({ setup_cost: 4, carrying_cost: 2.5 })).toEqual({ shipping: 4, storage: 2.5, hosting: 0 });
+    expect(leanFeesOf({ setup_cost: 'x', carrying_cost: undefined })).toEqual({ shipping: 0, storage: 0, hosting: 0 });
+    expect(leanFeesOf(null)).toEqual({ shipping: 0, storage: 0, hosting: 0 });
+    expect(leanFeesOf(undefined)).toEqual({ shipping: 0, storage: 0, hosting: 0 });
+  });
+
+  it('names the leaderboard Lean columns after the fees', () => {
+    expect(LEAN_LEADERBOARD_COLUMNS.map(c => c.label)).toEqual(['Shipping', 'Storage', 'Hosting', 'Lead', 'Sale']);
   });
 
   it('counts never-sold jokes per batch, even when total sales exceed published', () => {

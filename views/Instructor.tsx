@@ -16,7 +16,7 @@ import { LeanChartsPanel } from '../components/leanCharts/LeanChartsPanel';
 import { useLeanCharts } from '../services/useLeanCharts';
 import { leanChartsVisibility, leanRoundFlags, resolveLeanChartsRound } from '../services/leanCharts';
 import { FeeConfigFields, changedFees, feeValuesOf, type FeeConfigValues } from '../components/FeeConfigFields';
-import { fmtMoney, neverSold } from '../services/leanMode';
+import { LEAN_LEADERBOARD_COLUMNS, fmtMoney, leanFeesOf, neverSold, type LeanSortKey } from '../services/leanMode';
 
 // Expanded Palette for more teams
 const PALETTE = [
@@ -30,13 +30,7 @@ const CHART_KEYS = ['sales', 'sequence_quality', 'unrated_jokes'] as const;
 type ChartKey = typeof CHART_KEYS[number];
 
 // Lean leaderboard columns, read from row.lean on LEAN rounds only.
-type LeanSortKey = 'setup_cost' | 'carrying_cost' | 'lead_time_s' | 'sale_time_s';
-const LEAN_COLUMNS: Array<{ key: LeanSortKey; label: string; title: string }> = [
-  { key: 'setup_cost', label: 'Setup', title: 'Setup cost (per batch submitted)' },
-  { key: 'carrying_cost', label: 'Carrying', title: 'Carrying cost (jokes waiting, per minute)' },
-  { key: 'lead_time_s', label: 'Lead', title: 'Average lead time: batch submitted to joke published' },
-  { key: 'sale_time_s', label: 'Sale', title: 'Average time from publish to first sale' },
-];
+const LEAN_COLUMNS = LEAN_LEADERBOARD_COLUMNS;
 const isLeanSortKey = (k: string): k is LeanSortKey => LEAN_COLUMNS.some(c => c.key === k);
 const fmtSeconds = (s: number) => (s > 0 ? `${Math.round(s)}s` : '—');
 
@@ -342,9 +336,12 @@ const Instructor: React.FC = () => {
   const leanByTeam = useMemo(() => {
     const m: Record<string, Record<LeanSortKey | 'never_sold', number>> = {};
     for (const r of leaderboardStatsSelected?.leaderboard ?? []) {
+      // Older backends send only setup_cost / carrying_cost: leanFeesOf falls back to them.
+      const fees = leanFeesOf(r.lean);
       m[String(r.team.id)] = {
-        setup_cost: Number(r.lean?.setup_cost ?? 0),
-        carrying_cost: Number(r.lean?.carrying_cost ?? 0),
+        shipping_cost: fees.shipping,
+        storage_cost: fees.storage,
+        hosting_cost: fees.hosting,
         lead_time_s: Number(r.lean?.avg_submit_to_publish_s ?? 0),
         sale_time_s: Number(r.lean?.avg_publish_to_first_sale_s ?? 0),
         // Lean rows: published-but-never-sold (see neverSold); classic unsold otherwise.
@@ -1091,8 +1088,9 @@ const Instructor: React.FC = () => {
                   const lean = leanByTeam[String(row.team_id)];
                   return (
                     <>
-                      <td className="px-3 py-2 text-right text-gray-800 tabular-nums">{lean ? fmtMoney(lean.setup_cost) : '—'}</td>
-                      <td className="px-3 py-2 text-right text-gray-800 tabular-nums">{lean ? fmtMoney(lean.carrying_cost) : '—'}</td>
+                      <td className="px-3 py-2 text-right text-gray-800 tabular-nums">{lean ? fmtMoney(lean.shipping_cost) : '—'}</td>
+                      <td className="px-3 py-2 text-right text-gray-800 tabular-nums">{lean ? fmtMoney(lean.storage_cost) : '—'}</td>
+                      <td className="px-3 py-2 text-right text-gray-800 tabular-nums">{lean ? fmtMoney(lean.hosting_cost) : '—'}</td>
                       <td className="px-3 py-2 text-right text-gray-800 tabular-nums">{lean ? fmtSeconds(lean.lead_time_s) : '—'}</td>
                       <td className="px-3 py-2 text-right text-gray-800 tabular-nums">{lean ? fmtSeconds(lean.sale_time_s) : '—'}</td>
                     </>
@@ -2677,7 +2675,7 @@ const Instructor: React.FC = () => {
           </Card>
 
           {statsR2 && [statsR1, statsR2].some(st => (st?.leaderboard ?? []).some(r => r.lean != null)) && (
-            <Card className="xl:col-span-2" title="Round 1 vs Round 2" subtitle="Push rules vs lean rules, per team">
+            <Card className="xl:col-span-2" title="Round 1 vs Round 2" subtitle="Same rules and fees in both rounds, per team">
               <LeanDebrief r1={statsR1} r2={statsR2} teamNames={teamNames} />
             </Card>
           )}

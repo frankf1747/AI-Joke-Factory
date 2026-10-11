@@ -210,6 +210,44 @@ export function leanConfigToBody(c: LeanConfigUpdate): LeanConfigBody {
   return body;
 }
 
+/** A team's three Lean fees so far, in dollars. */
+export interface LeanFees { shipping: number; storage: number; hosting: number }
+
+/**
+ * Shipping, storage and hosting from a Lean stats block. A backend that
+ * predates the fee names sends only setup_cost and carrying_cost: shipping then
+ * reads setup_cost, storage reads the whole carrying_cost (it cannot be split)
+ * and hosting 0, so the three still add up to what that backend charged.
+ * Anything missing or not a number reads as 0, never NaN.
+ */
+export function leanFeesOf(
+  lean: { shipping_cost?: unknown; storage_cost?: unknown; hosting_cost?: unknown; setup_cost?: unknown; carrying_cost?: unknown } | null | undefined,
+): LeanFees {
+  const num = (v: unknown): number | null => {
+    const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN;
+    return Number.isFinite(n) ? n : null;
+  };
+  if (!lean) return { shipping: 0, storage: 0, hosting: 0 };
+  const split = num(lean.storage_cost) != null || num(lean.hosting_cost) != null;
+  return {
+    shipping: num(lean.shipping_cost) ?? num(lean.setup_cost) ?? 0,
+    storage: split ? num(lean.storage_cost) ?? 0 : num(lean.carrying_cost) ?? 0,
+    hosting: split ? num(lean.hosting_cost) ?? 0 : 0,
+  };
+}
+
+/** Sort keys of the leaderboard's Lean columns. */
+export type LeanSortKey = 'shipping_cost' | 'storage_cost' | 'hosting_cost' | 'lead_time_s' | 'sale_time_s';
+
+/** The leaderboard's Lean columns, in order (views/Instructor.tsx). */
+export const LEAN_LEADERBOARD_COLUMNS: ReadonlyArray<{ key: LeanSortKey; label: string; title: string }> = [
+  { key: 'shipping_cost', label: 'Shipping', title: 'Shipping fees: every batch sent, priced by its size' },
+  { key: 'storage_cost', label: 'Storage', title: "Storage fees: jokes waiting on Marketing's desk, per minute" },
+  { key: 'hosting_cost', label: 'Hosting', title: 'Hosting fees: released jokes unsold on the shelf, per minute' },
+  { key: 'lead_time_s', label: 'Lead', title: 'Average lead time: batch sent to joke released' },
+  { key: 'sale_time_s', label: 'Sale', title: 'Average time from release to first sale' },
+];
+
 /** One learning-curve point: a batch's sell-through (sold ÷ published). */
 export interface LearningCurvePoint { seq: number; rate: number }
 

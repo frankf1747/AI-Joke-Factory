@@ -16,8 +16,14 @@ describe('chart 1 — Where the money leaked', () => {
     const out = html(createElement(WasteBreakdownChart, { data: null, teamNames: {} }));
     expect(out).toContain('Where the money leaked');
     expect(out).toContain('Cost of waste per team, by kind. Shorter bars = leaner.');
-    for (const label of ['Setup', 'Waiting at Marketing', 'Unsold on shelf', 'Published, never sold', 'Discarded']) {
+    for (const label of [
+      'Shipping', 'Storage (waiting on Marketing&#x27;s desk)', 'Hosting (unsold on the shelf)',
+      'Listing fees on never-sold jokes', 'Discards',
+    ]) {
       expect(out).toContain(label);
+    }
+    for (const old of ['>Setup<', 'Waiting at Marketing', 'Unsold on shelf', 'Published, never sold']) {
+      expect(out).not.toContain(old);
     }
     expect(out).toContain('No batches sent yet');
   });

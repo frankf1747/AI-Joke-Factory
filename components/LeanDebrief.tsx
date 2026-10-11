@@ -1,9 +1,9 @@
-/* Round 1 vs Round 2, per team — the debrief table for Lean classes. Round 1
-   is played with push rules and Round 2 with lean rules, so the comparison
-   itself is the lesson: profit, waste and lead time side by side. */
+/* Round 1 vs Round 2, per team — the debrief table for Lean classes. Both
+   rounds play the same rules and fees (only the batch size differs), so any
+   change is the team's doing: profit, waste, fees and lead time side by side. */
 import React from 'react';
 import type { TeamStats } from '../types/api';
-import { fmtMoney, neverSold } from '../services/leanMode';
+import { fmtMoney, leanFeesOf, neverSold } from '../services/leanMode';
 
 /** The slice of a stats response the debrief reads. Both the instructor stats
     type (types.ts) and RoundStatsResponse (types/api.ts) fit it. */
@@ -20,7 +20,9 @@ export interface DebriefSide {
   /** Published but never sold (Lean rows only); null for a Classic round, whose
       unsold figure measures something else and must not share this column. */
   unsold: number | null;
-  setup: number; carrying: number; leadTimeS: number; saleTimeS: number;
+  /** Shipping + storage + hosting (an older backend's setup + carrying). */
+  fees: number;
+  leadTimeS: number; saleTimeS: number;
 }
 export interface DebriefRow {
   teamId: number; team: string;
@@ -29,9 +31,10 @@ export interface DebriefRow {
 }
 
 function side(t: DebriefStats['leaderboard'][number]): DebriefSide {
+  const fees = leanFeesOf(t.lean);
   return {
     profit: t.profit, sales: t.total_sales, published: t.published_jokes, unsold: neverSold(t.lean),
-    setup: t.lean?.setup_cost ?? 0, carrying: t.lean?.carrying_cost ?? 0,
+    fees: fees.shipping + fees.storage + fees.hosting,
     leadTimeS: t.lean?.avg_submit_to_publish_s ?? 0, saleTimeS: t.lean?.avg_publish_to_first_sale_s ?? 0,
   };
 }
@@ -85,7 +88,8 @@ export const LeanDebrief: React.FC<{
             <th className="px-2 py-1 text-left">Team</th>
             <th className="px-2 py-1 text-right">R1 profit</th><th className="px-2 py-1 text-right">R2 profit</th><th className="px-2 py-1 text-right">Δ profit</th>
             <th className="px-2 py-1 text-right">R1 never sold</th><th className="px-2 py-1 text-right">R2 never sold</th>
-            <th className="px-2 py-1 text-right">R1 setup+carry</th><th className="px-2 py-1 text-right">R2 setup+carry</th>
+            <th className="px-2 py-1 text-right" title="Shipping + storage + hosting fees">R1 Fees</th>
+            <th className="px-2 py-1 text-right" title="Shipping + storage + hosting fees">R2 Fees</th>
             <th className="px-2 py-1 text-right">R1 lead</th><th className="px-2 py-1 text-right">R2 lead</th>
           </tr>
         </thead>
@@ -100,7 +104,7 @@ export const LeanDebrief: React.FC<{
                 {r.r1 && r.r2 ? fmtMoney(r.delta.profit) : '—'}
               </td>
               <Cell s={r.r1} pick={s => (s.unsold == null ? '—' : String(s.unsold))} /><Cell s={r.r2} pick={s => (s.unsold == null ? '—' : String(s.unsold))} />
-              <Cell s={r.r1} pick={s => fmtMoney(s.setup + s.carrying)} /><Cell s={r.r2} pick={s => fmtMoney(s.setup + s.carrying)} />
+              <Cell s={r.r1} pick={s => fmtMoney(s.fees)} /><Cell s={r.r2} pick={s => fmtMoney(s.fees)} />
               <Cell s={r.r1} pick={s => fmtS(s.leadTimeS)} /><Cell s={r.r2} pick={s => fmtS(s.leadTimeS)} />
             </tr>
           ))}

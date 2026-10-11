@@ -8,9 +8,9 @@ import type { LeanChartsClassAverage, LeanChartsResponse, LeanChartsTeam } from 
 
 /** Same meaning, same colour, everywhere (design_handoff_joke_factory_ui/colors_and_type.css.txt). */
 export const LEAN_CHART_COLORS = {
-  setup: '#2563eb',        // --production: Joke Maker changeover
-  waiting: '#7c3aed',      // --marketing: waiting at Marketing
-  shelf: '#d97706',        // --market: unsold on the shelf
+  setup: '#2563eb',        // --production: shipping (each batch the Joke Maker sends)
+  waiting: '#7c3aed',      // --marketing: storage (waiting on Marketing's desk)
+  shelf: '#d97706',        // --market: hosting (unsold on the shelf)
   neverSold: '#e11d48',    // --waste: published, never sold
   discarded: '#94a3b8',    // --fg4: discarded
   round1: '#3B82F6',       // Round 1, as on the Wasted Jokes chart
@@ -150,13 +150,15 @@ export interface WasteBarRow {
 
 export type WasteSegmentKey = 'setup' | 'waiting' | 'shelf' | 'neverSold' | 'discarded';
 
-/** Bar segments in stacking order, left to right. */
+/** Bar segments in stacking order, left to right. The keys are the backend's
+    waste keys (setup = shipping, waiting = storage, shelf = hosting); the
+    labels are the fee names students see. */
 export const WASTE_SEGMENTS: ReadonlyArray<{ key: WasteSegmentKey; label: string; color: string }> = [
-  { key: 'setup', label: 'Setup', color: LEAN_CHART_COLORS.setup },
-  { key: 'waiting', label: 'Waiting at Marketing', color: LEAN_CHART_COLORS.waiting },
-  { key: 'shelf', label: 'Unsold on shelf', color: LEAN_CHART_COLORS.shelf },
-  { key: 'neverSold', label: 'Published, never sold', color: LEAN_CHART_COLORS.neverSold },
-  { key: 'discarded', label: 'Discarded', color: LEAN_CHART_COLORS.discarded },
+  { key: 'setup', label: 'Shipping', color: LEAN_CHART_COLORS.setup },
+  { key: 'waiting', label: "Storage (waiting on Marketing's desk)", color: LEAN_CHART_COLORS.waiting },
+  { key: 'shelf', label: 'Hosting (unsold on the shelf)', color: LEAN_CHART_COLORS.shelf },
+  { key: 'neverSold', label: 'Listing fees on never-sold jokes', color: LEAN_CHART_COLORS.neverSold },
+  { key: 'discarded', label: 'Discards', color: LEAN_CHART_COLORS.discarded },
 ];
 
 /** One bar per team, most waste first (ties: lowest team id first). */

@@ -1056,7 +1056,15 @@ export interface BatchPoint {
  */
 export interface LeanTeamStats {
   batches_submitted: number;
+  /** Shipping fees so far: every sent batch priced by its size. Absent before migration 0005. */
+  shipping_cost?: number;
+  /** Storage fees so far: jokes waiting on Marketing's desk. Absent before migration 0005. */
+  storage_cost?: number;
+  /** Hosting fees so far: released jokes waiting for a first sale. Absent before migration 0005. */
+  hosting_cost?: number;
+  /** Alias of shipping_cost on newer backends (read through services/leanMode.ts leanFeesOf). */
   setup_cost: number;
+  /** Alias of storage_cost + hosting_cost on newer backends. */
   carrying_cost: number;
   avg_submit_to_publish_s: number;
   avg_publish_to_first_sale_s: number;

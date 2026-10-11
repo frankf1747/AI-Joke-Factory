@@ -1,7 +1,7 @@
 /* Chart 1 — "Where the money leaked" (instructor only). One horizontal bar per
    team, most waste first, split into the five kinds of waste in dollars, with
-   the total at the end of each bar. Setup + Waiting + Unsold equals the
-   leaderboard's Setup + Carrying for that team. */
+   the total at the end of each bar. Shipping + Storage + Hosting equals the
+   leaderboard's Shipping + Storage + Hosting for that team. */
 import React from 'react';
 import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Card } from '../ui';
