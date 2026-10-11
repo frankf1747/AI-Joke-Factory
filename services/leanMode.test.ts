@@ -232,6 +232,16 @@ describe('saving settings to the rounds', () => {
     expect(out.feeRounds).toEqual([2]);
   });
 
+  it('leaves a round whose number is unknown out of the note instead of guessing', async () => {
+    const { sent, send } = fake();
+    const out = await saveRoundConfig({
+      current: 11, currentNumber: null, otherBody: {}, leanBody: fee,
+      targets: leanTargetRounds(11, { 1: null, 2: null }, { 1: null, 2: null }), send,
+    });
+    expect(sent).toEqual([{ id: 11, body: fee }]);
+    expect(out).toEqual({ currentSaved: true, feeRounds: [], error: null });
+  });
+
   it('stops at the first refusal and reports what was saved', async () => {
     const first = fake([11]);
     const a = await saveRoundConfig({

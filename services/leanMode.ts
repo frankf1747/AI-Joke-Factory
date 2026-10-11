@@ -217,7 +217,8 @@ export function leanTargetRounds(
  * Sends one settings edit: the selected round (`current`) gets every changed
  * setting, its Lean part only when it is a target; every other target round
  * gets the Lean part alone. Stops at the first refusal and returns it, with
- * the round numbers whose fees were written so far.
+ * the round numbers whose fees were written so far (a round whose number is
+ * unknown is written but not listed).
  */
 export async function saveRoundConfig(o: {
   current: number;
@@ -238,7 +239,9 @@ export async function saveRoundConfig(o: {
       return { currentSaved: false, feeRounds, error };
     }
   }
-  if (currentTarget) feeRounds.push(currentTarget.number ?? o.currentNumber ?? 1);
+  // A round whose number is unknown is left out of the note rather than guessed.
+  const currentNo = currentTarget ? currentTarget.number ?? o.currentNumber : null;
+  if (currentNo != null) feeRounds.push(currentNo);
   if (!hasLean) return { currentSaved: true, feeRounds, error: null };
   for (const t of o.targets) {
     if (t.id === o.current) continue;

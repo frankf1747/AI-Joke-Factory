@@ -173,8 +173,8 @@ export function jokeMakerInputFrom(a: {
  * Marketing's inputs: the desk (claimed batch), the team's batches, summary and
  * feedback. The batch list can include the browser's stored rated history,
  * which may hold earlier rounds (or an earlier class), so the last decision
- * reads only the current round's batches: by round id when known, else by
- * round number.
+ * reads only the current round's batches: by round id when both sides know
+ * it, else by round number.
  */
 export function marketingInputFrom(a: {
   now: number;
@@ -194,7 +194,9 @@ export function marketingInputFrom(a: {
   const desk = a.qcQueue?.batch ?? null;
   const sentAt = desk?.submitted_at ? Date.parse(desk.submitted_at) : NaN;
   const backlog = finiteOrNull(a.teamSummary?.unprocessed_batches);
-  const thisRound = (b: Batch) => (a.roundId != null ? b.round_id === a.roundId : b.round === a.round);
+  // List-mapped batches carry round_id 0 (the team list has no round id), so a
+  // 0 or missing round_id is unknown and the round number decides.
+  const thisRound = (b: Batch) => (a.roundId != null && b.round_id ? b.round_id === a.roundId : b.round === a.round);
   const decided = latestBy(
     a.batches.filter(b => thisRound(b) && isProcessed(b) && b.jokes.length > 0), b => b.ratedAt ?? b.submittedAt,
   );

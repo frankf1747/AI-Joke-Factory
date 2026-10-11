@@ -280,6 +280,22 @@ describe("Marketing's last decision comes from the current round only", () => {
     expect(marketingInputFrom({ ...base, round: 1, batches: [r1, staleR1, r2] }).lastDecision).toEqual({ published: 0, discarded: 2 });
   });
 
+  it('reads list-mapped batches (round_id 0, round set) with a known round id, so rule 3 still fires', () => {
+    const base = {
+      now: NOW, roundActive: true, round: 2, roundId: 21, storageFeePerJokeMinute: 0.1, teamSummary: { unprocessed_batches: 1 },
+      qcQueue: null, feedbackRows: [],
+    };
+    // mapBatchFromTeamList: the list endpoint has no round_id, so it is 0; round is the fetched round's number.
+    const listed = batch(5, { round_id: 0, round: 2, status: 'PROCESSED', submittedAt: NOW - s(90), ratedAt: NOW - s(30), jokes: [joke(1, true), joke(2, false), joke(3, false), joke(4, false)] });
+    const previous = batch(4, { round_id: 0, round: 1, status: 'PROCESSED', submittedAt: NOW - s(20), ratedAt: NOW - s(5), jokes: [joke(5, true), joke(6, true)] });
+    const input = marketingInputFrom({ ...base, batches: [listed, previous] });
+    expect(input.lastDecision).toEqual({ published: 1, discarded: 3 });
+    expect(marketingNextStep(input)).toEqual({
+      text: "You discarded 3 of 4 last time — customers can only buy what's on the shelf.", tone: 'warn',
+    });
+    expect(marketingInputFrom({ ...base, batches: [previous] }).lastDecision).toBeNull();
+  });
+
   it('ignores an earlier class\'s batch of the same round number when the round id is known', () => {
     const base = {
       now: NOW, roundActive: true, round: 1, storageFeePerJokeMinute: 0.1, teamSummary: null, qcQueue: null, feedbackRows: [],
