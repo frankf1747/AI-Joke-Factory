@@ -22,8 +22,8 @@ export interface JokeMakerStepInput {
   lastSentAt: number | null;
   /** Joke count of the latest sent batch; null while it is unsplit (or unknown). */
   lastBatchJokes: number | null;
-  /** The latest processed batch's note from Marketing, when it has one. */
-  latestNote: { text: string; batchSentAt: number } | null;
+  /** The latest processed batch's note from Marketing, when it has one; notedAt = when Marketing processed it (ms epoch). */
+  latestNote: { text: string; notedAt: number } | null;
 }
 
 export interface MarketingStepInput {
@@ -41,7 +41,7 @@ export interface MarketingStepInput {
   topFixNext: string | null;
 }
 
-/** A note counts as fresh while its batch was sent at most this long ago. */
+/** A note counts as fresh while it was written (its batch processed) at most this long ago. */
 export const NOTE_FRESH_MS = 120_000;
 /** Round 2: a last batch of at least this many jokes earns the small-batch hint. */
 export const BIG_BATCH_JOKES = 6;
@@ -67,7 +67,7 @@ export function quoteNote(text: string): string {
 export function jokeMakerNextStep(i: JokeMakerStepInput): NextStep {
   if (!i.roundActive) return info('Get your AI tool ready — the round starts soon.');
   const note = i.latestNote?.text.trim() ? i.latestNote : null;
-  if (note && i.now - note.batchSentAt <= NOTE_FRESH_MS) {
+  if (note && i.now - note.notedAt <= NOTE_FRESH_MS) {
     return info(`Marketing says: “${quoteNote(note.text)}” — use it in your next batch.`);
   }
   if (i.roundNumber === 2 && i.lastBatchJokes != null && i.lastBatchJokes >= BIG_BATCH_JOKES) {
@@ -143,8 +143,8 @@ export function jokeMakerInputFrom(a: {
     marketingBacklog: finiteOrNull(a.teamSummary?.unprocessed_batches),
     lastSentAt: lastSent?.submittedAt ?? null,
     lastBatchJokes: lastSent && lastSent.jokes.length > 0 ? lastSent.jokes.length : null,
-    latestNote: noteText && noteText.trim() && lastProcessed?.submittedAt != null
-      ? { text: noteText, batchSentAt: lastProcessed.submittedAt }
+    latestNote: noteText && noteText.trim() && lastProcessed && (lastProcessed.ratedAt ?? lastProcessed.submittedAt) != null
+      ? { text: noteText, notedAt: (lastProcessed.ratedAt ?? lastProcessed.submittedAt) as number }
       : null,
   };
 }

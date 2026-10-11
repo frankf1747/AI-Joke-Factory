@@ -26,9 +26,14 @@ describe('the Next step line on the student screens', () => {
   });
 
   it('renders on both screens before anything has loaded (no summary, no batches, no desk)', () => {
-    for (const [view, role] of [[JokeMaker, Role.JOKE_MAKER], [QualityControl, Role.QUALITY_CONTROL]] as const) {
+    const cases = [
+      [JokeMaker, Role.JOKE_MAKER, 'Keep writing — every batch is another chance to sell.'],
+      [QualityControl, Role.QUALITY_CONTROL, 'Release what&#x27;s good enough, then tell your Joke Maker what to change.'],
+    ] as const;
+    for (const [view, role, sentence] of cases) {
       const out = renderWithGame(view, { user: testUser(role), teamSummary: null, qcQueue: null, batches: [] });
       expect(out).toContain('Next step');
+      expect(out).toContain(sentence);
     }
   });
 

@@ -13,7 +13,8 @@ describe('NextStepLine', () => {
     expect(out).toContain('bg-sky-50');
     expect(out).not.toContain('bg-amber-50');
     expect(out).toContain('<svg');
-    expect(out).toContain('role="status"');
+    expect(out).not.toContain('role="status"');
+    expect(out).not.toContain('aria-live');
   });
 
   it('turns amber for a warning', () => {

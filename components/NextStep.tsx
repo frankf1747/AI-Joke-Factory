@@ -1,6 +1,7 @@
 /* The "Next step" line under the stat tiles of both student screens: a small
    coloured bar with an arrow, the label "Next step" and one sentence from
-   services/nextStep.ts. Amber for a warning, blue otherwise. NextStepLive
+   services/nextStep.ts. Not a live region: Marketing's
+   sentence changes every second and must not be re-announced. Amber for a warning, blue otherwise. NextStepLive
    keeps its own one-second clock, so only the line re-renders as time
    passes; the screen's polls re-render it with fresh inputs. */
 import React, { useEffect, useState } from 'react';
@@ -11,8 +12,6 @@ export const NextStepLine: React.FC<{ step: NextStep }> = ({ step }) => {
   const warn = step.tone === 'warn';
   return (
     <div
-      role="status"
-      aria-live="polite"
       className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-sm ${
         warn ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-sky-50 border-sky-200 text-sky-900'
       }`}
