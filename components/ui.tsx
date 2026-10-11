@@ -92,11 +92,13 @@ export const StatBox: React.FC<{
   className?: string;
   valueClassName?: string;
   labelClassName?: string;
-}> = ({ label, value, tone, sub, color, className = '', valueClassName = '', labelClassName = '' }) => {
+  /** Native tooltip: one line saying what the number counts. */
+  title?: string;
+}> = ({ label, value, tone, sub, color, className = '', valueClassName = '', labelClassName = '', title }) => {
   // Back-compat: legacy `color` prop (raw className) takes precedence if provided.
   const toneClass = color ?? STAT_TONES[tone ?? 'slate'];
   return (
-    <div className={`px-3 py-3 rounded-lg flex flex-col items-center justify-center text-center ${toneClass} ${className}`}>
+    <div title={title} className={`px-3 py-3 rounded-lg flex flex-col items-center justify-center text-center ${toneClass} ${className}`}>
       <span className={`text-2xl font-bold tabular-nums leading-none ${valueClassName}`}>{value}</span>
       <span className={`text-[10px] font-bold uppercase tracking-wide opacity-85 mt-1.5 ${labelClassName}`}>{label}</span>
       {sub && <span className="text-[10px] opacity-60 mt-0.5">{sub}</span>}

@@ -9,7 +9,7 @@ import { Batch } from '../types';
 import { computeAvgCreatedToPublishSeconds, countJokesSold } from '../services/economics';
 import { dimById } from '../config/dimensions';
 import { isWatchMode } from '../services/watchMode';
-import { fmtMoney, wipStatus } from '../services/leanMode';
+import { shippingLine } from '../services/leanMode';
 import { MarketingNoteCallout, MarketingNoteIcon, marketingNoteOf } from '../components/MarketingNote';
 
 /* ---- per-joke status drives the status dots ---- */
@@ -183,21 +183,18 @@ const JokeMaker: React.FC = () => {
   );
 
   const trimmedLen = input.trim().length;
-  /* Lean market mode only: each batch carries a setup cost, and with a WIP
-     limit the Joke Maker may not send another batch while Marketing already
-     has that many waiting (a pull system). CLASSIC: leanMode is false, so
-     canSubmit is exactly what it was. */
+  /* Lean market mode: every batch sent pays a shipping fee by its size (the
+     line under Send). There is no WIP limit: the Joke Maker may always send. */
   const leanMode = config.marketMode === 'LEAN';
-  const wip = wipStatus(teamSummary?.unprocessed_batches ?? 0, config.wipLimit);
-  const canSubmit = config.isActive && certified && trimmedLen >= MIN_RAW_CHARS && !(leanMode && wip.blocked);
+  const canSubmit = config.isActive && certified && trimmedLen >= MIN_RAW_CHARS;
 
   /* V2: JM pastes the raw AI output as one blob and hands it off to Marketing,
      who reads through and splits it into individual jokes. */
   const submit = async () => {
     if (!canSubmit) return;
     const sent = await submitRawBatch(input);
-    // Lean: keep the draft when the backend refused the batch (e.g. the WIP
-    // limit was reached between polls), so the Joke Maker can send it later.
+    // Lean: keep the draft when the backend refused the batch, so the Joke
+    // Maker can send it later.
     if (leanMode && !sent) return;
     setInput('');
     setCertified(false);
@@ -295,8 +292,10 @@ const JokeMaker: React.FC = () => {
                 <Info size={16} className="mt-0.5 shrink-0" />
                 <span>
                   <b>{isRound1 ? `Round 1:` : `Round 2:`}</b>{' '}
-                  Generate {isRound1 ? `${targetBatchSize} jokes` : `your jokes`} with any AI tool and paste
-                  the whole response below. Marketing will split the batch into individual jokes.
+                  {isRound1
+                    ? <>Generate {targetBatchSize} jokes with any AI tool and paste the whole response below.</>
+                    : <>Generate up to {config.round2BatchLimit} jokes with any AI tool (smaller batches are fine) and paste the whole response below.</>}
+                  {' '}Marketing will split the batch into individual jokes.
                 </span>
               </div>
 
@@ -336,8 +335,7 @@ const JokeMaker: React.FC = () => {
               </div>
               {leanMode && (
                 <div className="text-xs text-gray-500 text-right">
-                  Each batch costs {fmtMoney(config.setupCostPerBatch)} to set up
-                  {wip.label ? <> · <span className={wip.blocked ? 'font-semibold text-amber-700' : ''}>{wip.label}</span></> : null}
+                  {shippingLine(config.round, config.round1BatchSize, config)}
                 </div>
               )}
             </div>

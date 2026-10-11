@@ -249,6 +249,8 @@ export interface ApiTeamSummaryResponse {
   jokes_created?: number;
   jokes_published?: number;
   cost_breakdown?: { revenue: number; publish_cost: number; discard_cost: number; profit: number };
+  /** Lean rounds only: the team's fees so far (read through services/leanMode.ts leanFeesOf). */
+  lean?: LeanTeamStats;
 }
 
 export interface ApiTeamBatchesResponse {

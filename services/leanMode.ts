@@ -97,13 +97,6 @@ export function leanConfigFromRound(round: LeanRoundFields | null | undefined): 
   };
 }
 
-export function wipStatus(waiting: number, limit: number): { blocked: boolean; label: string | null } {
-  if (limit <= 0) return { blocked: false, label: null };
-  const blocked = waiting >= limit;
-  const base = `Marketing has ${waiting} of ${limit} batches waiting`;
-  return { blocked, label: blocked ? `${base} — wait, or go help` : base };
-}
-
 /**
  * The shipping fee of one batch with this many jokes: small for 1–4, standard
  * for exactly 5, large for 6 or more. An unknown count (a batch Marketing has
@@ -147,6 +140,27 @@ export function fmtCents(v: number): string {
 /** "10¢ a joke each minute" — the storage or hosting fee as students read it. */
 export function fmtPerMinute(v: number): string {
   return `${fmtCents(v)} a joke each minute`;
+}
+
+/**
+ * The Joke Maker's shipping line under Send. Round 1 sends one size, so it
+ * names that size's fee ("Shipping: $2 per batch of 5"); Round 2 lists the
+ * three tiers ("Shipping: $1 for 1–4 jokes · $2 for 5 · $3 for 6–10").
+ */
+export function shippingLine(roundNumber: number, round1BatchSize: number, f: ShippingFees): string {
+  if (roundNumber <= 1) {
+    return `Shipping: ${fmtFee(shippingFeeFor(round1BatchSize, f))} per batch of ${round1BatchSize}`;
+  }
+  return `Shipping: ${fmtFee(f.shippingFeeSmall)} for 1–4 jokes · ${fmtFee(f.shippingFeeStandard)} for 5 · ${fmtFee(f.shippingFeeLarge)} for 6–10`;
+}
+
+/** The one-line tooltips of Marketing's three fee tiles, with the round's amounts. */
+export function feeTooltips(f: LeanFeeConfig): { shipping: string; storage: string; hosting: string } {
+  return {
+    shipping: `Charged per batch you send: ${fmtFee(f.shippingFeeSmall)} for 1–4 jokes, ${fmtFee(f.shippingFeeStandard)} for 5, ${fmtFee(f.shippingFeeLarge)} for 6–10.`,
+    storage: `Every minute a joke waits on Marketing's desk costs ${fmtCents(f.storageFeePerJokeMinute)}.`,
+    hosting: `Every minute a released joke sits unsold costs ${fmtCents(f.hostingFeePerJokeMinute)}.`,
+  };
 }
 
 /** The backend reports a WIP refusal as 409 CONFLICT with this prefix in the message. */

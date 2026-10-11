@@ -21,7 +21,7 @@ import { DIMENSIONS, dimById } from '../config/dimensions';
 import { toFeedbackRows } from './feedback';
 import { CustomerFeedbackCard } from '../components/CustomerFeedbackCard';
 import { isWatchMode } from '../services/watchMode';
-import { fmtMoney } from '../services/leanMode';
+import { feeTooltips, fmtMoney, leanFeesOf } from '../services/leanMode';
 import { MARKETING_NOTE_MAX } from '../services/marketingService';
 import { releaseOutcome } from './marketingRelease';
 
@@ -557,11 +557,13 @@ const QualityControl: React.FC = () => {
     () => countJokesSold(batches.filter(b => b.team === user?.team)),
     [batches, user?.team],
   );
-  /* Lean market mode only: the team's setup and carrying costs and how long a
-     released joke waits for its first buyer. Nothing below renders for a
-     CLASSIC round. The lean charts are instructor-only. */
+  /* Lean market mode only: the team's shipping, storage and hosting fees and
+     how long a released joke waits for its first buyer. Nothing below renders
+     for a CLASSIC round. The lean charts are instructor-only. */
   const leanMode = config.marketMode === 'LEAN';
   const lean = teamSummary?.lean ?? null;
+  const fees = leanFeesOf(lean);
+  const tips = feeTooltips(config);
   const toFirstSale = lean && lean.avg_publish_to_first_sale_s > 0
     ? Math.round(lean.avg_publish_to_first_sale_s)
     : null;
@@ -805,9 +807,10 @@ const QualityControl: React.FC = () => {
             <StatBox label="Content Waste" value={waste} tone="rose" />
             {leanMode && (
               <>
-                <StatBox label="Setup cost" value={fmtMoney(lean?.setup_cost ?? 0)} tone="rose" valueClassName="text-xl" />
-                <StatBox label="Carrying cost" value={fmtMoney(lean?.carrying_cost ?? 0)} tone="rose" valueClassName="text-xl" />
-                <StatBox label="Publish → first sale" value={fmtSeconds(toFirstSale)} tone="sky" className="col-span-2" />
+                <StatBox label="Shipping fees" value={fmtMoney(fees.shipping)} tone="rose" valueClassName="text-xl" title={tips.shipping} />
+                <StatBox label="Storage fees" value={fmtMoney(fees.storage)} tone="rose" valueClassName="text-xl" title={tips.storage} />
+                <StatBox label="Hosting fees" value={fmtMoney(fees.hosting)} tone="rose" valueClassName="text-xl" title={tips.hosting} />
+                <StatBox label="Publish → first sale" value={fmtSeconds(toFirstSale)} tone="sky" />
               </>
             )}
           </div>

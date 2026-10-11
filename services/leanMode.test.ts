@@ -2,8 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   LEAN_LEADERBOARD_COLUMNS, MARKET_MODE_LOCKED_MESSAGE, WIP_LIMIT_MESSAGE,
-  fmtCents, fmtFee, fmtMoney, fmtPerMinute, isLeanRound, isMarketModeLocked, isWipLimitReached,
-  leanConfigFromRound, leanConfigToBody, leanFeesOf, learningCurvePoints, neverSold, shippingFeeFor, wipStatus,
+  feeTooltips, fmtCents, fmtFee, fmtMoney, fmtPerMinute, isLeanRound, isMarketModeLocked, isWipLimitReached,
+  leanConfigFromRound, leanConfigToBody, leanFeesOf, learningCurvePoints, neverSold, shippingFeeFor, shippingLine,
 } from './leanMode';
 
 const classic = { market_mode: 'CLASSIC', arrival_window_seconds: 900, setup_cost_per_batch: 0, carrying_cost_per_joke_minute: 0, wip_limit: 0 };
@@ -33,10 +33,21 @@ describe('lean mode helpers', () => {
     });
   });
 
-  it('describes the WIP state for the Joke Maker', () => {
-    expect(wipStatus(0, 0)).toEqual({ blocked: false, label: null });
-    expect(wipStatus(1, 2)).toEqual({ blocked: false, label: 'Marketing has 1 of 2 batches waiting' });
-    expect(wipStatus(2, 2)).toEqual({ blocked: true, label: 'Marketing has 2 of 2 batches waiting — wait, or go help' });
+  it('writes the Joke Maker\'s shipping line from the round\'s fees', () => {
+    expect(shippingLine(1, 5, fees)).toBe('Shipping: $2 per batch of 5');
+    expect(shippingLine(2, 5, fees)).toBe('Shipping: $1 for 1–4 jokes · $2 for 5 · $3 for 6–10');
+    expect(shippingLine(1, 5, { shippingFeeSmall: 0.5, shippingFeeStandard: 1.5, shippingFeeLarge: 2 }))
+      .toBe('Shipping: $1.50 per batch of 5');
+  });
+
+  it('writes the fee tooltips from the round\'s fees', () => {
+    expect(feeTooltips({ ...fees, storageFeePerJokeMinute: 0.1, hostingFeePerJokeMinute: 0.05 })).toEqual({
+      shipping: 'Charged per batch you send: $1 for 1–4 jokes, $2 for 5, $3 for 6–10.',
+      storage: "Every minute a joke waits on Marketing's desk costs 10¢.",
+      hosting: 'Every minute a released joke sits unsold costs 5¢.',
+    });
+    expect(feeTooltips({ ...fees, storageFeePerJokeMinute: 0.2, hostingFeePerJokeMinute: 0.025 }).storage)
+      .toBe("Every minute a joke waits on Marketing's desk costs 20¢.");
   });
 
   it('prices a batch by its size, an unsplit batch as the standard 5', () => {
