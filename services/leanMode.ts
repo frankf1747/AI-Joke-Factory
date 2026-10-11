@@ -67,16 +67,6 @@ export interface LeanConfigUpdate extends Partial<LeanConfig> {
   customerCount?: number;
 }
 
-/**
- * @deprecated The two-rule-set class preset of the first Lean design (Round 1
- * push, Round 2 WIP-limited pull). Only scripts/pilot/lean-pilot.mts still
- * reads it; the instructor screen no longer offers it.
- */
-export const LEAN_CLASS_PRESET: Record<1 | 2, LeanConfigUpdate> = {
-  1: { marketMode: 'LEAN', setupCostPerBatch: 2, carryingCostPerJokeMinute: 0.05, wipLimit: 0, preferenceBase: 3, customerCount: 150 },
-  2: { marketMode: 'LEAN', setupCostPerBatch: 0.5, carryingCostPerJokeMinute: 0.05, wipLimit: 2, preferenceBase: 3, customerCount: 150 },
-};
-
 export function isLeanRound(round: LeanRoundFields | null | undefined): boolean {
   return round?.market_mode === 'LEAN';
 }

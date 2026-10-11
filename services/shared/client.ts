@@ -51,6 +51,7 @@ import type {
   InstructorLoginRequest,
   InstructorLoginResponse,
   InstructorRoundResponse,
+  LeanChartsResponse,
   LobbyResponse,
   MarketResponse,
   MarketingQueueBatch,
@@ -698,6 +699,15 @@ export class JokeFactoryClient {
   instructorStats(roundId: number, signal?: AbortSignal): Promise<RoundStatsResponse> {
     return this.call<RoundStatsResponse>({
       method: 'GET', path: `/v1/instructor/rounds/${roundId}/stats`,
+      envelope: 'wrapped', needsIdentity: true, signal,
+    });
+  }
+
+  /** GET /v1/instructor/rounds/{rid}/lean-charts — every team's lean charts
+   *  and the class average. A CLASSIC round answers 409 NOT_LEAN_ROUND. */
+  instructorLeanCharts(roundId: number, signal?: AbortSignal): Promise<LeanChartsResponse> {
+    return this.call<LeanChartsResponse>({
+      method: 'GET', path: `/v1/instructor/rounds/${roundId}/lean-charts`,
       envelope: 'wrapped', needsIdentity: true, signal,
     });
   }

@@ -16,7 +16,7 @@ import { statusOf, type BotApi } from './api';
 import { Deck, drawLearnerBatch } from './deck';
 import { botName, isBotName, parseBotName, SEAT_ROLE, type Seat } from './naming';
 import {
-  BATCH_CAP_PER_ROUND, DWELL_MS, FEEDBACK_WAIT_MS, IDLE_POLL_MS, MAX_BOT_TEAMS, PERSONAS,
+  DWELL_MS, FEEDBACK_WAIT_MS, IDLE_POLL_MS, JOKE_CAP_PER_ROUND, MAX_BOT_TEAMS, PERSONAS,
   QUEUE_POLL_MS, chooseWithMemory, choosePublished, jitter, publishCount, type JokeMemory, type PersonaId,
 } from './personas';
 import { isWipLimitReached } from '../leanMode';
@@ -43,16 +43,6 @@ export const CAP_REACHED = 'cap reached';
 /** A Joke Maker refused by the Lean WIP limit shows this while it waits. */
 export const WIP_WAIT_ACTIVITY = 'waiting — Marketing at WIP limit';
 
-/**
- * The per-round cap in JOKES: BATCH_CAP_PER_ROUND batches of the round's
- * batch_size. A persona that submits full batches stops after exactly
- * BATCH_CAP_PER_ROUND batches, as before; one that submits smaller batches
- * (the Learner's 3 from round 2) sends more, smaller batches instead of fewer
- * jokes. Classification calls are bounded by jokes either way.
- */
-export function jokeCapFor(batchSize: number): number {
-  return BATCH_CAP_PER_ROUND * batchSize;
-}
 const HISTORY_PER_BOT = 50;
 const ROUND_CACHE_MS = 2_000;
 const MAX_BACKOFF_MS = 30_000;
@@ -207,7 +197,7 @@ interface TeamRuntime {
    * not hold up the next round.
    */
   submittedByRound: Map<number, number>;
-  /** Jokes submitted per round, for the per-round cap (jokeCapFor). */
+  /** Jokes submitted per round, for the per-round cap (JOKE_CAP_PER_ROUND). */
   submittedJokesByRound: Map<number, number>;
   publishedByRound: Map<number, number>;
   /** All rounds, for the panel. */
@@ -564,7 +554,10 @@ export class BotEngine {
         }
         const submitted = team.submittedByRound.get(round.id) ?? 0;
         const submittedJokes = team.submittedJokesByRound.get(round.id) ?? 0;
-        const cap = jokeCapFor(round.batch_size);
+        // The cap is in jokes (40), not batches: smaller batches mean more of
+        // them, never fewer jokes. The last batch may run past it by less than
+        // one batch.
+        const cap = JOKE_CAP_PER_ROUND;
         if (submittedJokes >= cap) {
           this.setActivity(seat, `done — ${cap}-joke ${CAP_REACHED}`, signal);
           await this.pace(IDLE_POLL_MS, signal);
@@ -573,10 +566,10 @@ export class BotEngine {
         if (persona.waitForFeedback) await this.waitUntilSettled(me, team, round.id, signal);
         if (signal.aborted) break;
 
-        // Round 1 must split into exactly batch_size, so a lean batch size
-        // applies only from round 2 (usecase/marketing.go:98-102).
-        const size = persona.leanBatchSize && round.round_number >= 2
-          ? Math.min(persona.leanBatchSize, round.batch_size)
+        // Round 1 must split into exactly batch_size (5), so the persona's own
+        // size applies only from round 2, capped at that round's batch_size.
+        const size = round.round_number >= 2
+          ? Math.min(persona.round2BatchSize, round.batch_size)
           : round.batch_size;
         let jokes: JokeFixture[];
         if (persona.learns) {

@@ -2,7 +2,8 @@
 import { describe, it, expect } from 'vitest';
 import { seededRng } from '../shared/jokes';
 import {
-  PERSONAS, PERSONA_ORDER, chooseWithMemory, choosePublished, jitter, personaSequence, publishCount, type Persona,
+  JOKE_CAP_PER_ROUND, PERSONAS, PERSONA_ORDER, chooseWithMemory, choosePublished, jitter, personaSequence, publishCount,
+  type Persona,
 } from './personas';
 
 const always = (x: number) => () => x;
@@ -74,10 +75,22 @@ describe('personaSequence', () => {
   });
 });
 
+describe('round 2 batch sizes and the joke cap', () => {
+  it('sends Spray 10, Balanced 5, Careful 5 and Learner 3 jokes a batch from round 2', () => {
+    expect(Object.fromEntries(PERSONA_ORDER.map(id => [id, PERSONAS[id].round2BatchSize]))).toEqual({
+      CAREFUL: 5, BALANCED: 5, SPRAY: 10, LEARNER: 3,
+    });
+  });
+
+  it('caps every round at 40 jokes', () => {
+    expect(JOKE_CAP_PER_ROUND).toBe(40);
+  });
+});
+
 describe('Learner persona', () => {
   it('is in the order and publishes 2 of 3 by default', () => {
     expect(PERSONA_ORDER).toContain('LEARNER');
-    expect(PERSONAS.LEARNER.leanBatchSize).toBe(3);
+    expect(PERSONAS.LEARNER.round2BatchSize).toBe(3);
     expect(publishCount(PERSONAS.LEARNER, 3, 2, () => 0.5)).toBe(2);
   });
 

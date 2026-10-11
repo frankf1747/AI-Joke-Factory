@@ -2,10 +2,13 @@
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_IDEAL_PROFILE } from '../../config/dimensions';
 import { seededRng, variedCorpus } from '../shared/jokes';
-import { BotEngine, CAP_REACHED, SEAT_CHECK_MS, WIP_WAIT_ACTIVITY, fitPieces, jokeCapFor, splitBlob, titleOf, wallClockSteps } from './engine';
+import { BotEngine, CAP_REACHED, SEAT_CHECK_MS, WIP_WAIT_ACTIVITY, fitPieces, splitBlob, titleOf, wallClockSteps } from './engine';
 import { botName, isBotName } from './naming';
 import { Deck } from './deck';
-import { BATCH_CAP_PER_ROUND } from './personas';
+import { JOKE_CAP_PER_ROUND } from './personas';
+
+/** Round 1 batches of 5 reach the 40-joke cap after exactly this many batches. */
+const ROUND1_BATCHES_AT_CAP = JOKE_CAP_PER_ROUND / 5;
 import type { BotApi } from './api';
 import type { BatchSubmitRequest } from '../../types/api';
 import type { FromWorker, StartOptions } from './protocol';
@@ -211,22 +214,22 @@ describe('BotEngine', () => {
     await until(() => engine.status().teams[0].jm.activity.includes('cap'), 'the batch cap');
     engine.stop();
     const team = teamOf(world, botName(1, 'A'));
-    expect(world.batches.filter(b => b.teamId === team)).toHaveLength(BATCH_CAP_PER_ROUND);
+    expect(world.batches.filter(b => b.teamId === team)).toHaveLength(ROUND1_BATCHES_AT_CAP);
   });
 
-  it('caps full-batch personas at exactly BATCH_CAP_PER_ROUND batches, as the old batch cap did', async () => {
+  it('caps full-batch personas at exactly 8 batches of 5 in round 1', async () => {
     const { world, engine } = setup();
     const personas = ['CAREFUL', 'BALANCED', 'SPRAY'] as const;
     await engine.start(options({ teams: personas.map((persona, i) => ({ index: i + 1, persona })) }));
     await until(() => engine.status().teams.every(t => t.jm.activity.includes(CAP_REACHED)), 'every cap');
     const activity = engine.status().teams[0].jm.activity;
     engine.stop();
-    expect(jokeCapFor(world.round.batch_size)).toBe(BATCH_CAP_PER_ROUND * 5);
+    expect(ROUND1_BATCHES_AT_CAP).toBe(8);
     for (let i = 1; i <= personas.length; i++) {
       const team = teamOf(world, botName(i, 'A'));
-      expect(world.batches.filter(b => b.teamId === team)).toHaveLength(BATCH_CAP_PER_ROUND);
+      expect(world.batches.filter(b => b.teamId === team)).toHaveLength(ROUND1_BATCHES_AT_CAP);
     }
-    expect(activity).toBe(`done — ${BATCH_CAP_PER_ROUND * 5}-joke ${CAP_REACHED}`);
+    expect(activity).toBe(`done — 40-joke ${CAP_REACHED}`);
   });
 
   it('shows a Joke Maker refused by the WIP limit as waiting, not as an idle round', async () => {
@@ -705,7 +708,7 @@ describe('BotEngine', () => {
   });
 });
 
-describe('Learner bot', () => {
+describe('Round 2 batch sizes and the Learner bot', () => {
   /** Wraps the client so every submitted blob is recorded with its round and joke count. */
   interface Submit { roundId: number; teamId: number; texts: string[]; jokes: number }
 
@@ -753,16 +756,52 @@ describe('Learner bot', () => {
     expect(world.decisions.find(d => round2.has(d.batchId))).toMatchObject({ published: 2, total: 3 });
   });
 
-  it('sends more than BATCH_CAP_PER_ROUND smaller batches in round 2, stopping at the joke cap', async () => {
+  it('sends Round 2 batches of 10 (Spray), 5 (Balanced, Careful) and 3 (Learner) when the round allows 10', async () => {
+    const submits: Submit[] = [];
+    const { world, engine } = setup([], { wrapApi: recordSubmits(submits) });
+    world.round = { ...world.round, round_number: 2, batch_size: 10, max_batch_size: 10 };
+    const personas = ['SPRAY', 'BALANCED', 'CAREFUL', 'LEARNER'] as const;
+    await engine.start(options({ teams: personas.map((persona, i) => ({ index: i + 1, persona })) }));
+    const teams = personas.map((_, i) => teamOf(world, botName(i + 1, 'A')));
+    await until(() => teams.every(t => submits.some(s => s.teamId === t)), 'a batch from every team');
+    engine.stop();
+    expect(teams.map(t => submits.find(s => s.teamId === t)?.jokes)).toEqual([10, 5, 5, 3]);
+  });
+
+  it('never sends a Round 2 batch above the round\'s batch_size', async () => {
+    const submits: Submit[] = [];
+    const { world, engine } = setup([], { wrapApi: recordSubmits(submits) });
+    world.round = { ...world.round, round_number: 2, batch_size: 4, max_batch_size: 4 };
+    const personas = ['SPRAY', 'BALANCED', 'LEARNER'] as const;
+    await engine.start(options({ teams: personas.map((persona, i) => ({ index: i + 1, persona })) }));
+    const teams = personas.map((_, i) => teamOf(world, botName(i + 1, 'A')));
+    await until(() => teams.every(t => submits.some(s => s.teamId === t)), 'a batch from every team');
+    engine.stop();
+    expect(teams.map(t => submits.find(s => s.teamId === t)?.jokes)).toEqual([4, 4, 3]);
+  });
+
+  it('caps a Round 2 Spray team at 40 jokes, 4 batches of 10', async () => {
+    const submits: Submit[] = [];
+    const { world, engine } = setup([], { wrapApi: recordSubmits(submits) });
+    world.round = { ...world.round, round_number: 2, batch_size: 10, max_batch_size: 10 };
+    await engine.start(options({ teams: [{ index: 1, persona: 'SPRAY' }] }));
+    await until(() => engine.status().teams[0].jm.activity.includes(CAP_REACHED), 'the joke cap');
+    const activity = engine.status().teams[0].jm.activity;
+    engine.stop();
+    expect(submits.map(s => s.jokes)).toEqual([10, 10, 10, 10]);
+    expect(activity).toBe(`done — 40-joke ${CAP_REACHED}`);
+  });
+
+  it('sends more, smaller batches in round 2, stopping at the 40-joke cap', async () => {
     const submits: Submit[] = [];
     const { world, engine } = setup([], { wrapApi: recordSubmits(submits) });
     world.round.round_number = 2;
     await engine.start(options({ teams: [{ index: 1, persona: 'LEARNER' }] }));
     await until(() => engine.status().teams[0].jm.activity.includes(CAP_REACHED), 'the joke cap');
     engine.stop();
-    const cap = jokeCapFor(world.round.batch_size);
+    const cap = JOKE_CAP_PER_ROUND;
     const jokes = submits.reduce((n, s) => n + s.jokes, 0);
-    expect(submits.length).toBeGreaterThan(BATCH_CAP_PER_ROUND);
+    expect(submits.length).toBeGreaterThan(ROUND1_BATCHES_AT_CAP);
     expect(submits.every(s => s.jokes === 3)).toBe(true);
     expect(submits).toHaveLength(Math.ceil(cap / 3));
     expect(jokes).toBeGreaterThanOrEqual(cap);

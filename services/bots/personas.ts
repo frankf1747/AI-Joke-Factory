@@ -27,10 +27,11 @@ export interface Persona {
   readonly publish: (jokeCount: number, rand: () => number) => number;
   /**
    * The Joke Maker's batch size from round 2 on, capped at the round's
-   * batch_size. Round 1 always uses batch_size, because Marketing must split
-   * a round-1 batch into exactly that many jokes (usecase/marketing.go:98-102).
+   * batch_size (10 after Reset Game). Round 1 always uses batch_size (5),
+   * because Marketing must split a round-1 batch into exactly that many jokes
+   * (usecase/marketing.go Split).
    */
-  readonly leanBatchSize?: number;
+  readonly round2BatchSize: number;
   /** Marketing remembers which joke texts sold and chooses with chooseWithMemory. */
   readonly learns?: boolean;
 }
@@ -38,15 +39,16 @@ export interface Persona {
 export const PERSONAS: Readonly<Record<PersonaId, Persona>> = {
   CAREFUL: {
     id: 'CAREFUL', label: 'Careful', submitIntervalMs: 150_000, waitForFeedback: true,
-    publish: n => Math.min(2, n),
+    publish: n => Math.min(2, n), round2BatchSize: 5,
   },
   BALANCED: {
     id: 'BALANCED', label: 'Balanced', submitIntervalMs: 90_000, waitForFeedback: false,
-    publish: (n, rand) => Math.min(rand() < 0.5 ? 3 : 4, n),
+    publish: (n, rand) => Math.min(rand() < 0.5 ? 3 : 4, n), round2BatchSize: 5,
   },
+  /** Spray pushes the biggest batch the round allows: 10 jokes from round 2. */
   SPRAY: {
     id: 'SPRAY', label: 'Spray', submitIntervalMs: 45_000, waitForFeedback: false,
-    publish: n => n,
+    publish: n => n, round2BatchSize: 10,
   },
   /**
    * The Learner closes the loop on both seats. Its Joke Maker resubmits texts
@@ -58,7 +60,7 @@ export const PERSONAS: Readonly<Record<PersonaId, Persona>> = {
    */
   LEARNER: {
     id: 'LEARNER', label: 'Learner', submitIntervalMs: 60_000, waitForFeedback: true,
-    publish: n => Math.min(2, n), leanBatchSize: 3, learns: true,
+    publish: n => Math.min(2, n), round2BatchSize: 3, learns: true,
   },
 };
 
@@ -71,8 +73,12 @@ export const DWELL_MS = { claim: 10_000, split: 15_000, decide: 10_000 } as cons
 export const FEEDBACK_WAIT_MS = 180_000;
 export const QUEUE_POLL_MS = 3_000;
 export const IDLE_POLL_MS = 5_000;
-/** Each classification is a paid Azure LLM call, so each bot team is capped per round. */
-export const BATCH_CAP_PER_ROUND = 8;
+/**
+ * Each classification is a paid Azure LLM call, so each bot team is capped per
+ * round, in JOKES: 40 in both rounds, whatever the batch size, so a persona
+ * that sends batches of 10 gets no more jokes than one that sends batches of 3.
+ */
+export const JOKE_CAP_PER_ROUND = 40;
 export const MAX_BOT_TEAMS = 12;
 
 export function publishCount(
