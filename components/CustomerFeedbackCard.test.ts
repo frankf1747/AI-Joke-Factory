@@ -34,6 +34,10 @@ describe('CustomerFeedbackCardView', () => {
     expect(out).toContain('Topic');
     expect(out).toContain('Wordplay');
     expect(out).toContain('Sold');
+    // Each criterion sits in its own box, not a comma-separated line.
+    expect(out).toMatch(/<li[^>]*>Topic<\/li>/);
+    expect(out).toMatch(/<li[^>]*>Wordplay<\/li>/);
+    expect(out).not.toContain('Topic, ');
   });
 
   it('offers no pop-out in watch mode, even if asked to be popped', () => {

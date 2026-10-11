@@ -13,14 +13,33 @@ import React from 'react';
 import type { FeedbackRow } from '../views/feedback';
 
 /* One joke, compact: its title with the sale status on the right, then one
-   line of the criteria that landed and one of those that missed. Plain text
-   at a readable size, so it scans at a glance in the floating window too. */
+   row of the criteria that landed and one of those that missed, each criterion
+   in its own small box so they read apart at a glance, in the floating window
+   too. */
 const DimLine: React.FC<{ tone: 'good' | 'improve'; labels: string[] }> = ({ tone, labels }) => (
-  <p className={`text-[13px] leading-snug ${tone === 'good' ? 'text-emerald-700' : 'text-amber-700'}`}>
-    <span aria-hidden="true">{tone === 'good' ? '✓ ' : '✗ '}</span>
+  <div className="flex items-start gap-1.5">
+    <span
+      aria-hidden="true"
+      className={`w-4 shrink-0 pt-0.5 text-center text-[13px] font-bold ${tone === 'good' ? 'text-emerald-600' : 'text-amber-600'}`}
+    >
+      {tone === 'good' ? '✓' : '✗'}
+    </span>
     <span className="sr-only">{tone === 'good' ? 'Landed: ' : 'Needs work: '}</span>
-    {labels.join(', ')}
-  </p>
+    <ul className="flex flex-wrap gap-1">
+      {labels.map(l => (
+        <li
+          key={l}
+          className={`rounded-md border px-1.5 py-0.5 text-[12px] font-medium leading-tight ${
+            tone === 'good'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+              : 'border-amber-200 bg-amber-50 text-amber-800'
+          }`}
+        >
+          {l}
+        </li>
+      ))}
+    </ul>
+  </div>
 );
 
 export const FeedbackCard: React.FC<{ row: FeedbackRow }> = ({ row }) => (
@@ -40,7 +59,7 @@ export const FeedbackCard: React.FC<{ row: FeedbackRow }> = ({ row }) => (
     {row.good.length === 0 && row.improve.length === 0 ? (
       <p className="mt-1 text-[13px] text-gray-400 italic">No customer read on this one yet.</p>
     ) : (
-      <div className="mt-1 space-y-0.5">
+      <div className="mt-1.5 space-y-1">
         {row.good.length > 0 && <DimLine tone="good" labels={row.good.map(d => d.label)} />}
         {row.improve.length > 0 && <DimLine tone="improve" labels={row.improve.map(d => d.label)} />}
       </div>
