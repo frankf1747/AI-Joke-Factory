@@ -16,10 +16,10 @@ import {
   type NudgeEvent,
 } from '../services/marketingNudge';
 import { DIMENSIONS, dimById } from '../config/dimensions';
-/* The feedback mapper and its card moved out of this file when the Joke Maker
-   started showing the same per-team rows — see views/feedback.ts. */
+/* The feedback mapper lives in views/feedback.ts; the card, with its Pop out
+   button, in components/CustomerFeedbackCard.tsx. */
 import { toFeedbackRows } from './feedback';
-import { FeedbackCard } from '../components/FeedbackCard';
+import { CustomerFeedbackCard } from '../components/CustomerFeedbackCard';
 import { isWatchMode } from '../services/watchMode';
 import { fmtMoney } from '../services/leanMode';
 import { MARKETING_NOTE_MAX } from '../services/marketingService';
@@ -838,21 +838,8 @@ const QualityControl: React.FC = () => {
               })}
             </div>
           </Card>
-          <Card
-            title="Customer feedback"
-            subtitle="Which criteria landed and which missed — the customers never say by how much"
-            accent={BRAND.sold}
-          >
-            <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
-              {feedbackRows.length === 0 ? (
-                <p className="text-sm text-gray-400 italic py-4 text-center">
-                  No feedback yet — release jokes to start uncovering the target.
-                </p>
-              ) : (
-                feedbackRows.map(r => <FeedbackCard key={r.joke_id} row={r} />)
-              )}
-            </div>
-          </Card>
+          {/* Pop out floats this list above the game; never offered in a watch tab. */}
+          <CustomerFeedbackCard rows={feedbackRows} canPopOut={!watching} />
         </div>
       </div>
 

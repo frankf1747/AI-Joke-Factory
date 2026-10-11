@@ -181,8 +181,13 @@ Publish, Content Waste):
 | **Carrying cost** | The team's carrying cost so far; it rises every minute work waits or jokes sit unsold. |
 | **Publish → first sale** | Average seconds a sold joke waited for its first buyer. |
 
-The **Customer feedback** panel is unchanged: it shows which of the criteria landed and which
-missed, never by how much.
+The **Customer feedback** panel shows which of the criteria landed and which missed, never by how
+much. It is on Marketing's screen only. **Pop out** in its header floats the same live list above
+the game: in Chrome and Edge on a computer it opens a small always-on-top window ("Customer
+feedback", 360 × 520) that stays in front while Marketing works; in other browsers it opens a
+panel pinned to the bottom-right of the page. While it is out, the card reads "Showing in the
+floating window"; **Bring back** (or closing the window) puts it back. Watching a bot's Marketing
+seat from the Bot Panel shows no Pop out button.
 
 ---
 
