@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
-  POP_OUT_HEIGHT, POP_OUT_WIDTH, PopOutPanel, onPopOutClosed, requestPopOutWindow,
+  POP_OUT_HEIGHT, POP_OUT_WIDTH, PopOutPanel, onPopOutClosed, preparePopOutWindow, requestPopOutWindow,
   supportsDocumentPiP, tailwindCdnSrc,
 } from './PopOutPanel';
 
@@ -41,6 +41,31 @@ describe('requestPopOutWindow', () => {
   it('resolves null when the browser refuses (e.g. no user gesture), so the caller falls back', async () => {
     const requestWindow = vi.fn(async () => { throw new DOMException('needs a user gesture', 'NotAllowedError'); });
     expect(await requestPopOutWindow({ documentPictureInPicture: { requestWindow } }, 'Customer feedback')).toBeNull();
+  });
+});
+
+describe('preparePopOutWindow', () => {
+  it('closes the window and returns null when the setup throws, so the caller falls back to the panel', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const close = vi.fn();
+    const pip = {
+      close,
+      get document(): Document { throw new Error('head unavailable'); },
+    } as unknown as Window;
+    const page = { document: {} } as unknown as Window;
+    expect(preparePopOutWindow(page, pip, () => {})).toBeNull();
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+  it('still returns null when closing the window also throws', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const pip = {
+      close: () => { throw new Error('already closed'); },
+      get document(): Document { throw new Error('head unavailable'); },
+    } as unknown as Window;
+    expect(preparePopOutWindow({ document: {} } as unknown as Window, pip, () => {})).toBeNull();
+    warn.mockRestore();
   });
 });
 

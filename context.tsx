@@ -406,8 +406,10 @@ interface GameContextType {
   submitRawBatch: (rawText: string) => Promise<boolean>;
   splitBatch: (batchId: string, jokes: string[]) => Promise<void>;
   unsplitBatch: (batchId: string) => Promise<void>;
-  /** Resolves true when the backend accepted the publish. False after an alert
-   *  otherwise, so the caller keeps its decisions and the typed note. */
+  /** Resolves true when the backend accepted the publish. Resolves false when
+   *  it did not: silently when there is no active round or the batch is not the
+   *  one claimed (nothing was sent), or after an alert when the backend rejected
+   *  it. Either way the caller keeps its decisions and the typed note. */
   publishBatch: (
     batchId: string,
     publishedIds: number[],

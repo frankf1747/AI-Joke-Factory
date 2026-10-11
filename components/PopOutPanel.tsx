@@ -57,7 +57,40 @@ export async function requestPopOutWindow(win: unknown, title: string): Promise<
     const pip = await api.requestWindow({ width: POP_OUT_WIDTH, height: POP_OUT_HEIGHT });
     pip.document.title = title;
     return pip;
-  } catch {
+  } catch (e) {
+    console.warn('Pop-out window unavailable; using the in-page panel instead.', e);
+    return null;
+  }
+}
+
+/**
+ * Styles and wires up a freshly opened pop-out window: mirrors the page's
+ * styles, loads the Tailwind CDN script, and calls `onClosed` when the window
+ * goes away. Returns a teardown function. If any step throws, the window is
+ * closed, the error is logged and null is returned, so the caller falls back to
+ * the in-page panel instead of leaving a blank floating window.
+ */
+export function preparePopOutWindow(page: Window, pip: Window, onClosed: () => void): (() => void) | null {
+  let stopMirror: (() => void) | null = null;
+  let stopWatching: (() => void) | null = null;
+  try {
+    stopMirror = mirrorStyles(page.document, pip.document);
+    const tailwind = tailwindCdnSrc(page.document);
+    if (tailwind) {
+      const script = pip.document.createElement('script');
+      script.src = tailwind;
+      pip.document.head.appendChild(script);
+    }
+    pip.document.body.style.margin = '0';
+    stopWatching = onPopOutClosed(pip, onClosed);
+    return () => {
+      stopWatching?.();
+      stopMirror?.();
+    };
+  } catch (e) {
+    try { stopWatching?.(); stopMirror?.(); } catch { /* ignore */ }
+    try { pip.close(); } catch { /* ignore */ }
+    console.warn('Pop-out window setup failed; using the in-page panel instead.', e);
     return null;
   }
 }
@@ -174,8 +207,7 @@ export const PopOutPanel: React.FC<PopOutPanelProps> = ({ title, open, onClose, 
     }
     let cancelled = false;
     let pip: Window | null = null;
-    let stopMirror: (() => void) | null = null;
-    let stopWatching: (() => void) | null = null;
+    let stopSetup: (() => void) | null = null;
     setMode({ kind: 'pending' });
     void requestPopOutWindow(win, title).then(w => {
       if (cancelled) {
@@ -186,22 +218,18 @@ export const PopOutPanel: React.FC<PopOutPanelProps> = ({ title, open, onClose, 
         setMode({ kind: 'panel' });
         return;
       }
-      pip = w;
-      stopMirror = mirrorStyles(win.document, w.document);
-      const tailwind = tailwindCdnSrc(win.document);
-      if (tailwind) {
-        const script = w.document.createElement('script');
-        script.src = tailwind;
-        w.document.head.appendChild(script);
+      const teardown = preparePopOutWindow(win, w, () => onCloseRef.current());
+      if (!teardown) {
+        setMode({ kind: 'panel' });
+        return;
       }
-      w.document.body.style.margin = '0';
-      stopWatching = onPopOutClosed(w, () => onCloseRef.current());
+      pip = w;
+      stopSetup = teardown;
       setMode({ kind: 'pip', win: w });
     });
     return () => {
       cancelled = true;
-      stopWatching?.();
-      stopMirror?.();
+      stopSetup?.();
       pip?.close();
     };
   }, [open, title]);

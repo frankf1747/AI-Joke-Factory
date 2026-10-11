@@ -78,6 +78,7 @@ type MockBatch = {
   status: BatchStatus;
   submitted_at: string;
   rated_at?: string;
+  marketing_note?: string | null;
   // V2: JM submits a raw text blob; jokes stays empty until Marketing splits it.
   raw_text?: string;
   jokes: Array<{ joke_id: JokeId; joke_text: string; joke_title?: string; is_published?: boolean; topic?: string; first_sold_at?: string | null; published_at?: string | null }>;
@@ -413,6 +414,7 @@ function listTeamBatches(db: MockDb, round_id: RoundId, team_id: TeamId): ApiTea
       status: b.status,
       submitted_at: b.submitted_at,
       rated_at: b.rated_at,
+      marketing_note: b.marketing_note ?? null,
       avg_score: b.avg_score,
       passes_count: b.passes_count,
       jokes: b.jokes.map(j => ({
@@ -1121,6 +1123,7 @@ function route(
 
       const body = (opts.body ?? {}) as {
         jokes?: Array<{ joke_id?: unknown; joke_title?: unknown; is_published?: unknown }>;
+        note?: unknown;
       };
       const decisions = Array.isArray(body.jokes) ? body.jokes : [];
       if (decisions.length === 0) {
@@ -1161,6 +1164,8 @@ function route(
       const publishedSet = new Set(publishedIds);
       batch.status = 'RATED';
       batch.rated_at = isoNow();
+      const note = typeof body.note === 'string' ? body.note.trim() : '';
+      batch.marketing_note = note || null;
       batch.passes_count = publishedIds.length;
       batch.jokes = batch.jokes.map(j => {
         const d = byJoke.get(j.joke_id);
