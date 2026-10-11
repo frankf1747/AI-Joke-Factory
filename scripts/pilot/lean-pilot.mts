@@ -26,8 +26,10 @@
      PILOT_STORAGE / PILOT_HOSTING
                           per joke-minute at classroom speed, default 0.10 / 0.05. The backend
                           charges per wall-clock minute, so both are sent ×10.
-     PILOT_PREFERENCE_BASE, PILOT_CUSTOMERS, PILOT_BUDGET
-                          optional overrides of the backend defaults (3, 150, $3).
+     PILOT_PREFERENCE_BASE, PILOT_CUSTOMERS, PILOT_BUDGET, PILOT_BUY_THRESHOLD
+                          optional overrides of the backend defaults (3, 150, $3, 7).
+     PILOT_PER_PERSONA    teams per persona, default 3 (a class of 80 is about 10).
+     PILOT_HOLD_TEAMS     extra Balanced teams whose Marketing holds batches, default 2.
      PILOT_TAG            free-text label printed under the report title.
 
    The class: reset (Round 1 batch size 5 exactly, Round 2 up to 10); configure both rounds
@@ -71,9 +73,11 @@ const TODAY = new Date().toISOString().slice(0, 10);
 const OUT = process.argv[2] ?? `docs/pilots/${TODAY}-lean-fees-pilot.md`;
 const SIDECAR = OUT.replace(/\.md$/, '') + '.json';
 
-const COUNTS: Record<PersonaId, number> = { CAREFUL: 3, BALANCED: 3, SPRAY: 3, LEARNER: 3 };
+const COUNTS: Record<PersonaId, number> = {
+  CAREFUL: TUNING.perPersona, BALANCED: TUNING.perPersona, SPRAY: TUNING.perPersona, LEARNER: TUNING.perPersona,
+};
 /** Extra Balanced teams whose Marketing holds each batch (BALANCED_HOLDS), reported as HOLDS. */
-const HOLD_TEAMS = 2;
+const HOLD_TEAMS = TUNING.holdTeams;
 const SPEED = 10 as const;
 const POLL_MS = 5_000;
 /** After the arrival window closes: let the backend serve due arrivals, then end the round. */

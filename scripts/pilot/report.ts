@@ -291,6 +291,12 @@ export interface Tuning {
   preferenceBase?: number;
   customers?: number;
   budget?: number;
+  /** Customers' buy threshold τ (fit out of 12 a joke needs before anyone buys it). */
+  buyThreshold?: number;
+  /** Teams per persona (Careful, Balanced, Spray, Learner); default 3. */
+  perPersona: number;
+  /** Extra Balanced teams whose Marketing holds each batch; default 2. */
+  holdTeams: number;
   tag?: string;
   /** The env knobs that changed a value, for the report. */
   overrides: string[];
@@ -329,6 +335,9 @@ export function parseTuning(env: Record<string, string | undefined>): Tuning {
     preferenceBase: num('PILOT_PREFERENCE_BASE', v => v > 1, 'a number > 1'),
     customers: num('PILOT_CUSTOMERS', v => Number.isInteger(v) && v >= 1, 'an integer >= 1'),
     budget: num('PILOT_BUDGET', v => v >= 0, 'a number >= 0'),
+    buyThreshold: num('PILOT_BUY_THRESHOLD', v => v >= 0 && v <= 12, 'a number from 0 to 12'),
+    perPersona: num('PILOT_PER_PERSONA', v => Number.isInteger(v) && v >= 1, 'an integer >= 1') ?? 3,
+    holdTeams: num('PILOT_HOLD_TEAMS', v => Number.isInteger(v) && v >= 0, 'an integer >= 0') ?? 2,
     tag: env.PILOT_TAG?.trim() || undefined,
     overrides,
   };
@@ -352,6 +361,7 @@ export function pilotConfig(t: Tuning, speed: number, round: PilotRound): Config
   if (t.preferenceBase !== undefined) body.preference_base = t.preferenceBase;
   if (t.customers !== undefined) body.customer_count = t.customers;
   if (t.budget !== undefined) body.customer_budget = t.budget;
+  if (t.buyThreshold !== undefined) body.buy_threshold = t.buyThreshold;
   return body;
 }
 

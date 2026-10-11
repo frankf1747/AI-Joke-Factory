@@ -215,8 +215,18 @@ describe('pilot settings', () => {
   it('defaults to the spec fees, a 90 s window and no overrides', () => {
     const t = parseTuning({});
     expect(t).toEqual({
-      fees: SPEC_FEES, window: 90, preferenceBase: undefined, customers: undefined, budget: undefined, tag: undefined, overrides: [],
+      fees: SPEC_FEES, window: 90, preferenceBase: undefined, customers: undefined, budget: undefined,
+      buyThreshold: undefined, perPersona: 3, holdTeams: 2, tag: undefined, overrides: [],
     });
+  });
+
+  it('reads the class size, holding teams and buy threshold, and sends the threshold', () => {
+    const t = parseTuning({ PILOT_PER_PERSONA: '10', PILOT_HOLD_TEAMS: '0', PILOT_BUY_THRESHOLD: '8.5' });
+    expect([t.perPersona, t.holdTeams, t.buyThreshold]).toEqual([10, 0, 8.5]);
+    expect(pilotConfig(t, 10, 2).buy_threshold).toBe(8.5);
+    expect(pilotConfig(parseTuning({}), 10, 2).buy_threshold).toBeUndefined();
+    expect(() => parseTuning({ PILOT_PER_PERSONA: '0' })).toThrow(/PILOT_PER_PERSONA/);
+    expect(() => parseTuning({ PILOT_BUY_THRESHOLD: '13' })).toThrow(/PILOT_BUY_THRESHOLD/);
   });
 
   it('reads the fee knobs and refuses bad ones', () => {
