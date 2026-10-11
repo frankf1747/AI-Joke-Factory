@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { FeeConfigFields, changedFees, feeValuesOf, type FeeConfigValues } from './FeeConfigFields';
+import { FeeConfigFields, SHIPPING_ORDER_TEXT, changedFees, feeValuesOf, shippingOrderError, type FeeConfigValues } from './FeeConfigFields';
 
 const config: FeeConfigValues = {
   arrivalWindowSeconds: 900, shippingFeeSmall: 1, shippingFeeStandard: 2, shippingFeeLarge: 3,
   storageFeePerJokeMinute: 0.1, hostingFeePerJokeMinute: 0.05,
 };
 
-const render = (disabled: boolean) => renderToStaticMarkup(createElement(FeeConfigFields, {
-  values: config, onChange: () => {}, disabled, lockHint: 'Lean settings lock once the round starts',
+const render = (disabled: boolean, values: FeeConfigValues = config) => renderToStaticMarkup(createElement(FeeConfigFields, {
+  values, onChange: () => {}, disabled, lockHint: 'Lean settings lock once the round starts',
   round1BatchSize: 5, round2BatchLimit: 10,
 }));
 
@@ -41,5 +41,19 @@ describe('FeeConfigFields', () => {
     expect(changedFees({ ...config, arrivalWindowSeconds: 0 }, config)).toEqual({ arrivalWindowSeconds: 1 });
     expect(changedFees({ ...config, arrivalWindowSeconds: 600.6 }, config)).toEqual({ arrivalWindowSeconds: 601 });
     expect(changedFees({ ...config, hostingFeePerJokeMinute: Number.NaN }, config)).toEqual({});
+  });
+
+  it('accepts shipping fees that rise (or stay level) with batch size, and refuses any that fall', () => {
+    expect(shippingOrderError(config)).toBeNull();
+    expect(shippingOrderError({ ...config, shippingFeeSmall: 2, shippingFeeStandard: 2, shippingFeeLarge: 2 })).toBeNull();
+    expect(shippingOrderError({ ...config, shippingFeeSmall: 3 })).toBe(SHIPPING_ORDER_TEXT);
+    expect(shippingOrderError({ ...config, shippingFeeLarge: 1.5 })).toBe(SHIPPING_ORDER_TEXT);
+    expect(SHIPPING_ORDER_TEXT).toBe('Shipping fees must rise with batch size: 1–4 jokes ≤ 5 jokes ≤ 6–10 jokes.');
+  });
+
+  it('shows the order message inline while the shipping fees fall, and not otherwise', () => {
+    expect(render(false, { ...config, shippingFeeSmall: 5 })).toContain(`role="alert"`);
+    expect(render(false, { ...config, shippingFeeSmall: 5 })).toContain(SHIPPING_ORDER_TEXT);
+    expect(render(false)).not.toContain(SHIPPING_ORDER_TEXT);
   });
 });

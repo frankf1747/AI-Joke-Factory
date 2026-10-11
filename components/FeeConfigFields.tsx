@@ -1,8 +1,9 @@
 /* The Lean part of the instructor's CONFIG row: the batch-size rule (read
    only: Reset Game sets it, Round 1 exactly 5 and Round 2 up to 10), the
    arrival window and the five fees. One rule set for both rounds, so there is
-   no market mode, preset or WIP limit to choose. The values edit the round the
-   Round 1 / Round 2 tabs select, and lock once it has started. */
+   no market mode, preset or WIP limit to choose. Apply writes them to every
+   round still being configured (both rounds before the class starts); a round
+   that has started is locked. */
 import React from 'react';
 import type { GameConfig } from '../types';
 
@@ -46,6 +47,18 @@ export function changedFees(local: FeeConfigValues, config: FeeConfigValues): Pa
   return out;
 }
 
+export const SHIPPING_ORDER_TEXT = 'Shipping fees must rise with batch size: 1–4 jokes ≤ 5 jokes ≤ 6–10 jokes.';
+
+/**
+ * The server refuses shipping fees that fall with batch size (400
+ * VALIDATION_ERROR), so the form checks first: small ≤ standard ≤ large.
+ * A value that is not a number is ignored here (changedFees leaves it out).
+ */
+export function shippingOrderError(v: Pick<FeeConfigValues, 'shippingFeeSmall' | 'shippingFeeStandard' | 'shippingFeeLarge'>): string | null {
+  const tiers = [v.shippingFeeSmall, v.shippingFeeStandard, v.shippingFeeLarge].filter(Number.isFinite);
+  return tiers.every((x, i) => i === 0 || tiers[i - 1] <= x) ? null : SHIPPING_ORDER_TEXT;
+}
+
 const inputClass = (disabled: boolean) =>
   `w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`;
 
@@ -77,6 +90,7 @@ export const FeeConfigFields: React.FC<{
 }> = ({ values, onChange, disabled, lockHint, round1BatchSize, round2BatchLimit }) => {
   const set = (k: keyof FeeConfigValues) => (v: number) => onChange({ ...values, [k]: v });
   const tip = (text: string) => (disabled ? lockHint : text);
+  const orderError = disabled ? null : shippingOrderError(values);
   return (
     <>
       <div className="flex items-center space-x-3 text-sm text-gray-600" title="Set by Reset Game. Round 1 batches must have exactly this many jokes; Round 2 batches may have fewer.">
@@ -93,6 +107,7 @@ export const FeeConfigFields: React.FC<{
         <FeeInput id="cfg-shipping-standard" label="Shipping fee for 5 jokes" value={values.shippingFeeStandard} step="0.5" min="0" disabled={disabled} onChange={set('shippingFeeStandard')} />
         <FeeInput id="cfg-shipping-large" label="Shipping fee for 6–10 jokes" value={values.shippingFeeLarge} step="0.5" min="0" disabled={disabled} onChange={set('shippingFeeLarge')} />
       </div>
+      {orderError && <p role="alert" className="text-sm text-red-700">{orderError}</p>}
       <div className="flex items-center space-x-3" title={tip("Charged per joke per minute while a batch waits on Marketing's desk, from send until released or discarded")}>
         <label htmlFor="cfg-storage-fee" className="text-sm text-gray-600 whitespace-nowrap">Storage fee per joke-minute:</label>
         <FeeInput id="cfg-storage-fee" label="Storage fee per joke-minute" value={values.storageFeePerJokeMinute} step="0.01" min="0" disabled={disabled} onChange={set('storageFeePerJokeMinute')} />

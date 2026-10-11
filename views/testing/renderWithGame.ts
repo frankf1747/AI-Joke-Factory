@@ -29,7 +29,7 @@ export function fakeGame(over: Partial<GameContextType> = {}): GameContextType {
   const done = async () => {};
   return {
     user: null, roster: [], login: done, instructorLogin: done, logout: () => {},
-    config: TEST_CONFIG, updateConfig: done, setRound: () => {}, setGameActive: done, endRound: done,
+    config: TEST_CONFIG, updateConfig: async () => ({ saved: true, feeRounds: [] }), setRound: () => {}, setGameActive: done, endRound: done,
     toggleTeamPopup: done, resetGame: async () => true, formTeams: done, resetToLobby: () => {},
     teamNames: {}, updateTeamName: () => {}, updateUser: done, deleteUser: done,
     batches: [], addBatch: done, submitRawBatch: async () => true, splitBatch: done, unsplitBatch: done,

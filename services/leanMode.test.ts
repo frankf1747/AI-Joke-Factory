@@ -4,6 +4,7 @@ import {
   LEAN_LEADERBOARD_COLUMNS, MARKET_MODE_LOCKED_MESSAGE, WIP_LIMIT_MESSAGE,
   feeTooltips, fmtCents, fmtFee, fmtMoney, fmtPerMinute, isLeanRound, isMarketModeLocked, isWipLimitReached,
   leanConfigFromRound, leanConfigToBody, leanFeesOf, learningCurvePoints, neverSold, shippingFeeFor, shippingLine,
+  CONFIG_NOT_SAVED_TEXT, configSaveErrorText, feeRoundsText, leanTargetRounds, saveRoundConfig,
 } from './leanMode';
 
 const classic = { market_mode: 'CLASSIC', arrival_window_seconds: 900, setup_cost_per_batch: 0, carrying_cost_per_joke_minute: 0, wip_limit: 0 };
@@ -148,5 +149,104 @@ describe('lean mode helpers', () => {
     expect(learningCurvePoints(series)).toEqual([{ seq: 1, rate: 0 }, { seq: 3, rate: 0.75 }, { seq: 4, rate: 1 }]);
     expect(learningCurvePoints([])).toEqual([]);
     expect(learningCurvePoints(undefined)).toEqual([]);
+  });
+});
+
+describe('fee edits go to every round still being configured', () => {
+  const ids = { 1: 11, 2: 12 };
+
+  it('targets both rounds while neither has started, the selected one first', () => {
+    expect(leanTargetRounds(11, ids, { 1: 'CONFIGURED', 2: 'CONFIGURED' })).toEqual([
+      { number: 1, id: 11 }, { number: 2, id: 12 },
+    ]);
+    expect(leanTargetRounds(12, ids, { 1: 'CONFIGURED', 2: 'CONFIGURED' })).toEqual([
+      { number: 2, id: 12 }, { number: 1, id: 11 },
+    ]);
+  });
+
+  it('never targets a round that has started', () => {
+    expect(leanTargetRounds(12, ids, { 1: 'ENDED', 2: 'CONFIGURED' })).toEqual([{ number: 2, id: 12 }]);
+    expect(leanTargetRounds(11, ids, { 1: 'ACTIVE', 2: 'CONFIGURED' })).toEqual([{ number: 2, id: 12 }]);
+    expect(leanTargetRounds(12, ids, { 1: 'ENDED', 2: 'ACTIVE' })).toEqual([]);
+  });
+
+  it('still targets the selected round when its status is not known yet (the server decides)', () => {
+    expect(leanTargetRounds(11, { 1: null, 2: null }, { 1: null, 2: null })).toEqual([{ number: null, id: 11 }]);
+    expect(leanTargetRounds(11, ids, { 1: null, 2: 'CONFIGURED' })).toEqual([{ number: 1, id: 11 }, { number: 2, id: 12 }]);
+    expect(leanTargetRounds(null, ids, { 1: 'CONFIGURED', 2: 'CONFIGURED' })).toEqual([
+      { number: 1, id: 11 }, { number: 2, id: 12 },
+    ]);
+  });
+
+  it('says which rounds were updated', () => {
+    expect(feeRoundsText([1, 2])).toBe('Fees applied to Rounds 1 and 2');
+    expect(feeRoundsText([2, 1])).toBe('Fees applied to Rounds 1 and 2');
+    expect(feeRoundsText([2])).toBe('Fees applied to Round 2');
+    expect(feeRoundsText([])).toBe('Fees applied');
+  });
+});
+
+describe('a refused settings save', () => {
+  it("shows the server's own message for a 400 VALIDATION_ERROR", () => {
+    const e = { status: 400, code: 'VALIDATION_ERROR', message: 'shipping fees must rise with batch size' };
+    expect(configSaveErrorText(e)).toBe('Settings were not saved: shipping fees must rise with batch size');
+  });
+
+  it('keeps the connection text for anything else', () => {
+    expect(configSaveErrorText(new Error('network down'))).toBe(CONFIG_NOT_SAVED_TEXT);
+    expect(configSaveErrorText({ status: 500, code: 'INTERNAL', message: 'boom' })).toBe(CONFIG_NOT_SAVED_TEXT);
+    expect(configSaveErrorText({ status: 400, code: 'VALIDATION_ERROR', message: '' })).toBe(CONFIG_NOT_SAVED_TEXT);
+    expect(CONFIG_NOT_SAVED_TEXT).toBe('Settings were not saved to the server. Check the connection and try again.');
+  });
+});
+
+describe('saving settings to the rounds', () => {
+  const ids = { 1: 11, 2: 12 };
+  const fake = (failOn: number[] = []) => {
+    const sent: Array<{ id: number; body: Record<string, unknown> }> = [];
+    const send = async (id: number, body: Record<string, unknown>) => {
+      if (failOn.includes(id)) throw { status: 400, code: 'VALIDATION_ERROR', message: 'nope' };
+      sent.push({ id, body });
+    };
+    return { sent, send };
+  };
+  const fee = { storage_fee_per_joke_minute: 0.2 };
+
+  it('writes a fee change to both CONFIGURED rounds; other settings only to the selected one', async () => {
+    const { sent, send } = fake();
+    const out = await saveRoundConfig({
+      current: 11, currentNumber: 1, otherBody: { market_price: 2 }, leanBody: fee,
+      targets: leanTargetRounds(11, ids, { 1: 'CONFIGURED', 2: 'CONFIGURED' }), send,
+    });
+    expect(sent).toEqual([{ id: 11, body: { market_price: 2, ...fee } }, { id: 12, body: fee }]);
+    expect(out).toEqual({ currentSaved: true, feeRounds: [1, 2], error: null });
+  });
+
+  it('never writes a fee change to a round that has started', async () => {
+    const { sent, send } = fake();
+    const out = await saveRoundConfig({
+      current: 12, currentNumber: 2, otherBody: {}, leanBody: fee,
+      targets: leanTargetRounds(12, ids, { 1: 'ENDED', 2: 'CONFIGURED' }), send,
+    });
+    expect(sent).toEqual([{ id: 12, body: fee }]);
+    expect(out.feeRounds).toEqual([2]);
+  });
+
+  it('stops at the first refusal and reports what was saved', async () => {
+    const first = fake([11]);
+    const a = await saveRoundConfig({
+      current: 11, currentNumber: 1, otherBody: {}, leanBody: fee,
+      targets: leanTargetRounds(11, ids, { 1: 'CONFIGURED', 2: 'CONFIGURED' }), send: first.send,
+    });
+    expect(first.sent).toEqual([]);
+    expect(a).toMatchObject({ currentSaved: false, feeRounds: [] });
+    expect(a.error).toMatchObject({ status: 400 });
+    const second = fake([12]);
+    const b = await saveRoundConfig({
+      current: 11, currentNumber: 1, otherBody: {}, leanBody: fee,
+      targets: leanTargetRounds(11, ids, { 1: 'CONFIGURED', 2: 'CONFIGURED' }), send: second.send,
+    });
+    expect(b).toMatchObject({ currentSaved: true, feeRounds: [1] });
+    expect(b.error).not.toBeNull();
   });
 });

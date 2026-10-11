@@ -171,6 +171,95 @@ export const MARKET_MODE_LOCKED_MESSAGE = 'MARKET_MODE_LOCKED';
 /** What the instructor sees when the backend refuses a fee or market change after the start. */
 export const MARKET_MODE_LOCKED_TEXT = "Fees and Lean settings can't change once a round has started.";
 
+/** What the instructor sees when a settings save fails for any reason but a validation refusal. */
+export const CONFIG_NOT_SAVED_TEXT = 'Settings were not saved to the server. Check the connection and try again.';
+
+/**
+ * The alert for a failed settings save. A 400 VALIDATION_ERROR is the server
+ * refusing a value, not an outage, so its own message is shown.
+ */
+export function configSaveErrorText(e: unknown): string {
+  const err = e as { status?: unknown; code?: unknown; message?: unknown } | null;
+  const message = typeof err?.message === 'string' ? err.message.trim() : '';
+  if (err && err.status === 400 && err.code === 'VALIDATION_ERROR' && message) return `Settings were not saved: ${message}`;
+  return CONFIG_NOT_SAVED_TEXT;
+}
+
+type RoundNo = 1 | 2;
+type RoundStatusOf = 'CONFIGURED' | 'ACTIVE' | 'ENDED' | null;
+
+/**
+ * Where a Lean settings edit goes. One rule set and one set of fees for both
+ * rounds (spec §1), so the edit is written to every round still CONFIGURED,
+ * the selected round (`current`) first. A round that has started is never a
+ * target. The selected round is kept when its status is not known yet: the
+ * server stays the authority and answers 409 if it has started.
+ */
+export function leanTargetRounds(
+  current: number | null,
+  ids: Readonly<Record<RoundNo, number | null>>,
+  statuses: Readonly<Record<RoundNo, RoundStatusOf>>,
+): Array<{ number: RoundNo | null; id: number }> {
+  const out: Array<{ number: RoundNo | null; id: number }> = [];
+  const currentNo = ([1, 2] as const).find(n => ids[n] != null && ids[n] === current) ?? null;
+  if (current != null && (currentNo == null || statuses[currentNo] == null || statuses[currentNo] === 'CONFIGURED')) {
+    out.push({ number: currentNo, id: current });
+  }
+  for (const n of [1, 2] as const) {
+    const id = ids[n];
+    if (id == null || id === current || statuses[n] !== 'CONFIGURED') continue;
+    out.push({ number: n, id });
+  }
+  return out;
+}
+
+/**
+ * Sends one settings edit: the selected round (`current`) gets every changed
+ * setting, its Lean part only when it is a target; every other target round
+ * gets the Lean part alone. Stops at the first refusal and returns it, with
+ * the round numbers whose fees were written so far.
+ */
+export async function saveRoundConfig(o: {
+  current: number;
+  currentNumber: RoundNo | null;
+  otherBody: Record<string, unknown>;
+  leanBody: Record<string, unknown>;
+  targets: ReadonlyArray<{ number: RoundNo | null; id: number }>;
+  send: (roundId: number, body: Record<string, unknown>) => Promise<unknown>;
+}): Promise<{ currentSaved: boolean; feeRounds: number[]; error: unknown }> {
+  const hasLean = Object.keys(o.leanBody).length > 0;
+  const currentTarget = hasLean ? o.targets.find(t => t.id === o.current) : undefined;
+  const first = { ...o.otherBody, ...(currentTarget ? o.leanBody : {}) };
+  const feeRounds: number[] = [];
+  if (Object.keys(first).length > 0) {
+    try {
+      await o.send(o.current, first);
+    } catch (error) {
+      return { currentSaved: false, feeRounds, error };
+    }
+  }
+  if (currentTarget) feeRounds.push(currentTarget.number ?? o.currentNumber ?? 1);
+  if (!hasLean) return { currentSaved: true, feeRounds, error: null };
+  for (const t of o.targets) {
+    if (t.id === o.current) continue;
+    try {
+      await o.send(t.id, o.leanBody);
+    } catch (error) {
+      return { currentSaved: true, feeRounds, error };
+    }
+    if (t.number != null) feeRounds.push(t.number);
+  }
+  return { currentSaved: true, feeRounds, error: null };
+}
+
+/** "Fees applied to Rounds 1 and 2" / "Fees applied to Round 2". */
+export function feeRoundsText(rounds: readonly number[]): string {
+  const sorted = [...new Set(rounds)].sort((a, b) => a - b);
+  if (sorted.length === 0) return 'Fees applied';
+  if (sorted.length === 1) return `Fees applied to Round ${sorted[0]}`;
+  return `Fees applied to Rounds ${sorted.slice(0, -1).join(', ')} and ${sorted[sorted.length - 1]}`;
+}
+
 /** True for the backend's 409 refusal to change Lean settings after a round started. */
 export function isMarketModeLocked(e: unknown): boolean {
   const err = e as { status?: unknown; message?: unknown } | null;

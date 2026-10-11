@@ -15,8 +15,8 @@ import { LeanDebrief } from '../components/LeanDebrief';
 import { LeanChartsPanel } from '../components/leanCharts/LeanChartsPanel';
 import { useLeanCharts } from '../services/useLeanCharts';
 import { leanChartsVisibility, leanRoundFlags, resolveLeanChartsRound } from '../services/leanCharts';
-import { FeeConfigFields, changedFees, feeValuesOf, type FeeConfigValues } from '../components/FeeConfigFields';
-import { LEAN_LEADERBOARD_COLUMNS, fmtMoney, leanFeesOf, neverSold, type LeanSortKey } from '../services/leanMode';
+import { FeeConfigFields, changedFees, feeValuesOf, shippingOrderError, type FeeConfigValues } from '../components/FeeConfigFields';
+import { LEAN_LEADERBOARD_COLUMNS, feeRoundsText, fmtMoney, leanFeesOf, neverSold, type LeanSortKey } from '../services/leanMode';
 
 // Expanded Palette for more teams
 const PALETTE = [
@@ -57,6 +57,8 @@ const Instructor: React.FC = () => {
   const [localNudge2, setLocalNudge2] = useState(config.marketingNudge2Seconds);
   // The Lean fees and arrival window — edit the current round, like the fields above.
   const [localFees, setLocalFees] = useState<FeeConfigValues>(() => feeValuesOf(config));
+  /** After Apply: which rounds the fees were written to, e.g. "Fees applied to Rounds 1 and 2". */
+  const [feeNotice, setFeeNotice] = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showEndRound1Confirm, setShowEndRound1Confirm] = useState(false);
 
@@ -200,8 +202,13 @@ const Instructor: React.FC = () => {
     (canEditPricing && (localMarketPrice !== config.marketPrice || localCostOfPublishing !== config.costOfPublishing)) ||
     (canEditNudges && (localNudge1 !== config.marketingNudge1Seconds || localNudge2 !== config.marketingNudge2Seconds)) ||
     (canEditLean && Object.keys(changedFees(localFees, config)).length > 0);
+  // The server refuses shipping fees that fall with batch size; FeeConfigFields says so inline.
+  const feeOrderBlocked = canEditLean && shippingOrderError(localFees) != null;
+  const canApply = hasPendingConfigChanges && !feeOrderBlocked;
 
-  const handleUpdateSettings = () => {
+  const handleUpdateSettings = async () => {
+    setFeeNotice(null);
+    if (feeOrderBlocked) return;
     const updates: any = {};
     if (canEditBudget && localBudget !== config.customerBudget) updates.customerBudget = localBudget;
     if (canEditPricing && localMarketPrice !== config.marketPrice) updates.marketPrice = localMarketPrice;
@@ -216,7 +223,8 @@ const Instructor: React.FC = () => {
     // The fees and the arrival window (clamped to at least 1 s: 0 would bring every customer at once).
     if (canEditLean) Object.assign(updates, changedFees(localFees, config));
     if (Object.keys(updates).length === 0) return;
-    updateConfig(updates);
+    const result = await updateConfig(updates);
+    if (result.feeRounds.length > 0) setFeeNotice(feeRoundsText(result.feeRounds));
   };
 
   // --- Lobby Logic ---
@@ -2472,16 +2480,19 @@ const Instructor: React.FC = () => {
                 type="button"
                 onClick={handleUpdateSettings}
                 variant="secondary"
-                disabled={!hasPendingConfigChanges}
+                disabled={!canApply}
                 className={
                   `px-4 py-1 text-xs font-semibold transition-colors ` +
-                  (hasPendingConfigChanges
+                  (canApply
                     ? 'bg-amber-100 text-amber-900 hover:bg-amber-200 ring-2 ring-amber-200'
                     : 'opacity-60')
                 }
               >
                 Apply
               </Button>
+              {feeNotice && !hasPendingConfigChanges && (
+                <span role="status" className="text-xs text-emerald-700 whitespace-nowrap">{feeNotice}</span>
+              )}
             </div>
 
             {/* Row 4: the hidden ideal joke. The backend will not start a round without a

@@ -30,7 +30,7 @@ import { ApiError } from './services/apiClient';
 import { clearPersisted, getWatchIdentity, isWatchMode, mayClaimMarketingBatch } from './services/watchMode';
 import { setMockRoundNumber } from './services/mockApi';
 import { DEFAULT_IDEAL_PROFILE } from './config/dimensions';
-import { LEAN_DEFAULTS, MARKET_MODE_LOCKED_TEXT, WIP_LIMIT_TEXT, isMarketModeLocked, isWipLimitReached, leanConfigFromRound, leanConfigToBody } from './services/leanMode';
+import { LEAN_DEFAULTS, MARKET_MODE_LOCKED_TEXT, WIP_LIMIT_TEXT, configSaveErrorText, isMarketModeLocked, isWipLimitReached, leanConfigFromRound, leanConfigToBody, leanTargetRounds, saveRoundConfig } from './services/leanMode';
 import { isCompleteProfile } from './components/IdealProfilePicker';
 
 const LS_USER_ID = 'joke_factory_user_id';
@@ -377,6 +377,12 @@ export function normalizeInstructorStats(raw: any): ApiInstructorStatsResponse {
   };
 }
 
+export interface ConfigSaveResult {
+  /** False when the selected round refused the save (or there was no round to save to). */
+  saved: boolean;
+  feeRounds: number[];
+}
+
 export interface GameContextType {
   user: User | null;
   roster: User[]; // Instructor: lobby; JM/QC: teammates
@@ -385,7 +391,13 @@ export interface GameContextType {
   logout: () => void;
   
   config: GameConfig;
-  updateConfig: (updates: Partial<GameConfig>) => Promise<void>;
+  /**
+   * Applies `updates` locally and persists the round parameters. Lean settings
+   * (fees, arrival window) go to every round still CONFIGURED; the rest to the
+   * selected round. feeRounds lists the round numbers whose Lean settings were
+   * written (empty when none changed or the save failed).
+   */
+  updateConfig: (updates: Partial<GameConfig>) => Promise<ConfigSaveResult>;
   setRound: (round: number) => void;
   setGameActive: (active: boolean) => Promise<void>;
   endRound: () => Promise<void>;
@@ -1568,29 +1580,38 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     clearPersisted([LS_SUBMITTED_BATCH_JOKES, LS_QC_RATED_HISTORY]);
   };
 
-  const updateConfig = async (updates: Partial<GameConfig>) => {
+  const updateConfig = async (updates: Partial<GameConfig>): Promise<ConfigSaveResult> => {
     const previous = config;
     setConfig(prev => ({ ...prev, ...updates }));
 
     // Client-only knobs: the marketing nudge timers are React state by design and have no
     // backend column. Everything else is a real round parameter and must be persisted, or
     // the instructor's settings are silently discarded (they were, until now).
-    if (!roundId || !user || user.role !== ('INSTRUCTOR' as Role)) return;
+    if (!roundId || !user || user.role !== ('INSTRUCTOR' as Role)) return { saved: true, feeRounds: [] };
 
-    const body: Record<string, unknown> = {};
-    if (updates.customerBudget !== undefined) body.customer_budget = updates.customerBudget;
-    if (updates.marketPrice !== undefined) body.market_price = updates.marketPrice;
-    if (updates.costOfPublishing !== undefined) body.cost_of_publishing = updates.costOfPublishing;
-    if (updates.costOfDiscard !== undefined) body.cost_of_discard = updates.costOfDiscard;
-    if (updates.idealProfile !== undefined) body.ideal_profile = updates.idealProfile;
-    Object.assign(body, leanConfigToBody(updates));
+    const otherBody: Record<string, unknown> = {};
+    if (updates.customerBudget !== undefined) otherBody.customer_budget = updates.customerBudget;
+    if (updates.marketPrice !== undefined) otherBody.market_price = updates.marketPrice;
+    if (updates.costOfPublishing !== undefined) otherBody.cost_of_publishing = updates.costOfPublishing;
+    if (updates.costOfDiscard !== undefined) otherBody.cost_of_discard = updates.costOfDiscard;
+    if (updates.idealProfile !== undefined) otherBody.ideal_profile = updates.idealProfile;
+    // One rule set and one set of fees for both rounds (spec §1): a Lean edit goes to every
+    // round still CONFIGURED, the selected one included; a started round stays locked.
+    const leanBody = leanConfigToBody(updates) as Record<string, unknown>;
 
-    if (Object.keys(body).length === 0) return;
+    if (Object.keys(otherBody).length === 0 && Object.keys(leanBody).length === 0) return { saved: true, feeRounds: [] };
 
-    try {
-      await instructorService.updateRoundConfig(roundId, body);
-    } catch (e) {
-      console.error('Failed to persist round config', e);
+    const currentNumber = roundIds[1] === roundId ? 1 : roundIds[2] === roundId ? 2 : null;
+    const result = await saveRoundConfig({
+      current: roundId, currentNumber, otherBody, leanBody,
+      targets: leanTargetRounds(roundId, roundIds, roundStatuses),
+      send: (id, body) => instructorService.updateRoundConfig(id as RoundId, body),
+    });
+    if (result.error == null) return { saved: true, feeRounds: result.feeRounds };
+
+    const e = result.error;
+    console.error('Failed to persist round config', e);
+    if (!result.currentSaved) {
       // The server refused (or never saw) these values: put back what was on screen before,
       // for the persisted fields only. Client-only knobs (nudge timers) were never sent.
       const persistedKeys = (Object.keys(updates) as (keyof GameConfig)[]).filter(
@@ -1603,12 +1624,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return next;
         });
       }
-      if (isMarketModeLocked(e)) {
-        alert(MARKET_MODE_LOCKED_TEXT);
-        return;
-      }
-      alert('Settings were not saved to the server. Check the connection and try again.');
     }
+    alert(isMarketModeLocked(e) ? MARKET_MODE_LOCKED_TEXT : configSaveErrorText(e));
+    return { saved: result.currentSaved, feeRounds: result.feeRounds };
   };
 
   // --- LOBBY & TEAM FORMATION LOGIC ---

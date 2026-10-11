@@ -29,4 +29,12 @@ describe('Instructor screen, one Lean rule set', () => {
     expect(locked).toMatch(/id="cfg-storage-fee"[^>]*disabled=""/);
     expect(locked).toContain('title="Lean settings lock once the round starts"');
   });
+
+  it('says inline why shipping fees that fall with batch size cannot be applied', () => {
+    const between = { ...TEST_CONFIG, isActive: false, shippingFeeSmall: 4 };
+    const out = renderWithGame(Instructor, { user: instructor, config: between, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' } });
+    expect(out).toContain('Shipping fees must rise with batch size: 1–4 jokes ≤ 5 jokes ≤ 6–10 jokes.');
+    const ok = renderWithGame(Instructor, { user: instructor, config: { ...TEST_CONFIG, isActive: false }, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' } });
+    expect(ok).not.toContain('Shipping fees must rise');
+  });
 });
