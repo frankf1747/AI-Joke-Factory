@@ -22,6 +22,8 @@ import { toFeedbackRows } from './feedback';
 import { FeedbackCard } from '../components/FeedbackCard';
 import { isWatchMode } from '../services/watchMode';
 import { fmtMoney } from '../services/leanMode';
+import { MARKETING_NOTE_MAX } from '../services/marketingService';
+import { releaseOutcome } from './marketingRelease';
 
 /* ---- Icons for the backend's Topic categories. Keyed by the category string
    itself so the picker stays in step with config/dimensions automatically: add
@@ -437,11 +439,11 @@ const QualityControl: React.FC = () => {
   const release = async () => {
     if (watching) return;
     if (!canRelease || !qcQueue) return;
-    /* Only titles survive to the wire now. The backend stores no rating, no tag,
-       no batch feedback and no topic, so the old ratings/tags/topics payloads had
-       nowhere to go; `submittingIds` already states exactly which jokes ship, which
-       is what publish wants. The topic picker stays — it is deliberately decorative
-       (the LLM classifies topic from the joke text), and nothing here claims it was
+    /* Titles and Marketing's note go on the wire. The backend stores no rating,
+       no tag and no topic, so the old ratings/tags/topics payloads had nowhere to
+       go; `submittingIds` already states exactly which jokes ship, which is what
+       publish wants. The topic picker stays — it is deliberately decorative (the
+       LLM classifies topic from the joke text), and nothing here claims it was
        saved. It is still required by `canRelease` as a "think about it" gate. */
     const titlesOut: Record<string, string> = {};
     for (const id of submittingIds) {
@@ -450,20 +452,28 @@ const QualityControl: React.FC = () => {
 
     const batchId = String(qcQueue.batch.batch_id);
     const count = submittingIds.length;
+    const note = batchFeedback;
     dispatchNudge({ type: 'RELEASED' });   // no popup may ambush a team that shipped
-    await publishBatch(batchId, submittingIds, titlesOut);
+    const ok = await publishBatch(batchId, submittingIds, titlesOut, note);
 
     /* No local feedback entry is appended here. Releasing a joke does not mean a
        customer has judged it — the panel fills in from the backend's own
        feedback poll once the scoring engine has actually run. */
 
-    // TEMP (ranking disabled): used to read "Rank 1 + N selected".
-    setToast(
-      count === 0
-        ? `Passed on this batch · ${orderIds.length} joke${orderIds.length > 1 ? 's' : ''} discarded · −${fmt$(orderIds.length * config.costOfDiscard)}`
-        : `Released ${count} joke${count > 1 ? 's' : ''} · −${fmt$(count * config.costOfPublishing)}`,
-    );
-    window.setTimeout(() => setToast(null), 2800);
+    // A failed publish has already alerted: no toast, and the note stays in the box.
+    const outcome = releaseOutcome({
+      ok,
+      releasedCount: count,
+      batchSize: orderIds.length,
+      costOfPublishing: config.costOfPublishing,
+      costOfDiscard: config.costOfDiscard,
+      note,
+    });
+    if (outcome.clearNote) setBatchFeedback('');
+    if (outcome.toast) {
+      setToast(outcome.toast);
+      window.setTimeout(() => setToast(null), 2800);
+    }
   };
 
   React.useEffect(() => {
@@ -728,26 +738,33 @@ const QualityControl: React.FC = () => {
                   );
                 })}
 
-                {/* TODO(phase-3D): batch feedback is COLLECTED BUT NOT PERSISTED.
-                    V2 has no field for it — the publish payload carries only
-                    {joke_id, joke_title, is_published}, and there is no batch
-                    feedback column, no /ratings route and nothing on the Joke
-                    Maker's batch list that could return it. The label used to read
-                    "(sent to Joke Maker)" and the release toast used to say
-                    "feedback sent to Joke Maker"; both were false, and doubly so
-                    across browsers, since the only thing that ever stored this was
-                    the marketer's OWN localStorage. Copy now says what actually
-                    happens. Restore the promise only once the backend grows a
-                    field to put it in. */}
+                {/* Marketing's note to its Joke Maker. It goes out as `note` on this
+                    batch's publish call — Release or Discard batch alike — is stored
+                    on the batch (batches.marketing_note) and shows under the batch
+                    in the Joke Maker's Value stream. Written once: there is no
+                    editing after release. The box clears when the publish succeeds
+                    and keeps its text when it fails (views/marketingRelease.ts).
+                    maxLength stops input at MARKETING_NOTE_MAX. */}
                 <div className="rounded-lg border border-gray-200 bg-white p-4">
-                  <SectionLabel className="mb-1.5">
-                    Batch feedback <span className="text-gray-400">(for your team's discussion — not sent)</span>
-                  </SectionLabel>
+                  <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                    <SectionLabel>
+                      Note to your Joke Maker <span className="text-gray-400">(sent with this batch)</span>
+                    </SectionLabel>
+                    <span
+                      className={`text-[11px] tabular-nums ${
+                        batchFeedback.length >= MARKETING_NOTE_MAX ? 'font-semibold text-amber-700' : 'text-gray-400'
+                      }`}
+                    >
+                      {batchFeedback.length}/{MARKETING_NOTE_MAX}
+                    </span>
+                  </div>
                   <textarea
                     value={batchFeedback}
-                    onChange={(e) => setBatchFeedback(e.target.value)}
+                    onChange={(e) => setBatchFeedback(e.target.value.slice(0, MARKETING_NOTE_MAX))}
+                    maxLength={MARKETING_NOTE_MAX}
                     rows={3}
-                    placeholder="Notes on the whole batch — what landed, what to drop next round…"
+                    aria-label="Note to your Joke Maker"
+                    placeholder="What should they change next? What did customers like?"
                     className="w-full bg-white border border-gray-300 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#8bb8e8] resize-none placeholder-gray-400"
                   />
                 </div>

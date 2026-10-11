@@ -514,6 +514,10 @@ export interface TeamBatch {
   processed_at: string | null;
   /** `var jokes []gin.H` at app/http/handler/batch.go:81 — null, not [], for an empty batch. */
   jokes: TeamBatchJoke[] | null;
+  /** Marketing's note to the Joke Maker, written once at publish (handler/batch.go
+   *  List). null when Marketing wrote nothing; absent on a backend older than
+   *  migration 0004_batch_marketing_note, which the client treats as null. */
+  marketing_note?: string | null;
 }
 
 /**
@@ -809,8 +813,11 @@ export interface PublishJokeDecision {
   is_published: boolean;
 }
 
-/** app/http/dto/models.go:36-38 */
-export interface PublishRequest { jokes: PublishJokeDecision[]; }
+/** app/http/dto/models.go PublishRequest. `note` is Marketing's optional note to
+ *  the Joke Maker: the backend trims it, stores NULL when it is blank, and
+ *  answers 400 VALIDATION_ERROR field "note" when it is over 500 characters
+ *  (runes). Bots never send one. */
+export interface PublishRequest { jokes: PublishJokeDecision[]; note?: string; }
 
 /**
  * POST /v1/marketing/batches/{bid}/publish — wrapped.

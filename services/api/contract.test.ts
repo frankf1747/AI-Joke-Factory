@@ -263,6 +263,34 @@ describe('marketing', () => {
     expect(sentBody(spy)).toEqual({ jokes: [{ joke_id: 1, joke_title: 't', is_published: true }] });
   });
 
+  it('sends Marketing\'s note with the decisions (dto.PublishRequest.Note)', async () => {
+    const body: Wrapped<PublishResponse> = {
+      data: {
+        batch: { batch_id: 501, status: 'PROCESSED', processed_at: '2026-01-12T10:30:00Z' },
+        published: { count: 1, joke_ids: [1] },
+        discarded: { count: 0, joke_ids: [] },
+      },
+    };
+    const spy = stub(body);
+    await marketingApi.publish(501, { jokes: [{ joke_id: 1, joke_title: 't', is_published: true }], note: 'More puns' });
+    expect(sentBody(spy)).toEqual({ jokes: [{ joke_id: 1, joke_title: 't', is_published: true }], note: 'More puns' });
+  });
+
+  it('rejects a note over 500 characters with VALIDATION_ERROR on field note', async () => {
+    const body: ApiErrorBody = {
+      error: { code: 'VALIDATION_ERROR', message: 'must be at most 500 characters', field: 'note' },
+    };
+    stub(body, 400);
+    const err = await marketingApi.publish(501, {
+      jokes: [{ joke_id: 1, joke_title: 't', is_published: true }],
+      note: 'x'.repeat(501),
+    }).catch(e => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(400);
+    expect(err.field).toBe('note');
+    expect(err.message).toBe('must be at most 500 characters');
+  });
+
   it('rejects an all-discard publish with NO_JOKE_PUBLISHED', async () => {
     // CORRECTED. An earlier draft of this plan asserted the opposite, on the
     // strength of usecase/marketing.go:81-82, which validates only that
@@ -366,6 +394,33 @@ describe('team', () => {
     const res = await teamApi.batches(1, 3);
     expect(res.batches![0].jokes![1].joke_title).toBeNull();
     expect(res.batches![0].jokes![1].first_sold_at).toBeNull();
+  });
+
+  /** ADDED 2026-10-11 with migration 0004 (handler/batch.go List). Every batch
+   *  carries marketing_note: Marketing's note as a string, or null. */
+  it('reads marketing_note on a team batch listing', async () => {
+    const body: Wrapped<TeamBatchesResponse> = {
+      data: {
+        batches: [
+          {
+            batch_id: 502, status: 'PROCESSED',
+            submitted_at: '2026-01-12T10:20:00Z', processed_at: '2026-01-12T10:30:00Z',
+            marketing_note: 'Shorter setups.\nMore puns.',
+            jokes: null,
+          },
+          {
+            batch_id: 503, status: 'SUBMITTED',
+            submitted_at: '2026-01-12T10:31:00Z', processed_at: null,
+            marketing_note: null,
+            jokes: null,
+          },
+        ],
+      },
+    };
+    stub(body);
+    const res = await teamApi.batches(1, 3);
+    expect(res.batches![0].marketing_note).toBe('Shorter setups.\nMore puns.');
+    expect(res.batches![1].marketing_note).toBeNull();
   });
 
   /** ADDED 2026-09-16 with first_sold_at (handler/batch.go:90).

@@ -23,7 +23,7 @@ import { teamApi } from './services/api';
 import { instructorService } from './services/instructorService';
 import type { PatchUserRole } from './services/instructorService';
 import { jmService } from './services/jmService';
-import { marketingService } from './services/marketingService';
+import { buildPublishBody, marketingService, publishFailureMessage, toMarketingNote } from './services/marketingService';
 import { customerService } from './services/customerService';
 import { sessionService } from './services/sessionService';
 import { ApiError } from './services/apiClient';
@@ -200,6 +200,9 @@ export function mapBatchFromTeamList(
     jokes,
     submitted_at: teamBatches.submitted_at,
     rated_at: ratedAtRaw,
+    // Marketing's note to the Joke Maker. An older backend sends no key at all,
+    // and that, null and a blank string all read as "no note".
+    marketing_note: toMarketingNote(teamBatches.marketing_note),
     // No avg_score / passes_count / feedback / tag_summary: the batch listing
     // sends none of them. `feedback` and `tagSummary` survive only as local
     // state, merged back in by the caller from its persisted copy.
@@ -403,11 +406,14 @@ interface GameContextType {
   submitRawBatch: (rawText: string) => Promise<boolean>;
   splitBatch: (batchId: string, jokes: string[]) => Promise<void>;
   unsplitBatch: (batchId: string) => Promise<void>;
+  /** Resolves true when the backend accepted the publish. False after an alert
+   *  otherwise, so the caller keeps its decisions and the typed note. */
   publishBatch: (
     batchId: string,
     publishedIds: number[],
     jokeTitles: { [jokeId: string]: string },
-  ) => Promise<void>;
+    note?: string,
+  ) => Promise<boolean>;
   
   sales: Record<string, number>; // jokeId -> count of purchases
 
@@ -1861,50 +1867,27 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     batchId: string,
     publishedIds: number[],
     jokeTitles: { [jokeId: string]: string },
-  ) => {
-    if (!roundId) return;
+    note = '',
+  ): Promise<boolean> => {
+    if (!roundId) return false;
     const bid = Number(batchId) as BatchId;
     const active = qcQueue?.batch?.batch_id === bid ? qcQueue : null;
-    if (!active) return;
+    if (!active) return false;
 
-    // The backend requires a decision for EVERY joke in the batch, not just the published
-    // ones (a partial list is rejected), so build from the batch contents.
-    const published = new Set(publishedIds);
-    const jokes = (active.jokes ?? []).map(j => ({
-      joke_id: Number(j.joke_id),
-      joke_title: published.has(Number(j.joke_id)) ? (jokeTitles[String(j.joke_id)] ?? '').trim() : '',
-      is_published: published.has(Number(j.joke_id)),
-    }));
+    // One decision per joke in the batch, plus Marketing's note when it has any
+    // text — see buildPublishBody.
+    const body = buildPublishBody(active.jokes ?? [], publishedIds, jokeTitles, note);
 
     try {
-      await marketingService.publish(bid, { jokes });
+      await marketingService.publish(bid, body);
       setQcQueue(null);
+      return true;
     } catch (e) {
-      if (e instanceof ApiError) {
-        // NO_JOKE_PUBLISHED arrives as a 400 VALIDATION_ERROR whose *message* is the
-        // sentinel (field: 'jokes'). Round 1 only — round 2 accepts an all-discard
-        // batch by design, so this alert should never fire there.
-        if (e.message === 'NO_JOKE_PUBLISHED') {
-          alert('Round 1 requires at least one joke to be published.');
-          return;
-        }
-        if (e.status === 409 && e.code === 'ROUND_NOT_ACTIVE') {
-          alert('Round is not active. Please wait for the instructor to start.');
-          return;
-        }
-        // V2 renamed these two: BATCH_ALREADY_RATED -> BATCH_ALREADY_PROCESSED and
-        // NOT_ASSIGNED_TO_THIS_QC -> NOT_ASSIGNED_TO_THIS_MARKETER. The old handler
-        // was matching codes this backend no longer emits.
-        if (e.status === 409 && e.code === 'BATCH_ALREADY_PROCESSED') {
-          alert('This batch was already processed.');
-          return;
-        }
-        if (e.status === 403 && e.code === 'NOT_ASSIGNED_TO_THIS_MARKETER') {
-          alert('You are not assigned to this batch.');
-          return;
-        }
-      }
-      alert('Failed to publish the batch. Please try again.');
+      // The batch stays claimed and the desk keeps its decisions and note, so the
+      // marketer can fix the problem and release again. A note over 500
+      // characters shows the server's own message (publishFailureMessage).
+      alert(publishFailureMessage(e));
+      return false;
     }
   };
 

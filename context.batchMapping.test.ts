@@ -44,6 +44,19 @@ describe('mapBatchFromTeamList', () => {
     expect((b.jokes[0] as never as { sold_count: number }).sold_count).toBe(5);
   });
 
+  it('keeps Marketing\'s note', () => {
+    const b = mapBatchFromTeamList(1, 1 as never, { ...realBatch, marketing_note: 'More puns.\nShorter setups.' } as never);
+    expect(b.marketing_note).toBe('More puns.\nShorter setups.');
+  });
+
+  it('reads a missing, null or blank marketing_note as null', () => {
+    // realBatch has no marketing_note key at all: what a backend before migration 0004 sends.
+    expect(mapBatchFromTeamList(1, 1 as never, realBatch as never).marketing_note).toBeNull();
+    for (const marketing_note of [null, '', '  \n']) {
+      expect(mapBatchFromTeamList(1, 1 as never, { ...realBatch, marketing_note } as never).marketing_note).toBeNull();
+    }
+  });
+
   it('survives a null jokes array', () => {
     // handler/batch.go declares `var jokes []gin.H`, so an empty batch sends null, not [].
     const b = mapBatchFromTeamList(1, 1 as never, { ...realBatch, jokes: null } as never);

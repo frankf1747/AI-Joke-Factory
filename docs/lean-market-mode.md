@@ -142,13 +142,16 @@ When the count reaches the limit the text turns amber, reads
 A batch counts as waiting from the moment it is sent until Marketing releases it.
 
 What to do when blocked: stop writing new batches, walk over and help your Marketing partner
-decide, or improve the next batch using the customer feedback. If the limit is reached between
+decide, or improve the next batch using Marketing's notes. If the limit is reached between
 screen refreshes and the server refuses the send, an alert says
 "Marketing still has batches waiting. In a pull system you wait — or go help them decide." and the
 draft is kept so it can be sent later.
 
 The Joke Maker does not see the Customer feedback panel; it is on Marketing's screen only. The
-lean charts are on the instructor's screen only; the student screens do not show them.
+Joke Maker hears from Marketing instead: in **Value stream**, a batch Marketing left a note on
+shows a speech-bubble icon ("Marketing left a note"), and expanding it shows the note under
+"From Marketing", above the jokes. The lean charts are on the instructor's screen only; the
+student screens do not show them.
 
 ### Marketing
 
@@ -162,6 +165,12 @@ the team). Marketing then:
    choose none and **Discard batch** instead.
 3. **Releases** with **Release to market**. Released jokes are published, classified by the AI and
    put on the shelf for customers.
+
+Before releasing (or discarding the batch), Marketing can write in **Note to your Joke Maker**
+(sent with this batch), up to 500 characters: what to change next, what customers liked. The
+note goes with the batch, shows on the Joke Maker's screen within a few seconds, and cannot be
+edited afterwards. The release message ends with "· note sent" when a note went with it. This
+works the same in Classic and Lean rounds.
 
 In a Lean round three extra tiles appear next to the usual ones (Profit, Sold / Total, Created to
 Publish, Content Waste):

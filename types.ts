@@ -104,6 +104,9 @@ export interface Batch {
      it is persisted client-side for the team's own discussion. */
   feedback?: string;
   tagSummary?: Array<{ tag: string; count: number }>;
+  /* From the wire (batch list marketing_note): Marketing's note to the Joke
+     Maker, or null when there is none. Set by mapBatchFromTeamList. */
+  marketing_note?: string | null;
 }
 
 export interface GameConfig {
@@ -244,6 +247,8 @@ export interface ApiTeamBatchesResponse {
     // and the batch listing (handler/batch.go) never carried a feedback column
     // or a tag summary in the first place.
     jokes?: Array<{ joke_id: JokeId; joke_text: string }>;
+    // Marketing's note to the Joke Maker; absent on backends before migration 0004.
+    marketing_note?: string | null;
   }>;
 }
 

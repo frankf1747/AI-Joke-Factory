@@ -10,6 +10,7 @@ import { computeAvgCreatedToPublishSeconds, countJokesSold } from '../services/e
 import { dimById } from '../config/dimensions';
 import { isWatchMode } from '../services/watchMode';
 import { fmtMoney, wipStatus } from '../services/leanMode';
+import { MarketingNoteCallout, MarketingNoteIcon, marketingNoteOf } from '../components/MarketingNote';
 
 /* ---- per-joke status drives the status dots ---- */
 type JokeStatus = 'reviewing' | 'market' | 'sold' | 'wasted';
@@ -53,13 +54,18 @@ const fmtSeconds = (s: number | null) => {
   return `${m}m ${r}s`;
 };
 
-/* ============================ Batch card (collapsible) ============================ */
-const BatchCard: React.FC<{
+/* ============================ Batch card (collapsible) ============================
+   A batch with a note from Marketing shows a speech bubble on its collapsed row
+   and a "From Marketing" callout above its jokes when expanded; a batch without
+   one renders exactly as before (components/MarketingNote.tsx). Exported for
+   components/MarketingNote.test.ts. */
+export const BatchCard: React.FC<{
   batch: Batch;
   open: boolean;
   onToggle: () => void;
 }> = ({ batch, open, onToggle }) => {
   const jokes = batch.jokes as any[];
+  const note = marketingNoteOf(batch);
   return (
     <div className="rounded-lg border border-gray-200 bg-white">
       <div className="flex items-center gap-2 px-3 py-2">
@@ -73,6 +79,7 @@ const BatchCard: React.FC<{
           <span className="flex items-center gap-1.5">
             {jokes.map((j, i) => <StatusDot key={i} status={jokeStatus(batch, j)} size={10} />)}
           </span>
+          {note != null && <MarketingNoteIcon />}
           <span className="text-[11px] text-gray-400 ml-auto pl-2 group-hover:text-gray-600">
             {jokes.length} jokes
           </span>
@@ -80,6 +87,7 @@ const BatchCard: React.FC<{
       </div>
       {open && (
         <div className="border-t border-gray-100 divide-y divide-gray-50">
+          {note != null && <MarketingNoteCallout note={note} />}
           {jokes.map((j, i) => (
             <div key={i} className="flex items-center gap-3 px-3 py-2">
               <span className="text-gray-300 font-mono text-[11px] shrink-0">{i + 1}</span>
@@ -148,7 +156,9 @@ const StageDots: React.FC<{ batches: Batch[] }> = ({ batches }) => {
 };
 
 /* Customer feedback is Marketing-only: the Joke Maker hears from Marketing,
-   not from a panel both seats share (context.tsx TEAM_FEEDBACK_ROLES). */
+   not from a panel both seats share (context.tsx TEAM_FEEDBACK_ROLES).
+   Marketing's note on each batch arrives with the batch-list poll and shows in
+   the Value stream (BatchCard above). */
 
 /* ============================ Joke Maker screen ============================ */
 const MIN_RAW_CHARS = 20;
