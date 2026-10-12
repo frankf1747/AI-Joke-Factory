@@ -31,12 +31,13 @@ decisions: a team that pushes should see roughly half of its revenue go to fees.
 | Jokes per batch | **exactly 5** | **1 to 10**, the team's choice |
 | Work-in-progress limit | none | none |
 | Fees | the same | the same |
-| Customers | 150, arriving over 15 minutes (900 s) | the same, as a fresh market |
-| Preference base | 3 | 3 |
+| Customers | **18 per team** (360 for 20 teams), arriving over 15 minutes (900 s) | the same, as a fresh market |
+| Buy threshold | 8 | 8 |
+| Preference base | 5 | 5 |
 
 **Reset Game** sets all of this: both rounds Lean, Round 1 batches of exactly 5, Round 2 batches of
-up to 10, the fees in section 3, 150 customers, preference base 3, arrival window 900 s, no WIP
-limit. There is no market mode to choose and no preset button.
+up to 10, the fees in section 3, 18 customers per team, buy threshold 8, preference base 5, arrival window
+900 s, no WIP limit. There is no market mode to choose and no preset button.
 
 Suggested timeline for a 90-minute session (about 65 minutes of game time):
 
@@ -59,7 +60,7 @@ storage and hosting keep charging.
 | Fee | When it is charged | Starting amount |
 |---|---|---|
 | **Shipping fee** | Each batch the Joke Maker sends, priced by its size | **$1** for 1–4 jokes · **$2** for 5 · **$3** for 6–10 |
-| **Storage fee** | Each minute a joke waits on Marketing's desk, from send until released or discarded | **$0.10 per joke per minute** |
+| **Storage fee** | Each minute a joke waits on Marketing's desk, from send until released or discarded | **$0.05 per joke per minute** |
 | **Hosting fee** | Each minute a released joke sits unsold, from release until its first sale (or until the round ends) | **$0.05 per joke per minute** |
 | **Listing fee** | Each joke Marketing releases | $0.10 |
 | Discard fee | Each joke Marketing drops | $0.01 |
@@ -73,8 +74,9 @@ Before the split it counts as **5 jokes** for both the storage fee and the shipp
 shipment, $2). After the split, its real count sets both. A batch nobody splits before the round ends
 is charged as 5 jokes all the way to the end.
 
-Storage costs more than hosting on purpose: holding a batch on the desk costs more than releasing
-it, so Marketing gains nothing by being the bottleneck.
+Storage and hosting are both 5¢ a joke each minute. A batch on the desk is billed at its whole
+size, so holding a batch costs more than releasing it, and Marketing gains nothing by being the
+bottleneck.
 
 Nothing is stored: the fees are worked out from timestamps each time a screen refreshes, which is why
 the Storage and Hosting tiles tick up during the round, and every clock stops when the round ends.
@@ -84,13 +86,13 @@ hosting.
 **Worked example** (illustrative numbers, at the starting amounts):
 
 *A pushing team in Round 1.* Sends 8 batches of 5: shipping 8 × $2 = $16. Each batch waits 2 minutes
-on the desk: 8 × 5 × 2 × $0.10 = $8.00 storage. Releases all 40 jokes ($4.00 listing); 20 of them sit
-unsold for 8 minutes: 20 × 8 × $0.05 = $8.00 hosting. With 60 sales: fees $36.00, 60 % of revenue;
-profit $24.00.
+on the desk: 8 × 5 × 2 × $0.05 = $4.00 storage. Releases all 40 jokes ($4.00 listing); 20 of them sit
+unsold for 8 minutes: 20 × 8 × $0.05 = $8.00 hosting. With 60 sales: fees $32.00, 53 % of revenue;
+profit $28.00.
 
 *A team that learned, in Round 2.* Sends 13 batches of 3: shipping 13 × $1 = $13. Each is decided
-within a minute: 13 × 3 × 1 × $0.10 = $3.90 storage. Releases 26 ($2.60), drops 13 ($0.13); 6 sit
-unsold for 5 minutes ($1.50 hosting). With 50 sales: fees $21.13; profit $28.87. It sold less and
+within a minute: 13 × 3 × 1 × $0.05 = $1.95 storage. Releases 26 ($2.60), drops 13 ($0.13); 6 sit
+unsold for 5 minutes ($1.50 hosting). With 50 sales: fees $19.18; profit $30.82. It sold less and
 earned more.
 
 ---
@@ -109,14 +111,23 @@ not edited here), then:
 | **Shipping fee (1–4 / 5 / 6–10 jokes):** | Three amounts, one per batch size. Each must be 0 or more, and a bigger batch never ships for less. |
 | **Storage fee per joke-minute:** | Charged while a batch waits on Marketing's desk. |
 | **Hosting fee per joke-minute:** | Charged while a released joke waits for its first sale. |
+| **Customers per team:** | How many AI customers each team brings (default 18, 0 to 1000; 0 keeps a fixed count). A hint beside it reads, for example, "≈ 360 customers for 20 teams". |
 
-Changes take effect when you press **Apply**. The fees and the window are one set for the whole
+Changes take effect when you press **Apply**. The fees, the window and customers per team are one set for the whole
 class: Apply writes them to every round that has not started yet (both rounds before Round 1), and
 says so next to the button, for example "Fees applied to Rounds 1 and 2". Shipping fees that fall
 with batch size are flagged under the shipping inputs ("Shipping fees must rise with batch size …")
 and are not sent; any other value the server refuses is shown with the server's own message. The
 fees and the window lock once a round has started: they are greyed out on that round's tab, and the
-server refuses a change with "Fees and Lean settings can't change once a round has started." The
+server refuses a change with "Fees and Lean settings can't change once a round has started."
+
+**Customers per team** is turned into a customer count when the round starts: the count becomes
+customers per team × the number of teams that have a Joke Maker or Marketing seat (at least 1), and
+the screens and stats then show that real number. Before the start the round still shows its old
+count; the hint is worked out from the teams in the lobby. About 18 per team keeps roughly 60 % of
+teams in profit at 20 teams; fewer customers per team make the market harder for everyone. The
+field shows the default (18) after a page reload until you save a value, because the server returns
+the stored value only when a setting is saved. The
 other fields (Cust. Budget, Market Price, Cost of Publishing,
 the nudges) work as before.
 
@@ -185,7 +196,7 @@ amounts:
 | Tile | Tooltip |
 |---|---|
 | **Shipping fees** | "Charged per batch you send: $1 for 1–4 jokes, $2 for 5, $3 for 6–10." |
-| **Storage fees** | "Every minute a joke waits on Marketing's desk costs 10¢." |
+| **Storage fees** | "Every minute a joke waits on Marketing's desk costs 5¢." |
 | **Hosting fees** | "Every minute a released joke sits unsold costs 5¢." |
 
 **Publish → first sale** shows how long a sold joke waited for its first buyer.
@@ -195,7 +206,7 @@ Under the tiles, the **Next step** line:
 1. Before the round (and between rounds): "Watch the desk — your Joke Maker's first batch is
    coming." Once Round 2 has ended: "Round over — join the debrief."
 2. A batch has been on the desk 45 s or more: "Batch waiting {n} s — release what's good enough.
-   Storage costs 10¢ a joke each minute." (amber; the round's storage fee)
+   Storage costs 5¢ a joke each minute." (amber; the round's storage fee)
 3. The last decision discarded 60 % or more of a batch: "You discarded {d} of {n} last time —
    customers can only buy what's on the shelf." (amber)
 4. The customer feedback has a Fix next item: "Tell your Joke Maker: fix {criterion} next."
@@ -209,15 +220,16 @@ and can be popped out above the game.
 
 ## 5. How customers buy
 
-Each round creates 150 customers, so Round 2 starts with a fresh market. Each has a personal quality
-bar of 7 ± 0.3 and a budget of $3. A joke's **fit** is how well it matches the hidden ideal profile:
+Each round creates its customers when it starts (customers per team × teams, 18 per team by
+default), so Round 2 starts with a fresh market. Each has a personal quality bar of 8 ± 0.3 and a
+budget of $3. A joke's **fit** is how well it matches the hidden ideal profile:
 the sum of its scores on the 12 criteria, from 0 to 12.
 
-- **Arrival.** Customers arrive evenly across the arrival window: with 150 customers and 900 seconds,
-  one every 6 seconds. Arrival order is shuffled.
+- **Arrival.** Customers arrive evenly across the arrival window: with 360 customers (20 teams) and 900
+  seconds, one every 2.5 seconds. Arrival order is shuffled.
 - **Shopping once.** An arriving customer looks at every released, classified joke whose fit clears
-  their bar, and buys up to 3 (budget ÷ price), one weighted pick at a time: a joke's weight is 3 to
-  the power of its fit, so one fit point higher is three times as likely to be picked. A customer never
+  their bar, and buys up to 3 (budget ÷ price), one weighted pick at a time: a joke's weight is 5 to
+  the power of its fit, so one fit point higher is five times as likely to be picked. A customer never
   buys two jokes with the same text. Then they leave for good; there are no swaps.
 - **Lost demand.** A customer who finds nothing good enough leaves with their money. Customers who
   have not arrived when the round ends are never served.
@@ -235,7 +247,7 @@ a few seconds of their arrival time.
 - [ ] Form teams in the lobby: one Joke Maker and one Marketing seat per team.
 - [ ] Pick the ideal joke profile; a round will not start without a complete profile.
 - [ ] Check CONFIG on each tab: R1 batch 5 (exactly), R2 batch up to 10, shipping 1 / 2 / 3, storage
-      0.1, hosting 0.05, arrival window 900.
+      0.05, hosting 0.05, customers per team 18, arrival window 900.
 
 ### Cues to call out during a round
 
@@ -257,13 +269,21 @@ a few seconds of their arrival time.
 | 6 | Which jokes sat unsold longest, and what does that say about fit? | Hosting column; Sale column |
 | 7 | How did you use Marketing's notes and the customer feedback? | More cycles, more learning (pick the team) |
 
+**Debrief note: standing still loses.** Customers are shared by every team. A team that changes
+nothing in Round 2 keeps its Round 1 behaviour while the teams around it improve, so it loses sales
+to them and can end Round 2 worse off than Round 1 even though it did nothing differently. Ask the
+teams that stayed the same what they expected, and what the improving teams took from them.
+
 ---
 
 ## 7. Limits and open questions
 
-- **The amounts are starting values.** They come from the design and are to be confirmed by the bot
-  pilot (`scripts/pilot/lean-pilot.mts`), which plays one class at 10× with storage and hosting scaled
-  ×10. Human play will not match bot numbers exactly. The pilot seats 14 bot teams: 3 each of
+- **The amounts are the tuned defaults.** They come from the bot fee sweep of 2026-10-11
+  (`docs/pilots/2026-10-11-fee-sweep.md`): configuration E4 passed all three checks in 4 of 4 runs
+  at 20 teams, with 62 % / 59 % of teams in profit. Human play will not match bot numbers exactly,
+  and the buy threshold should be checked with real LLM-scored jokes in a small trial before class.
+  The pilot (`scripts/pilot/lean-pilot.mts`) plays one class at 10× with storage and hosting scaled
+  ×10; its default is 14 bot teams, and `PILOT_PER_PERSONA` sets a bigger class. It seats 14 bot teams: 3 each of
   Careful, Balanced, Spray and Learner, plus 2 **Balanced (holds)** teams, identical to Balanced
   except that their Marketing seat holds each batch an extra 60 class-seconds before deciding. Its
   three checks: Spray spends 40–60 % of its revenue on fees in Round 1; in Round 2 the Learner's
