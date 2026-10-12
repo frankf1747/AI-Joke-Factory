@@ -225,7 +225,7 @@ export interface ApiRound {
   shipping_fee_large?: number;
   storage_fee_per_joke_minute?: number;
   hosting_fee_per_joke_minute?: number;
-  // Instructor round only (config/start responses), never on /rounds/active.
+  // On every public round (newer backends).
   customers_per_team?: number;
 }
 

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import Instructor from './Instructor';
 import { TEST_CONFIG, renderWithGame, testUser } from './testing/renderWithGame';
 import { Role } from '../types';
+import { leanConfigFromRound } from '../services/leanMode';
 
 // Instructor reads window.location.search while rendering (the bot panel switch).
 vi.stubGlobal('window', { location: { search: '' } });
@@ -40,6 +41,12 @@ describe('Instructor screen, one Lean rule set', () => {
     expect(open).not.toMatch(/id="cfg-customers-per-team"[^>]*disabled=""/);
     const locked = renderWithGame(Instructor, { user: instructor, config: between, roundStatuses: { 1: 'ENDED', 2: 'CONFIGURED' } });
     expect(locked).toMatch(/id="cfg-customers-per-team"[^>]*disabled=""/);
+  });
+
+  it('shows the stored customers per team (12 from the round) in CONFIG', () => {
+    const stored = { ...TEST_CONFIG, isActive: false, ...leanConfigFromRound({ market_mode: 'LEAN', customers_per_team: 12 }) };
+    const out = renderWithGame(Instructor, { user: instructor, config: stored, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' } });
+    expect(out).toMatch(/id="cfg-customers-per-team"[^>]*value="12"/);
   });
 
   it('shows the stored customer budget in the CONFIG row', () => {

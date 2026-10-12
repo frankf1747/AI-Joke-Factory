@@ -341,6 +341,8 @@ export interface PublicRound {
   shipping_fee_large?: number;
   storage_fee_per_joke_minute?: number;
   hosting_fee_per_joke_minute?: number;
+  /** Customers per team (0 = fixed customer_count). Absent on a backend that predates it. */
+  customers_per_team?: number;
 }
 
 /**
@@ -377,8 +379,6 @@ export interface InstructorRound extends PublicRound {
    * Optional: a backend that predates Lean mode omits it.
    */
   preference_base?: number;
-  /** Customers per team (0 = fixed customer_count); instructor round only. Absent on an older backend. */
-  customers_per_team?: number;
 }
 
 /**
