@@ -4,7 +4,7 @@ import { useDemoMode, useGame } from './context';
 import { Role } from './types';
 import { isWatchMode } from './services/watchMode';
 import Tutorial from './components/Tutorial';
-import { GuidedTour } from './components/tour/GuidedTour';
+import { GuidedTour, TourErrorBoundary } from './components/tour/GuidedTour';
 import { isTourRole, launchMode, markTourSeen, readTourSeen, recordTourEnd } from './services/tour/seen';
 // Presentational primitives live in components/ui.tsx so leaf modules can import
 // them without cycling back through this barrel. Re-exported for existing callers.
@@ -155,16 +155,27 @@ const TutorialLauncher: React.FC<{ role: Role; tourView?: React.ComponentType }>
         </div>
       )}
       {phase === 'tour' && (
-        <GuidedTour
-          role={tourRole}
-          view={tourView}
-          config={config}
-          roundActive={config.isActive}
-          onEnd={outcome => {
-            recordTourEnd(tourRole, outcome);
+        /* GuidedTour's own render (plan, demo frame, controls) can throw too; with
+           no other boundary in the app that would blank everything. Any error ends
+           the tour on the live screen, with no seen flag; unmounting restores
+           #root and scrolling. */
+        <TourErrorBoundary
+          onError={error => {
+            console.error('Guided tour stopped:', error);
             setPhase('idle');
           }}
-        />
+        >
+          <GuidedTour
+            role={tourRole}
+            view={tourView}
+            config={config}
+            roundActive={config.isActive}
+            onEnd={outcome => {
+              recordTourEnd(tourRole, outcome);
+              setPhase('idle');
+            }}
+          />
+        </TourErrorBoundary>
       )}
     </>
   );

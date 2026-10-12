@@ -150,11 +150,16 @@ export const GuidedTour: React.FC<GuidedTourProps> = ({ role, view, config, roun
     root?.setAttribute('inert', '');
     const overflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    (document.activeElement as HTMLElement | null)?.blur?.();
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    previouslyFocused?.blur?.();
     controlsRef.current?.focus();
     return () => {
       if (!wasInert) root?.removeAttribute('inert');
       document.body.style.overflow = overflow;
+      // Hand focus back to where the student was (the root is no longer inert).
+      if (previouslyFocused && previouslyFocused !== document.body && document.contains(previouslyFocused)) {
+        previouslyFocused.focus?.();
+      }
     };
   }, []);
 

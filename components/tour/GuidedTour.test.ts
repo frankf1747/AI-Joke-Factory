@@ -49,6 +49,24 @@ describe('TourErrorBoundary', () => {
   });
 });
 
+describe('TourErrorBoundary around a throwing tour', () => {
+  /* Fizz (static render) has no error boundaries, so drive the same lifecycle
+     by hand: a child throws, React calls getDerivedStateFromError then
+     componentDidCatch, and the boundary shows nothing instead of propagating. */
+  it('turns a render error in the tour itself into an empty render and one report', () => {
+    const onError = vi.fn();
+    const Thrower = () => { throw new Error('tour render failed'); };
+    const child = createElement(Thrower);
+    const boundary = new TourErrorBoundary({ onError, children: child });
+    expect(boundary.render()).toBe(child);
+    const error = new Error('tour render failed');
+    boundary.state = { ...boundary.state, ...TourErrorBoundary.getDerivedStateFromError() };
+    boundary.componentDidCatch(error);
+    expect(boundary.render()).toBeNull();
+    expect(onError).toHaveBeenCalledWith(error);
+  });
+});
+
 describe('GuidedTour', () => {
   it('renders nothing without a document (static render), and calls nothing', () => {
     const onEnd = vi.fn();

@@ -48,10 +48,16 @@ describe('stepsFor', () => {
     }
   });
 
+  it('gives the long captions time to be read', () => {
+    const byId = (steps: readonly { id: string; durationMs?: number }[], id: string) => steps.find(x => x.id === id)!;
+    for (const id of ['jm-scoreboard', 'jm-customers']) expect(byId(JOKE_MAKER_STEPS, id).durationMs).toBe(9000);
+    for (const id of ['mk-fees', 'mk-pick']) expect(byId(MARKETING_STEPS, id).durationMs).toBe(9000);
+  });
+
   it('runs about a minute', () => {
     const total = (steps: readonly { durationMs?: number }[]) => steps.reduce((ms, s) => ms + stepDuration(s), 0);
-    expect(total(JOKE_MAKER_STEPS)).toBe(61_000);
-    expect(total(MARKETING_STEPS)).toBe(72_000);
+    expect(total(JOKE_MAKER_STEPS)).toBe(67_000);
+    expect(total(MARKETING_STEPS)).toBe(77_000);
   });
 
   it('uses data-tour ids that are safe in a CSS selector, and unique step ids', () => {

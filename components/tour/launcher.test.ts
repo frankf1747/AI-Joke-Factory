@@ -6,7 +6,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
    not have; this stand-in shows whether the launcher chose to play it. */
 vi.mock('./GuidedTour', async () => {
   const React = await import('react');
+  const actual = await vi.importActual<typeof import('./GuidedTour')>('./GuidedTour');
   return {
+    TourErrorBoundary: actual.TourErrorBoundary,
     GuidedTour: (props: { role: string; roundActive: boolean }) =>
       React.createElement('div', { 'data-test-tour': props.role, 'data-round-active': String(props.roundActive) }),
   };

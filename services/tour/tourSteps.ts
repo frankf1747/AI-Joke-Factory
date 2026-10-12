@@ -58,12 +58,12 @@ export const JOKE_MAKER_STEPS: readonly DemoStep[] = [
     onEnter: openSentBatch,
   },
   {
-    id: 'jm-scoreboard', target: 'jm-stats',
+    id: 'jm-scoreboard', target: 'jm-stats', durationMs: 9000,
     title: 'Your scoreboard.',
     body: 'Profit is sales minus fees, and it can go negative. Rank, Jokes Sold / Made and Created to Publish (how long a joke takes to reach the market) complete it. "More numbers" shows the rest.',
   },
   {
-    id: 'jm-customers', target: null,
+    id: 'jm-customers', target: null, durationMs: 9000,
     title: 'How customers buy.',
     body: 'AI customers are picky: they judge every joke on 12 criteria and only buy the ones that fit what they like. Better-aimed jokes beat lots of random ones.',
   },
@@ -87,7 +87,7 @@ export const MARKETING_STEPS: readonly DemoStep[] = [
     onEnter: batchArrives, beats: [{ atMs: 3000, apply: splitOnDesk }],
   },
   {
-    id: 'mk-pick', target: 'mk-jokes',
+    id: 'mk-pick', target: 'mk-jokes', durationMs: 9000,
     title: 'Pick the winners — quickly.',
     body: ({ fees }) => `Keep the jokes customers will buy and drop the rest (dropping costs ${fmtFee(fees.costOfDiscard)}). Don't be too strict: customers can only buy what's on the shelf.`,
     onEnter: pick(0), beats: [{ atMs: 1500, apply: pick(1) }, { atMs: 3000, apply: pick(2) }],
@@ -116,7 +116,7 @@ export const MARKETING_STEPS: readonly DemoStep[] = [
     onEnter: releaseSentBatch, beats: [{ atMs: 3000, apply: firstSale }],
   },
   {
-    id: 'mk-fees', target: 'mk-more', durationMs: 7000,
+    id: 'mk-fees', target: 'mk-more', durationMs: 9000,
     title: 'Fees add up.',
     body: ({ fees }) => `Every batch pays shipping. A batch waiting on your desk pays storage (${fmtCents(fees.storageFeePerJokeMinute)} a joke each minute), and an unsold joke pays hosting (${fmtPerMinute(fees.hostingFeePerJokeMinute)}). Holding batches only costs money: release quickly.`,
     onEnter: s => nextBatchArrives(openMore(s)),
