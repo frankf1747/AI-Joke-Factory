@@ -36,8 +36,11 @@ export const Card: React.FC<{
   subtitle?: string;
   action?: React.ReactNode;
   accent?: string;
-}> = ({ children, className = '', title, subtitle, action, accent }) => (
+  /** `data-tour` id: the guided tour can spotlight this card (services/tour/tourSteps.ts). */
+  tour?: string;
+}> = ({ children, className = '', title, subtitle, action, accent, tour }) => (
   <div
+    data-tour={tour}
     className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden ${className}`}
     style={accent ? { borderTop: `3px solid ${accent}` } : undefined}
   >

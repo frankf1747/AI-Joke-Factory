@@ -180,7 +180,7 @@ function reachable(roots: string[]): string[] {
   return [...seen].map(f => relative(ROOT, f));
 }
 
-const STUDENT_VIEW_ROOTS = ['views/JokeMaker.tsx', 'views/QualityControl.tsx'];
+const STUDENT_VIEW_ROOTS = ['views/JokeMaker.tsx', 'views/QualityControl.tsx', 'components/tour/DemoStage.tsx'];
 
 describe('direct network calls reachable from the student views', () => {
   it('there are none outside context.tsx', () => {

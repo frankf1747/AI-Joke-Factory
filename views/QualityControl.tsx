@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { useDemoMode, useGame } from '../context';
+import { useDemoMode, useDemoUi, useGame } from '../context';
 import { Button, Card, StatBox, RoleLayout, Modal, SectionLabel, BRAND, fmt$ } from '../components';
 import type { StatBoxTone } from '../components';
 import {
@@ -333,11 +333,25 @@ const QualityControl: React.FC = () => {
   }, [qcQueue]);
 
   /* Local rank order — initialize from incoming */
-  const [orderIds, setOrderIds] = useState<number[]>([]);
-  const [topics, setTopics] = useState<Record<number, string>>({});
-  const [titles, setTitles] = useState<Record<number, string>>({});
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
-  const [batchFeedback, setBatchFeedback] = useState('');
+  const [orderIdsState, setOrderIds] = useState<number[]>([]);
+  const [topicsState, setTopics] = useState<Record<number, string>>({});
+  const [titlesState, setTitles] = useState<Record<number, string>>({});
+  const [selectedIdsState, setSelectedIds] = useState<Set<number>>(() => new Set());
+  const [batchFeedbackState, setBatchFeedback] = useState('');
+  /* Guided tour: inside the demo stage the script drives the picks, Topics,
+     titles, note, "More numbers" and the Next step line's clock, and the cards
+     stay in the order they arrived (services/tour/demoUi.ts). In the real game
+     there is no DemoUi and the marketer's own state does. */
+  const demoUi = useDemoUi();
+  const demoOrderIds = useMemo(() => incomingJokes.map(j => j.id), [incomingJokes]);
+  const orderIds = demoUi ? demoOrderIds : orderIdsState;
+  const topics = demoUi ? demoUi.mkTopics : topicsState;
+  const titles = demoUi ? demoUi.mkTitles : titlesState;
+  const selectedIds = useMemo(
+    () => (demoUi ? new Set(demoUi.mkSelectedIds) : selectedIdsState),
+    [demoUi, selectedIdsState],
+  );
+  const batchFeedback = demoUi ? demoUi.mkNote : batchFeedbackState;
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [dismissedTeamPopup, setDismissedTeamPopup] = useState(false);
@@ -604,6 +618,7 @@ const QualityControl: React.FC = () => {
               keeps it out of the layout. The rest of the view stays interactive. */}
           <fieldset disabled={watching} className="contents">
           <Card
+            tour="mk-desk"
             title="Marketing Desk"
             subtitle={needsSplit
               ? 'Read the batch · click to place a cut · split into individual jokes'
@@ -641,6 +656,7 @@ const QualityControl: React.FC = () => {
                     <Scissors size={12} /> Back to splitting
                   </button>
                 </div>
+                <div data-tour="mk-jokes" className="space-y-3">
                 {orderIds.map((id, idx) => {
                   const j = jokeById(id);
                   if (!j) return null;
@@ -731,7 +747,7 @@ const QualityControl: React.FC = () => {
                       </div>
 
                       {submitting && (
-                        <div className="mt-3 space-y-3">
+                        <div data-tour="mk-topic-title" className="mt-3 space-y-3">
                           <TopicPicker
                             value={topics[id]}
                             onPick={(topic) => setTopics(t => ({ ...t, [id]: topic }))}
@@ -745,6 +761,7 @@ const QualityControl: React.FC = () => {
                     </div>
                   );
                 })}
+                </div>
 
                 {/* Marketing's note to its Joke Maker. It goes out as `note` on this
                     batch's publish call — Release or Discard batch alike — is stored
@@ -753,7 +770,7 @@ const QualityControl: React.FC = () => {
                     editing after release. The box clears when the publish succeeds
                     and keeps its text when it fails (views/marketingRelease.ts).
                     maxLength stops input at MARKETING_NOTE_MAX. */}
-                <div className="rounded-lg border border-gray-200 bg-white p-4">
+                <div data-tour="mk-note" className="rounded-lg border border-gray-200 bg-white p-4">
                   <div className="mb-1.5 flex items-baseline justify-between gap-2">
                     <SectionLabel>
                       Note to your Joke Maker <span className="text-gray-400">(sent with this batch)</span>
@@ -779,6 +796,7 @@ const QualityControl: React.FC = () => {
 
                 <div className="flex items-center justify-end pt-1">
                   <Button
+                    data-tour="mk-release"
                     variant={!canRelease ? 'secondary' : discardingAll ? 'danger' : 'success'}
                     onClick={release}
                     disabled={!canRelease}
@@ -803,6 +821,9 @@ const QualityControl: React.FC = () => {
         <div className="space-y-5">
           <StatTiles
             storageKey={moreTilesKey('quality_control')}
+            open={demoUi ? demoUi.moreOpen : undefined}
+            tourKey="mk-stats"
+            tourMore="mk-more"
             keyTiles={[
               <StatBox key="profit" label="Profit" value={profitLabel} tone={profitTone} />,
               <StatBox key="rank" label="Current Team Rank" value={String(myRank)} tone="rank" />,
@@ -823,13 +844,16 @@ const QualityControl: React.FC = () => {
               ] : []),
             ]}
           />
-          <NextStepLive
-            step={now => marketingNextStep(marketingInputFrom({
-              now, roundActive: config.isActive, round: config.round, roundId, roundStatuses,
-              storageFeePerJokeMinute: config.storageFeePerJokeMinute,
-              teamSummary, qcQueue, batches: batches.filter(b => b.team === user?.team), feedbackRows,
-            }))}
-          />
+          <div data-tour="mk-next-step">
+            <NextStepLive
+              step={now => marketingNextStep(marketingInputFrom({
+                now: demoUi ? demoUi.clockMs : now,
+                roundActive: config.isActive, round: config.round, roundId, roundStatuses,
+                storageFeePerJokeMinute: config.storageFeePerJokeMinute,
+                teamSummary, qcQueue, batches: batches.filter(b => b.team === user?.team), feedbackRows,
+              }))}
+            />
+          </div>
 
           {/* The 12 criteria — so Marketing knows what to coach the Joke Maker on. */}
           <Card title="The 12 criteria customers judge">

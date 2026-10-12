@@ -82,12 +82,14 @@ export const CustomerFeedbackCardView: React.FC<CustomerFeedbackCardViewProps> =
   return (
     <>
       <Card
+        tour="mk-feedback"
         title={CUSTOMER_FEEDBACK_TITLE}
         subtitle="Which criteria landed and which missed — the customers never say by how much"
         accent={BRAND.sold}
         action={canPopOut && !out ? (
           <button
             type="button"
+            data-tour="mk-expand"
             onClick={onPopOut}
             aria-label="Expand: open the feedback in a floating window that stays on top"
             title="Open the feedback in a floating window that stays on top"

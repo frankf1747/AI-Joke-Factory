@@ -35,10 +35,18 @@ export const StatTiles: React.FC<{
   storageKey: string;
   /** Start open (tests); default is the remembered choice, else closed. */
   initialOpen?: boolean;
-}> = ({ keyTiles, moreTiles, storageKey, initialOpen }) => {
-  const [open, setOpen] = useState(() => initialOpen ?? readMoreOpen(storageKey));
+  /** Controlled (the guided tour's demo): open or closed whatever the student
+      chose. The remembered choice is then neither read nor written. */
+  open?: boolean;
+  /** data-tour ids for the guided tour: the key-tile grid and the More numbers panel. */
+  tourKey?: string;
+  tourMore?: string;
+}> = ({ keyTiles, moreTiles, storageKey, initialOpen, open: forcedOpen, tourKey, tourMore }) => {
+  const [openState, setOpen] = useState(() => forcedOpen ?? initialOpen ?? readMoreOpen(storageKey));
+  const open = forcedOpen ?? openState;
   const panelId = useId();
   const toggle = () => {
+    if (forcedOpen !== undefined) return;
     const next = !open;
     setOpen(next);
     writeMoreOpen(storageKey, next);
@@ -46,7 +54,7 @@ export const StatTiles: React.FC<{
   const Chevron = open ? ChevronUp : ChevronDown;
   return (
     <div>
-      <div className="grid grid-cols-2 gap-3">{keyTiles}</div>
+      <div data-tour={tourKey} className="grid grid-cols-2 gap-3">{keyTiles}</div>
       {moreTiles.length > 0 && (
         <>
           <button
@@ -59,7 +67,7 @@ export const StatTiles: React.FC<{
             {open ? 'Fewer numbers' : 'More numbers'}
             <Chevron size={14} aria-hidden="true" />
           </button>
-          <div id={panelId} className="grid grid-cols-2 gap-3 mt-2" hidden={!open}>
+          <div id={panelId} data-tour={tourMore} className="grid grid-cols-2 gap-3 mt-2" hidden={!open}>
             {open && moreTiles}
           </div>
         </>

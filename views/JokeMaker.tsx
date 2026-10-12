@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { useGame } from '../context';
+import { useDemoUi, useGame } from '../context';
 import { Button, Card, StatBox, RoleLayout, Modal, BRAND, fmt$ } from '../components';
 import type { StatBoxTone } from '../components';
 import {
@@ -90,7 +90,11 @@ export const BatchCard: React.FC<{
       </div>
       {open && (
         <div className="border-t border-gray-100 divide-y divide-gray-50">
-          {note != null && <MarketingNoteCallout note={note} />}
+          {note != null && (
+            <div data-tour="jm-marketing-note">
+              <MarketingNoteCallout note={note} />
+            </div>
+          )}
           {jokes.map((j, i) => (
             <div key={i} className="flex items-center gap-3 px-3 py-2">
               <span className="text-gray-300 font-mono text-[11px] shrink-0">{i + 1}</span>
@@ -169,9 +173,20 @@ const MIN_RAW_CHARS = 20;
 const JokeMaker: React.FC = () => {
   const { user, roster, batches, submitRawBatch, config, teamSummary, roundStatuses } = useGame();
 
-  const [input, setInput] = useState('');
-  const [certified, setCertified] = useState(false);
-  const [openSet, setOpenSet] = useState<Set<string>>(() => new Set());
+  const [inputState, setInput] = useState('');
+  const [certifiedState, setCertified] = useState(false);
+  const [openSetState, setOpenSet] = useState<Set<string>>(() => new Set());
+  /* Guided tour: inside the demo stage the script drives the textbox, the
+     certify box, which batches are open, "More numbers" and the Next step
+     line's clock (services/tour/demoUi.ts). In the real game there is no
+     DemoUi and the student's own state does. */
+  const demoUi = useDemoUi();
+  const input = demoUi ? demoUi.jmDraft : inputState;
+  const certified = demoUi ? demoUi.jmCertified : certifiedState;
+  const openSet = useMemo(
+    () => (demoUi ? new Set(demoUi.jmOpenBatchIds) : openSetState),
+    [demoUi, openSetState],
+  );
   const [toast, setToast] = useState<string | null>(null);
   const [dismissedTeamPopup, setDismissedTeamPopup] = useState(false);
 
@@ -302,7 +317,7 @@ const JokeMaker: React.FC = () => {
                 </span>
               </div>
 
-              <div>
+              <div data-tour="jm-draft">
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
@@ -321,7 +336,7 @@ const JokeMaker: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-1">
+              <div data-tour="jm-send" className="flex items-center justify-between pt-1">
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                   <input
                     type="checkbox"
@@ -337,7 +352,7 @@ const JokeMaker: React.FC = () => {
                 </Button>
               </div>
               {leanMode && (
-                <div className="text-xs text-gray-500 text-right">
+                <div data-tour="jm-shipping" className="text-xs text-gray-500 text-right">
                   {shippingLine(config.round, config.round1BatchSize, config)}
                 </div>
               )}
@@ -345,7 +360,7 @@ const JokeMaker: React.FC = () => {
           </Card>
           </fieldset>
 
-          <Card title="Value stream" subtitle="Your submitted batches — batch-level status" accent={BRAND.production}>
+          <Card tour="jm-value-stream" title="Value stream" subtitle="Your submitted batches — batch-level status" accent={BRAND.production}>
             <div className="space-y-2 max-h-[440px] overflow-y-auto pr-1">
               {myBatches.length === 0 && (
                 <p className="text-center text-gray-400 text-sm py-4">No batches yet.</p>
@@ -366,6 +381,8 @@ const JokeMaker: React.FC = () => {
         <div className="space-y-5">
           <StatTiles
             storageKey={moreTilesKey('joke_maker')}
+            open={demoUi ? demoUi.moreOpen : undefined}
+            tourKey="jm-stats"
             keyTiles={[
               <StatBox key="profit" label="Profit" value={profitLabel} tone={profitTone} />,
               <StatBox key="rank" label="Current Team Rank" value={String(myRank)} tone="rank" />,
@@ -377,11 +394,14 @@ const JokeMaker: React.FC = () => {
               <StatBox key="waste" label="Content Waste" value={waste} tone="rose" />,
             ]}
           />
-          <NextStepLive
-            step={now => jokeMakerNextStep(jokeMakerInputFrom({
-              now, roundActive: config.isActive, round: config.round, roundStatuses, teamSummary, batches: myBatches,
-            }))}
-          />
+          <div data-tour="jm-next-step">
+            <NextStepLive
+              step={now => jokeMakerNextStep(jokeMakerInputFrom({
+                now: demoUi ? demoUi.clockMs : now,
+                roundActive: config.isActive, round: config.round, roundStatuses, teamSummary, batches: myBatches,
+              }))}
+            />
+          </div>
           <Card title="Jokes by stage" subtitle="Where your output sits right now">
             <StageDots batches={myBatches} />
           </Card>
