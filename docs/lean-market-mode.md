@@ -74,9 +74,9 @@ Before the split it counts as **5 jokes** for both the storage fee and the shipp
 shipment, $2). After the split, its real count sets both. A batch nobody splits before the round ends
 is charged as 5 jokes all the way to the end.
 
-Storage and hosting are both 5¢ a joke each minute. A batch on the desk is billed at its whole
-size, so holding a batch costs more than releasing it, and Marketing gains nothing by being the
-bottleneck.
+Storage and hosting are both 5¢ a joke each minute. A joke held on the desk is charged and cannot
+sell; a released joke can sell and stops being charged once it does. Marketing gains nothing by
+being the bottleneck.
 
 Nothing is stored: the fees are worked out from timestamps each time a screen refreshes, which is why
 the Storage and Hosting tiles tick up during the round, and every clock stops when the round ends.
@@ -126,8 +126,7 @@ customers per team × the number of teams that have a Joke Maker or Marketing se
 the screens and stats then show that real number. Before the start the round still shows its old
 count; the hint is worked out from the teams in the lobby. About 18 per team keeps roughly 60 % of
 teams in profit at 20 teams; fewer customers per team make the market harder for everyone. The
-field shows the default (18) after a page reload until you save a value, because the server returns
-the stored value only when a setting is saved. The
+field shows the round's stored value. The
 other fields (Cust. Budget, Market Price, Cost of Publishing,
 the nudges) work as before.
 
@@ -283,7 +282,7 @@ teams that stayed the same what they expected, and what the improving teams took
   at 20 teams, with 62 % / 59 % of teams in profit. Human play will not match bot numbers exactly,
   and the buy threshold should be checked with real LLM-scored jokes in a small trial before class.
   The pilot (`scripts/pilot/lean-pilot.mts`) plays one class at 10× with storage and hosting scaled
-  ×10; its default is 14 bot teams, and `PILOT_PER_PERSONA` sets a bigger class. It seats 14 bot teams: 3 each of
+  ×10; its default class is 14 bot teams (`PILOT_PER_PERSONA` sets a bigger one): 3 each of
   Careful, Balanced, Spray and Learner, plus 2 **Balanced (holds)** teams, identical to Balanced
   except that their Marketing seat holds each batch an extra 60 class-seconds before deciding. Its
   three checks: Spray spends 40–60 % of its revenue on fees in Round 1; in Round 2 the Learner's

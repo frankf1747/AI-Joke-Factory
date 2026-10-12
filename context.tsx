@@ -501,6 +501,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const pollAbortRef = useRef<AbortController | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   
+  /** The customer budget last read from the round; Start sends the budget only when it differs. */
+  const storedBudgetRef = useRef<number | null>(null);
+
   const initialConfig = (): GameConfig => ({
     status: 'LOBBY', // Start in LOBBY to show setup screen
     round: 1,
@@ -672,6 +675,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const shouldUseBackendConfig = isActive || normalizedStatus === 'ENDED';
                 // The budget is read whatever the status: the stored value is real before the start too.
                 const nextCustomerBudget = customerBudgetFromRound(selectedRound, prev.customerBudget);
+          if (Number(selectedRound?.customer_budget) > 0) storedBudgetRef.current = Number(selectedRound?.customer_budget);
                 const nextRound1BatchSize =
                   shouldUseBackendConfig && Number(r1?.batch_size) > 1
                     ? Number(r1?.batch_size)
@@ -1015,6 +1019,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Before start, some backends return placeholder values like { customer_budget: 0, batch_size: 1 }.
           const shouldUseBackendConfig = isActive || normalizedStatus === 'ENDED';
           const nextCustomerBudget = customerBudgetFromRound(selectedRound, prev.customerBudget);
+          if (Number(selectedRound?.customer_budget) > 0) storedBudgetRef.current = Number(selectedRound?.customer_budget);
           const nextRound1BatchSize =
             shouldUseBackendConfig && Number(r1?.batch_size) > 1
               ? Number(r1?.batch_size)
@@ -1606,7 +1611,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       targets: leanTargetRounds(roundId, roundIds, roundStatuses),
       send: async (id, body) => {
         const res: any = await instructorService.updateRoundConfig(id as RoundId, body);
-        // The public round never carries customers_per_team; the config response (the instructor
+        // Fallback: the public round now carries customers_per_team and the poll reads it; the config response (the instructor
         // round) is the only place the stored value comes back, so keep it for the field.
         const stored = res?.data?.round?.customers_per_team ?? res?.round?.customers_per_team;
         if (id === roundId && typeof stored === 'number' && Number.isFinite(stored)) {
@@ -2016,8 +2021,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
 
+        // Send the budget only when it differs from what the round stores, so Start never overwrites it with a stale value.
         await instructorService.start(rid, {
-          customer_budget,
+          ...(customer_budget !== storedBudgetRef.current ? { customer_budget } : {}),
           batch_size,
           market_price,
           cost_of_publishing,

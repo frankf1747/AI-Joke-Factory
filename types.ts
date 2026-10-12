@@ -144,7 +144,7 @@ export interface GameConfig {
   shippingFeeLarge: number;
   storageFeePerJokeMinute: number;
   hostingFeePerJokeMinute: number;
-  /** AI customers per team (0 = fixed count); instructor round only, shared by both rounds like the fees. */
+  /** AI customers per team (0 = fixed count); read from the round, shared by both rounds like the fees. */
   customersPerTeam: number;
 }
 

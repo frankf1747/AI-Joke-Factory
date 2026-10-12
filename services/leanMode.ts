@@ -21,7 +21,7 @@ export interface LeanRoundFields {
   shipping_fee_large?: number;
   storage_fee_per_joke_minute?: number;
   hosting_fee_per_joke_minute?: number;
-  /** Instructor round only (the public round never carries it). */
+  /** On every round (public and instructor); absent on a backend that predates it. */
   customers_per_team?: number;
 }
 
@@ -50,8 +50,8 @@ export interface LeanConfig extends LeanFeeConfig {
   wipLimit: number;
   /**
    * AI customers per team (0 = use the fixed customer count). At start a Lean
-   * round's customer count becomes this times the number of teams. Instructor
-   * round only, so a poll of the public round leaves it as it was.
+   * round's customer count becomes this times the number of teams. Read from
+   * the round when it carries it; kept as it was when absent (older backend).
    */
   customersPerTeam: number;
 }

@@ -105,7 +105,7 @@ export const instructorService = {
   start(
     round_id: RoundId,
     body: {
-      customer_budget: number;
+      customer_budget?: number;
       batch_size: number;
       market_price: number;
       cost_of_publishing: number;

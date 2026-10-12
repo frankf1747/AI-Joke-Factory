@@ -142,7 +142,7 @@ function loadDb(): MockDb {
     round_number: 1,
     status: 'CONFIGURED',
     batch_size: 5,
-    customer_budget: 10,
+    customer_budget: 3,
     started_at: null,
     ended_at: null,
     is_popped_active: false,
