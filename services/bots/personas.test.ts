@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { seededRng } from '../shared/jokes';
 import {
-  BALANCED_HOLDS, JOKE_CAP_PER_ROUND, PERSONAS, PERSONA_ORDER, chooseWithMemory, choosePublished, jitter, personaSequence, publishCount,
+  BALANCED_HOLDS, DWELL_MS, decideDwellMs, JOKE_CAP_PER_ROUND, PERSONAS, PERSONA_ORDER, chooseWithMemory, choosePublished, jitter, personaSequence, publishCount,
   type Persona,
 } from './personas';
 
@@ -123,5 +123,13 @@ describe('the pilot-only Balanced (holds) variant', () => {
     expect(BALANCED_HOLDS).toEqual({ persona: 'BALANCED', label: 'Balanced (holds)', marketingHoldMs: 60_000 });
     expect(PERSONA_ORDER as readonly string[]).not.toContain('BALANCED_HOLDS');
     expect(Object.values(PERSONAS).map(p => p.label)).not.toContain('Balanced (holds)');
+  });
+});
+
+describe('decideDwellMs', () => {
+  it('grows with every joke Marketing reads, so big batches wait longer on the desk', () => {
+    expect(decideDwellMs(0)).toBe(DWELL_MS.decide);
+    expect(decideDwellMs(3)).toBe(DWELL_MS.decide + 3 * DWELL_MS.reviewPerJoke);
+    expect(decideDwellMs(10) - decideDwellMs(3)).toBe(7 * DWELL_MS.reviewPerJoke);
   });
 });

@@ -16,7 +16,7 @@ import { statusOf, type BotApi } from './api';
 import { Deck, drawLearnerBatch } from './deck';
 import { botName, isBotName, parseBotName, SEAT_ROLE, type Seat } from './naming';
 import {
-  DWELL_MS, FEEDBACK_WAIT_MS, IDLE_POLL_MS, JOKE_CAP_PER_ROUND, MAX_BOT_TEAMS, PERSONAS,
+  DWELL_MS, FEEDBACK_WAIT_MS, decideDwellMs, IDLE_POLL_MS, JOKE_CAP_PER_ROUND, MAX_BOT_TEAMS, PERSONAS,
   QUEUE_POLL_MS, chooseWithMemory, choosePublished, jitter, publishCount, type JokeMemory, type PersonaId,
 } from './personas';
 import { isWipLimitReached } from '../leanMode';
@@ -754,7 +754,7 @@ export class BotEngine {
         const kept = jokes.filter(j => keep.has(j.joke_id)).map(j => `"${titleOf(j.joke_text)}"`);
         this.log(team, seat, `${persona.label}: keeping ${keep.size} of ${jokes.length} — ${kept.join(', ') || 'none'}`, signal);
         this.setActivity(seat, `publishing ${keep.size} of ${jokes.length}`, signal);
-        await this.pace(jitter(DWELL_MS.decide, rand), signal);
+        await this.pace(jitter(decideDwellMs(jokes.length), rand), signal);
         if (signal.aborted) break;
         if (this.scrambled) continue;
 

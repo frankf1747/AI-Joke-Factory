@@ -76,7 +76,16 @@ export const BALANCED_HOLDS = { persona: 'BALANCED', label: 'Balanced (holds)', 
 export const PERSONA_ORDER: readonly PersonaId[] = ['CAREFUL', 'BALANCED', 'SPRAY', 'LEARNER'];
 
 /** Marketing's pause after each stage, at 1×, so a watched screen shows every state. */
-export const DWELL_MS = { claim: 10_000, split: 15_000, decide: 10_000 } as const;
+export const DWELL_MS = { claim: 10_000, split: 15_000, decide: 10_000, reviewPerJoke: 12_000 } as const;
+
+/**
+ * Marketing's decide pause for a batch of `jokes`, at 1×: a fixed part plus
+ * reading and titling each joke, so a batch of 10 waits on the desk about three
+ * times as long as a batch of 3, as it does with people.
+ */
+export function decideDwellMs(jokes: number): number {
+  return DWELL_MS.decide + DWELL_MS.reviewPerJoke * Math.max(0, jokes);
+}
 /** Careful's longest wait for feedback, at 1×. Divided by speed like every other wait. */
 export const FEEDBACK_WAIT_MS = 180_000;
 export const QUEUE_POLL_MS = 3_000;
