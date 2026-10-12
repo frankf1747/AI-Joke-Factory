@@ -1,0 +1,2472 @@
+{
+  "date": "2026-10-12",
+  "settings": [
+    "Backend http://localhost:8081.",
+    "Bots at 10×; 6 CAREFUL, 6 BALANCED, 6 SPRAY, 6 LEARNER, 2 BALANCED_HOLDS; one class, Round 1 then Round 2.",
+    "Fees (real time): shipping $1 / $2 / $3 for 1–4 / 5 / 6–10 jokes, storage $0.05 and hosting $0.05 per joke-minute.",
+    "Storage and hosting are sent ×10 ($0.5 and $0.5) because the backend charges per wall-clock minute; shipping is per batch and is not scaled.",
+    "Arrival window 90 s (stands for 15 minutes of class time); batch size 5 exactly in Round 1, up to 10 in Round 2; no WIP limit.",
+    "Bot rounds are capped at 40 jokes per team, whatever the batch size.",
+    "Overrides: PILOT_STORAGE, PILOT_PREFERENCE_BASE, PILOT_CUSTOMERS, PILOT_BUY_THRESHOLD, PILOT_PER_PERSONA, PILOT_HOLD_TEAMS.",
+    "BALANCED_HOLDS (\"Balanced (holds)\") is Balanced in every way except that its Marketing seat holds each batch an extra 60 class-seconds (6 s at 10×) before deciding: the controlled contrast for the desk check.",
+    "Each round is ended 4 s after its arrival window closes, whatever the bots' progress (a 15-minute class ends at 15 minutes); stats and charts are read after the end, when the fee clocks have stopped. Round length is the server's started_at to ended_at, in class minutes (wall seconds × 10 / 60); a round over 16 (window + settle + 2 s slack) is flagged."
+  ],
+  "results": [
+    {
+      "round": 1,
+      "durationS": 94,
+      "classMinutes": 15.7,
+      "maxClassMinutes": 16,
+      "calls": 612,
+      "rows": [
+        {
+          "teamId": 18,
+          "persona": "BALANCED",
+          "revenue": 94,
+          "shipping": 16,
+          "storage": 3.602103958333333,
+          "hosting": 8.605210024999998,
+          "listing": 2.6,
+          "discard": 0.14,
+          "profit": 63.05268601666668,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 25.06329633333333,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": 8.293363
+            },
+            {
+              "size": 5,
+              "firstSaleS": 15.47678
+            },
+            {
+              "size": 5,
+              "firstSaleS": 73.717599
+            },
+            {
+              "size": 5,
+              "firstSaleS": 13.371332
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 16.471517
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 23.049187
+            }
+          ]
+        },
+        {
+          "teamId": 16,
+          "persona": "LEARNER",
+          "revenue": 72,
+          "shipping": 16,
+          "storage": 3.2335963333333333,
+          "hosting": 1.443532208333333,
+          "listing": 1.6,
+          "discard": 0.24,
+          "profit": 49.48287145833335,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 15.052796285714285,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": 9.480352
+            },
+            {
+              "size": 5,
+              "firstSaleS": 9.947577
+            },
+            {
+              "size": 5,
+              "firstSaleS": 16.05158
+            },
+            {
+              "size": 5,
+              "firstSaleS": 11.387483
+            },
+            {
+              "size": 5,
+              "firstSaleS": 13.289643
+            },
+            {
+              "size": 5,
+              "firstSaleS": 35.084181
+            },
+            {
+              "size": 5,
+              "firstSaleS": 10.128758
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 3,
+          "persona": "SPRAY",
+          "revenue": 79,
+          "shipping": 16,
+          "storage": 9.125141166666666,
+          "hosting": 12.876074200000001,
+          "listing": 4,
+          "discard": 0,
+          "profit": 36.99878463333333,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 28.210666600000003,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": 11.076584
+            },
+            {
+              "size": 5,
+              "firstSaleS": 15.872630000000001
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 30.251579
+            },
+            {
+              "size": 5,
+              "firstSaleS": 39.616006
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 44.236534
+            }
+          ]
+        },
+        {
+          "teamId": 2,
+          "persona": "BALANCED",
+          "revenue": 67,
+          "shipping": 16,
+          "storage": 4.5877705833333335,
+          "hosting": 8.123359766666663,
+          "listing": 2.8000000000000003,
+          "discard": 0.12,
+          "profit": 35.36886965000001,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 18.4352198,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": 8.301428
+            },
+            {
+              "size": 5,
+              "firstSaleS": 13.129587
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 14.243307
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 27.106398
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 29.395379
+            }
+          ]
+        },
+        {
+          "teamId": 10,
+          "persona": "BALANCED",
+          "revenue": 53,
+          "shipping": 16,
+          "storage": 5.528076333333334,
+          "hosting": 10.315853975000001,
+          "listing": 3,
+          "discard": 0.1,
+          "profit": 18.056069691666664,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 18.9207216,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": 8.280597
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 14.229006
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 18.843901
+            },
+            {
+              "size": 5,
+              "firstSaleS": 27.068312
+            },
+            {
+              "size": 5,
+              "firstSaleS": 26.181792
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 6,
+          "persona": "BALANCED",
+          "revenue": 47,
+          "shipping": 16,
+          "storage": 3.355426583333333,
+          "hosting": 7.856947308333333,
+          "listing": 2.7,
+          "discard": 0.13,
+          "profit": 16.95762610833333,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 13.262497200000002,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 11.64333
+            },
+            {
+              "size": 5,
+              "firstSaleS": 17.831921
+            },
+            {
+              "size": 5,
+              "firstSaleS": 12.462922
+            },
+            {
+              "size": 5,
+              "firstSaleS": 12.477735
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 11.896578
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 11,
+          "persona": "SPRAY",
+          "revenue": 54,
+          "shipping": 16,
+          "storage": 9.580702291666666,
+          "hosting": 13.485988233333332,
+          "listing": 4,
+          "discard": 0,
+          "profit": 10.933309475,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 33.34544016666666,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 14.937494000000001
+            },
+            {
+              "size": 5,
+              "firstSaleS": 22.592401
+            },
+            {
+              "size": 5,
+              "firstSaleS": 29.215426
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 37.307911
+            },
+            {
+              "size": 5,
+              "firstSaleS": 47.396076
+            },
+            {
+              "size": 5,
+              "firstSaleS": 48.623333
+            }
+          ]
+        },
+        {
+          "teamId": 19,
+          "persona": "SPRAY",
+          "revenue": 52,
+          "shipping": 16,
+          "storage": 9.577411125000001,
+          "hosting": 12.451943608333336,
+          "listing": 4,
+          "discard": 0,
+          "profit": 9.970645266666663,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 31.06069757142857,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": 14.366243
+            },
+            {
+              "size": 5,
+              "firstSaleS": 20.018547
+            },
+            {
+              "size": 5,
+              "firstSaleS": 20.568661
+            },
+            {
+              "size": 5,
+              "firstSaleS": 28.761037
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 38.172665
+            },
+            {
+              "size": 5,
+              "firstSaleS": 46.951306
+            },
+            {
+              "size": 5,
+              "firstSaleS": 48.586424
+            }
+          ]
+        },
+        {
+          "teamId": 14,
+          "persona": "BALANCED",
+          "revenue": 40,
+          "shipping": 16,
+          "storage": 4.46556675,
+          "hosting": 7.670170849999998,
+          "listing": 2.7,
+          "discard": 0.13,
+          "profit": 9.034262399999996,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 16.559689499999998,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": 14.357934
+            },
+            {
+              "size": 5,
+              "firstSaleS": 13.721332
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 19.034866
+            },
+            {
+              "size": 5,
+              "firstSaleS": 19.124626
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 8,
+          "persona": "LEARNER",
+          "revenue": 29,
+          "shipping": 16,
+          "storage": 3.3745744166666665,
+          "hosting": 3.6308592499999994,
+          "listing": 1.6,
+          "discard": 0.24,
+          "profit": 4.154566333333334,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 17.528315166666665,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 11.870204
+            },
+            {
+              "size": 5,
+              "firstSaleS": 25.341197
+            },
+            {
+              "size": 5,
+              "firstSaleS": 11.654837
+            },
+            {
+              "size": 5,
+              "firstSaleS": 33.92141
+            },
+            {
+              "size": 5,
+              "firstSaleS": 12.845346
+            },
+            {
+              "size": 5,
+              "firstSaleS": 9.536897
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 7,
+          "persona": "SPRAY",
+          "revenue": 46,
+          "shipping": 16,
+          "storage": 9.640442291666666,
+          "hosting": 13.4926818,
+          "listing": 4,
+          "discard": 0,
+          "profit": 2.866875908333334,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 35.385129666666664,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": 18.99856
+            },
+            {
+              "size": 5,
+              "firstSaleS": 18.827367
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 28.514588
+            },
+            {
+              "size": 5,
+              "firstSaleS": 32.394491
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 55.687008
+            },
+            {
+              "size": 5,
+              "firstSaleS": 57.888764
+            }
+          ]
+        },
+        {
+          "teamId": 17,
+          "persona": "CAREFUL",
+          "revenue": 19,
+          "shipping": 12,
+          "storage": 2.436004625,
+          "hosting": 3.2560633,
+          "listing": 1.2000000000000002,
+          "discard": 0.18,
+          "profit": -0.07206792499999892,
+          "batches": 6,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 26.966340333333335,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": 14.402431
+            },
+            {
+              "size": 5,
+              "firstSaleS": 52.475492
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 14.021098
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 24,
+          "persona": "LEARNER",
+          "revenue": 24,
+          "shipping": 16,
+          "storage": 3.103933625,
+          "hosting": 4.580871641666667,
+          "listing": 1.6,
+          "discard": 0.24,
+          "profit": -1.5248052666666663,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 17.08126114285714,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": 8.902573
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 12.642943
+            },
+            {
+              "size": 5,
+              "firstSaleS": 10.469721
+            },
+            {
+              "size": 5,
+              "firstSaleS": 53.174909
+            },
+            {
+              "size": 5,
+              "firstSaleS": 12.335992
+            },
+            {
+              "size": 5,
+              "firstSaleS": 12.000565
+            },
+            {
+              "size": 5,
+              "firstSaleS": 10.042125
+            }
+          ]
+        },
+        {
+          "teamId": 15,
+          "persona": "SPRAY",
+          "revenue": 41,
+          "shipping": 16,
+          "storage": 8.493111541666668,
+          "hosting": 15.290463066666673,
+          "listing": 4,
+          "discard": 0,
+          "profit": -2.783574608333341,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 32.509223999999996,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 16.284255
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 28.516959
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 32.427693
+            },
+            {
+              "size": 5,
+              "firstSaleS": 41.395742
+            },
+            {
+              "size": 5,
+              "firstSaleS": 43.921471
+            }
+          ]
+        },
+        {
+          "teamId": 25,
+          "persona": "BALANCED_HOLDS",
+          "revenue": 32,
+          "shipping": 16,
+          "storage": 10.722691458333333,
+          "hosting": 6.032805616666665,
+          "listing": 2.3000000000000003,
+          "discard": 0.07,
+          "profit": -3.1254970749999993,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 38.929654,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 26.713639
+            },
+            {
+              "size": 5,
+              "firstSaleS": 44.937413
+            },
+            {
+              "size": 5,
+              "firstSaleS": 38.339928
+            },
+            {
+              "size": 5,
+              "firstSaleS": 45.727636
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": null,
+              "firstSaleS": null
+            },
+            {
+              "size": null,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 21,
+          "persona": "CAREFUL",
+          "revenue": 10,
+          "shipping": 12,
+          "storage": 2.2409649583333335,
+          "hosting": 2.8157146583333335,
+          "listing": 1,
+          "discard": 0.15,
+          "profit": -8.206679616666667,
+          "batches": 6,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 20.678748666666667,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": 18.993895
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 15.609036
+            },
+            {
+              "size": 5,
+              "firstSaleS": 27.433315
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 20,
+          "persona": "LEARNER",
+          "revenue": 17,
+          "shipping": 16,
+          "storage": 3.0107162083333328,
+          "hosting": 4.608099941666666,
+          "listing": 1.6,
+          "discard": 0.24,
+          "profit": -8.458816149999999,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 17.804217142857144,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": 8.675955
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 31.32641
+            },
+            {
+              "size": 5,
+              "firstSaleS": 30.133558
+            },
+            {
+              "size": 5,
+              "firstSaleS": 11.130657
+            },
+            {
+              "size": 5,
+              "firstSaleS": 10.632513
+            },
+            {
+              "size": 5,
+              "firstSaleS": 19.340865
+            },
+            {
+              "size": 5,
+              "firstSaleS": 13.389562
+            }
+          ]
+        },
+        {
+          "teamId": 26,
+          "persona": "BALANCED_HOLDS",
+          "revenue": 25,
+          "shipping": 16,
+          "storage": 11.558536916666664,
+          "hosting": 5.184140025000001,
+          "listing": 2.2,
+          "discard": 0.08,
+          "profit": -10.022676941666663,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 36.50268975,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": 16.177407
+            },
+            {
+              "size": 5,
+              "firstSaleS": 26.469592
+            },
+            {
+              "size": 5,
+              "firstSaleS": 59.95546
+            },
+            {
+              "size": 5,
+              "firstSaleS": 43.4083
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": null,
+              "firstSaleS": null
+            },
+            {
+              "size": null,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 22,
+          "persona": "BALANCED",
+          "revenue": 18,
+          "shipping": 16,
+          "storage": 3.37220825,
+          "hosting": 9.357208858333337,
+          "listing": 2.7,
+          "discard": 0.13,
+          "profit": -13.559417108333337,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 15.948692249999999,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": 10.275578
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 13.73935
+            },
+            {
+              "size": 5,
+              "firstSaleS": 14.217676
+            },
+            {
+              "size": 5,
+              "firstSaleS": 25.562165
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 9,
+          "persona": "CAREFUL",
+          "revenue": 2,
+          "shipping": 12,
+          "storage": 2.30365175,
+          "hosting": 3.493412866666666,
+          "listing": 1,
+          "discard": 0.15,
+          "profit": -16.947064616666665,
+          "batches": 6,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 18.8670135,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": 26.271102
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 11.462925
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 13,
+          "persona": "CAREFUL",
+          "revenue": 2,
+          "shipping": 12,
+          "storage": 2.5026187083333333,
+          "hosting": 3.6409190250000005,
+          "listing": 1,
+          "discard": 0.15,
+          "profit": -17.293537733333334,
+          "batches": 6,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 10.899127,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 10.899127
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 12,
+          "persona": "LEARNER",
+          "revenue": 8,
+          "shipping": 16,
+          "storage": 3.2928617916666667,
+          "hosting": 5.366853341666667,
+          "listing": 1.6,
+          "discard": 0.24,
+          "profit": -18.499715133333332,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 24.183892333333336,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 24.20088
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 26.023486
+            },
+            {
+              "size": 5,
+              "firstSaleS": 22.327311
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 5,
+          "persona": "CAREFUL",
+          "revenue": 0,
+          "shipping": 12,
+          "storage": 2.389084416666667,
+          "hosting": 4.254653933333334,
+          "listing": 1.2000000000000002,
+          "discard": 0.18,
+          "profit": -20.023738350000002,
+          "batches": 6,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": null,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 1,
+          "persona": "CAREFUL",
+          "revenue": 0,
+          "shipping": 12,
+          "storage": 2.4311532083333334,
+          "hosting": 4.417480283333333,
+          "listing": 1.2000000000000002,
+          "discard": 0.18,
+          "profit": -20.228633491666667,
+          "batches": 6,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": null,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 4,
+          "persona": "LEARNER",
+          "revenue": 5,
+          "shipping": 16,
+          "storage": 3.3798599583333333,
+          "hosting": 5.936915174999999,
+          "listing": 1.6,
+          "discard": 0.24,
+          "profit": -22.156775133333333,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 14.5926805,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 15.38658
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 13.798781
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 23,
+          "persona": "SPRAY",
+          "revenue": 16,
+          "shipping": 16,
+          "storage": 9.469629291666667,
+          "hosting": 13.809991416666662,
+          "listing": 4,
+          "discard": 0,
+          "profit": -27.27962070833333,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 25.555541,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": 11.880413
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 29.479626
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 35.306584
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "durationS": 94,
+      "classMinutes": 15.7,
+      "maxClassMinutes": 16,
+      "calls": 655,
+      "rows": [
+        {
+          "teamId": 12,
+          "persona": "LEARNER",
+          "revenue": 117,
+          "shipping": 13,
+          "storage": 2.2465419749999995,
+          "hosting": 5.43765345,
+          "listing": 2.6,
+          "discard": 0.13,
+          "profit": 93.58580457500001,
+          "batches": 13,
+          "meanBatchSize": 3,
+          "sendToFirstSaleS": 14.959732000000002,
+          "batchList": [
+            {
+              "size": 3,
+              "firstSaleS": 6.23628
+            },
+            {
+              "size": 3,
+              "firstSaleS": 6.568504
+            },
+            {
+              "size": 3,
+              "firstSaleS": 7.334568
+            },
+            {
+              "size": 3,
+              "firstSaleS": 9.589112
+            },
+            {
+              "size": 3,
+              "firstSaleS": 7.194258
+            },
+            {
+              "size": 3,
+              "firstSaleS": 37.538549
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            },
+            {
+              "size": 3,
+              "firstSaleS": 16.805597
+            },
+            {
+              "size": 3,
+              "firstSaleS": 28.410988
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 1,
+          "persona": "CAREFUL",
+          "revenue": 83,
+          "shipping": 14,
+          "storage": 2.506434833333333,
+          "hosting": 2.714636333333333,
+          "listing": 1.2000000000000002,
+          "discard": 0.18,
+          "profit": 62.39892883333333,
+          "batches": 7,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 24.408318,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": 9.630997
+            },
+            {
+              "size": 5,
+              "firstSaleS": 39.185639
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 20,
+          "persona": "LEARNER",
+          "revenue": 74,
+          "shipping": 14,
+          "storage": 2.296554175,
+          "hosting": 5.100581024999999,
+          "listing": 2.4000000000000004,
+          "discard": 0.12,
+          "profit": 50.082864799999996,
+          "batches": 13,
+          "meanBatchSize": 3,
+          "sendToFirstSaleS": 11.863392857142857,
+          "batchList": [
+            {
+              "size": 3,
+              "firstSaleS": 8.560387
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            },
+            {
+              "size": 3,
+              "firstSaleS": 13.511461
+            },
+            {
+              "size": 3,
+              "firstSaleS": 12.589038
+            },
+            {
+              "size": 3,
+              "firstSaleS": 15.573973
+            },
+            {
+              "size": 3,
+              "firstSaleS": 7.627682
+            },
+            {
+              "size": 3,
+              "firstSaleS": 15.216758
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            },
+            {
+              "size": 3,
+              "firstSaleS": 9.964451
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            },
+            {
+              "size": null,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 21,
+          "persona": "CAREFUL",
+          "revenue": 52,
+          "shipping": 12,
+          "storage": 2.330314125,
+          "hosting": 2.3255134166666664,
+          "listing": 1.2000000000000002,
+          "discard": 0.18,
+          "profit": 33.96417245833333,
+          "batches": 6,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 11.727234249999999,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": 10.380031
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 11.8513
+            },
+            {
+              "size": 5,
+              "firstSaleS": 16.606989
+            },
+            {
+              "size": 5,
+              "firstSaleS": 8.070617
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 24,
+          "persona": "LEARNER",
+          "revenue": 57,
+          "shipping": 13,
+          "storage": 2.2466091,
+          "hosting": 5.6354441500000005,
+          "listing": 2.4000000000000004,
+          "discard": 0.12,
+          "profit": 33.597946750000006,
+          "batches": 13,
+          "meanBatchSize": 3,
+          "sendToFirstSaleS": 10.164717000000001,
+          "batchList": [
+            {
+              "size": 3,
+              "firstSaleS": 8.238977
+            },
+            {
+              "size": 3,
+              "firstSaleS": 9.314592
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            },
+            {
+              "size": 3,
+              "firstSaleS": 7.376177
+            },
+            {
+              "size": 3,
+              "firstSaleS": 10.390667
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            },
+            {
+              "size": 3,
+              "firstSaleS": 16.762006
+            },
+            {
+              "size": 3,
+              "firstSaleS": 8.905883
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 4,
+          "persona": "LEARNER",
+          "revenue": 53,
+          "shipping": 13,
+          "storage": 2.264136475,
+          "hosting": 3.67597145,
+          "listing": 2.4000000000000004,
+          "discard": 0.12,
+          "profit": 31.539892075000004,
+          "batches": 13,
+          "meanBatchSize": 3,
+          "sendToFirstSaleS": 15.309283555555558,
+          "batchList": [
+            {
+              "size": 3,
+              "firstSaleS": 6.962913
+            },
+            {
+              "size": 3,
+              "firstSaleS": 8.960078
+            },
+            {
+              "size": 3,
+              "firstSaleS": 15.805073
+            },
+            {
+              "size": 3,
+              "firstSaleS": 24.359684
+            },
+            {
+              "size": 3,
+              "firstSaleS": 22.480286
+            },
+            {
+              "size": 3,
+              "firstSaleS": 10.301008
+            },
+            {
+              "size": 3,
+              "firstSaleS": 21.853139
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            },
+            {
+              "size": 3,
+              "firstSaleS": 12.593296
+            },
+            {
+              "size": 3,
+              "firstSaleS": 14.468075
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 19,
+          "persona": "SPRAY",
+          "revenue": 71,
+          "shipping": 12,
+          "storage": 10.44064025,
+          "hosting": 13.554790091666662,
+          "listing": 4,
+          "discard": 0,
+          "profit": 31.004569658333338,
+          "batches": 4,
+          "meanBatchSize": 10,
+          "sendToFirstSaleS": 32.88395225,
+          "batchList": [
+            {
+              "size": 10,
+              "firstSaleS": 13.237405
+            },
+            {
+              "size": 10,
+              "firstSaleS": 29.890421
+            },
+            {
+              "size": 10,
+              "firstSaleS": 38.328728
+            },
+            {
+              "size": 10,
+              "firstSaleS": 50.079255
+            }
+          ]
+        },
+        {
+          "teamId": 8,
+          "persona": "LEARNER",
+          "revenue": 51,
+          "shipping": 13,
+          "storage": 2.2838186499999997,
+          "hosting": 4.173956550000001,
+          "listing": 2.4000000000000004,
+          "discard": 0.12,
+          "profit": 29.022224800000004,
+          "batches": 13,
+          "meanBatchSize": 3,
+          "sendToFirstSaleS": 11.317053333333334,
+          "batchList": [
+            {
+              "size": 3,
+              "firstSaleS": 6.938264
+            },
+            {
+              "size": 3,
+              "firstSaleS": 7.756425
+            },
+            {
+              "size": 3,
+              "firstSaleS": 10.091318
+            },
+            {
+              "size": 3,
+              "firstSaleS": 9.739353
+            },
+            {
+              "size": 3,
+              "firstSaleS": 12.503884
+            },
+            {
+              "size": 3,
+              "firstSaleS": 17.032417
+            },
+            {
+              "size": 3,
+              "firstSaleS": 7.252651
+            },
+            {
+              "size": 3,
+              "firstSaleS": 9.09331
+            },
+            {
+              "size": 3,
+              "firstSaleS": 21.445858
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 23,
+          "persona": "SPRAY",
+          "revenue": 57,
+          "shipping": 12,
+          "storage": 10.930829083333334,
+          "hosting": 13.651949766666664,
+          "listing": 4,
+          "discard": 0,
+          "profit": 16.41722115,
+          "batches": 4,
+          "meanBatchSize": 10,
+          "sendToFirstSaleS": 37.37550075,
+          "batchList": [
+            {
+              "size": 10,
+              "firstSaleS": 19.714769
+            },
+            {
+              "size": 10,
+              "firstSaleS": 27.514569
+            },
+            {
+              "size": 10,
+              "firstSaleS": 49.908406
+            },
+            {
+              "size": 10,
+              "firstSaleS": 52.364259
+            }
+          ]
+        },
+        {
+          "teamId": 16,
+          "persona": "LEARNER",
+          "revenue": 34,
+          "shipping": 14,
+          "storage": 2.2962488999999997,
+          "hosting": 5.029556783333334,
+          "listing": 2.4000000000000004,
+          "discard": 0.12,
+          "profit": 10.154194316666667,
+          "batches": 13,
+          "meanBatchSize": 3,
+          "sendToFirstSaleS": 14.941668142857143,
+          "batchList": [
+            {
+              "size": 3,
+              "firstSaleS": 8.576576
+            },
+            {
+              "size": 3,
+              "firstSaleS": 16.347873
+            },
+            {
+              "size": 3,
+              "firstSaleS": 22.631344
+            },
+            {
+              "size": 3,
+              "firstSaleS": 7.365336
+            },
+            {
+              "size": 3,
+              "firstSaleS": 18.352533
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            },
+            {
+              "size": 3,
+              "firstSaleS": 8.78041
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            },
+            {
+              "size": 3,
+              "firstSaleS": 22.537605
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            },
+            {
+              "size": 3,
+              "firstSaleS": null
+            },
+            {
+              "size": null,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 7,
+          "persona": "SPRAY",
+          "revenue": 40,
+          "shipping": 12,
+          "storage": 10.751812583333333,
+          "hosting": 12.223836674999998,
+          "listing": 4,
+          "discard": 0,
+          "profit": 1.0243507416666695,
+          "batches": 4,
+          "meanBatchSize": 10,
+          "sendToFirstSaleS": 32.115703333333336,
+          "batchList": [
+            {
+              "size": 10,
+              "firstSaleS": 15.483019
+            },
+            {
+              "size": 10,
+              "firstSaleS": 31.193705
+            },
+            {
+              "size": 10,
+              "firstSaleS": null
+            },
+            {
+              "size": 10,
+              "firstSaleS": 49.670386
+            }
+          ]
+        },
+        {
+          "teamId": 22,
+          "persona": "BALANCED",
+          "revenue": 27,
+          "shipping": 16,
+          "storage": 4.704324124999999,
+          "hosting": 9.263070666666666,
+          "listing": 2.6,
+          "discard": 0.14,
+          "profit": -5.707394791666667,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 21.84178725,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 14.558258
+            },
+            {
+              "size": 5,
+              "firstSaleS": 13.406837
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 23.563099
+            },
+            {
+              "size": 5,
+              "firstSaleS": 35.838955
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 18,
+          "persona": "BALANCED",
+          "revenue": 25,
+          "shipping": 16,
+          "storage": 4.281487833333333,
+          "hosting": 10.081980599999998,
+          "listing": 2.9000000000000004,
+          "discard": 0.11,
+          "profit": -8.37346843333333,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 15.793518666666666,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 14.476259
+            },
+            {
+              "size": 5,
+              "firstSaleS": 17.893486
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 15.010811
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 9,
+          "persona": "CAREFUL",
+          "revenue": 10,
+          "shipping": 12,
+          "storage": 2.1769433333333335,
+          "hosting": 3.300606175,
+          "listing": 1,
+          "discard": 0.15,
+          "profit": -8.627549508333335,
+          "batches": 6,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 15.697467500000002,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": 17.386227
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 14.008708
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 5,
+          "persona": "CAREFUL",
+          "revenue": 12,
+          "shipping": 14,
+          "storage": 2.64089,
+          "hosting": 2.9870526749999997,
+          "listing": 1.2000000000000002,
+          "discard": 0.18,
+          "profit": -9.007942674999999,
+          "batches": 7,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 14.860191,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": 11.519507
+            },
+            {
+              "size": 5,
+              "firstSaleS": 18.098693
+            },
+            {
+              "size": 5,
+              "firstSaleS": 15.766936
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 14.055628
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 13,
+          "persona": "CAREFUL",
+          "revenue": 12,
+          "shipping": 14,
+          "storage": 2.5488285416666665,
+          "hosting": 3.53056155,
+          "listing": 1.2000000000000002,
+          "discard": 0.18,
+          "profit": -9.459390091666666,
+          "batches": 7,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 15.195509333333334,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 18.964246
+            },
+            {
+              "size": 5,
+              "firstSaleS": 15.093489
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 11.528793
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": null,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 11,
+          "persona": "SPRAY",
+          "revenue": 31,
+          "shipping": 12,
+          "storage": 9.988980083333335,
+          "hosting": 15.398099324999993,
+          "listing": 4,
+          "discard": 0,
+          "profit": -10.387079408333328,
+          "batches": 4,
+          "meanBatchSize": 10,
+          "sendToFirstSaleS": 33.324256749999996,
+          "batchList": [
+            {
+              "size": 10,
+              "firstSaleS": 21.789143
+            },
+            {
+              "size": 10,
+              "firstSaleS": 27.281086
+            },
+            {
+              "size": 10,
+              "firstSaleS": 39.881097
+            },
+            {
+              "size": 10,
+              "firstSaleS": 44.345701
+            }
+          ]
+        },
+        {
+          "teamId": 25,
+          "persona": "BALANCED_HOLDS",
+          "revenue": 19,
+          "shipping": 16,
+          "storage": 10.223182208333334,
+          "hosting": 5.037626449999999,
+          "listing": 2,
+          "discard": 0.1,
+          "profit": -14.360808658333335,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 31.138474,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": 20.28557
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 41.991378
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": null,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 2,
+          "persona": "BALANCED",
+          "revenue": 18,
+          "shipping": 16,
+          "storage": 4.245539666666667,
+          "hosting": 9.869153999999996,
+          "listing": 2.8000000000000003,
+          "discard": 0.12,
+          "profit": -15.034693666666662,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 16.7416685,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": 19.405453
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 14.077884
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 14,
+          "persona": "BALANCED",
+          "revenue": 16,
+          "shipping": 16,
+          "storage": 3.2095811666666663,
+          "hosting": 9.30861688333333,
+          "listing": 2.8000000000000003,
+          "discard": 0.12,
+          "profit": -15.438198049999997,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 18.056873799999998,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 14.231813
+            },
+            {
+              "size": 5,
+              "firstSaleS": 15.91633
+            },
+            {
+              "size": 5,
+              "firstSaleS": 26.870039
+            },
+            {
+              "size": 5,
+              "firstSaleS": 15.014619
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 18.251568
+            }
+          ]
+        },
+        {
+          "teamId": 17,
+          "persona": "CAREFUL",
+          "revenue": 3,
+          "shipping": 12,
+          "storage": 2.649460166666667,
+          "hosting": 3.6701688166666666,
+          "listing": 1.2000000000000002,
+          "discard": 0.18,
+          "profit": -16.699628983333334,
+          "batches": 6,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 19.180007,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 19.180007
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 15,
+          "persona": "SPRAY",
+          "revenue": 23,
+          "shipping": 12,
+          "storage": 11.001956,
+          "hosting": 15.583441758333338,
+          "listing": 4,
+          "discard": 0,
+          "profit": -19.585397758333336,
+          "batches": 4,
+          "meanBatchSize": 10,
+          "sendToFirstSaleS": 35.192499,
+          "batchList": [
+            {
+              "size": 10,
+              "firstSaleS": 16.573206
+            },
+            {
+              "size": 10,
+              "firstSaleS": 39.774734
+            },
+            {
+              "size": 10,
+              "firstSaleS": null
+            },
+            {
+              "size": 10,
+              "firstSaleS": 49.229557
+            }
+          ]
+        },
+        {
+          "teamId": 10,
+          "persona": "BALANCED",
+          "revenue": 9,
+          "shipping": 16,
+          "storage": 3.9659287083333337,
+          "hosting": 8.99133755833333,
+          "listing": 2.5,
+          "discard": 0.15,
+          "profit": -22.607266266666663,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 12.3194145,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": 10.132581
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 14.506248
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 3,
+          "persona": "SPRAY",
+          "revenue": 13,
+          "shipping": 12,
+          "storage": 11.615768749999999,
+          "hosting": 15.114056483333332,
+          "listing": 4,
+          "discard": 0,
+          "profit": -29.72982523333333,
+          "batches": 4,
+          "meanBatchSize": 10,
+          "sendToFirstSaleS": 31.410377666666665,
+          "batchList": [
+            {
+              "size": 10,
+              "firstSaleS": 17.213051
+            },
+            {
+              "size": 10,
+              "firstSaleS": 34.909086
+            },
+            {
+              "size": 10,
+              "firstSaleS": 42.108996
+            },
+            {
+              "size": 10,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 6,
+          "persona": "BALANCED",
+          "revenue": 2,
+          "shipping": 16,
+          "storage": 3.844285666666666,
+          "hosting": 9.406160041666665,
+          "listing": 2.6,
+          "discard": 0.14,
+          "profit": -29.990445708333333,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 16.496261500000003,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 13.748936
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 19.243587
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            }
+          ]
+        },
+        {
+          "teamId": 26,
+          "persona": "BALANCED_HOLDS",
+          "revenue": 3,
+          "shipping": 16,
+          "storage": 10.450446874999999,
+          "hosting": 6.287455758333332,
+          "listing": 1.7000000000000002,
+          "discard": 0.08,
+          "profit": -31.51790263333333,
+          "batches": 8,
+          "meanBatchSize": 5,
+          "sendToFirstSaleS": 68.480599,
+          "batchList": [
+            {
+              "size": 5,
+              "firstSaleS": 84.567687
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": 52.393511
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": 5,
+              "firstSaleS": null
+            },
+            {
+              "size": null,
+              "firstSaleS": null
+            },
+            {
+              "size": null,
+              "firstSaleS": null
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "tag": "E1-storage05 small(26 teams) r2: PILOT_BUY_THRESHOLD=8 PILOT_PREFERENCE_BASE=5 PILOT_STORAGE=0.05 PILOT_CUSTOMERS=312"
+}
