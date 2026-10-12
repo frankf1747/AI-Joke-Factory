@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { useGame } from '../context';
+import { useDemoMode, useGame } from '../context';
 import { Button, Card, StatBox, RoleLayout, Modal, SectionLabel, BRAND, fmt$ } from '../components';
 import type { StatBoxTone } from '../components';
 import {
@@ -319,6 +319,9 @@ const QualityControl: React.FC = () => {
 
   /* A watch tab shows a bot's seat read-only: no nudges, no modals, no writes. */
   const watching = isWatchMode();
+  /* Inside the guided tour's demo stage (context.tsx useDemoMode) the decision
+     clock never arms either: a nudge dialog must not open over the demo. */
+  const demoMode = useDemoMode();
 
   /* Live queue from API */
   const incomingJokes = useMemo(() => {
@@ -495,7 +498,7 @@ const QualityControl: React.FC = () => {
      block only translates it to and from React. */
 
   // Arm on arrival at the selection view; disarm if the batch goes away.
-  const batchReady = !watching && !needsSplit && orderIds.length > 0;
+  const batchReady = !watching && !demoMode && !needsSplit && orderIds.length > 0;
   React.useEffect(() => {
     dispatchNudge(batchReady ? { type: 'BATCH_READY' } : { type: 'BATCH_CLEARED' });
     // queueSig, not orderIds — reordering cards must not restart the clock.

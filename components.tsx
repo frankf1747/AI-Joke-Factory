@@ -1,6 +1,6 @@
 import React from 'react';
 import { LogOut, User as UserIcon, X, Trophy, TrendingUp, Tag, Info, HelpCircle } from 'lucide-react';
-import { useGame } from './context';
+import { useDemoMode, useGame } from './context';
 import { Role } from './types';
 import { isWatchMode } from './services/watchMode';
 import Tutorial, { type TutorialRole } from './components/Tutorial';
@@ -102,6 +102,9 @@ const TutorialLauncher: React.FC<{ role: Role }> = ({ role }) => {
 
 export const RoleLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, logout, config, teamNames } = useGame();
+  /* Inside the guided tour's demo stage the header has no tutorial launcher: it
+     would start a tour inside the tour and write seen-flags to localStorage. */
+  const demoMode = useDemoMode();
 
   if (!user) return null;
 
@@ -139,7 +142,7 @@ export const RoleLayout: React.FC<{ children: React.ReactNode }> = ({ children }
                 <UserIcon size={16} className="text-gray-400" />
                 <span className="text-sm font-medium">{user.name} ({user.role.replace('_', ' ')})</span>
              </div>
-             <TutorialLauncher role={user.role} />
+             {!demoMode && <TutorialLauncher role={user.role} />}
              {/* A watch tab has no session of its own to end, and logging out would only strand it on a login screen. */}
              {!isWatchMode() && (
                <button onClick={logout} className="text-gray-400 hover:text-red-500 transition-colors" title="Logout">

@@ -33,6 +33,7 @@ import { DEFAULT_IDEAL_PROFILE } from './config/dimensions';
 import { DEFAULT_CUSTOMER_BUDGET, customerBudgetFromRound } from './services/roundConfig';
 import { LEAN_DEFAULTS, MARKET_MODE_LOCKED_TEXT, WIP_LIMIT_TEXT, configSaveErrorText, isMarketModeLocked, isWipLimitReached, leanConfigFromRound, leanConfigToBody, leanTargetRounds, saveRoundConfig } from './services/leanMode';
 import { isCompleteProfile } from './components/IdealProfilePicker';
+import type { DemoUi } from './services/tour/demoUi';
 
 const LS_USER_ID = 'joke_factory_user_id';
 const LS_DISPLAY_NAME = 'joke_factory_display_name';
@@ -464,7 +465,23 @@ export const useGame = () => {
   return context;
 };
 
+/**
+ * Demo mode: on inside the guided tour's stage (components/tour/DemoStage.tsx),
+ * off everywhere else. The stage renders the real student views under its own
+ * GameContext.Provider (a scripted demo game, services/tour/demoGame.ts). The
+ * value here is the scripted screen state the views read in place of their own
+ * local state (services/tour/demoUi.ts); null means "not a demo". Anything that
+ * could reach the network, write localStorage or start a timer that opens a
+ * dialog checks useDemoMode() first.
+ */
+export const DemoModeContext = createContext<DemoUi | null>(null);
+export const useDemoMode = (): boolean => useContext(DemoModeContext) !== null;
+export const useDemoUi = (): DemoUi | null => useContext(DemoModeContext);
+
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  /* A provider inside the guided tour's demo stage never polls. The stage uses
+     its own demo context, not this provider; this is the backstop. */
+  const demoMode = useDemoMode();
   const [user, setUser] = useState<User | null>(null);
   const [roundId, setRoundId] = useState<RoundId | null>(null);
   const [roundIds, setRoundIds] = useState<{ 1: RoundId | null; 2: RoundId | null }>({ 1: null, 2: null });
@@ -581,8 +598,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Professional polling: /v1/session/me + /v1/rounds/active (+ role-specific data)
   useEffect(() => {
-    // Start polling only when a user is present (after login/join).
-    if (!user) {
+    // Start polling only when a user is present (after login/join), and never
+    // in demo mode.
+    if (!user || demoMode) {
       // ensure no timers are running
       pollAbortRef.current?.abort();
       if (pollTimerRef.current) {
