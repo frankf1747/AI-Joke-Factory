@@ -270,7 +270,7 @@ const JokeMaker: React.FC = () => {
   const watching = isWatchMode();
 
   return (
-    <RoleLayout>
+    <RoleLayout tourView={JokeMaker}>
       {/* Round 2: Team popup */}
       <Modal
         isOpen={!watching && config.round === 2 && config.showTeamPopup && !dismissedTeamPopup}

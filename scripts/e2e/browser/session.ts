@@ -34,8 +34,11 @@ export const LS = {
   QC_RATED_HISTORY: 'joke_factory_qc_rated_history_v1',
 } as const;
 
-/** components.tsx:40 — `${TUTORIAL_SEEN_PREFIX}${Role}` suppresses the auto-opening tutorial. */
+/** components.tsx — `${TUTORIAL_SEEN_PREFIX}${Role}` suppresses the instructor's auto-opening tutorial. */
 export const TUTORIAL_SEEN_PREFIX = 'jf_tutorial_seen_v1:';
+
+/** services/tour/seen.ts — `${TOUR_SEEN_PREFIX}${Role}` stops the students' guided tour auto-playing. */
+export const TOUR_SEEN_PREFIX = 'jf_tour_seen_v1:';
 
 export type SeedableRole = 'INSTRUCTOR' | 'UNASSIGNED';
 
@@ -76,19 +79,23 @@ export async function seedSession(context: BrowserContext, seed: SessionSeed): P
 }
 
 /**
- * Stop the per-role tutorial modal auto-opening and swallowing the first click.
+ * Stop the instructor's tutorial modal and the students' guided tour starting
+ * on their own and swallowing the first click.
  * Must be called BEFORE the context's first navigation.
  */
 export async function suppressTutorials(context: BrowserContext): Promise<void> {
-  await context.addInitScript(prefix => {
+  await context.addInitScript(({ tutorial, tour }) => {
     try {
       for (const role of ['INSTRUCTOR', 'JOKE_MAKER', 'QUALITY_CONTROL', 'CUSTOMER']) {
-        localStorage.setItem(`${prefix}${role}`, '1');
+        localStorage.setItem(`${tutorial}${role}`, '1');
+      }
+      for (const role of ['JOKE_MAKER', 'QUALITY_CONTROL']) {
+        localStorage.setItem(`${tour}${role}`, '1');
       }
     } catch {
       /* ignore */
     }
-  }, TUTORIAL_SEEN_PREFIX);
+  }, { tutorial: TUTORIAL_SEEN_PREFIX, tour: TOUR_SEEN_PREFIX });
 }
 
 /** Read the live session identity back out of a page — useful for handing ids to the orchestrator. */

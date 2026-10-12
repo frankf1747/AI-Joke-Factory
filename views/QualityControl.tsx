@@ -589,7 +589,7 @@ const QualityControl: React.FC = () => {
     : null;
 
   return (
-    <RoleLayout>
+    <RoleLayout tourView={QualityControl}>
       {/* Round 2: Team popup */}
       <Modal
         isOpen={!watching && config.round === 2 && config.showTeamPopup && !dismissedTeamPopup}

@@ -3,7 +3,9 @@ import { LogOut, User as UserIcon, X, Trophy, TrendingUp, Tag, Info, HelpCircle 
 import { useDemoMode, useGame } from './context';
 import { Role } from './types';
 import { isWatchMode } from './services/watchMode';
-import Tutorial, { type TutorialRole } from './components/Tutorial';
+import Tutorial from './components/Tutorial';
+import { GuidedTour } from './components/tour/GuidedTour';
+import { isTourRole, launchMode, markTourSeen, readTourSeen, recordTourEnd } from './services/tour/seen';
 // Presentational primitives live in components/ui.tsx so leaf modules can import
 // them without cycling back through this barrel. Re-exported for existing callers.
 export { Button, Card, StatBox, SectionLabel } from './components/ui';
@@ -36,41 +38,52 @@ export const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: stri
   );
 };
 
-/** localStorage key for "this role has already seen the tutorial". Versioned so a
- *  future copy revision can force it to show again. */
+/** localStorage key for "the instructor has already seen How this works". Versioned
+ *  so a future copy revision can force it to show again. The students' guided
+ *  tour has its own key: services/tour/seen.ts TOUR_SEEN_PREFIX. */
 export const TUTORIAL_SEEN_PREFIX = 'jf_tutorial_seen_v1:';
 
-const ROLE_TO_TUTORIAL_TAB: Record<string, TutorialRole> = {
-  [Role.JOKE_MAKER]: 'joke_maker',
-  [Role.QUALITY_CONTROL]: 'marketing',
-  [Role.CUSTOMER]: 'customers',
-  [Role.INSTRUCTOR]: 'instructor',
-};
+/** The mid-round prompt (spec §3.3). */
+export const TOUR_PROMPT_TEXT = 'New here? Watch the 1-minute tour';
+/** The students' "?" button. */
+export const TOUR_REPLAY_LABEL = 'Replay the 1-minute tour';
+
+type TourPhase = 'pending' | 'idle' | 'tour' | 'prompt';
 
 /**
- * Tutorial button + auto-open-once. Kept as its own component because RoleLayout
- * early-returns before its JSX — adding hooks there would make them conditional.
+ * The header's "?" button and what opens on its own. Kept as its own component
+ * because RoleLayout early-returns before its JSX — hooks there would be
+ * conditional.
+ *
+ * Instructor: the "How this works" modal, opened once on its own.
+ * Joke Maker and Marketing: the guided tour of their own screen
+ * (components/tour/GuidedTour.tsx). It plays on its own the first time, when
+ * the round is not ACTIVE; a student arriving mid-round gets a dismissible
+ * prompt instead, and "?" replays it (services/tour/seen.ts launchMode).
+ * A watch tab gets none of this: it shows someone else's seat, and a seen-flag
+ * written there would land in the shared localStorage of whoever else uses the
+ * browser.
+ *
+ * Seen-flags are written when the modal or tour is dismissed, never on mount:
+ * StrictMode mounts twice in dev, and a flag written on mount #1 would
+ * suppress the auto-open on mount #2.
  */
-const TutorialLauncher: React.FC<{ role: Role }> = ({ role }) => {
-  const tab = ROLE_TO_TUTORIAL_TAB[role];
+const TutorialLauncher: React.FC<{ role: Role; tourView?: React.ComponentType }> = ({ role, tourView }) => {
+  const { config, roundId } = useGame();
+  const watch = isWatchMode();
+  const tourRole = isTourRole(role) && tourView ? role : null;
 
-  // Decide during the first render, not in an effect. StrictMode mounts twice in
-  // dev; writing the "seen" flag from an effect would mark it seen on mount #1 and
-  // then suppress the modal on mount #2, so the tutorial would never appear.
-  // Instead we mark it seen when the user actually dismisses it.
-  const [open, setOpen] = React.useState(() => {
-    // A watch tab is looking at someone else's seat; a tutorial modal would
-    // cover the screen being watched and write a seen-flag into shared storage.
-    if (!tab || isWatchMode()) return false;
+  // ---- Instructor: the modal, auto-opened once.
+  const [modalOpen, setModalOpen] = React.useState(() => {
+    if (role !== Role.INSTRUCTOR || watch) return false;
     try {
       return !localStorage.getItem(`${TUTORIAL_SEEN_PREFIX}${role}`);
     } catch {
       return false; // private mode / storage disabled — don't auto-open
     }
   });
-
-  const dismiss = () => {
-    setOpen(false);
+  const dismissModal = () => {
+    setModalOpen(false);
     try {
       localStorage.setItem(`${TUTORIAL_SEEN_PREFIX}${role}`, '1');
     } catch {
@@ -78,29 +91,90 @@ const TutorialLauncher: React.FC<{ role: Role }> = ({ role }) => {
     }
   };
 
-  // Hooks above run unconditionally; only then bail. A watch tab gets no
-  // button at all, since dismissing the tutorial writes a seen-flag into the
-  // shared localStorage that belongs to whoever else uses this browser.
-  if (!tab || isWatchMode()) return null;
+  // ---- Students: the tour, decided once the round's state is known. roundId
+  // arrives in the same poll update as config.isActive; before it, config
+  // still holds its defaults (not ACTIVE), so deciding earlier would auto-play
+  // the tour over a student who joined mid-round.
+  const [phase, setPhase] = React.useState<TourPhase>('pending');
+  if (phase === 'pending' && tourRole && roundId != null) {
+    const mode = launchMode({ role: tourRole, watch, seen: readTourSeen(tourRole), roundActive: config.isActive });
+    setPhase(mode === 'none' ? 'idle' : mode);
+  }
+
+  if (watch) return null;
+
+  if (role === Role.INSTRUCTOR) {
+    return (
+      <>
+        <button
+          onClick={() => setModalOpen(true)}
+          className="text-gray-400 hover:text-blue-600 transition-colors"
+          title="How this works"
+          aria-label="Open the tutorial"
+        >
+          <HelpCircle size={18} />
+        </button>
+        <Modal isOpen={modalOpen} onClose={dismissModal} title="How this works" maxWidth="max-w-5xl">
+          <Tutorial onClose={dismissModal} />
+        </Modal>
+      </>
+    );
+  }
+
+  if (!tourRole || !tourView) return null;
 
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
+        onClick={() => setPhase('tour')}
         className="text-gray-400 hover:text-blue-600 transition-colors"
-        title="How this works"
-        aria-label="Open the tutorial"
+        title={TOUR_REPLAY_LABEL}
+        aria-label={TOUR_REPLAY_LABEL}
       >
         <HelpCircle size={18} />
       </button>
-      <Modal isOpen={open} onClose={dismiss} title="How this works" maxWidth="max-w-5xl">
-        <Tutorial initialRole={tab} onClose={dismiss} />
-      </Modal>
+      {phase === 'prompt' && (
+        <div
+          role="status"
+          className="fixed top-[4.5rem] left-4 right-4 sm:left-auto z-20 flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 py-1 pl-3 pr-1 text-sm text-amber-900 shadow-md"
+          style={{ marginLeft: 0 }}
+        >
+          <button onClick={() => setPhase('tour')} className="flex-1 text-left font-semibold underline-offset-2 hover:underline">
+            {TOUR_PROMPT_TEXT}
+          </button>
+          <button
+            onClick={() => {
+              markTourSeen(tourRole);
+              setPhase('idle');
+            }}
+            className="rounded-full p-1 text-amber-700 hover:bg-amber-100"
+            aria-label="Dismiss the tour prompt"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+      {phase === 'tour' && (
+        <GuidedTour
+          role={tourRole}
+          view={tourView}
+          config={config}
+          roundActive={config.isActive}
+          onEnd={outcome => {
+            recordTourEnd(tourRole, outcome);
+            setPhase('idle');
+          }}
+        />
+      )}
     </>
   );
 };
 
-export const RoleLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const RoleLayout: React.FC<{
+  children: React.ReactNode;
+  /** The screen this layout wraps. The students' guided tour replays it with sample data. */
+  tourView?: React.ComponentType;
+}> = ({ children, tourView }) => {
   const { user, logout, config, teamNames } = useGame();
   /* Inside the guided tour's demo stage the header has no tutorial launcher: it
      would start a tour inside the tour and write seen-flags to localStorage. */
@@ -142,7 +216,7 @@ export const RoleLayout: React.FC<{ children: React.ReactNode }> = ({ children }
                 <UserIcon size={16} className="text-gray-400" />
                 <span className="text-sm font-medium">{user.name} ({user.role.replace('_', ' ')})</span>
              </div>
-             {!demoMode && <TutorialLauncher role={user.role} />}
+             {!demoMode && <TutorialLauncher role={user.role} tourView={tourView} />}
              {/* A watch tab has no session of its own to end, and logging out would only strand it on a login screen. */}
              {!isWatchMode() && (
                <button onClick={logout} className="text-gray-400 hover:text-red-500 transition-colors" title="Logout">
