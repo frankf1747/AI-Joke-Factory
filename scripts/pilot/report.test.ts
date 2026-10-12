@@ -212,10 +212,11 @@ describe('round length', () => {
 });
 
 describe('pilot settings', () => {
-  it('defaults to the spec fees, a 90 s window and no overrides', () => {
+  it('defaults to the spec fees (storage 5¢), a 90 s window and no overrides', () => {
+    expect(SPEC_FEES).toEqual({ shippingSmall: 1, shippingStandard: 2, shippingLarge: 3, storage: 0.05, hosting: 0.05 });
     const t = parseTuning({});
     expect(t).toEqual({
-      fees: SPEC_FEES, window: 90, preferenceBase: undefined, customers: undefined, budget: undefined,
+      fees: SPEC_FEES, window: 90, preferenceBase: undefined, customers: undefined, customersPerTeam: undefined, budget: undefined,
       buyThreshold: undefined, perPersona: 3, holdTeams: 2, tag: undefined, overrides: [],
     });
   });
@@ -246,13 +247,35 @@ describe('pilot settings', () => {
     expect(pilotConfig(t, 10, 1)).toEqual({
       market_mode: 'LEAN', arrival_window_seconds: 90, wip_limit: 0, batch_size: 5,
       shipping_fee_small: 1, shipping_fee_standard: 2, shipping_fee_large: 3,
-      storage_fee_per_joke_minute: 1, hosting_fee_per_joke_minute: 0.5,
+      storage_fee_per_joke_minute: 0.5, hosting_fee_per_joke_minute: 0.5,
     });
     expect(pilotConfig(t, 10, 2).batch_size).toBe(10);
     expect(pilotConfig({ ...t, customers: 150, preferenceBase: 3 }, 10, 2)).toMatchObject({ customer_count: 150, preference_base: 3 });
     expect(settingsLines(t, 10, '3 CAREFUL, 3 BALANCED, 3 SPRAY, 3 LEARNER')).toContain(
-      'Storage and hosting are sent ×10 ($1 and $0.5) because the backend charges per wall-clock minute; shipping is per batch and is not scaled.',
+      'Storage and hosting are sent ×10 ($0.5 and $0.5) because the backend charges per wall-clock minute; shipping is per batch and is not scaled.',
     );
+  });
+
+  it('leaves customers to the backend (18 per team) unless asked, and says which rule applies', () => {
+    const t = parseTuning({});
+    expect(pilotConfig(t, 10, 1)).not.toHaveProperty('customers_per_team');
+    expect(pilotConfig(t, 10, 1)).not.toHaveProperty('customer_count');
+    expect(settingsLines(t, 10, 'x')).toContain('Customers: the backend default, 18 per team (the count at start is 18 × the number of teams).');
+  });
+
+  it('PILOT_CUSTOMERS_PER_TEAM sets the per-team number; PILOT_CUSTOMERS fixes the count and turns per-team off', () => {
+    const per = parseTuning({ PILOT_CUSTOMERS_PER_TEAM: '25' });
+    expect(per.overrides).toEqual(['PILOT_CUSTOMERS_PER_TEAM']);
+    expect(pilotConfig(per, 10, 1)).toMatchObject({ customers_per_team: 25 });
+    expect(pilotConfig(per, 10, 1)).not.toHaveProperty('customer_count');
+    expect(settingsLines(per, 10, 'x')).toContain('Customers: 25 per team (PILOT_CUSTOMERS_PER_TEAM); the count at start is 25 × the number of teams.');
+    const fixed = parseTuning({ PILOT_CUSTOMERS: '150' });
+    expect(pilotConfig(fixed, 10, 2)).toMatchObject({ customer_count: 150, customers_per_team: 0 });
+    expect(settingsLines(fixed, 10, 'x')).toContain('Customers: a fixed 150 (PILOT_CUSTOMERS), no per-team scaling.');
+    expect(pilotConfig(parseTuning({ PILOT_CUSTOMERS_PER_TEAM: '0' }), 10, 1)).toMatchObject({ customers_per_team: 0 });
+    expect(() => parseTuning({ PILOT_CUSTOMERS_PER_TEAM: '1001' })).toThrow(/PILOT_CUSTOMERS_PER_TEAM/);
+    expect(() => parseTuning({ PILOT_CUSTOMERS_PER_TEAM: '2.5' })).toThrow(/PILOT_CUSTOMERS_PER_TEAM/);
+    expect(() => parseTuning({ PILOT_CUSTOMERS: '150', PILOT_CUSTOMERS_PER_TEAM: '18' })).toThrow(/not both/);
   });
 
   it('treats only localhost, 127.0.0.1 and [::1] as local', () => {

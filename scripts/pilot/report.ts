@@ -281,15 +281,18 @@ export interface PilotFees {
   hosting: number;
 }
 
-/** The spec's starting amounts (§3). */
-export const SPEC_FEES: PilotFees = { shippingSmall: 1, shippingStandard: 2, shippingLarge: 3, storage: 0.1, hosting: 0.05 };
+/** The game's defaults (tuned defaults spec §2): the recommended configuration, no overrides. */
+export const SPEC_FEES: PilotFees = { shippingSmall: 1, shippingStandard: 2, shippingLarge: 3, storage: 0.05, hosting: 0.05 };
 
 export interface Tuning {
   fees: PilotFees;
   /** Arrival window in seconds (bots run 10× faster, so 90 s stands for 15 minutes). */
   window: number;
   preferenceBase?: number;
+  /** A fixed customer count; sent with customers_per_team 0 so the per-team rule is off. */
   customers?: number;
+  /** Customers per team (the backend default is 18); the count at start is this × the number of teams. */
+  customersPerTeam?: number;
   budget?: number;
   /** Customers' buy threshold τ (fit out of 12 a joke needs before anyone buys it). */
   buyThreshold?: number;
@@ -305,7 +308,7 @@ export interface Tuning {
 /**
  * Reads PILOT_SHIP_SMALL, PILOT_SHIP_STANDARD, PILOT_SHIP_LARGE, PILOT_STORAGE,
  * PILOT_HOSTING (real-time amounts; default the spec's), PILOT_WINDOW (default
- * 90), PILOT_PREFERENCE_BASE, PILOT_CUSTOMERS, PILOT_BUDGET and PILOT_TAG.
+ * 90), PILOT_PREFERENCE_BASE, PILOT_CUSTOMERS, PILOT_CUSTOMERS_PER_TEAM, PILOT_BUDGET and PILOT_TAG.
  * Throws on a bad value, and when shipping does not rise with batch size.
  */
 export function parseTuning(env: Record<string, string | undefined>): Tuning {
@@ -329,11 +332,17 @@ export function parseTuning(env: Record<string, string | undefined>): Tuning {
   if (fees.shippingSmall > fees.shippingStandard || fees.shippingStandard > fees.shippingLarge) {
     throw new Error('shipping fees must rise with batch size: PILOT_SHIP_SMALL <= PILOT_SHIP_STANDARD <= PILOT_SHIP_LARGE');
   }
+  const customers = num('PILOT_CUSTOMERS', v => Number.isInteger(v) && v >= 1, 'an integer >= 1');
+  const customersPerTeam = num('PILOT_CUSTOMERS_PER_TEAM', v => Number.isInteger(v) && v >= 0 && v <= 1000, 'an integer from 0 to 1000');
+  if (customers !== undefined && customersPerTeam !== undefined) {
+    throw new Error('set PILOT_CUSTOMERS (a fixed count) or PILOT_CUSTOMERS_PER_TEAM, not both');
+  }
   return {
     fees,
     window: num('PILOT_WINDOW', v => Number.isInteger(v) && v >= 1, 'an integer >= 1') ?? 90,
     preferenceBase: num('PILOT_PREFERENCE_BASE', v => v > 1, 'a number > 1'),
-    customers: num('PILOT_CUSTOMERS', v => Number.isInteger(v) && v >= 1, 'an integer >= 1'),
+    customers,
+    customersPerTeam,
     budget: num('PILOT_BUDGET', v => v >= 0, 'a number >= 0'),
     buyThreshold: num('PILOT_BUY_THRESHOLD', v => v >= 0 && v <= 12, 'a number from 0 to 12'),
     perPersona: num('PILOT_PER_PERSONA', v => Number.isInteger(v) && v >= 1, 'an integer >= 1') ?? 3,
@@ -359,7 +368,9 @@ export function pilotConfig(t: Tuning, speed: number, round: PilotRound): Config
     storage_fee_per_joke_minute: perMinute(t.fees.storage), hosting_fee_per_joke_minute: perMinute(t.fees.hosting),
   };
   if (t.preferenceBase !== undefined) body.preference_base = t.preferenceBase;
-  if (t.customers !== undefined) body.customer_count = t.customers;
+  // A fixed count switches the per-team rule off (customers_per_team 0), or the start would overwrite it.
+  if (t.customers !== undefined) { body.customer_count = t.customers; body.customers_per_team = 0; }
+  if (t.customersPerTeam !== undefined) body.customers_per_team = t.customersPerTeam;
   if (t.budget !== undefined) body.customer_budget = t.budget;
   if (t.buyThreshold !== undefined) body.buy_threshold = t.buyThreshold;
   return body;
@@ -374,9 +385,14 @@ export function settingsLines(t: Tuning, speed: number, counts: string): string[
       + `storage $${f.storage} and hosting $${f.hosting} per joke-minute.`,
     `Storage and hosting are sent ×${speed} ($${Number((f.storage * speed).toFixed(4))} and $${Number((f.hosting * speed).toFixed(4))}) `
       + 'because the backend charges per wall-clock minute; shipping is per batch and is not scaled.',
+    t.customers !== undefined ? `Customers: a fixed ${t.customers} (PILOT_CUSTOMERS), no per-team scaling.`
+      : t.customersPerTeam === 0 ? 'Customers: per-team scaling off (PILOT_CUSTOMERS_PER_TEAM=0), the stored fixed count.'
+      : t.customersPerTeam !== undefined
+        ? `Customers: ${t.customersPerTeam} per team (PILOT_CUSTOMERS_PER_TEAM); the count at start is ${t.customersPerTeam} × the number of teams.`
+        : 'Customers: the backend default, 18 per team (the count at start is 18 × the number of teams).',
     `Arrival window ${t.window} s (stands for ${Math.round((t.window * speed) / 60)} minutes of class time); batch size 5 exactly in Round 1, up to 10 in Round 2; no WIP limit.`,
     'Bot rounds are capped at 40 jokes per team, whatever the batch size.',
-    t.overrides.length ? `Overrides: ${t.overrides.join(', ')}.` : 'Overrides: none (the spec\'s starting amounts).',
+    t.overrides.length ? `Overrides: ${t.overrides.join(', ')}.` : 'Overrides: none (the game\'s defaults).',
   ];
 }
 

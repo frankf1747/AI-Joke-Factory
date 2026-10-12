@@ -24,10 +24,15 @@
                           shipping fee per batch of 1–4 / 5 / 6–10 jokes, default 1 / 2 / 3.
                           Per batch, so NOT scaled.
      PILOT_STORAGE / PILOT_HOSTING
-                          per joke-minute at classroom speed, default 0.10 / 0.05. The backend
+                          per joke-minute at classroom speed, default 0.05 / 0.05. The backend
                           charges per wall-clock minute, so both are sent ×10.
      PILOT_PREFERENCE_BASE, PILOT_CUSTOMERS, PILOT_BUDGET, PILOT_BUY_THRESHOLD
-                          optional overrides of the backend defaults (3, 150, $3, 7).
+                          optional overrides of the backend defaults (5, $3, 8). Customers: the
+                          backend default is 18 per team (count at start = 18 x teams).
+     PILOT_CUSTOMERS_PER_TEAM
+                          customers per team (0-1000), default the backend's 18.
+     PILOT_CUSTOMERS      a FIXED customer count; also sends customers_per_team 0 so the
+                          per-team rule is off. Not together with PILOT_CUSTOMERS_PER_TEAM.
      PILOT_PER_PERSONA    teams per persona, default 3 (a class of 80 is about 10).
      PILOT_HOLD_TEAMS     extra Balanced teams whose Marketing holds batches, default 2.
      PILOT_SEED           seed for the bots' jokes, default a fresh one per run.
