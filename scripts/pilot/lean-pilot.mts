@@ -30,6 +30,7 @@
                           optional overrides of the backend defaults (3, 150, $3, 7).
      PILOT_PER_PERSONA    teams per persona, default 3 (a class of 80 is about 10).
      PILOT_HOLD_TEAMS     extra Balanced teams whose Marketing holds batches, default 2.
+     PILOT_SEED           seed for the bots' jokes, default a fresh one per run.
      PILOT_TAG            free-text label printed under the report title.
 
    The class: reset (Round 1 batch size 5 exactly, Round 2 up to 10); configure both rounds
@@ -79,6 +80,8 @@ const COUNTS: Record<PersonaId, number> = {
 /** Extra Balanced teams whose Marketing holds each batch (BALANCED_HOLDS), reported as HOLDS. */
 const HOLD_TEAMS = TUNING.holdTeams;
 const SPEED = 10 as const;
+/** Seeds the bots' jokes; a fresh one per run unless PILOT_SEED is set, so repeat runs sample joke luck. */
+const SEED = process.env.PILOT_SEED?.trim() || `pilot-${Date.now()}`;
 const POLL_MS = 5_000;
 /** After the arrival window closes: let the backend serve due arrivals, then end the round. */
 const SETTLE_MS = 4_000;
@@ -95,6 +98,7 @@ const SETTINGS: string[] = [
   ),
   `${HOLDS} ("${BALANCED_HOLDS.label}") is Balanced in every way except that its Marketing seat holds each batch an extra `
     + `${BALANCED_HOLDS.marketingHoldMs / 1000} class-seconds (${BALANCED_HOLDS.marketingHoldMs / 1000 / SPEED} s at ${SPEED}×) before deciding: the controlled contrast for the desk check.`,
+  `Bot joke seed: ${SEED}. Each Balanced (holds) team draws the same jokes as a Balanced partner.`,
   `Each round is ended ${SETTLE_MS / 1000} s after its arrival window closes, whatever the bots' progress (a 15-minute class ends at 15 minutes); stats and charts are read after the end, when the fee clocks have stopped. Round length is the server's started_at to ended_at, in class minutes (wall seconds × ${SPEED} / 60); a round over ${MAX_CLASS_MINUTES} (window + settle + ${ROUND_SLACK_S} s slack) is flagged.`,
 ];
 
@@ -119,11 +123,17 @@ async function runClass(results: RunResult[]): Promise<void> {
   const engine = new BotEngine({
     api, instructorUserId: login.user.user_id, delay: realDelay, now: () => Date.now(),
     emit: m => { if (m.type === 'fatal') console.error('FATAL', m.message); },
-    seed: 'pilot-fees',
+    seed: SEED,
   });
   const teams: BotTeamSpec[] = personaSequence(COUNTS).map((persona, i) => ({ index: i + 1, persona }));
+  // Each holding team draws exactly the jokes of a Balanced partner, so the
+  // contrast measures the hold and not joke luck.
+  const balanced = teams.filter(t => t.persona === 'BALANCED');
   for (let k = 0; k < HOLD_TEAMS; k++) {
-    teams.push({ index: teams.length + 1, persona: BALANCED_HOLDS.persona, marketingHoldMs: BALANCED_HOLDS.marketingHoldMs });
+    teams.push({
+      index: teams.length + 1, persona: BALANCED_HOLDS.persona, marketingHoldMs: BALANCED_HOLDS.marketingHoldMs,
+      deckIndex: balanced.length ? balanced[k % balanced.length].index : undefined,
+    });
   }
   const labelOf = new Map(teams.map(t => [t.index, t.marketingHoldMs ? HOLDS : t.persona]));
   try {

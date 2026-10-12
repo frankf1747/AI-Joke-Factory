@@ -22,6 +22,12 @@ export interface BotTeamSpec {
    * persona the instructor's Bot players panel starts.
    */
   marketingHoldMs?: number;
+  /**
+   * Pilot-only: draw jokes (and Marketing's choices) as team `deckIndex` would,
+   * so a contrast team sees exactly the same jokes as its partner. Defaults to
+   * the team's own index.
+   */
+  deckIndex?: number;
 }
 
 export interface StartOptions {

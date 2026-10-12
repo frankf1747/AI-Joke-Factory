@@ -208,6 +208,8 @@ interface TeamRuntime {
   memory: JokeMemory;
   /** Extra hold on each batch before Marketing decides, at 1× (BotTeamSpec.marketingHoldMs); 0 for none. */
   marketingHoldMs: number;
+  /** Seeds this team's joke deck and Marketing choices (BotTeamSpec.deckIndex). */
+  deckIndex: number;
 }
 
 function newSeat(index: number, seat: Seat): SeatRuntime {
@@ -219,7 +221,7 @@ function newTeam(spec: BotTeamSpec): TeamRuntime {
     index: spec.index, persona: spec.persona, teamId: null,
     jm: newSeat(spec.index, 'A'), marketing: newSeat(spec.index, 'B'),
     submittedByRound: new Map(), submittedJokesByRound: new Map(), publishedByRound: new Map(), published: 0, awaitingFeedback: null,
-    memory: new Map(), marketingHoldMs: Math.max(0, spec.marketingHoldMs ?? 0),
+    memory: new Map(), marketingHoldMs: Math.max(0, spec.marketingHoldMs ?? 0), deckIndex: spec.deckIndex ?? spec.index,
   };
 }
 
@@ -534,7 +536,7 @@ export class BotEngine {
     const persona = PERSONAS[team.persona];
     const seat = team.jm;
     const me = this.deps.api.as(seat.userId as number, `bot ${team.index}A`);
-    const rand = seededRng(`${this.deps.seed}:jm:${team.index}`);
+    const rand = seededRng(`${this.deps.seed}:jm:${team.deckIndex}`);
     const deck = new Deck(variedCorpus, rand);
     /** Learner only: where its rotation through sold texts resumes. */
     let reuseCursor = 0;
@@ -673,7 +675,7 @@ export class BotEngine {
     const persona = PERSONAS[team.persona];
     const seat = team.marketing;
     const me = this.deps.api.as(seat.userId as number, `bot ${team.index}B`);
-    const rand = seededRng(`${this.deps.seed}:mkt:${team.index}`);
+    const rand = seededRng(`${this.deps.seed}:mkt:${team.deckIndex}`);
     let attempt = 0;
 
     while (!signal.aborted) {
