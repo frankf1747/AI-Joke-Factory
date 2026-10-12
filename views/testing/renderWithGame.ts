@@ -14,7 +14,7 @@ export const TEST_CONFIG: GameConfig = {
   customerBudget: 3, round1BatchSize: 5, round2BatchLimit: 10, marketPrice: 1, costOfPublishing: 0.1, costOfDiscard: 0.01,
   marketingNudge1Seconds: 60, marketingNudge2Seconds: 45, idealProfile: {},
   marketMode: 'LEAN', arrivalWindowSeconds: 900, setupCostPerBatch: 0, carryingCostPerJokeMinute: 0, wipLimit: 0,
-  shippingFeeSmall: 1, shippingFeeStandard: 2, shippingFeeLarge: 3, storageFeePerJokeMinute: 0.1, hostingFeePerJokeMinute: 0.05,
+  shippingFeeSmall: 1, shippingFeeStandard: 2, shippingFeeLarge: 3, storageFeePerJokeMinute: 0.05, hostingFeePerJokeMinute: 0.05, customersPerTeam: 18,
 };
 
 /** A signed-in user; teamId null for the instructor. */

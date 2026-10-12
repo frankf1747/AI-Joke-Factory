@@ -16,7 +16,8 @@ import { LeanChartsPanel } from '../components/leanCharts/LeanChartsPanel';
 import { useLeanCharts } from '../services/useLeanCharts';
 import { leanChartsVisibility, leanRoundFlags, resolveLeanChartsRound } from '../services/leanCharts';
 import { FeeConfigFields, changedFees, feeValuesOf, shippingOrderError, type FeeConfigValues } from '../components/FeeConfigFields';
-import { LEAN_LEADERBOARD_COLUMNS, feeRoundsText, fmtMoney, leanFeesOf, neverSold, type LeanSortKey } from '../services/leanMode';
+import { LEAN_LEADERBOARD_COLUMNS, feeRoundsText, fmtMoney, leanFeesOf, neverSold, productionTeamCount, type LeanSortKey } from '../services/leanMode';
+import { buildApplyUpdates } from '../services/roundConfig';
 
 // Expanded Palette for more teams
 const PALETTE = [
@@ -124,7 +125,7 @@ const Instructor: React.FC = () => {
   useEffect(
     () => setLocalFees(feeValuesOf(config)),
     [config.arrivalWindowSeconds, config.shippingFeeSmall, config.shippingFeeStandard, config.shippingFeeLarge,
-      config.storageFeePerJokeMinute, config.hostingFeePerJokeMinute],
+      config.storageFeePerJokeMinute, config.hostingFeePerJokeMinute, config.customersPerTeam],
   );
 
   const handleDeleteUser = async (userId: string, displayName?: string) => {
@@ -209,19 +210,11 @@ const Instructor: React.FC = () => {
   const handleUpdateSettings = async () => {
     setFeeNotice(null);
     if (feeOrderBlocked) return;
-    const updates: any = {};
-    if (canEditBudget && localBudget !== config.customerBudget) updates.customerBudget = localBudget;
-    if (canEditPricing && localMarketPrice !== config.marketPrice) updates.marketPrice = localMarketPrice;
-    if (canEditPricing && localCostOfPublishing !== config.costOfPublishing) updates.costOfPublishing = localCostOfPublishing;
-    // Clamped: a 0s nudge would fire the instant Marketing lands on the view.
-    if (canEditNudges && localNudge1 !== config.marketingNudge1Seconds) {
-      updates.marketingNudge1Seconds = Math.max(5, localNudge1);
-    }
-    if (canEditNudges && localNudge2 !== config.marketingNudge2Seconds) {
-      updates.marketingNudge2Seconds = Math.max(5, localNudge2);
-    }
-    // The fees and the arrival window (clamped to at least 1 s: 0 would bring every customer at once).
-    if (canEditLean) Object.assign(updates, changedFees(localFees, config));
+    const updates = buildApplyUpdates({
+      local: { budget: localBudget, marketPrice: localMarketPrice, costOfPublishing: localCostOfPublishing,
+        nudge1: localNudge1, nudge2: localNudge2, fees: localFees },
+      config, canEditBudget, canEditPricing, canEditNudges, canEditLean,
+    });
     if (Object.keys(updates).length === 0) return;
     const result = await updateConfig(updates);
     if (result.feeRounds.length > 0) setFeeNotice(feeRoundsText(result.feeRounds));
@@ -2475,6 +2468,7 @@ const Instructor: React.FC = () => {
                 lockHint={LEAN_LOCK_HINT}
                 round1BatchSize={config.round1BatchSize}
                 round2BatchLimit={config.round2BatchLimit}
+                teamCount={productionTeamCount(roster)}
               />
               <Button
                 type="button"

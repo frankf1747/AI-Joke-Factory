@@ -377,6 +377,8 @@ export interface InstructorRound extends PublicRound {
    * Optional: a backend that predates Lean mode omits it.
    */
   preference_base?: number;
+  /** Customers per team (0 = fixed customer_count); instructor round only. Absent on an older backend. */
+  customers_per_team?: number;
 }
 
 /**
@@ -975,6 +977,8 @@ export interface ConfigRequest {
   carrying_cost_per_joke_minute?: number;
   wip_limit?: number;
   preference_base?: number;
+  /** Integer 0-1000 (else 400 VALIDATION_ERROR); locked once the round starts. */
+  customers_per_team?: number;
   /** Lean fees: each >= 0, and shipping small <= standard <= large, or 400 on the field. Locked once the round starts. */
   shipping_fee_small?: number;
   shipping_fee_standard?: number;

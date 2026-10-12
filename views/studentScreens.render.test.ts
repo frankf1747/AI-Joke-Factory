@@ -61,7 +61,7 @@ describe('Marketing screen', () => {
     expect(out).toContain('$1.50');
     expect(out).toContain('$0.20');
     expect(out).toContain('title="Charged per batch you send: $1 for 1–4 jokes, $2 for 5, $3 for 6–10."');
-    expect(out).toContain('title="Every minute a joke waits on Marketing&#x27;s desk costs 10¢."');
+    expect(out).toContain('title="Every minute a joke waits on Marketing&#x27;s desk costs 5¢."');
     expect(out).toContain('title="Every minute a released joke sits unsold costs 5¢."');
     expect(out).not.toContain('Setup cost');
     expect(out).not.toContain('Carrying cost');

@@ -30,6 +30,7 @@ import { ApiError } from './services/apiClient';
 import { clearPersisted, getWatchIdentity, isWatchMode, mayClaimMarketingBatch } from './services/watchMode';
 import { setMockRoundNumber } from './services/mockApi';
 import { DEFAULT_IDEAL_PROFILE } from './config/dimensions';
+import { DEFAULT_CUSTOMER_BUDGET, customerBudgetFromRound } from './services/roundConfig';
 import { LEAN_DEFAULTS, MARKET_MODE_LOCKED_TEXT, WIP_LIMIT_TEXT, configSaveErrorText, isMarketModeLocked, isWipLimitReached, leanConfigFromRound, leanConfigToBody, leanTargetRounds, saveRoundConfig } from './services/leanMode';
 import { isCompleteProfile } from './components/IdealProfilePicker';
 
@@ -507,7 +508,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     showTeamPopup: false,
     startTime: null,
     elapsedTime: 0,
-    customerBudget: 10,
+    customerBudget: DEFAULT_CUSTOMER_BUDGET,
     round1BatchSize: 5,
     round2BatchLimit: DEFAULT_ROUND2_BATCH_LIMIT,
     marketPrice: DEFAULT_MARKET_PRICE,
@@ -669,10 +670,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 // Only trust backend-provided config numbers once the round has started (or ended).
                 // Before start, some backends return placeholder values like { customer_budget: 0, batch_size: 1 }.
                 const shouldUseBackendConfig = isActive || normalizedStatus === 'ENDED';
-                const nextCustomerBudget =
-                  shouldUseBackendConfig && Number(selectedRound?.customer_budget) > 0
-                    ? Number(selectedRound?.customer_budget)
-                    : prev.customerBudget;
+                // The budget is read whatever the status: the stored value is real before the start too.
+                const nextCustomerBudget = customerBudgetFromRound(selectedRound, prev.customerBudget);
                 const nextRound1BatchSize =
                   shouldUseBackendConfig && Number(r1?.batch_size) > 1
                     ? Number(r1?.batch_size)
@@ -1015,10 +1014,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Only trust backend-provided config numbers once the round has started (or ended).
           // Before start, some backends return placeholder values like { customer_budget: 0, batch_size: 1 }.
           const shouldUseBackendConfig = isActive || normalizedStatus === 'ENDED';
-          const nextCustomerBudget =
-            shouldUseBackendConfig && Number(selectedRound?.customer_budget) > 0
-              ? Number(selectedRound?.customer_budget)
-              : prev.customerBudget;
+          const nextCustomerBudget = customerBudgetFromRound(selectedRound, prev.customerBudget);
           const nextRound1BatchSize =
             shouldUseBackendConfig && Number(r1?.batch_size) > 1
               ? Number(r1?.batch_size)
@@ -1608,7 +1604,16 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const result = await saveRoundConfig({
       current: roundId, currentNumber, otherBody, leanBody,
       targets: leanTargetRounds(roundId, roundIds, roundStatuses),
-      send: (id, body) => instructorService.updateRoundConfig(id as RoundId, body),
+      send: async (id, body) => {
+        const res: any = await instructorService.updateRoundConfig(id as RoundId, body);
+        // The public round never carries customers_per_team; the config response (the instructor
+        // round) is the only place the stored value comes back, so keep it for the field.
+        const stored = res?.data?.round?.customers_per_team ?? res?.round?.customers_per_team;
+        if (id === roundId && typeof stored === 'number' && Number.isFinite(stored)) {
+          setConfig(prev => (prev.customersPerTeam === stored ? prev : { ...prev, customersPerTeam: stored }));
+        }
+        return res;
+      },
     });
     if (result.error == null) return { saved: true, feeRounds: result.feeRounds };
 

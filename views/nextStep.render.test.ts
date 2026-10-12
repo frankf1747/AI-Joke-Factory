@@ -47,7 +47,7 @@ describe('the Next step line on the student screens', () => {
     const line = out.indexOf('Next step');
     expect(line).toBeGreaterThan(out.indexOf('Hosting fees'));
     expect(line).toBeLessThan(out.indexOf('The 12 criteria customers judge'));
-    expect(out).toMatch(/Batch waiting (5\d) s — release what&#x27;s good enough\. Storage costs 10¢ a joke each minute\./);
+    expect(out).toMatch(/Batch waiting (5\d) s — release what&#x27;s good enough\. Storage costs 5¢ a joke each minute\./);
   });
 
   it('sends both seats to the debrief once Round 2 has ended, but not between rounds', () => {

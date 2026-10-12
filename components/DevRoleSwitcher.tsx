@@ -62,7 +62,7 @@ function seedDb(): any {
     active_round_id: 1,
     round: {
       id: 1, round_number: 1, status: 'ACTIVE',
-      batch_size: 5, customer_budget: 10,
+      batch_size: 5, customer_budget: 3,
       started_at: nowIso(), ended_at: null, is_popped_active: false,
     },
     teams, participants: {}, assignments: {}, batches: rawBatches, purchases: {}, purchaseIndex: {},

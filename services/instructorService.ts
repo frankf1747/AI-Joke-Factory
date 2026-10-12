@@ -81,6 +81,7 @@ export const instructorService = {
       carrying_cost_per_joke_minute?: number;
       wip_limit?: number;
       preference_base?: number;
+      customers_per_team?: number;
       shipping_fee_small?: number;
       shipping_fee_standard?: number;
       shipping_fee_large?: number;

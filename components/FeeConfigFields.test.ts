@@ -5,11 +5,11 @@ import { FeeConfigFields, SHIPPING_ORDER_TEXT, changedFees, feeValuesOf, shippin
 
 const config: FeeConfigValues = {
   arrivalWindowSeconds: 900, shippingFeeSmall: 1, shippingFeeStandard: 2, shippingFeeLarge: 3,
-  storageFeePerJokeMinute: 0.1, hostingFeePerJokeMinute: 0.05,
+  storageFeePerJokeMinute: 0.05, hostingFeePerJokeMinute: 0.05, customersPerTeam: 18,
 };
 
-const render = (disabled: boolean, values: FeeConfigValues = config) => renderToStaticMarkup(createElement(FeeConfigFields, {
-  values, onChange: () => {}, disabled, lockHint: 'Lean settings lock once the round starts',
+const render = (disabled: boolean, values: FeeConfigValues = config, teamCount?: number) => renderToStaticMarkup(createElement(FeeConfigFields, {
+  values, teamCount, onChange: () => {}, disabled, lockHint: 'Lean settings lock once the round starts',
   round1BatchSize: 5, round2BatchLimit: 10,
 }));
 
@@ -30,7 +30,7 @@ describe('FeeConfigFields', () => {
 
   it('locks every input with the hint once the round has started', () => {
     const out = render(true);
-    expect(out.match(/disabled=""/g)?.length).toBe(6);
+    expect(out.match(/disabled=""/g)?.length).toBe(7);
     expect(out).toContain('title="Lean settings lock once the round starts"');
   });
 
@@ -41,6 +41,21 @@ describe('FeeConfigFields', () => {
     expect(changedFees({ ...config, arrivalWindowSeconds: 0 }, config)).toEqual({ arrivalWindowSeconds: 1 });
     expect(changedFees({ ...config, arrivalWindowSeconds: 600.6 }, config)).toEqual({ arrivalWindowSeconds: 601 });
     expect(changedFees({ ...config, hostingFeePerJokeMinute: Number.NaN }, config)).toEqual({});
+  });
+
+  it('shows customers per team with a hint for the lobby team count, and sends it as a whole number from 0 to 1000', () => {
+    const out = render(false, config, 20);
+    expect(out).toContain('Customers per team:');
+    expect(out).toContain('aria-label="Customers per team"');
+    expect(out).toContain('≈ 360 customers for 20 teams');
+    expect(render(false, config)).not.toContain('customers for');
+    expect(render(false, { ...config, customersPerTeam: 0 }, 20)).toContain('Fixed customer count');
+    expect(changedFees({ ...config, customersPerTeam: 25 }, config)).toEqual({ customersPerTeam: 25 });
+    expect(changedFees({ ...config, customersPerTeam: 0 }, config)).toEqual({ customersPerTeam: 0 });
+    expect(changedFees({ ...config, customersPerTeam: 12.6 }, config)).toEqual({ customersPerTeam: 13 });
+    expect(changedFees({ ...config, customersPerTeam: 5000 }, config)).toEqual({ customersPerTeam: 1000 });
+    expect(changedFees({ ...config, customersPerTeam: -3 }, config)).toEqual({ customersPerTeam: 0 });
+    expect(changedFees({ ...config, customersPerTeam: Number.NaN }, config)).toEqual({});
   });
 
   it('accepts shipping fees that rise (or stay level) with batch size, and refuses any that fall', () => {

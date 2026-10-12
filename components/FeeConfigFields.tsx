@@ -6,6 +6,7 @@
    that has started is locked. */
 import React from 'react';
 import type { GameConfig } from '../types';
+import { customersHint } from '../services/leanMode';
 
 export interface FeeConfigValues {
   arrivalWindowSeconds: number;
@@ -14,11 +15,13 @@ export interface FeeConfigValues {
   shippingFeeLarge: number;
   storageFeePerJokeMinute: number;
   hostingFeePerJokeMinute: number;
+  /** AI customers per team; 0 = the fixed customer count. Shared like the fees. */
+  customersPerTeam: number;
 }
 
 const FEE_KEYS = [
   'arrivalWindowSeconds', 'shippingFeeSmall', 'shippingFeeStandard', 'shippingFeeLarge',
-  'storageFeePerJokeMinute', 'hostingFeePerJokeMinute',
+  'storageFeePerJokeMinute', 'hostingFeePerJokeMinute', 'customersPerTeam',
 ] as const satisfies ReadonlyArray<keyof FeeConfigValues>;
 
 export function feeValuesOf(config: FeeConfigValues): FeeConfigValues {
@@ -29,12 +32,14 @@ export function feeValuesOf(config: FeeConfigValues): FeeConfigValues {
     shippingFeeLarge: config.shippingFeeLarge,
     storageFeePerJokeMinute: config.storageFeePerJokeMinute,
     hostingFeePerJokeMinute: config.hostingFeePerJokeMinute,
+    customersPerTeam: config.customersPerTeam,
   };
 }
 
 /**
  * The updateConfig patch for what changed. The arrival window is clamped to a
- * whole number of at least 1 second (0 would bring every customer at once); a
+ * whole number of at least 1 second (0 would bring every customer at once),
+ * customers per team to a whole number from 0 to 1000 (the server's range); a
  * value that is not a number is left out, so the server keeps its own.
  */
 export function changedFees(local: FeeConfigValues, config: FeeConfigValues): Partial<GameConfig> {
@@ -42,7 +47,9 @@ export function changedFees(local: FeeConfigValues, config: FeeConfigValues): Pa
   for (const k of FEE_KEYS) {
     const v = local[k];
     if (v === config[k] || !Number.isFinite(v)) continue;
-    out[k] = k === 'arrivalWindowSeconds' ? Math.max(1, Math.round(v || 0)) : v;
+    out[k] = k === 'arrivalWindowSeconds' ? Math.max(1, Math.round(v || 0))
+      : k === 'customersPerTeam' ? Math.min(1000, Math.max(0, Math.round(v)))
+      : v;
   }
   return out;
 }
@@ -87,10 +94,13 @@ export const FeeConfigFields: React.FC<{
   lockHint: string;
   round1BatchSize: number;
   round2BatchLimit: number;
-}> = ({ values, onChange, disabled, lockHint, round1BatchSize, round2BatchLimit }) => {
+  /** Teams with a Joke Maker or Marketing in the lobby, for the customers hint. */
+  teamCount?: number;
+}> = ({ values, onChange, disabled, lockHint, round1BatchSize, round2BatchLimit, teamCount }) => {
   const set = (k: keyof FeeConfigValues) => (v: number) => onChange({ ...values, [k]: v });
   const tip = (text: string) => (disabled ? lockHint : text);
   const orderError = disabled ? null : shippingOrderError(values);
+  const hint = customersHint(values.customersPerTeam, teamCount ?? 0);
   return (
     <>
       <div className="flex items-center space-x-3 text-sm text-gray-600" title="Set by Reset Game. Round 1 batches must have exactly this many jokes; Round 2 batches may have fewer.">
@@ -115,6 +125,11 @@ export const FeeConfigFields: React.FC<{
       <div className="flex items-center space-x-3" title={tip('Charged per joke per minute while a released joke sits unsold, until its first sale or the end of the round')}>
         <label htmlFor="cfg-hosting-fee" className="text-sm text-gray-600 whitespace-nowrap">Hosting fee per joke-minute:</label>
         <FeeInput id="cfg-hosting-fee" label="Hosting fee per joke-minute" value={values.hostingFeePerJokeMinute} step="0.01" min="0" disabled={disabled} onChange={set('hostingFeePerJokeMinute')} />
+      </div>
+      <div className="flex items-center space-x-3" title={tip('AI customers per team. At start the round has this many times the number of teams (0 keeps a fixed count). About 18 per team keeps roughly 60% of teams profitable.')}>
+        <label htmlFor="cfg-customers-per-team" className="text-sm text-gray-600 whitespace-nowrap">Customers per team:</label>
+        <FeeInput id="cfg-customers-per-team" label="Customers per team" value={values.customersPerTeam} step="1" min="0" disabled={disabled} onChange={set('customersPerTeam')} />
+        {hint && <span className="text-xs text-gray-500 whitespace-nowrap">{hint}</span>}
       </div>
     </>
   );

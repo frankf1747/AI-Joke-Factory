@@ -144,6 +144,8 @@ export interface GameConfig {
   shippingFeeLarge: number;
   storageFeePerJokeMinute: number;
   hostingFeePerJokeMinute: number;
+  /** AI customers per team (0 = fixed count); instructor round only, shared by both rounds like the fees. */
+  customersPerTeam: number;
 }
 
 // --- API shapes (schema-aligned) ---
@@ -223,6 +225,8 @@ export interface ApiRound {
   shipping_fee_large?: number;
   storage_fee_per_joke_minute?: number;
   hosting_fee_per_joke_minute?: number;
+  // Instructor round only (config/start responses), never on /rounds/active.
+  customers_per_team?: number;
 }
 
 export interface ApiActiveRoundResponse {

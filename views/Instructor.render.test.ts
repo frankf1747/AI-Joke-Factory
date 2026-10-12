@@ -30,6 +30,23 @@ describe('Instructor screen, one Lean rule set', () => {
     expect(locked).toContain('title="Lean settings lock once the round starts"');
   });
 
+  it('shows customers per team with the team-count hint, and greys it out once the selected round has started', () => {
+    const between = { ...TEST_CONFIG, isActive: false };
+    const roster = [1, 2, 3].flatMap(t => [testUser(Role.JOKE_MAKER, t), testUser(Role.QUALITY_CONTROL, t)])
+      .map((u, i) => ({ ...u, id: String(i + 10), user_id: i + 10 }));
+    const open = renderWithGame(Instructor, { user: instructor, config: between, roster, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' } });
+    expect(open).toContain('Customers per team:');
+    expect(open).toContain('≈ 54 customers for 3 teams');
+    expect(open).not.toMatch(/id="cfg-customers-per-team"[^>]*disabled=""/);
+    const locked = renderWithGame(Instructor, { user: instructor, config: between, roundStatuses: { 1: 'ENDED', 2: 'CONFIGURED' } });
+    expect(locked).toMatch(/id="cfg-customers-per-team"[^>]*disabled=""/);
+  });
+
+  it('shows the stored customer budget in the CONFIG row', () => {
+    const out = renderWithGame(Instructor, { user: instructor, config: { ...TEST_CONFIG, isActive: false, customerBudget: 3 }, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' } });
+    expect(out).toMatch(/Cust\. Budget:<\/label><input[^>]*value="3"/);
+  });
+
   it('says inline why shipping fees that fall with batch size cannot be applied', () => {
     const between = { ...TEST_CONFIG, isActive: false, shippingFeeSmall: 4 };
     const out = renderWithGame(Instructor, { user: instructor, config: between, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' } });

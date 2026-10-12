@@ -21,6 +21,8 @@ export interface LeanRoundFields {
   shipping_fee_large?: number;
   storage_fee_per_joke_minute?: number;
   hosting_fee_per_joke_minute?: number;
+  /** Instructor round only (the public round never carries it). */
+  customers_per_team?: number;
 }
 
 /** The shipping tiers: small 1–4 jokes, standard exactly 5, large 6 or more. */
@@ -46,11 +48,18 @@ export interface LeanConfig extends LeanFeeConfig {
   /** Stored by the backend but no longer charged (replaced by the fees). */
   carryingCostPerJokeMinute: number;
   wipLimit: number;
+  /**
+   * AI customers per team (0 = use the fixed customer count). At start a Lean
+   * round's customer count becomes this times the number of teams. Instructor
+   * round only, so a poll of the public round leaves it as it was.
+   */
+  customersPerTeam: number;
 }
 
 export const LEAN_DEFAULTS: LeanConfig = {
   marketMode: 'CLASSIC', arrivalWindowSeconds: 900, setupCostPerBatch: 0, carryingCostPerJokeMinute: 0, wipLimit: 0,
   shippingFeeSmall: 0, shippingFeeStandard: 0, shippingFeeLarge: 0, storageFeePerJokeMinute: 0, hostingFeePerJokeMinute: 0,
+  customersPerTeam: 18,
 };
 
 /** The standard shipment: an unsplit batch counts as this many jokes for its fees. */
@@ -71,7 +80,10 @@ export function isLeanRound(round: LeanRoundFields | null | undefined): boolean 
   return round?.market_mode === 'LEAN';
 }
 
-export function leanConfigFromRound(round: LeanRoundFields | null | undefined): LeanConfig {
+/** LeanConfig, but customersPerTeam only when the round carried it. */
+export type LeanConfigFromRound = Omit<LeanConfig, 'customersPerTeam'> & Partial<Pick<LeanConfig, 'customersPerTeam'>>;
+
+export function leanConfigFromRound(round: LeanRoundFields | null | undefined): LeanConfigFromRound {
   const num = (v: unknown, fallback: number) => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
   return {
     marketMode: isLeanRound(round) ? 'LEAN' : 'CLASSIC',
@@ -84,7 +96,28 @@ export function leanConfigFromRound(round: LeanRoundFields | null | undefined): 
     shippingFeeLarge: num(round?.shipping_fee_large, LEAN_DEFAULTS.shippingFeeLarge),
     storageFeePerJokeMinute: num(round?.storage_fee_per_joke_minute, LEAN_DEFAULTS.storageFeePerJokeMinute),
     hostingFeePerJokeMinute: num(round?.hosting_fee_per_joke_minute, LEAN_DEFAULTS.hostingFeePerJokeMinute),
+    // Left out when absent (the public round, an older backend): a spread of this over
+    // the current config must keep the value already known, not reset it to the default.
+    ...(typeof round?.customers_per_team === 'number' && Number.isFinite(round.customers_per_team)
+      ? { customersPerTeam: round.customers_per_team } : {}),
   };
+}
+
+/** Teams with at least one Joke Maker or Marketing seat: what the backend multiplies by at start. */
+export function productionTeamCount(roster: ReadonlyArray<{ team: string; role: string }>): number {
+  const teams = new Set<string>();
+  for (const u of roster) {
+    if (u.team && u.team !== 'N/A' && (u.role === 'JOKE_MAKER' || u.role === 'QUALITY_CONTROL')) teams.add(u.team);
+  }
+  return teams.size;
+}
+
+/** The hint under "Customers per team": the count it gives for the teams in the lobby. */
+export function customersHint(perTeam: number, teamCount: number): string | null {
+  if (!Number.isFinite(perTeam)) return null;
+  if (perTeam === 0) return 'Fixed customer count (no per-team scaling)';
+  if (!(teamCount > 0)) return null;
+  return `≈ ${perTeam * teamCount} customers for ${teamCount} ${teamCount === 1 ? 'team' : 'teams'}`;
 }
 
 /**
@@ -277,6 +310,7 @@ export interface LeanConfigBody {
   wip_limit?: number;
   preference_base?: number;
   customer_count?: number;
+  customers_per_team?: number;
   shipping_fee_small?: number;
   shipping_fee_standard?: number;
   shipping_fee_large?: number;
@@ -298,6 +332,7 @@ export function leanConfigToBody(c: LeanConfigUpdate): LeanConfigBody {
   if (c.wipLimit !== undefined) body.wip_limit = c.wipLimit;
   if (c.preferenceBase !== undefined) body.preference_base = c.preferenceBase;
   if (c.customerCount !== undefined) body.customer_count = c.customerCount;
+  if (c.customersPerTeam !== undefined) body.customers_per_team = c.customersPerTeam;
   if (c.shippingFeeSmall !== undefined) body.shipping_fee_small = c.shippingFeeSmall;
   if (c.shippingFeeStandard !== undefined) body.shipping_fee_standard = c.shippingFeeStandard;
   if (c.shippingFeeLarge !== undefined) body.shipping_fee_large = c.shippingFeeLarge;

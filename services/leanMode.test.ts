@@ -5,13 +5,14 @@ import {
   feeTooltips, fmtCents, fmtFee, fmtMoney, fmtPerMinute, isLeanRound, isMarketModeLocked, isWipLimitReached,
   leanConfigFromRound, leanConfigToBody, leanFeesOf, learningCurvePoints, neverSold, shippingFeeFor, shippingLine,
   CONFIG_NOT_SAVED_TEXT, configSaveErrorText, feeRoundsText, leanTargetRounds, saveRoundConfig,
+  LEAN_DEFAULTS, customersHint, productionTeamCount,
 } from './leanMode';
 
 const classic = { market_mode: 'CLASSIC', arrival_window_seconds: 900, setup_cost_per_batch: 0, carrying_cost_per_joke_minute: 0, wip_limit: 0 };
 const lean = {
   ...classic, market_mode: 'LEAN', setup_cost_per_batch: 3, carrying_cost_per_joke_minute: 0.02, wip_limit: 0,
   shipping_fee_small: 1, shipping_fee_standard: 2, shipping_fee_large: 3,
-  storage_fee_per_joke_minute: 0.1, hosting_fee_per_joke_minute: 0.05,
+  storage_fee_per_joke_minute: 0.05, hosting_fee_per_joke_minute: 0.05,
 };
 const fees = { shippingFeeSmall: 1, shippingFeeStandard: 2, shippingFeeLarge: 3 };
 
@@ -26,7 +27,7 @@ describe('lean mode helpers', () => {
   it('maps round fields onto GameConfig keys, fees included, with defaults for old backends', () => {
     expect(leanConfigFromRound(lean)).toEqual({
       marketMode: 'LEAN', arrivalWindowSeconds: 900, setupCostPerBatch: 3, carryingCostPerJokeMinute: 0.02, wipLimit: 0,
-      shippingFeeSmall: 1, shippingFeeStandard: 2, shippingFeeLarge: 3, storageFeePerJokeMinute: 0.1, hostingFeePerJokeMinute: 0.05,
+      shippingFeeSmall: 1, shippingFeeStandard: 2, shippingFeeLarge: 3, storageFeePerJokeMinute: 0.05, hostingFeePerJokeMinute: 0.05,
     });
     expect(leanConfigFromRound({})).toEqual({
       marketMode: 'CLASSIC', arrivalWindowSeconds: 900, setupCostPerBatch: 0, carryingCostPerJokeMinute: 0, wipLimit: 0,
@@ -42,9 +43,9 @@ describe('lean mode helpers', () => {
   });
 
   it('writes the fee tooltips from the round\'s fees', () => {
-    expect(feeTooltips({ ...fees, storageFeePerJokeMinute: 0.1, hostingFeePerJokeMinute: 0.05 })).toEqual({
+    expect(feeTooltips({ ...fees, storageFeePerJokeMinute: 0.05, hostingFeePerJokeMinute: 0.05 })).toEqual({
       shipping: 'Charged per batch you send: $1 for 1–4 jokes, $2 for 5, $3 for 6–10.',
-      storage: "Every minute a joke waits on Marketing's desk costs 10¢.",
+      storage: "Every minute a joke waits on Marketing's desk costs 5¢.",
       hosting: 'Every minute a released joke sits unsold costs 5¢.',
     });
     expect(feeTooltips({ ...fees, storageFeePerJokeMinute: 0.2, hostingFeePerJokeMinute: 0.025 }).storage)
@@ -258,5 +259,33 @@ describe('saving settings to the rounds', () => {
     });
     expect(b).toMatchObject({ currentSaved: true, feeRounds: [1] });
     expect(b.error).not.toBeNull();
+  });
+});
+
+describe('customers per team', () => {
+  it('defaults to 18 and is read off the instructor round only when the backend sends it', () => {
+    expect(LEAN_DEFAULTS.customersPerTeam).toBe(18);
+    expect(leanConfigFromRound({ ...lean, customers_per_team: 12 })).toMatchObject({ customersPerTeam: 12 });
+    // Absent (the public round, an older backend): the key is left out so a polled config keeps what it knew.
+    expect('customersPerTeam' in leanConfigFromRound(lean)).toBe(false);
+    expect({ ...{ customersPerTeam: 12 }, ...leanConfigFromRound(lean) }.customersPerTeam).toBe(12);
+  });
+
+  it('sends customers_per_team only when the update carries it (0 is a value)', () => {
+    expect(leanConfigToBody({ customersPerTeam: 25 })).toEqual({ customers_per_team: 25 });
+    expect(leanConfigToBody({ customersPerTeam: 0 })).toEqual({ customers_per_team: 0 });
+    expect(leanConfigToBody({ storageFeePerJokeMinute: 0.05 })).not.toHaveProperty('customers_per_team');
+  });
+
+  it('counts the teams that have a Joke Maker or Marketing, and words the hint', () => {
+    const r = (team: string, role: string) => ({ team, role });
+    expect(productionTeamCount([r('1', 'JOKE_MAKER'), r('1', 'QUALITY_CONTROL'), r('2', 'QUALITY_CONTROL'),
+      r('N/A', 'UNASSIGNED'), r('3', 'UNASSIGNED'), r('N/A', 'INSTRUCTOR')])).toBe(2);
+    expect(productionTeamCount([])).toBe(0);
+    expect(customersHint(18, 20)).toBe('≈ 360 customers for 20 teams');
+    expect(customersHint(18, 1)).toBe('≈ 18 customers for 1 team');
+    expect(customersHint(0, 20)).toBe('Fixed customer count (no per-team scaling)');
+    expect(customersHint(18, 0)).toBeNull();
+    expect(customersHint(Number.NaN, 5)).toBeNull();
   });
 });
