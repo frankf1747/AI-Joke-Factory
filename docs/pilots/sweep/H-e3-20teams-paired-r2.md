@@ -1,0 +1,65 @@
+# Lean fees pilot — 2026-10-12
+
+_H-e3-20teams-paired r2 (20 teams, 300 customers)_
+
+## Success checks
+
+- **FAIL** — Spray spends 40–60 % of its revenue on fees in Round 1: Spray Round 1 fees are 61.5 % of revenue
+- **PASS** — In Round 2, the Learner's batches of 3 reach their first sale sooner than Spray's batches of 10: send → first sale: Learner 15 s, Spray 34 s
+  - Learner also differs in pacing and feedback waits; see the batch-size table
+- **PASS** — No persona profits by leaving batches on Marketing's desk: mean profit, Balanced (holds) vs Balanced: Round 1: -$11.88 vs $3.84; Round 2: -$19.92 vs -$0.99
+  - Indicative only (not a pass/fail): rank correlation of storage fee per batch with profit, across all teams: Round 1: ρ = -0.18; Round 2: ρ = -0.44
+
+## Round 2 batches by size
+
+Every batch sent in Round 2, all teams, grouped by its number of jokes.
+
+| Batch size | Batches | Sold | Send → first sale (sold batches) |
+|---|---|---|---|
+| 3 | 51 | 75 % | 15 s |
+| 5 | 78 | 47 % | 25 s |
+| 10 | 16 | 88 % | 34 s |
+| not split | 10 | 0 % | — |
+
+## Settings
+
+- Backend http://localhost:8081.
+- Bots at 10×; 4 CAREFUL, 4 BALANCED, 4 SPRAY, 4 LEARNER, 4 BALANCED_HOLDS; one class, Round 1 then Round 2.
+- Fees (real time): shipping $1 / $2 / $3 for 1–4 / 5 / 6–10 jokes, storage $0.05 and hosting $0.05 per joke-minute.
+- Storage and hosting are sent ×10 ($0.5 and $0.5) because the backend charges per wall-clock minute; shipping is per batch and is not scaled.
+- Arrival window 90 s (stands for 15 minutes of class time); batch size 5 exactly in Round 1, up to 10 in Round 2; no WIP limit.
+- Bot rounds are capped at 40 jokes per team, whatever the batch size.
+- Overrides: PILOT_STORAGE, PILOT_PREFERENCE_BASE, PILOT_CUSTOMERS, PILOT_BUY_THRESHOLD, PILOT_PER_PERSONA, PILOT_HOLD_TEAMS.
+- BALANCED_HOLDS ("Balanced (holds)") is Balanced in every way except that its Marketing seat holds each batch an extra 60 class-seconds (6 s at 10×) before deciding: the controlled contrast for the desk check.
+- Bot joke seed: pilot-1791774483557. Each Balanced (holds) team draws the same jokes as a Balanced partner.
+- Each round is ended 4 s after its arrival window closes, whatever the bots' progress (a 15-minute class ends at 15 minutes); stats and charts are read after the end, when the fee clocks have stopped. Round length is the server's started_at to ended_at, in class minutes (wall seconds × 10 / 60); a round over 16 (window + settle + 2 s slack) is flagged.
+
+Means per team. Fees are shipping + storage + hosting + listing + discard, so profit = revenue − fees. Mean batch size counts split batches; send → first sale is per batch, over batches that sold.
+
+## Round 1
+
+| Persona | Teams | Revenue | Shipping | Storage | Hosting | Listing | Profit | Batches | Mean batch size | Send → first sale | Fees % of revenue |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| CAREFUL | 4 | $27.25 | $14.00 | $2.79 | $3.22 | $1.25 | **$5.80** | 7.0 | 5.0 | 19 s | 78.7 % |
+| BALANCED | 4 | $36.25 | $16.00 | $4.26 | $9.27 | $2.75 | **$3.84** | 8.0 | 5.0 | 18 s | 89.4 % |
+| BALANCED_HOLDS | 4 | $23.00 | $16.00 | $11.02 | $5.75 | $2.03 | **-$11.88** | 8.0 | 5.0 | 35 s | 151.6 % |
+| SPRAY | 4 | $69.25 | $16.00 | $9.58 | $13.00 | $4.00 | **$26.68** | 8.0 | 5.0 | 35 s | 61.5 % |
+| LEARNER | 4 | $48.00 | $16.00 | $3.21 | $4.34 | $1.60 | **$22.61** | 8.0 | 5.0 | 15 s | 52.9 % |
+
+## Round 2
+
+| Persona | Teams | Revenue | Shipping | Storage | Hosting | Listing | Profit | Batches | Mean batch size | Send → first sale | Fees % of revenue |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| CAREFUL | 4 | $17.25 | $12.00 | $2.25 | $2.65 | $1.05 | **-$0.86** | 6.0 | 5.0 | 16 s | 105.0 % |
+| BALANCED | 4 | $31.75 | $16.00 | $4.86 | $8.94 | $2.83 | **-$0.99** | 8.0 | 5.0 | 21 s | 103.1 % |
+| BALANCED_HOLDS | 4 | $14.25 | $16.00 | $12.81 | $3.80 | $1.48 | **-$19.92** | 8.0 | 5.0 | 39 s | 239.8 % |
+| SPRAY | 4 | $56.75 | $12.00 | $10.35 | $14.39 | $4.00 | **$16.01** | 4.0 | 10.0 | 34 s | 71.8 % |
+| LEARNER | 4 | $98.00 | $12.75 | $2.23 | $4.76 | $2.35 | **$75.79** | 12.8 | 3.0 | 15 s | 22.7 % |
+
+## Rounds
+
+| Round | Winner | Profit | Duration | Classification calls | Class minutes |
+|---|---|---|---|---|---|
+| 1 | LEARNER | $60.54 | 94s | 465 | 15.7 |
+| 2 | LEARNER | $115.03 | 94s | 468 | 15.7 |
+
