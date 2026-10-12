@@ -1,8 +1,8 @@
 # Guided walkthrough (replaces the student pop-up tutorial) — design
 
-Status: drafted 2026-10-11 from the conversation. The decisions the user made are in §2. The defaults the controller chose are marked **[default — review]**.
+Status: drafted 2026-10-11 from the conversation; **refreshed 2026-10-11 after the Lean fees, Next step line, tuned defaults and key tiles changes** (this branch is Lean-only). The decisions the user made are in §2. The defaults the controller chose are marked **[default — review]**.
 Branch: `feat/lean-market` (frontend `AI-Joke-Factory` only; no backend change).
-Prerequisite: `2026-10-11-team-screens-notes-design.md` is implemented first. The tour shows its final screens: no student charts, the Marketing note box, the Joke Maker's "From Marketing" callout and the Customer feedback pop-out.
+Prerequisites (all implemented first): `2026-10-11-team-screens-notes-design.md`, `2026-10-11-lean-fees-next-step-design.md`, `2026-10-11-tuned-defaults-design.md` and `2026-10-11-key-tiles-design.md`. The tour shows those final screens: no student charts, the Marketing note box, the Joke Maker's "From Marketing" callout, the Customer feedback card with its Expand button, the shipping line, the Next step line, and four key tiles with the rest behind "More numbers".
 
 ## 1. Goal
 
@@ -26,7 +26,7 @@ Success means:
 | Pace | **[default — review]** Auto-play: each step advances on its own after ~5–7 s. Controls: Back, Pause/Play, Next, Skip tour. About 60 s in total. |
 | Roles | **[default — review]** Joke Maker and Marketing each get their own tour. The instructor keeps the existing "How this works" modal (instructor tab only). The modal's student and "AI Customers" tabs are retired; one "how customers buy" step is folded into each student tour. |
 | Mid-round arrivals | **[default — review]** Auto-play only when the student's round is not ACTIVE: lobby, before Start, between rounds. A student arriving mid-round sees a small dismissible prompt, "New here? Watch the 1-minute tour", instead of a tour that takes over the screen. |
-| Classic vs Lean | Steps that only exist in Lean (setup cost line, WIP counter, Lean cost tiles) appear only when the student's round is Lean. The rest is shared. |
+| Lean only | This branch is Lean-only, so there are no Classic or WIP branches. The only round-dependent copy is the Joke Maker's shipping step (Round 1: batches of exactly 5; Round 2: up to 10). Amounts always come from the round. |
 | Watch mode | Never auto-plays in an instructor watch tab, and offers no replay button there. This is the same rule as the old tutorial. |
 | Dependencies | **[default — review]** No new library. A small in-house spotlight engine gives full control over the scripted demo state and timing. |
 
@@ -80,36 +80,37 @@ The sample data comes from a fixed script, `services/tour/demoScript.ts`:
 - one earlier batch is already on the market with 2 of 5 sold;
 - the numbers stay plausible and consistent: Profit, Jokes Sold / Made and the costs agree with the game's own formulas at the default prices.
 
-The captions below are the copy to use. Steps marked *(Lean)* are included only in Lean rounds; *(Lean R2)* only when the round has a WIP limit.
+The captions below are the copy to use. Money amounts in braces come from the student's round (formatted like the game: whole dollars as `$2`, per-minute rates in cents), never fixed text.
 
 ### Joke Maker tour (~60 s)
 
 1. *(centre)* **You're the Joke Maker.** "Your team earns money when AI customers buy your jokes. Here's your screen in one minute."
 2. *(production textbox; demo types five jokes in)* **Write, then paste.** "Write jokes with your AI tool and paste the whole reply here. Marketing splits it into separate jokes."
 3. *(certify + Send to Marketing; demo ticks the box)* **Send a batch.** "Tick the box and press Send to Marketing. Each send is one batch."
-4. *(Lean)* *(setup-cost line)* **Every batch has a setup cost.** "Each batch costs money to set up, so make it count."
-5. *(Lean R2)* *(WIP counter, demo shows "2 of 2 waiting")* **Don't flood Marketing.** "When Marketing's queue is full you can't send more. Wait, or go help them."
+4. *(shipping line)* **Every batch pays shipping.** Round 1: "Each batch of 5 costs {standard} to ship, so keep them coming but make them count." Round 2: "You choose the size now: {small} for 1–4 jokes, {standard} for 5, {large} for 6–10. Smaller batches come back with feedback sooner."
+5. *(Next step line)* **Your next step.** "This line watches the game and tells you what to do next. Glance at it whenever you're unsure."
 6. *(Value stream; demo batch moves through the stages)* **Follow your batches.** "Each row is a batch. The dots show where every joke is: with Marketing, on the market, sold or wasted."
 7. *(the expanded batch's "From Marketing" callout)* **Read Marketing's note.** "Marketing tells you what customers liked and what to change. Read it before you write the next batch."
-8. *(stat tiles: Profit, Jokes Sold / Made)* **Your scoreboard.** "Profit is sales minus costs, and it can go negative. Jokes Sold / Made shows how many of your jokes sold at least once."
-9. *(centre)* **How customers buy.** "AI customers judge every joke on 12 criteria and buy the ones that fit what they like. Fewer, better-aimed jokes beat lots of random ones."
-10. *(centre)* **Your goal.** "Send jokes customers want, learn from each batch, improve the next one." [Start]
+8. *(the four key tiles)* **Your scoreboard.** "Profit is sales minus fees, and it can go negative. Rank, Jokes Sold / Made and Created to Publish (how long a joke takes to reach the market) complete it. "More numbers" shows the rest."
+9. *(centre)* **How customers buy.** "AI customers are picky: they judge every joke on 12 criteria and only buy the ones that fit what they like. Better-aimed jokes beat lots of random ones."
+10. *(centre)* **Your goal.** "Keep the line moving, learn from each batch, and improve the next one." [Start]
 
 ### Marketing tour (~60 s)
 
-1. *(centre)* **You're Marketing.** "You decide which jokes go to market. Each joke you publish costs $0.10, and each sale earns $1.00." Use the actual configured prices, not fixed text.
+1. *(centre)* **You're Marketing.** "You decide which jokes go to market. Listing a joke costs {listing}, and each sale earns {price}."
 2. *(Marketing Desk; a demo batch arrives and is split into five jokes)* **A batch arrives.** "Your Joke Maker's batch lands here. Split it into separate jokes."
-3. *(joke list; demo keeps 3 and discards 2)* **Pick the winners.** "Keep the jokes customers will buy. Discarding costs only $0.01."
+3. *(joke list; demo keeps 3 and discards 2)* **Pick the winners — quickly.** "Keep the jokes customers will buy and drop the rest (dropping costs {discard}). Don't be too strict: customers can only buy what's on the shelf."
 4. *(Topic and title fields; demo fills a title)* **Topic and title.** "Give each joke a topic and a title. A good title helps it sell."
 5. *(note box; demo types a note)* **Tell your Joke Maker.** "Say what to change next. Your note is sent with this batch."
 6. *(Release to market)* **Release.** "Released jokes go on the market, where customers start buying."
-7. *(stat tiles: Profit, Jokes Sold / Made, Content Backlog)* **Your scoreboard.** "Profit, how many jokes have sold, and how many jokes are waiting for you."
-8. *(Lean)* *(Setup cost and Carrying cost tiles)* **Waste costs money.** "Unsold jokes and waiting batches cost money every minute. Release quickly and publish only what sells."
-9. *(Customer feedback card; a demo card shows Landed and Needs-work chips)* **What customers said.** "For your latest jokes: which criteria landed and which missed. It never says by how much."
-10. *(Pop-out button)* **Keep it in view.** "Pop the feedback out to keep it on top while you work."
-11. *(centre)* **Your goal.** "Ship what sells, tell your Joke Maker why, and improve every batch." [Start]
+7. *(the four key tiles)* **Your scoreboard.** "Profit, your rank, how many jokes have sold, and how many batches are waiting on your desk."
+8. *(the "More numbers" area, opened by the demo, spotlighting the Shipping, Storage and Hosting fee tiles)* **Fees add up.** "Every batch pays shipping. A batch waiting on your desk pays storage ({storage} a joke each minute), and an unsold joke pays hosting ({hosting}). Holding batches only costs money: release quickly."
+9. *(Next step line)* **Your next step.** "This line watches the game and tells you what to do next, like releasing a batch that has waited too long."
+10. *(Customer feedback card; a demo card shows the ✓ and ✗ criteria boxes)* **What customers said.** "For your latest jokes: which criteria landed and which missed. It never says by how much."
+11. *(Expand button)* **Keep it in view.** "Expand opens the feedback in a floating window that stays on top while you work."
+12. *(centre)* **Your goal.** "Ship what sells, tell your Joke Maker why, and improve every batch." [Start]
 
-If a step's target does not exist on the screen, for example because the round has no WIP limit, the step is skipped, not shown blank.
+If a step's target does not exist on the screen, the step shows as a centred card; the tour never stalls.
 
 ## 5. Units
 
@@ -117,7 +118,7 @@ If a step's target does not exist on the screen, for example because the round h
 |---|---|
 | `context.tsx` | Export `GameContext`; add `DemoModeContext` and `useDemoMode()`. Live polls and requests are skipped when demo mode is on. |
 | `services/tour/tourMachine.ts` | Pure step reducer (`next`, `back`, `pause`, `resume`, `tick`, `skip`, `finish`) and the step type. |
-| `services/tour/tourSteps.ts` | Joke Maker and Marketing step lists, plus `stepsFor(role, { lean, wipLimit })`. |
+| `services/tour/tourSteps.ts` | Joke Maker and Marketing step lists, plus `stepsFor(role, { roundNumber, fees })` (captions filled from the round). |
 | `services/tour/demoScript.ts` | Placeholder jokes, the initial demo game state, and `buildDemoState(steps, k)`. |
 | `services/tour/seen.ts` | Seen-flag read and write, plus `shouldAutoPlay({ role, watch, seen, roundActive })`. |
 | `components/tour/DemoStage.tsx` | Full-screen stage that renders the role view with the demo `GameContext` and demo mode on. |
@@ -138,11 +139,11 @@ If a step's target does not exist on the screen, for example because the round h
 
 **Vitest**
 - The tour machine: auto-advance, back rebuilds state, pause stops ticks, skip and finish set the flag.
-- `stepsFor` filtering: Classic vs Lean, and with or without a WIP limit.
+- `stepsFor`: Round 1 vs Round 2 shipping copy; every amount comes from the round (a non-default fee shows in the caption).
 - `shouldAutoPlay` for every combination of role, watch mode, seen flag and round state.
 - `buildDemoState` is deterministic and its numbers are consistent: profit equals sales × price − published × publish cost − discarded × discard cost, plus the Lean costs.
 - With demo mode on, rendering the views makes zero fetch calls (fetch stubbed).
-- Static render: each step's `data-tour` target exists in the demo-rendered view, for both roles and both modes.
+- Static render: each step's `data-tour` target exists in the demo-rendered view, for both roles and both rounds (with "More numbers" opened where a step needs it).
 
 **Browser (local stack)**
 - As a fresh Joke Maker and a fresh Marketing seat with no seen flag, in a round that has not started:
@@ -162,4 +163,4 @@ If a step's target does not exist on the screen, for example because the round h
 - An instructor-triggered tour for the whole class (option B).
 - Audio narration.
 - Translating captions.
-- The "what to do next" coach line and the per-batch result message suggested in conversation (separate projects).
+- The per-batch result message suggested in conversation (separate project). The Next step line already exists and is featured in both tours.
