@@ -11,6 +11,7 @@ import { dimById } from '../config/dimensions';
 import { isWatchMode } from '../services/watchMode';
 import { shippingLine } from '../services/leanMode';
 import { MarketingNoteCallout, MarketingNoteIcon, marketingNoteOf } from '../components/MarketingNote';
+import { StatTiles, moreTilesKey } from '../components/StatTiles';
 import { NextStepLive } from '../components/NextStep';
 import { jokeMakerInputFrom, jokeMakerNextStep } from '../services/nextStep';
 
@@ -363,14 +364,19 @@ const JokeMaker: React.FC = () => {
 
         {/* RIGHT: stat tiles + Jokes by stage */}
         <div className="space-y-5">
-          <div className="grid grid-cols-2 gap-3">
-            <StatBox label="Current Team Rank" value={String(myRank)} tone="rank" />
-            <StatBox label="Jokes Sold / Made" value={`${jokesSold}/${totalJokes}`} tone="blue" />
-            <StatBox label="Profit" value={profitLabel} tone={profitTone} valueClassName="text-xl" />
-            <StatBox label="Created to Publish" value={fmtSeconds(avgLeadSec)} tone="sky" />
-            <StatBox label="Batches" value={batchesCreated} tone="slate" />
-            <StatBox label="Content Waste" value={waste} tone="rose" />
-          </div>
+          <StatTiles
+            storageKey={moreTilesKey('joke_maker')}
+            keyTiles={[
+              <StatBox key="profit" label="Profit" value={profitLabel} tone={profitTone} />,
+              <StatBox key="rank" label="Current Team Rank" value={String(myRank)} tone="rank" />,
+              <StatBox key="sold" label="Jokes Sold / Made" value={`${jokesSold}/${totalJokes}`} tone="blue" />,
+              <StatBox key="lead" label="Created to Publish" value={fmtSeconds(avgLeadSec)} tone="sky" />,
+            ]}
+            moreTiles={[
+              <StatBox key="batches" label="Batches" value={batchesCreated} tone="slate" />,
+              <StatBox key="waste" label="Content Waste" value={waste} tone="rose" />,
+            ]}
+          />
           <NextStepLive
             step={now => jokeMakerNextStep(jokeMakerInputFrom({
               now, roundActive: config.isActive, round: config.round, roundStatuses, teamSummary, batches: myBatches,

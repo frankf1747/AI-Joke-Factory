@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import JokeMaker from './JokeMaker';
 import QualityControl from './QualityControl';
 import { TEST_CONFIG, renderWithGame, testUser } from './testing/renderWithGame';
 import { Role, type ApiTeamSummaryResponse } from '../types';
 import type { LeanTeamStats } from '../types/api';
+
+afterEach(() => vi.unstubAllGlobals());
 
 const summary = (lean?: Partial<LeanTeamStats>): ApiTeamSummaryResponse => ({
   team: { id: 1, name: 'Team 1' }, round_id: 1, rank: 1, points: 0, total_sales: 3, profit: -1.25,
@@ -52,7 +54,8 @@ describe('Joke Maker screen', () => {
 });
 
 describe('Marketing screen', () => {
-  it('shows Shipping, Storage and Hosting fee tiles with one-line tooltips', () => {
+  it('shows Shipping, Storage and Hosting fee tiles (behind More numbers) with one-line tooltips', () => {
+    vi.stubGlobal('localStorage', { getItem: () => '1' });
     const out = marketing({ shipping_cost: 8, storage_cost: 1.5, hosting_cost: 0.2, setup_cost: 8, carrying_cost: 1.7 });
     expect(out).toContain('Shipping fees');
     expect(out).toContain('Storage fees');
@@ -68,6 +71,7 @@ describe('Marketing screen', () => {
   });
 
   it('reads an older backend\'s setup and carrying costs without NaN', () => {
+    vi.stubGlobal('localStorage', { getItem: () => '1' });
     const out = marketing({ setup_cost: 4, carrying_cost: 2.5 });
     expect(out).toContain('$4.00');
     expect(out).toContain('$2.50');

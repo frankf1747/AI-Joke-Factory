@@ -24,6 +24,7 @@ import { isWatchMode } from '../services/watchMode';
 import { feeTooltips, fmtMoney, leanFeesOf } from '../services/leanMode';
 import { MARKETING_NOTE_MAX } from '../services/marketingService';
 import { releaseOutcome } from './marketingRelease';
+import { StatTiles, moreTilesKey } from '../components/StatTiles';
 import { NextStepLive } from '../components/NextStep';
 import { marketingInputFrom, marketingNextStep } from '../services/nextStep';
 
@@ -797,25 +798,28 @@ const QualityControl: React.FC = () => {
 
         {/* RIGHT: stats + customer-feedback learning panel */}
         <div className="space-y-5">
-          <div className="grid grid-cols-2 gap-3">
-            <StatBox label="Current Team Rank" value={String(myRank)} tone="rank" />
-            {/* TODO(backend): queue_size from the mock API counts every SUBMITTED
-                batch in the round across ALL teams, and counts batches rather than
-                jokes. Point this at the real per-team backlog endpoint when it lands. */}
-            <StatBox label="Content Backlog" value={queueSize} tone="blue" />
-            <StatBox label="Profit" value={profitLabel} tone={profitTone} valueClassName="text-xl" />
-            <StatBox label="Jokes Sold / Made" value={`${jokesSold}/${jokesCreated}`} tone="sky" />
-            <StatBox label="Created to Publish" value={fmtSeconds(avgLeadSec)} tone="sky" />
-            <StatBox label="Content Waste" value={waste} tone="rose" />
-            {leanMode && (
-              <>
-                <StatBox label="Shipping fees" value={fmtMoney(fees.shipping)} tone="rose" valueClassName="text-xl" title={tips.shipping} />
-                <StatBox label="Storage fees" value={fmtMoney(fees.storage)} tone="rose" valueClassName="text-xl" title={tips.storage} />
-                <StatBox label="Hosting fees" value={fmtMoney(fees.hosting)} tone="rose" valueClassName="text-xl" title={tips.hosting} />
-                <StatBox label="Publish → first sale" value={fmtSeconds(toFirstSale)} tone="sky" />
-              </>
-            )}
-          </div>
+          <StatTiles
+            storageKey={moreTilesKey('quality_control')}
+            keyTiles={[
+              <StatBox key="profit" label="Profit" value={profitLabel} tone={profitTone} />,
+              <StatBox key="rank" label="Current Team Rank" value={String(myRank)} tone="rank" />,
+              <StatBox key="sold" label="Jokes Sold / Made" value={`${jokesSold}/${jokesCreated}`} tone="sky" />,
+              /* TODO(backend): queue_size from the mock API counts every SUBMITTED
+                 batch in the round across ALL teams, and counts batches rather than
+                 jokes. Point this at the real per-team backlog endpoint when it lands. */
+              <StatBox key="backlog" label="Content Backlog" value={queueSize} tone="blue" />,
+            ]}
+            moreTiles={[
+              <StatBox key="lead" label="Created to Publish" value={fmtSeconds(avgLeadSec)} tone="sky" />,
+              ...(leanMode ? [<StatBox key="firstsale" label="Publish → first sale" value={fmtSeconds(toFirstSale)} tone="sky" />] : []),
+              <StatBox key="waste" label="Content Waste" value={waste} tone="rose" />,
+              ...(leanMode ? [
+                <StatBox key="shipping" label="Shipping fees" value={fmtMoney(fees.shipping)} tone="rose" valueClassName="text-xl" title={tips.shipping} />,
+                <StatBox key="storage" label="Storage fees" value={fmtMoney(fees.storage)} tone="rose" valueClassName="text-xl" title={tips.storage} />,
+                <StatBox key="hosting" label="Hosting fees" value={fmtMoney(fees.hosting)} tone="rose" valueClassName="text-xl" title={tips.hosting} />,
+              ] : []),
+            ]}
+          />
           <NextStepLive
             step={now => marketingNextStep(marketingInputFrom({
               now, roundActive: config.isActive, round: config.round, roundId, roundStatuses,

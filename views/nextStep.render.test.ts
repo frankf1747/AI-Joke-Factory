@@ -13,7 +13,8 @@ describe('the Next step line on the student screens', () => {
   it('sits under the Joke Maker\'s stat tiles, above Jokes by stage', () => {
     const out = renderWithGame(JokeMaker, { user: testUser(Role.JOKE_MAKER), teamSummary: summary });
     const line = out.indexOf('Next step');
-    expect(line).toBeGreaterThan(out.indexOf('Content Waste'));
+    expect(line).toBeGreaterThan(out.indexOf('More numbers'));
+    expect(line).toBeGreaterThan(out.indexOf('Created to Publish'));
     expect(line).toBeLessThan(out.indexOf('Jokes by stage'));
     expect(out).toContain("Marketing&#x27;s desk is empty — send your next batch of 5.");
   });
@@ -45,7 +46,8 @@ describe('the Next step line on the student screens', () => {
       qcQueue: { batch: { batch_id: 9, round_id: 1, team_id: 1, submitted_at: sent, raw_text: 'one\n\ntwo' }, jokes: [], queue_size: 1 },
     });
     const line = out.indexOf('Next step');
-    expect(line).toBeGreaterThan(out.indexOf('Hosting fees'));
+    expect(line).toBeGreaterThan(out.indexOf('More numbers'));
+    expect(line).toBeGreaterThan(out.indexOf('Content Backlog'));
     expect(line).toBeLessThan(out.indexOf('The 12 criteria customers judge'));
     expect(out).toMatch(/Batch waiting (5\d) s — release what&#x27;s good enough\. Storage costs 5¢ a joke each minute\./);
   });
