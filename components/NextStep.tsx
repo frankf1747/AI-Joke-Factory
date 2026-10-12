@@ -6,6 +6,7 @@
    passes; the screen's polls re-render it with fresh inputs. */
 import React, { useEffect, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
+import { useDemoMode } from '../context';
 import type { NextStep } from '../services/nextStep';
 
 export const NextStepLine: React.FC<{ step: NextStep }> = ({ step }) => {
@@ -26,17 +27,19 @@ export const NextStepLine: React.FC<{ step: NextStep }> = ({ step }) => {
 };
 
 /** Date.now(), refreshed every `intervalMs` while mounted. */
-export function useNow(intervalMs = 1000): number {
+export function useNow(intervalMs = 1000, paused = false): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
+    if (paused) return undefined;
     const id = window.setInterval(() => setNow(Date.now()), intervalMs);
     return () => window.clearInterval(id);
-  }, [intervalMs]);
+  }, [intervalMs, paused]);
   return now;
 }
 
 /** The line, recomputed every second: `step` maps the current time to the sentence. */
 export const NextStepLive: React.FC<{ step: (now: number) => NextStep }> = ({ step }) => {
-  const now = useNow();
+  // Inside the demo stage the script's clock drives the line; the wall clock is ignored, so don't tick it.
+  const now = useNow(1000, useDemoMode());
   return <NextStepLine step={step(now)} />;
 };
