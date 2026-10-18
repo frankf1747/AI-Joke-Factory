@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Batch, Joke } from '../types';
-import { latestRelease, moreWaiting, splitStatus } from './desk';
+import { latestRelease, moreWaiting, moreWaitingLabel, splitStatus } from './desk';
 
 describe('moreWaiting', () => {
   it('does not count the batch on the desk', () => {
@@ -16,6 +16,15 @@ describe('moreWaiting', () => {
   });
   it('never goes below zero', () => {
     expect(moreWaiting(0, true)).toBe(0);
+  });
+});
+
+describe('moreWaitingLabel', () => {
+  it('reads the count, zero and unknown', () => {
+    expect(moreWaitingLabel(1)).toBe('1 more waiting');
+    expect(moreWaitingLabel(4)).toBe('4 more waiting');
+    expect(moreWaitingLabel(0)).toBe('nothing else waiting');
+    expect(moreWaitingLabel(null)).toBeNull();
   });
 });
 
@@ -46,7 +55,9 @@ describe('splitStatus', () => {
     expect(splitStatus({ ...r1, cuts: 5, remainder: '' })).toEqual({
       count: 5, valid: true, message: 'All split. Check the jokes, then confirm.',
     });
-    expect(splitStatus({ ...r1, cuts: 6, remainder: '' }).valid).toBe(false);
+    expect(splitStatus({ ...r1, cuts: 6, remainder: '' })).toEqual({
+      count: 6, valid: false, message: 'Round 1 needs exactly 5 jokes; you have 6.',
+    });
   });
   it('Round 2 allows one up to the limit', () => {
     expect(splitStatus({ ...r2, cuts: 11, remainder: '' })).toEqual({
@@ -80,6 +91,19 @@ describe('latestRelease', () => {
       batch(5, { status: 'SUBMITTED', jokes: [joke(3, 'PENDING')] }),
     ]);
     expect(r?.batchId).toBe(2);
+  });
+  it('reads a legacy batch without publish_status through is_published', () => {
+    const legacy = (id: number, published: boolean) => ({ joke_id: id, joke_text: 't', id: String(id), content: 't', is_published: published }) as unknown as Joke;
+    const r = latestRelease([batch(4, { status: 'RATED', ratedAt: 20, jokes: [legacy(1, true), legacy(2, true), legacy(3, false)] })]);
+    expect(r).toEqual({ batchId: 4, published: 2, discarded: 1, noteSent: false });
+  });
+  it('skips a batch that is not processed even with a timestamp', () => {
+    const r = latestRelease([
+      batch(1, { ratedAt: 5, jokes: [joke(1, 'PUBLISHED')] }),
+      batch(2, { status: 'SUBMITTED', ratedAt: 99, jokes: [joke(2, 'PENDING')] }),
+    ]);
+    expect(r?.batchId).toBe(1);
+    expect(latestRelease([batch(2, { status: 'SUBMITTED', ratedAt: 99, jokes: [joke(2, 'PENDING')] })])).toBeNull();
   });
   it('counts published and discarded jokes', () => {
     const r = latestRelease([batch(3, {

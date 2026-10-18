@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { useDemoMode, useDemoUi, useGame } from '../context';
-import { Button, Card, StatBox, RoleLayout, Modal, SectionLabel, BRAND, fmt$ } from '../components';
+import { Button, Card, StatBox, RoleLayout, Modal, SectionLabel, fmt$ } from '../components';
 import {
-  Send, Zap, GripVertical, ChevronUp, ChevronDown, Check, X as XIcon,
+  Send, Zap, GripVertical, ChevronUp, ChevronDown, Check,
   Star, CheckCircle2, MousePointerClick,
-  Scissors, CornerDownLeft, Trash2,
+  Scissors, Trash2,
   Briefcase, Heart, Users, Utensils, Cpu, PawPrint, GraduationCap,
   DollarSign, Plane, HeartPulse, Medal, Landmark, Coffee, Languages,
   Pencil, type LucideIcon,
@@ -27,6 +27,9 @@ import { FeesAndWaits } from '../components/FeesAndWaits';
 import { Scoreboard } from '../components/Scoreboard';
 import { foundABuyer, rankInputOf } from '../services/scoreboard';
 import { NextStepLive } from '../components/NextStep';
+import { BatchSplitter } from '../components/marketing/BatchSplitter';
+import { DeskBar } from '../components/marketing/DeskBar';
+import { moreWaiting, moreWaitingLabel } from '../services/desk';
 import { marketingInputFrom, marketingNextStep } from '../services/nextStep';
 
 /* ---- Icons for the backend's Topic categories. Keyed by the category string
@@ -119,204 +122,9 @@ const TitleField: React.FC<{
   </div>
 );
 
-/* ============================ Phase 1: interactive batch splitter ============================
-   Marketing reads the raw AI blob and splits it into individual jokes by placing a
-   caret between texts. Everything before the caret highlights; Enter or the
-   "Split Above?" button carves it off as the next joke. Auto-finalizes at targetCount
-   (Round 1). Removing a split card re-opens everything from that point. */
-
-const BatchSplitter: React.FC<{
-  rawText: string;
-  targetCount: number | null; // R1 = 5 (soft hint only — no auto-advance)
-  onComplete: (jokes: string[]) => void;
-}> = ({ rawText, targetCount, onComplete }) => {
-  // Offset model: one immutable `text` + a sorted list of cut offsets. Cards are the
-  // segments before the last cut; `working` is the tail. Removing a cut is lossless —
-  // it never inserts a separator, so undo restores the original format exactly.
-  // The text is READ-ONLY: Marketing decides where the cuts go, never what the jokes say.
-  // (The component is keyed on batch_id by the caller, so a new batch remounts it.)
-  const text = useMemo(() => rawText.trim(), [rawText]);
-  const [cuts, setCuts] = useState<number[]>([]);
-  const [caret, setCaret] = useState<number>(0);
-  const containerRef = React.useRef<HTMLDivElement>(null);
-  const taRef = React.useRef<HTMLTextAreaElement>(null);
-  const markerRef = React.useRef<HTMLSpanElement>(null);
-  const [caretPos, setCaretPos] = useState<{ top: number; left: number } | null>(null);
-
-  const lastCut = cuts.length ? cuts[cuts.length - 1] : 0;
-  const working = text.slice(lastCut);
-  const splits = cuts.map((c, i) => text.slice(i === 0 ? 0 : cuts[i - 1], c));
-
-  const safeCaret = Math.min(caret, working.length);
-  const highlighted = working.slice(0, safeCaret).trim();
-  const canSplit = highlighted.length > 0;
-  const boxEmpty = working.trim() === '';
-  // Count of jokes made so far (cards) + any remaining chunk (shown as the pending last joke).
-  const shownCount = splits.length + (boxEmpty ? 0 : 1);
-  // Confirm is only allowed once every joke is a card and the box is empty.
-  const canConfirm = splits.length > 0 && boxEmpty;
-
-  const suppressSyncRef = React.useRef(false);
-  const syncCaret = () => {
-    if (suppressSyncRef.current) return; // ignore the keyup/select that fires right after a split
-    if (taRef.current) setCaret(taRef.current.selectionStart ?? 0);
-  };
-
-  // Measure the caret marker (in the mirror layer) and float the split button next to it.
-  React.useLayoutEffect(() => {
-    if (!canSplit || !markerRef.current || !containerRef.current) {
-      setCaretPos(null);
-      return;
-    }
-    const mr = markerRef.current.getBoundingClientRect();
-    const cr = containerRef.current.getBoundingClientRect();
-    setCaretPos({ top: mr.top - cr.top, left: mr.left - cr.left });
-  }, [safeCaret, working, canSplit]);
-
-  /** Add a cut at the caret (absolute offset into `text`). Never auto-advances. */
-  const doSplit = () => {
-    if (!working.slice(0, safeCaret).trim()) return;
-    // Advance the cut past trailing whitespace so the working chunk starts clean (no blank line).
-    let newCut = lastCut + safeCaret;
-    while (newCut < text.length && /\s/.test(text[newCut])) newCut++;
-    suppressSyncRef.current = true; // ignore the keyup that follows an Enter-split
-    setCuts([...cuts, newCut]);
-    setCaret(0);
-    requestAnimationFrame(() => {
-      const t = taRef.current;
-      if (t) { t.focus(); t.setSelectionRange(0, 0); }
-      suppressSyncRef.current = false;
-    });
-  };
-
-  /** Remove card `i` and everything after — merges it back into the working chunk losslessly. */
-  const undoFrom = (i: number) => {
-    setCuts(cuts.slice(0, i));
-    setCaret(0);
-  };
-
-  /** Explicit commit — the ONLY way to leave Phase 1 (box must be empty).
-   *  Strips the AI's leading list markers ("1) ", "2." …) so they don't reach the
-   *  market or the classifier — Marketing can no longer delete them by hand. */
-  const confirm = () => {
-    const jokes = splits
-      .map(s => s.trim().replace(/^\d{1,2}\s*[.)]\s*/, '').trim())
-      .filter(Boolean);
-    if (jokes.length) onComplete(jokes);
-  };
-
-  // Shared box-model so the mirror highlight lines up exactly with the textarea.
-  const boxClass =
-    'joke-font text-[16px] leading-relaxed whitespace-pre-wrap break-words rounded-lg border px-3 py-3 min-h-[280px] w-full';
-
-  return (
-    <div className="space-y-4">
-      <div className="bg-blue-50 text-blue-800 rounded-lg px-3 py-2.5 text-sm flex items-start gap-2">
-        <Scissors size={16} className="mt-0.5 shrink-0" />
-        <span>
-          <b>Split the batch.</b> Put the cursor between two jokes and press <b>Enter</b> (or click
-          <b> Split</b>). You can't change the wording — only where the text is cut.
-        </span>
-      </div>
-
-      {/* already-split jokes */}
-      {splits.length > 0 && (
-        <div className="space-y-1.5">
-          {splits.map((s, i) => (
-            <div key={i} className="group flex items-start gap-2 rounded-md border border-[#ffe08a] bg-[#ffd100]/[0.14] px-3 py-2">
-              <span className="shrink-0 w-5 h-5 grid place-items-center rounded bg-[#003b5c] text-white text-[10px] font-bold tabular-nums mt-0.5">
-                {i + 1}
-              </span>
-              <span className="joke-font text-gray-900 text-[15px] leading-snug flex-1">{s}</span>
-              <button
-                onClick={() => undoFrom(i)}
-                title="Undo from here"
-                className="text-gray-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition shrink-0 mt-0.5"
-              >
-                <XIcon size={15} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* working chunk — editable textarea with a highlight mirror behind it */}
-      <div>
-        <div className="flex items-center justify-between mb-1.5">
-          <SectionLabel>Unsplit text {boxEmpty ? '(empty)' : ''}</SectionLabel>
-          <span className="text-[11px] text-gray-400">
-            {shownCount}{targetCount != null ? `/${targetCount}` : ''} jokes
-          </span>
-        </div>
-
-        <div ref={containerRef} className="relative">
-          {/* mirror: renders the same text, transparent, only the highlight bg + caret marker show */}
-          <div
-            aria-hidden
-            className={`${boxClass} absolute inset-0 text-transparent border-transparent pointer-events-none overflow-hidden select-none`}
-          >
-            <span className="bg-[#ffd100]/45 rounded-sm">{working.slice(0, safeCaret)}</span>
-            <span ref={markerRef} style={{ display: 'inline-block', width: 0 }} />
-            {working.slice(safeCaret)}
-            {'​'}
-          </div>
-
-          {/* read-only textarea on top — caret still moves, but the text can't change.
-              readOnly (not disabled) keeps focus, caret, selection and key handling,
-              which the mirror highlight and the floating Split button both depend on.
-              In a watch tab the enclosing Marketing Desk fieldset disables it as well,
-              and that is intended: the watcher must not place cuts for the bot. */}
-          <textarea
-            ref={taRef}
-            value={working}
-            readOnly
-            onClick={syncCaret}
-            onKeyUp={syncCaret}
-            onSelect={syncCaret}
-            onKeyDown={(e) => {
-              // Enter splits at the caret. The text itself is not editable.
-              if (e.key === 'Enter') { e.preventDefault(); doSplit(); }
-            }}
-            spellCheck={false}
-            placeholder="All text split — review your jokes above, then confirm."
-            className={`${boxClass} relative bg-transparent text-gray-900 border-gray-300 resize-y outline-none cursor-text focus:ring-2 focus:ring-[#8bb8e8]`}
-            style={{ caretColor: '#005587' }}
-          />
-
-          {/* floating split button — pinned to the caret, layered above the text */}
-          {caretPos && canSplit && (
-            <button
-              onClick={doSplit}
-              style={{ position: 'absolute', top: caretPos.top, left: caretPos.left + 4, transform: 'translateY(-1px)', zIndex: 10 }}
-              className="inline-flex items-center gap-1 rounded-md bg-[#ffd100] text-[#003b5c] text-[11px] font-sans font-bold px-2.5 py-1 shadow-lg shadow-[#ffd100]/50 hover:bg-[#f5c400] ring-1 ring-[#003b5c]/10 whitespace-nowrap"
-              title="Split off the text before the cursor"
-            >
-              Split <CornerDownLeft size={11} />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* explicit confirm — enabled only when the box is empty (every joke is a card) */}
-      <div className="flex items-center justify-end pt-1 gap-3">
-        {!canConfirm && (
-          <span className="text-[11px] text-gray-400">
-            {boxEmpty ? 'Split at least one joke first.' : 'Split the remaining text to finish.'}
-          </span>
-        )}
-        <Button variant={canConfirm ? 'success' : 'secondary'} onClick={confirm} disabled={!canConfirm}>
-          <span className="flex items-center gap-1">
-            <Check size={14} /> Confirm, next
-          </span>
-        </Button>
-      </div>
-    </div>
-  );
-};
-
 /* ============================ Marketing screen ============================ */
 const QualityControl: React.FC = () => {
-  const { user, roster, qcQueue, publishBatch, splitBatch, unsplitBatch, config, teamSummary, teamFeedback, batches, roundId, roundStatuses } = useGame();
+  const { user, roster, qcQueue, qcQueueSize, publishBatch, splitBatch, unsplitBatch, config, teamSummary, teamFeedback, batches, roundId, roundStatuses } = useGame();
 
   /* A watch tab shows a bot's seat read-only: no nudges, no modals, no writes. */
   const watching = isWatchMode();
@@ -502,9 +310,10 @@ const QualityControl: React.FC = () => {
   }, [config.showTeamPopup]);
 
   /* Phase gate: a raw-text batch with no jokes yet must be split first. */
+  const deskBatch = qcQueue?.batch ?? null;
+  const waitingLabel = moreWaitingLabel(moreWaiting(qcQueueSize, deskBatch !== null));
   const rawText = qcQueue?.batch?.raw_text;
   const needsSplit = !!(rawText && rawText.trim()) && incomingJokes.length === 0;
-  const splitTarget = config.round === 1 ? config.round1BatchSize : null;
 
   /* ---- Marketing's decision clock ----------------------------------------
      Ranking no longer force-ships the top card, so nothing reaches the market
@@ -604,19 +413,39 @@ const QualityControl: React.FC = () => {
           <fieldset disabled={watching} className="contents">
           <Card
             tour="mk-desk"
-            title="Marketing Desk"
-            subtitle={needsSplit
-              ? 'Read the batch · click to place a cut · split into individual jokes'
-              : mayPublishNothing
-              ? 'Pick the jokes worth selling — or none · assign a Topic + title to each · release · drag to reorder'
-              : 'Pick at least one joke to sell · assign a Topic + title to each · release · drag to reorder'}
-            accent={BRAND.marketing}
+            title="Marketing desk"
+            subtitle="Split the batch, choose what to sell, then release it to the market."
+            action={waitingLabel && (
+              <span className="text-xs" style={{ fontFamily: "'IBM Plex Mono', ui-monospace, monospace", color: 'var(--ink-3)' }}>
+                {waitingLabel}
+              </span>
+            )}
           >
+          <div className="space-y-4">
+            <div data-tour="mk-next-step">
+              <NextStepLive
+                step={now => marketingNextStep(marketingInputFrom({
+                  now: demoUi ? demoUi.clockMs : now,
+                  roundActive: config.isActive, round: config.round, roundId, roundStatuses,
+                  storageFeePerJokeMinute: config.storageFeePerJokeMinute,
+                  teamSummary, qcQueue, batches: batches.filter(b => b.team === user?.team), feedbackRows,
+                }))}
+              />
+            </div>
+            {deskBatch && (
+              <DeskBar
+                batchId={deskBatch.batch_id}
+                submittedAt={deskBatch.submitted_at}
+                stage={needsSplit ? 'split' : 'choose'}
+              />
+            )}
             {needsSplit ? (
               <BatchSplitter
                 key={qcQueue?.batch?.batch_id}
                 rawText={rawText!}
-                targetCount={splitTarget}
+                round={config.round === 2 ? 2 : 1}
+                batchSize={config.round1BatchSize}
+                limit={config.round2BatchLimit}
                 onComplete={(jokes) => {
                   if (qcQueue) splitBatch(String(qcQueue.batch.batch_id), jokes);
                 }}
@@ -798,6 +627,7 @@ const QualityControl: React.FC = () => {
                 </div>
               </div>
             )}
+          </div>
           </Card>
           </fieldset>
         </div>
@@ -838,16 +668,6 @@ const QualityControl: React.FC = () => {
                 ]}
               />
             )}
-          </div>
-          <div data-tour="mk-next-step">
-            <NextStepLive
-              step={now => marketingNextStep(marketingInputFrom({
-                now: demoUi ? demoUi.clockMs : now,
-                roundActive: config.isActive, round: config.round, roundId, roundStatuses,
-                storageFeePerJokeMinute: config.storageFeePerJokeMinute,
-                teamSummary, qcQueue, batches: batches.filter(b => b.team === user?.team), feedbackRows,
-              }))}
-            />
           </div>
 
           {/* The 12 criteria — so Marketing knows what to coach the Joke Maker on. */}

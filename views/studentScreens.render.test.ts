@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import JokeMaker from './JokeMaker';
 import QualityControl from './QualityControl';
+import { BatchSplitter } from '../components/marketing/BatchSplitter';
 import { TEST_CONFIG, fakeGame, renderWithGame, testUser } from './testing/renderWithGame';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -307,5 +308,115 @@ describe('Marketing screen', () => {
     expect(out).toContain('$4.00');
     expect(out).toContain('$2.50');
     expect(out).not.toContain('NaN');
+  });
+});
+
+describe('Marketing desk card', () => {
+  /** Marketing's screen with batch B-5004 on the desk, submitted `secondsAgo` before a fixed clock (null: no submitted_at). */
+  const deskGame = (over: Parameters<typeof renderWithGame>[1] = {}, secondsAgo: number | null = 72) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-18T12:00:00Z'));
+    try {
+      const submitted_at = secondsAgo === null ? null : new Date(Date.now() - secondsAgo * 1000).toISOString();
+      return renderWithGame(QualityControl, {
+        user: testUser(Role.QUALITY_CONTROL),
+        teamSummary: summary({}),
+        qcQueueSize: 2,
+        qcQueue: {
+          batch: { batch_id: 5004, round_id: 1, team_id: 1, submitted_at: submitted_at as string, raw_text: 'one\n\ntwo' },
+          jokes: [], queue_size: 2,
+        },
+        ...over,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  };
+
+  it('shows the title, the count, the batch bar, the position marker and the Enter keycap', () => {
+    const out = deskGame();
+    expect(out).toContain('Marketing desk');
+    expect(out).toContain('1 more waiting');
+    expect(out).toContain('B-5004');
+    expect(out).toContain('waiting 1:12');
+    for (const stage of ['Split', 'Choose', 'Release']) expect(out).toContain(`>${stage}</span>`);
+    expect(out).toContain('<kbd');
+    expect(out).toContain('Enter</kbd>');
+    expect(out).toContain('data-tour="mk-desk"');
+    expect(out).toContain('data-tour="mk-next-step"');
+  });
+
+  it('puts Next step first in the card, before the batch bar', () => {
+    const out = deskGame();
+    expect(out.indexOf('Marketing desk')).toBeLessThan(out.indexOf('data-tour="mk-next-step"'));
+    expect(out.indexOf('data-tour="mk-next-step"')).toBeLessThan(out.indexOf('B-5004'));
+  });
+
+  it('says nothing else is waiting at zero and shows no count while it is unknown', () => {
+    expect(deskGame({ qcQueueSize: 1 })).toContain('nothing else waiting');
+    const unknown = deskGame({ qcQueueSize: null });
+    expect(unknown).not.toContain('more waiting');
+    expect(unknown).not.toContain('nothing else waiting');
+  });
+
+  it('omits the time when the batch has no submitted_at', () => {
+    const out = deskGame({}, null);
+    expect(out).toContain('B-5004');
+    expect(out).not.toMatch(/waiting \d+:\d\d/);
+  });
+
+  it('keeps both tour targets with no batch on the desk', () => {
+    const out = renderWithGame(QualityControl, { user: testUser(Role.QUALITY_CONTROL), qcQueue: null, qcQueueSize: 0 });
+    expect(out).toContain('data-tour="mk-desk"');
+    expect(out).toContain('data-tour="mk-next-step"');
+    expect(out).toContain('nothing else waiting');
+    expect(out).not.toContain('B-');
+  });
+});
+
+describe('Split stage', () => {
+  const render = (props: Partial<Parameters<typeof BatchSplitter>[0]>) => renderToStaticMarkup(
+    createElement(BatchSplitter, {
+      rawText: 'one two three four', round: 1, batchSize: 5, limit: 10, onComplete: () => {}, ...props,
+    }),
+  );
+  const DISABLED = /\sdisabled=""/;
+  const confirmButton = (out: string) =>
+    out.match(/<button[^>]*>(?:(?!<\/button>).)*Confirm, next(?:(?!<\/button>).)*<\/button>/s)?.[0] ?? '';
+
+  it('Round 1 with four cut pieces: wrong count message, 4 of 5, Confirm disabled', () => {
+    const out = render({ initialCuts: [4, 8, 14, 18] });
+    expect(out).toContain('Round 1 needs exactly 5 jokes; you have 4.');
+    expect(out).toContain('4 of 5');
+    expect(confirmButton(out)).toMatch(DISABLED);
+    expect(out).toContain('Undo from here');
+  });
+
+  it('does not count the uncut remainder as a joke', () => {
+    const out = render({ rawText: 'one two three', initialCuts: [4, 8] });
+    expect(out).toContain('2 of 5');
+    expect(out).toContain('Split the remaining text to finish.');
+    expect(confirmButton(out)).toMatch(DISABLED);
+  });
+
+  it('enables Confirm once five pieces are cut and nothing remains', () => {
+    const out = render({ rawText: 'a b c d e', initialCuts: [2, 4, 6, 8, 9] });
+    expect(out).toContain('All split. Check the jokes, then confirm.');
+    expect(out).toContain('5 of 5');
+    expect(confirmButton(out)).not.toMatch(DISABLED);
+  });
+
+  it('Round 2 shows the cut count and the limit', () => {
+    const out = render({ round: 2, initialCuts: [4, 8, 14, 18] });
+    expect(out).toContain('4, up to 10');
+    expect(out).toContain('All split. Check the jokes, then confirm.');
+    expect(confirmButton(out)).not.toMatch(DISABLED);
+  });
+
+  it('asks for a first cut when nothing is cut', () => {
+    const out = render({});
+    expect(out).toContain('Split at least one joke first.');
+    expect(out).toContain('0 of 5');
+    expect(confirmButton(out)).toMatch(DISABLED);
   });
 });

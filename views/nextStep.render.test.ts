@@ -38,7 +38,7 @@ describe('the Next step line on the student screens', () => {
     }
   });
 
-  it('sits under Marketing\'s stat tiles and prices a waiting batch at the round\'s storage fee', () => {
+  it('is the first row of Marketing\'s desk card and prices a waiting batch at the round\'s storage fee', () => {
     const sent = new Date(Date.now() - 50_000).toISOString();
     const out = renderWithGame(QualityControl, {
       user: testUser(Role.QUALITY_CONTROL),
@@ -46,8 +46,8 @@ describe('the Next step line on the student screens', () => {
       qcQueue: { batch: { batch_id: 9, round_id: 1, team_id: 1, submitted_at: sent, raw_text: 'one\n\ntwo' }, jokes: [], queue_size: 1 },
     });
     const line = out.indexOf('Next step');
-    expect(line).toBeGreaterThan(out.indexOf('More numbers'));
-    expect(line).toBeGreaterThan(out.indexOf('Content Backlog'));
+    expect(line).toBeGreaterThan(out.indexOf('Marketing desk'));
+    expect(line).toBeLessThan(out.indexOf('B-9'));
     expect(line).toBeLessThan(out.indexOf('The 12 criteria customers judge'));
     expect(out).toMatch(/Batch waiting (5\d) s\. Release what&#x27;s good enough\. Storage costs 5¢ a joke each minute\./);
   });

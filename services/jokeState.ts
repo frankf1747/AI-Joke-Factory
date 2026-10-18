@@ -6,7 +6,7 @@ export type JokeState = 'with-marketing' | 'selling' | 'lost-buyers' | 'no-buyer
 const buyersOf = (j: Joke): number => Number(j.sold_count ?? 0);
 
 /** V2 renamed RATED to PROCESSED; the mock still says RATED. Both mean Marketing has finished. */
-const isProcessed = (b: Batch): boolean => b.status === 'PROCESSED' || b.status === 'RATED';
+export const isProcessed = (b: Batch): boolean => b.status === 'PROCESSED' || b.status === 'RATED';
 
 /** A published joke, split by whether anyone holds it now and whether anyone ever did. */
 function marketState(j: Joke): JokeState {

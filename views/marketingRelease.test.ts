@@ -12,13 +12,13 @@ describe('releaseOutcome', () => {
 
   it('charges the jokes left behind as discards: 3 published, 2 discarded', () => {
     const out = releaseOutcome({ ...base, releasedCount: 3, ok: true, note: '' });
-    expect(out.cost).toBeCloseTo(0.32, 10);
+    expect(out.cost).toBe(0.32);
     expect(out.toast).toBe('Released 3 jokes · 2 discarded · −$0.32');
   });
 
   it('a release that discards nothing keeps the short toast', () => {
     const out = releaseOutcome({ ...base, releasedCount: 5, ok: true, note: '' });
-    expect(out.cost).toBeCloseTo(0.5, 10);
+    expect(out.cost).toBe(0.5);
     expect(out.toast).toBe('Released 5 jokes · −$0.50');
   });
 
@@ -29,7 +29,7 @@ describe('releaseOutcome', () => {
   it('a whole-batch discard with a note says so too', () => {
     expect(releaseOutcome({ ...base, releasedCount: 0, ok: true, note: 'Nothing landed' }).toast)
       .toBe('Passed on this batch · 5 jokes discarded · −$0.05 · note sent');
-    expect(releaseOutcome({ ...base, releasedCount: 0, ok: true, note: '' }).cost).toBeCloseTo(0.05, 10);
+    expect(releaseOutcome({ ...base, releasedCount: 0, ok: true, note: '' }).cost).toBe(0.05);
   });
 
   it('a blank note is not "sent"', () => {

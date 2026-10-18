@@ -113,7 +113,7 @@ describe('the student views in demo mode', () => {
     const jm = renderToStaticMarkup(inDemo(Role.JOKE_MAKER, createElement(JokeMaker)));
     const mk = renderToStaticMarkup(inDemo(Role.QUALITY_CONTROL, createElement(QualityControl)));
     expect(jm).toContain('Production line');
-    expect(mk).toContain('Marketing Desk');
+    expect(mk).toContain('Marketing desk');
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(storage.writes).toEqual([]);
   });

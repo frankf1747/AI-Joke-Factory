@@ -35,7 +35,8 @@ export function releaseOutcome(i: ReleaseOutcomeInput): ReleaseOutcome {
   if (!i.ok) return { toast: null, cost: 0, clearNote: false };
   /* The jokes not released are discarded, and both are charged at publish. */
   const discarded = Math.max(0, i.batchSize - i.releasedCount);
-  const cost = i.releasedCount * i.costOfPublishing + discarded * i.costOfDiscard;
+  /* Round to cents so float noise (0.1 × 3 + 0.01 × 2) never reaches the toast or a caller. */
+  const cost = Math.round((i.releasedCount * i.costOfPublishing + discarded * i.costOfDiscard) * 100) / 100;
   const base = i.releasedCount === 0
     ? `Passed on this batch · ${i.batchSize} joke${i.batchSize > 1 ? 's' : ''} discarded · −${fmt$(cost)}`
     : `Released ${i.releasedCount} joke${i.releasedCount > 1 ? 's' : ''}${discarded > 0 ? ` · ${discarded} discarded` : ''} · −${fmt$(cost)}`;

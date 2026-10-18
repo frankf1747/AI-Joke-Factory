@@ -2,12 +2,19 @@
    (services/desk.test.ts). Consumed by views/QualityControl.tsx. */
 import type { Batch } from '../types';
 import { marketingNoteOf } from '../components/MarketingNote';
+import { isProcessed, jokeState } from './jokeState';
 
 /** Batches waiting behind the one on the desk, or null while queue/count is unknown.
     queue_size counts every SUBMITTED batch of the team, the desk batch included. */
 export function moreWaiting(queueSize: number | null, hasDeskBatch: boolean): number | null {
   if (queueSize === null) return null;
   return Math.max(0, queueSize - (hasDeskBatch ? 1 : 0));
+}
+
+/** The desk header's count: "2 more waiting", "nothing else waiting", or null while unknown. */
+export function moreWaitingLabel(n: number | null): string | null {
+  if (n === null) return null;
+  return n === 0 ? 'nothing else waiting' : `${n} more waiting`;
 }
 
 export interface SplitStatusInput {
@@ -54,18 +61,20 @@ export interface LatestRelease {
 }
 
 /** This team's most recently processed batch (largest ratedAt; the list is sorted by id),
-    or null when none has been released yet. */
+    or null when none has been released yet. Published and discarded are read through
+    jokeState, so legacy jokes without publish_status fall back to is_published. */
 export function latestRelease(batches: Batch[]): LatestRelease | null {
   let best: Batch | null = null;
   for (const b of batches) {
-    if (b.ratedAt === undefined || Number.isNaN(b.ratedAt)) continue;
+    if (!isProcessed(b) || b.ratedAt === undefined || Number.isNaN(b.ratedAt)) continue;
     if (best === null || b.ratedAt > (best.ratedAt as number)) best = b;
   }
   if (best === null) return null;
+  const states = best.jokes.map(j => jokeState(j, best as Batch));
   return {
     batchId: best.batch_id,
-    published: best.jokes.filter(j => j.publish_status === 'PUBLISHED').length,
-    discarded: best.jokes.filter(j => j.publish_status === 'DISCARDED').length,
+    published: states.filter(st => st === 'selling' || st === 'lost-buyers' || st === 'no-buyer').length,
+    discarded: states.filter(st => st === 'not-released').length,
     noteSent: marketingNoteOf(best) !== null,
   };
 }
