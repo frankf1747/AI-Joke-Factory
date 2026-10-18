@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import JokeMaker from './JokeMaker';
 import QualityControl from './QualityControl';
-import { TEST_CONFIG, renderWithGame, testUser } from './testing/renderWithGame';
-import { Role, type ApiTeamSummaryResponse } from '../types';
+import { TEST_CONFIG, fakeGame, renderWithGame, testUser } from './testing/renderWithGame';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { DemoModeContext, GameContext } from '../context';
+import { EMPTY_DEMO_UI } from '../services/tour/demoUi';
+import { Role, type ApiTeamSummaryResponse, type Batch } from '../types';
 import type { LeanTeamStats } from '../types/api';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -50,6 +54,64 @@ describe('Joke Maker screen', () => {
     for (const gone of ['batches waiting', 'wait, or go help', 'to set up', 'Setup cost', 'Carrying cost']) {
       expect(out).not.toContain(gone);
     }
+  });
+});
+
+describe('Value stream', () => {
+  const NOW = 1_000_000_000_000;
+  const joke = (n: number, over: Partial<Batch['jokes'][number]> = {}) => ({
+    joke_id: n, id: String(n), joke_text: `Joke ${n}`, content: `Joke ${n}`, joke_title: `Title ${n}`,
+    publish_status: 'PUBLISHED' as const, sold_count: 0, is_published: true, ...over,
+  });
+  const batch = (id: number, over: Partial<Batch> = {}): Batch => ({
+    batch_id: id, round_id: 1, team_id: 1, status: 'PROCESSED', jokes: [joke(1)],
+    id: String(id), team: '1', round: 1, submittedAt: NOW - 300_000, ratedAt: NOW - 120_000, ...over,
+  });
+  // Oldest first, the way the context provides them.
+  const three = [
+    batch(5001),
+    batch(5002, {
+      marketing_note: 'Shorter setups sell.',
+      jokes: [joke(1, { joke_title: 'The Self-Starter', sold_count: 6 }), joke(2, { publish_status: 'DISCARDED', is_published: false })],
+    }),
+    batch(5003, { status: 'SUBMITTED', jokes: [], ratedAt: undefined }),
+  ];
+  const render = (open: string[]) => renderToStaticMarkup(createElement(
+    GameContext.Provider,
+    { value: fakeGame({ user: testUser(Role.JOKE_MAKER), teamSummary: { ...summary({}), batches_created: 3 }, batches: three }) },
+    createElement(DemoModeContext.Provider, { value: { ...EMPTY_DEMO_UI, jmOpenBatchIds: open, clockMs: NOW } }, createElement(JokeMaker)),
+  ));
+
+  it('lists the newest batch first under a "Value stream" header with the batch count', () => {
+    const out = render([]);
+    expect(out).toContain('data-tour="jm-value-stream"');
+    expect(out).toContain('Value stream');
+    expect(out).toContain('3 batches');
+    expect(out.indexOf('B-5003')).toBeGreaterThan(-1);
+    expect(out.indexOf('B-5003')).toBeLessThan(out.indexOf('B-5001'));
+    expect(out).toContain('Sent 5 min ago');
+    expect(out).toContain('not split yet');
+  });
+
+  it('opens a batch to its note card and joke cards', () => {
+    const out = render(['5002']);
+    expect(out).toContain('data-tour="jm-marketing-note"');
+    expect(out).toContain('From Marketing');
+    expect(out).toContain('Shorter setups sell.');
+    expect(out).toContain('with the release, 2 min ago');
+    expect(out).toContain('#1');
+    expect(out).toContain('The Self-Starter');
+    expect(out).toContain('6 buyers');
+    expect(out).toContain('Not released by Marketing');
+    expect(out).toContain('joke-font');
+  });
+
+  it('shows no note card on a batch without a note, and no jokes while closed', () => {
+    expect(render(['5001'])).not.toContain('jm-marketing-note');
+    const closed = render([]);
+    expect(closed).not.toContain('From Marketing');
+    expect(closed).not.toContain('Shorter setups sell.');
+    expect(closed).not.toContain('The Self-Starter');
   });
 });
 

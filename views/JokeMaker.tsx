@@ -1,15 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { useDemoUi, useGame } from '../context';
 import { Button, Card, StatBox, RoleLayout, Modal, BRAND } from '../components';
-import {
-  Send, ChevronRight, Info, CheckCircle2,
-} from 'lucide-react';
+import { Send, Info, CheckCircle2 } from 'lucide-react';
 import { Batch } from '../types';
 import { computeAvgCreatedToPublishSeconds } from '../services/economics';
 import { dimById } from '../config/dimensions';
 import { isWatchMode } from '../services/watchMode';
 import { shippingLine } from '../services/leanMode';
-import { MarketingNoteCallout, MarketingNoteIcon, marketingNoteOf } from '../components/MarketingNote';
+import { ValueStream } from '../components/jokeMaker/ValueStream';
 import { StatTiles, moreTilesKey } from '../components/StatTiles';
 import { FeesAndWaits } from '../components/FeesAndWaits';
 import { Scoreboard } from '../components/Scoreboard';
@@ -57,56 +55,6 @@ const fmtSeconds = (s: number | null) => {
   const m = Math.floor(s / 60);
   const r = s % 60;
   return `${m}m ${r}s`;
-};
-
-/* ============================ Batch card (collapsible) ============================
-   A batch with a note from Marketing shows a speech bubble on its collapsed row
-   and a "From Marketing" callout above its jokes when expanded; a batch without
-   one renders exactly as before (components/MarketingNote.tsx). Exported for
-   components/MarketingNote.test.ts. */
-export const BatchCard: React.FC<{
-  batch: Batch;
-  open: boolean;
-  onToggle: () => void;
-}> = ({ batch, open, onToggle }) => {
-  const jokes = batch.jokes as any[];
-  const note = marketingNoteOf(batch);
-  return (
-    <div className="rounded-lg border border-gray-200 bg-white">
-      <div className="flex items-center gap-2 px-3 py-2">
-        <button onClick={onToggle} className="flex items-center gap-2.5 flex-1 min-w-0 text-left group">
-          <ChevronRight
-            size={15}
-            className="text-gray-400"
-            style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }}
-          />
-          <span className="font-mono text-xs text-gray-400">#{batch.id.slice(-4)}</span>
-          <span className="flex items-center gap-1.5">
-            {jokes.map((j, i) => <StatusDot key={i} status={jokeStatus(batch, j)} size={10} />)}
-          </span>
-          {note != null && <MarketingNoteIcon />}
-          <span className="text-[11px] text-gray-400 ml-auto pl-2 group-hover:text-gray-600">
-            {jokes.length} jokes
-          </span>
-        </button>
-      </div>
-      {open && (
-        <div className="border-t border-gray-100 divide-y divide-gray-50">
-          {note != null && (
-            <div data-tour="jm-marketing-note">
-              <MarketingNoteCallout note={note} />
-            </div>
-          )}
-          {jokes.map((j, i) => (
-            <div key={i} className="flex items-center gap-3 px-3 py-2">
-              <span className="text-gray-300 font-mono text-[11px] shrink-0">{i + 1}</span>
-              <span className="text-sm flex-1 text-gray-700">{j.joke_text ?? j.content}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 };
 
 /* ============================ Jokes by stage (StageDots) ============================
@@ -167,7 +115,7 @@ const StageDots: React.FC<{ batches: Batch[] }> = ({ batches }) => {
 /* Customer feedback is Marketing-only: the Joke Maker hears from Marketing,
    not from a panel both seats share (context.tsx TEAM_FEEDBACK_ROLES).
    Marketing's note on each batch arrives with the batch-list poll and shows in
-   the Value stream (BatchCard above). */
+   the Value stream (components/jokeMaker/ValueStream.tsx). */
 
 /* ============================ Joke Maker screen ============================ */
 const MIN_RAW_CHARS = 20;
@@ -351,21 +299,7 @@ const JokeMaker: React.FC = () => {
           </Card>
           </fieldset>
 
-          <Card tour="jm-value-stream" title="Value stream" subtitle="Your submitted batches — batch-level status" accent={BRAND.production}>
-            <div className="space-y-2 max-h-[440px] overflow-y-auto pr-1">
-              {myBatches.length === 0 && (
-                <p className="text-center text-gray-400 text-sm py-4">No batches yet.</p>
-              )}
-              {[...myBatches].reverse().map(b => (
-                <BatchCard
-                  key={b.id}
-                  batch={b}
-                  open={openSet.has(b.id)}
-                  onToggle={() => toggleBatch(b.id)}
-                />
-              ))}
-            </div>
-          </Card>
+          <ValueStream batches={myBatches} batchCount={teamSummary?.batches_created} openIds={openSet} onToggle={toggleBatch} />
         </div>
 
         {/* RIGHT: stat tiles + Jokes by stage */}

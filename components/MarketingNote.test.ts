@@ -1,28 +1,30 @@
 import { describe, expect, it } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { BatchCard } from '../views/JokeMaker';
+import { BatchRow } from './jokeMaker/ValueStream';
 import { marketingNoteOf } from './MarketingNote';
 import type { Batch } from '../types';
 
-/* The Joke Maker's Value stream row (views/JokeMaker.tsx BatchCard), rendered
-   statically: the speech-bubble icon and the "From Marketing" callout appear
-   only for a batch that has a note, and the note is shown as text. */
+/* The Joke Maker's Value stream row (components/jokeMaker/ValueStream.tsx BatchRow),
+   rendered statically: the note icon and the "From Marketing" card appear only for
+   a batch that has a note, and the note is shown as text. */
+
+const NOW = 1_000_000_000_000;
 
 function batch(over: Partial<Batch> = {}): Batch {
   return {
     batch_id: 41, round_id: 1, team_id: 3, status: 'PROCESSED',
     jokes: [{ joke_id: 1, joke_text: 'Why did the intern cross the road?', id: '1', content: 'x', is_published: true, sold_count: 0 } as Batch['jokes'][number]],
-    id: '41', team: '3', round: 1,
+    id: '41', team: '3', round: 1, submittedAt: NOW - 60_000, ratedAt: NOW - 30_000,
     ...over,
   };
 }
 
 const render = (b: Batch, open: boolean) =>
-  renderToStaticMarkup(createElement(BatchCard, { batch: b, open, onToggle: () => {} }));
+  renderToStaticMarkup(createElement(BatchRow, { batch: b, open, onToggle: () => {}, now: NOW }));
 
-describe('BatchCard and Marketing notes', () => {
-  it('a batch without a note shows neither the icon nor the callout — absent, null or blank alike', () => {
+describe('BatchRow and Marketing notes', () => {
+  it('a batch without a note shows neither the icon nor the note card, absent, null or blank alike', () => {
     const plain = render(batch(), true);
     for (const marketing_note of [undefined, null, '', '   \n ']) {
       const out = render(batch({ marketing_note }), true);
@@ -33,20 +35,23 @@ describe('BatchCard and Marketing notes', () => {
     }
   });
 
-  it('a collapsed batch with a note shows the icon with its tooltip, but not the note', () => {
+  it('a collapsed batch with a note shows the navy icon with its tooltip, but not the note', () => {
     const out = render(batch({ marketing_note: 'More puns, please.' }), false);
     expect(out).toContain('title="Marketing left a note"');
     expect(out).toContain('aria-label="Marketing left a note"');
+    expect(out).toContain('color:var(--navy)');
     expect(out).not.toContain('From Marketing');
     expect(out).not.toContain('More puns, please.');
   });
 
-  it('an expanded batch with a note shows the callout above the jokes', () => {
+  it('an opened batch with a note shows the note card above the jokes', () => {
     const out = render(batch({ marketing_note: 'More puns, please.' }), true);
     expect(out).toContain('From Marketing');
     expect(out).toContain('More puns, please.');
+    expect(out).toContain('with the release, 30 s ago');
     expect(out.indexOf('From Marketing')).toBeLessThan(out.indexOf('Why did the intern cross the road?'));
-    expect(out).toContain('#7c3aed');
+    expect(out).not.toContain('#7c3aed');
+    expect(out).not.toContain('border-left');
   });
 
   it('shows markup in a note as text, never as HTML', () => {
