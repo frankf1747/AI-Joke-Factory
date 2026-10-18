@@ -3,49 +3,18 @@ import { useDemoUi, useGame } from '../context';
 import { Card, StatBox, RoleLayout, Modal, BRAND } from '../components';
 import { CheckCircle2 } from 'lucide-react';
 import { Batch } from '../types';
+import { stageCounts } from '../services/jokeState';
 import { computeAvgCreatedToPublishSeconds } from '../services/economics';
 import { isWatchMode } from '../services/watchMode';
 import { shippingLine } from '../services/leanMode';
 import { ValueStream } from '../components/jokeMaker/ValueStream';
+import { JokesByStage } from '../components/jokeMaker/JokesByStage';
 import { StatTiles, moreTilesKey } from '../components/StatTiles';
 import { FeesAndWaits } from '../components/FeesAndWaits';
 import { Scoreboard } from '../components/Scoreboard';
 import { foundABuyer, rankInputOf } from '../services/scoreboard';
 import { NextStepLive } from '../components/NextStep';
 import { jokeMakerInputFrom, jokeMakerNextStep } from '../services/nextStep';
-
-/* ---- per-joke status drives the status dots ---- */
-type JokeStatus = 'reviewing' | 'market' | 'sold' | 'wasted';
-const JOKE_STATUS: Record<JokeStatus, { label: string; color: string }> = {
-  reviewing: { label: 'In review', color: '#eab308' },
-  market: { label: 'On market', color: '#94a3b8' },
-  sold: { label: 'Sold', color: '#059669' },
-  wasted: { label: 'Wasted', color: '#e11d48' },
-};
-
-const StatusDot: React.FC<{ status: JokeStatus; size?: number; opacity?: number }> = ({
-  status, size = 11, opacity,
-}) => {
-  const m = JOKE_STATUS[status];
-  return (
-    <span
-      title={m.label}
-      className="rounded-full inline-block shrink-0"
-      style={{ width: size, height: size, background: m.color, opacity }}
-    />
-  );
-};
-
-/** Derive each joke's display status from the batch + joke flags. */
-function jokeStatus(batch: Batch, joke: any): JokeStatus {
-  // V2 renamed RATED to PROCESSED (domain/enums.go). Accept both; the mock still says RATED.
-  if (batch.status !== 'PROCESSED' && batch.status !== 'RATED') return 'reviewing';
-  const published = Boolean(joke.is_published);
-  const sold = Number(joke.sold_count ?? 0) > 0;
-  if (!published) return 'wasted';
-  if (sold) return 'sold';
-  return 'market';
-}
 
 /* ---- Format a duration in seconds → "Xm Ys" / "Ys" ---- */
 const fmtSeconds = (s: number | null) => {
@@ -54,61 +23,6 @@ const fmtSeconds = (s: number | null) => {
   const m = Math.floor(s / 60);
   const r = s % 60;
   return `${m}m ${r}s`;
-};
-
-/* ============================ Jokes by stage (StageDots) ============================
-   Caps visible dots at 30 (15 per row × 2 rows). When the true count exceeds 30, the
-   last 5 rendered dots fade on a descending opacity ramp — signaling more are hidden.
-   The numeric total on the right is always the honest count. */
-const STAGE_MAX_DOTS = 30;
-const STAGE_FADE_TAIL = 5;
-
-const StageDots: React.FC<{ batches: Batch[] }> = ({ batches }) => {
-  const all = batches.flatMap(b => (b.jokes as any[]).map(j => ({ status: jokeStatus(b, j) })));
-  const buckets: Array<[string, JokeStatus]> = [
-    ['In review', 'reviewing'],
-    ['On market', 'market'],
-    ['Sold', 'sold'],
-    ['Wasted', 'wasted'],
-  ];
-  return (
-    <div className="space-y-2.5">
-      {buckets.map(([label, st]) => {
-        const items = all.filter(j => j.status === st);
-        const total = items.length;
-        const overflow = total > STAGE_MAX_DOTS;
-        const shown = overflow ? STAGE_MAX_DOTS : total;
-        return (
-          <div key={st} className="flex items-center gap-3">
-            <span className="text-[11px] font-semibold text-gray-500 w-20 shrink-0">{label}</span>
-            <div
-              className="flex flex-wrap flex-1 min-h-[10px]"
-              style={{ gap: 4, maxWidth: 192 }}
-            >
-              {total === 0 ? (
-                <span className="text-[11px] text-gray-300">—</span>
-              ) : (
-                Array.from({ length: shown }).map((_, i) => {
-                  // Fade the last STAGE_FADE_TAIL dots when overflowing.
-                  let opacity: number | undefined;
-                  if (overflow) {
-                    const tailIdx = i - (shown - STAGE_FADE_TAIL);
-                    if (tailIdx >= 0) {
-                      opacity = 1 - (tailIdx + 1) * (0.85 / STAGE_FADE_TAIL);
-                    }
-                  }
-                  return <StatusDot key={i} status={st} size={9} opacity={opacity} />;
-                })
-              )}
-            </div>
-            <span className="text-sm font-bold tabular-nums text-gray-700 w-6 text-right">
-              {total}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
 };
 
 /* Customer feedback is Marketing-only: the Joke Maker hears from Marketing,
@@ -178,20 +92,8 @@ const JokeMaker: React.FC = () => {
   /* Stats. The Scoreboard shows rank, profit, jokes that found a buyer and sales
      (profit can and should go negative, so the team feels the cost of weak jokes). */
   const batchesCreated = teamSummary?.batches_created ?? myBatches.length;
-  // Waste = jokes that failed to reach market (rated but not published) + published-but-unsold.
-  // Compute directly from batches so it matches the "Wasted" row in StageDots exactly.
-  const waste = useMemo(() => {
-    let count = 0;
-    for (const b of myBatches) {
-      for (const j of (b.jokes as any[])) {
-        const st = jokeStatus(b, j);
-        if (st === 'wasted') count += 1;
-      }
-    }
-    // Include published-but-unsold (i.e. still "On market" but stale) — leave out to match
-    // the stage dot semantics. The design's Wasted bucket == rejected only.
-    return count;
-  }, [myBatches]);
+  // Waste = jokes Marketing did not release. It is the "Not released" row in Jokes by stage.
+  const waste = useMemo(() => stageCounts(myBatches).notReleased, [myBatches]);
 
   /* Created → Publish: average time this team's batches wait between submission
      and Marketing releasing them. Was created-to-first-sale, which mixed in
@@ -328,7 +230,13 @@ const JokeMaker: React.FC = () => {
           </Card>
           </fieldset>
 
-          <ValueStream batches={myBatches} batchCount={teamSummary?.batches_created} openIds={openSet} onToggle={toggleBatch} />
+          <ValueStream
+            batches={myBatches}
+            batchCount={teamSummary?.batches_created}
+            openIds={openSet}
+            onToggle={toggleBatch}
+            roundStarted={teamSummary != null}
+          />
         </div>
 
         {/* RIGHT: stat tiles + Jokes by stage */}
@@ -363,9 +271,7 @@ const JokeMaker: React.FC = () => {
               />
             )}
           </div>
-          <Card title="Jokes by stage" subtitle="Where your output sits right now">
-            <StageDots batches={myBatches} />
-          </Card>
+          <JokesByStage batches={myBatches} unprocessedBatches={teamSummary?.unprocessed_batches} />
         </div>
       </div>
 

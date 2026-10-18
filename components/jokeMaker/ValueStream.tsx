@@ -43,6 +43,19 @@ const LOOK: Record<JokeState, { square: React.CSSProperties; card: React.CSSProp
   },
 };
 
+/** One joke as a small square coloured by its state. `fade` (0 to 1) dims it further. Shared with the Jokes by stage card. */
+export const StateSquare: React.FC<{ state: JokeState; fade?: number }> = ({ state, fade = 1 }) => {
+  const { square } = LOOK[state];
+  return (
+    <span
+      aria-hidden="true"
+      data-square=""
+      className="inline-block shrink-0"
+      style={{ width: 9, height: 9, ...square, opacity: Number(square.opacity ?? 1) * fade }}
+    />
+  );
+};
+
 const seconds = (fromMs: number, nowMs: number) => Math.max(0, (nowMs - fromMs) / 1000);
 
 /** Marketing's note: a white raised card with a small tail pointing up at the batch row. */
@@ -135,14 +148,7 @@ export const BatchRow: React.FC<{
           </span>
         ) : (
           <span className="flex items-center gap-1">
-            {jokes.map((j, i) => (
-              <span
-                key={i}
-                aria-hidden="true"
-                className="inline-block shrink-0"
-                style={{ width: 9, height: 9, ...LOOK[jokeState(j, batch)].square }}
-              />
-            ))}
+            {jokes.map((j, i) => <StateSquare key={i} state={jokeState(j, batch)} />)}
           </span>
         )}
         <span className="ml-auto pl-2 text-xs" style={{ color: 'var(--ink-2)' }}>{batchSummary(batch)}</span>
@@ -168,7 +174,9 @@ export const ValueStream: React.FC<{
   batchCount?: number | null;
   openIds: Set<string>;
   onToggle: (id: string) => void;
-}> = ({ batches, batchCount, openIds, onToggle }) => {
+  /** False before the round's first summary arrives: an empty stream then says the round has not started. */
+  roundStarted?: boolean;
+}> = ({ batches, batchCount, openIds, onToggle, roundStarted = true }) => {
   const demoUi = useDemoUi();
   const wallNow = useNow(1000, demoUi !== null);
   const now = demoUi ? demoUi.clockMs : wallNow;
@@ -191,7 +199,9 @@ export const ValueStream: React.FC<{
       </p>
       <div className="mt-3 max-h-[520px] space-y-1 overflow-y-auto">
         {batches.length === 0 && (
-          <p className="py-4 text-center text-sm" style={{ color: 'var(--ink-3)' }}>No batches yet.</p>
+          <p className="py-4 text-center text-sm" style={{ color: 'var(--ink-3)' }}>
+            {roundStarted ? 'No batches yet.' : 'Your batches show up here once the round starts.'}
+          </p>
         )}
         {[...batches].reverse().map(b => (
           <BatchRow key={b.id} batch={b} open={openIds.has(b.id)} onToggle={() => onToggle(b.id)} now={now} />

@@ -330,7 +330,7 @@ export class JokeMakerPage {
   /**
    * The Joke Maker's own view of "classification finished": the batch leaves
    * the `reviewing` bucket, which only happens once batch.status flips to
-   * PROCESSED/RATED (JokeMaker.tsx `jokeStatus`).
+   * PROCESSED/RATED (services/jokeState.ts `isProcessed`).
    */
   async waitForClassification(jokeCount: number): Promise<void> {
     /* Jokes only become records once Marketing splits the batch, so this total

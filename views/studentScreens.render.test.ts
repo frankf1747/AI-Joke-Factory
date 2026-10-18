@@ -156,6 +156,92 @@ describe('Value stream', () => {
   });
 });
 
+describe('Jokes by stage', () => {
+  const j = (n: number, over: Partial<Batch['jokes'][number]> = {}) => ({
+    joke_id: n, id: String(n), joke_text: `Joke ${n}`, content: `Joke ${n}`, joke_title: `Title ${n}`,
+    publish_status: 'PUBLISHED' as const, sold_count: 0, is_published: true, ...over,
+  });
+  const b = (id: number, status: Batch['status'], jokes: Batch['jokes']): Batch => ({
+    batch_id: id, round_id: 1, team_id: 1, status, jokes, id: String(id), team: '1', round: 1,
+  });
+  // Selling 2, lost its buyers 1, no buyer yet 2, not released 1; one batch still with Marketing.
+  const fixture = [
+    b(1, 'PROCESSED', [
+      j(1, { sold_count: 2 }), j(2, { first_sold_at: '2026-10-18T10:00:00Z' }), j(3, { publish_status: 'DISCARDED', is_published: false }),
+    ]),
+    b(2, 'PROCESSED', [j(4, { sold_count: 1 }), j(5), j(6)]),
+    b(3, 'SUBMITTED', []),
+  ];
+  const card = (batches: Batch[], unprocessed: number | undefined) => {
+    const out = renderWithGame(JokeMaker, {
+      user: testUser(Role.JOKE_MAKER), batches,
+      teamSummary: unprocessed == null ? null : { ...summary({}), unprocessed_batches: unprocessed },
+    });
+    return out.slice(out.indexOf('Jokes by stage'));
+  };
+  const row = (out: string, label: string) =>
+    out.match(new RegExp(`${label}</span><span[^>]*>(.*?)</span>`, 's'))?.[1].replace(/<[^>]*>/g, '') ?? '';
+
+  it('shows With Marketing from the summary, then each market stage with its count', () => {
+    const out = card(fixture, 1);
+    expect(out).toContain('Where your output sits right now.');
+    expect(out).toContain('With Marketing');
+    expect(row(out, 'With Marketing')).toBe('1 batch');
+    expect(out).toContain('On the market');
+    expect(row(out, 'Selling')).toBe('2');
+    expect(row(out, 'Lost its buyers')).toBe('1');
+    expect(row(out, 'No buyer yet')).toBe('2');
+    expect(row(out, 'Not released')).toBe('1');
+    const at = (t: string) => out.indexOf(t);
+    expect(at('With Marketing')).toBeLessThan(at('Selling'));
+    expect(at('Selling')).toBeLessThan(at('Lost its buyers'));
+    expect(at('Lost its buyers')).toBeLessThan(at('No buyer yet'));
+    expect(at('No buyer yet')).toBeLessThan(at('Not released'));
+  });
+
+  it('says "batches" for other counts and a dash while there is no summary', () => {
+    expect(row(card(fixture, 3), 'With Marketing')).toBe('3 batches');
+    expect(row(card(fixture, 0), 'With Marketing')).toBe('0 batches');
+    expect(row(card([], undefined), 'With Marketing')).toBe('—');
+  });
+
+  it('draws one square per joke and caps them at 30 while the count stays honest', () => {
+    const many = [b(9, 'PROCESSED', Array.from({ length: 45 }, (_, i) => j(100 + i, { sold_count: 1 })))];
+    const out = card(many, 0);
+    expect(row(out, 'Selling')).toBe('45');
+    expect(out.match(/data-square/g)?.length).toBe(30);
+    expect(card(fixture, 1).match(/data-square/g)?.length).toBe(6);
+  });
+
+  it('replaces the old status rows', () => {
+    const out = card(fixture, 1);
+    for (const gone of ['In review', 'On market<', 'Wasted', 'w-20 shrink-0']) expect(out).not.toContain(gone);
+  });
+});
+
+describe('Before the first round starts', () => {
+  const pre = () => renderWithGame(JokeMaker, { user: testUser(Role.JOKE_MAKER), batches: [], teamSummary: null });
+
+  it('tells the Joke Maker the value stream fills in once the round starts', () => {
+    const out = pre();
+    expect(out).toContain('Your batches show up here once the round starts.');
+    expect(out).not.toContain('No batches yet.');
+  });
+
+  it('keeps "No batches yet." once the round has a summary', () => {
+    const out = renderWithGame(JokeMaker, { user: testUser(Role.JOKE_MAKER), batches: [], teamSummary: summary({}) });
+    expect(out).toContain('No batches yet.');
+    expect(out).not.toContain('once the round starts');
+  });
+
+  it('shows a dash on the scoreboard', () => {
+    const out = pre();
+    const board = out.match(/aria-label="Scoreboard".*?<\/section>/s)?.[0] ?? '';
+    expect(board).toContain('—');
+    expect(board).not.toContain('NaN');
+  });
+});
+
 describe('Header', () => {
   const header = (over: Partial<Parameters<typeof renderWithGame>[1]> = {}) => renderWithGame(JokeMaker, {
     user: { ...testUser(Role.JOKE_MAKER), display_name: 'priya_tomás', team: '3' },
