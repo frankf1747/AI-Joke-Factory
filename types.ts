@@ -73,6 +73,12 @@ export interface Joke {
   sold_count?: number;
   is_bought?: boolean;
   is_published?: boolean;
+  // Straight from the team batch list. publish_status is the backend's word;
+  // is_published is derived from it in the mapper.
+  joke_title?: string | null;
+  publish_status?: 'PENDING' | 'PUBLISHED' | 'DISCARDED';
+  published_at?: string | null;
+  first_sold_at?: string | null;
 
   // QC feedback (client-side only; schema does not include tags/feedback)
   rating?: number; // 1-5

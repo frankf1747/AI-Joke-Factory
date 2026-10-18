@@ -39,6 +39,23 @@ describe('mapBatchFromTeamList', () => {
     expect((b.jokes[1] as never as { is_published: boolean }).is_published).toBe(false);
   });
 
+  it('carries joke_title, publish_status and the timestamps onto the joke', () => {
+    const pending = {
+      ...realBatch,
+      jokes: [{
+        joke_id: 7, joke_text: 'c', joke_title: 'The Self-Starter',
+        publish_status: 'PENDING', sold_count: 1,
+        published_at: null, first_sold_at: '2026-10-18T10:00:00Z',
+      }],
+    };
+    const [j] = mapBatchFromTeamList(1, 1 as never, pending as never).jokes;
+    expect(j.joke_title).toBe('The Self-Starter');
+    expect(j.publish_status).toBe('PENDING');
+    expect(j.first_sold_at).toBe('2026-10-18T10:00:00Z');
+    expect(j.published_at).toBeNull();
+    expect(j.is_published).toBe(false);
+  });
+
   it('keeps the real sales figures', () => {
     const b = mapBatchFromTeamList(1, 1 as never, realBatch as never);
     expect((b.jokes[0] as never as { sold_count: number }).sold_count).toBe(5);

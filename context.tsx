@@ -168,6 +168,8 @@ export function mapBatchFromTeamList(
         joke_text: j.joke_text,
         id: String(j.joke_id),
         content: j.joke_text,
+        joke_title: j.joke_title ?? null,
+        publish_status: j.publish_status,
         sold_count: j.sold_count ?? (j as any)?.soldCount ?? undefined,
         is_bought: (j as any)?.is_bought ?? (j as any)?.isBought ?? undefined,
         // The backend sends publish_status: PENDING | PUBLISHED | DISCARDED. is_published is
@@ -179,7 +181,7 @@ export function mapBatchFromTeamList(
         first_sold_at: j.first_sold_at ?? (j as any)?.firstSoldAt ?? null,
         published_at: j.published_at ?? (j as any)?.publishedAt ?? null,
         topic: (j as any)?.topic ?? (j as any)?.category ?? undefined,
-      } as any))
+      }))
     : (jokeTexts || []).map((txt, idx) => {
         const fakeJokeId = Number(`${batch_id}${idx}`); // stable-ish per batch; only for UI rendering
         return {
