@@ -26,13 +26,18 @@ export interface ReleaseOutcomeInput {
 
 export interface ReleaseOutcome {
   toast: string | null;
+  /** What the publish charged: published × costOfPublishing + discarded × costOfDiscard. */
+  cost: number;
   clearNote: boolean;
 }
 
 export function releaseOutcome(i: ReleaseOutcomeInput): ReleaseOutcome {
-  if (!i.ok) return { toast: null, clearNote: false };
+  if (!i.ok) return { toast: null, cost: 0, clearNote: false };
+  /* The jokes not released are discarded, and both are charged at publish. */
+  const discarded = Math.max(0, i.batchSize - i.releasedCount);
+  const cost = i.releasedCount * i.costOfPublishing + discarded * i.costOfDiscard;
   const base = i.releasedCount === 0
-    ? `Passed on this batch · ${i.batchSize} joke${i.batchSize > 1 ? 's' : ''} discarded · −${fmt$(i.batchSize * i.costOfDiscard)}`
-    : `Released ${i.releasedCount} joke${i.releasedCount > 1 ? 's' : ''} · −${fmt$(i.releasedCount * i.costOfPublishing)}`;
-  return { toast: base + (i.note.trim() !== '' ? NOTE_SENT_SUFFIX : ''), clearNote: true };
+    ? `Passed on this batch · ${i.batchSize} joke${i.batchSize > 1 ? 's' : ''} discarded · −${fmt$(cost)}`
+    : `Released ${i.releasedCount} joke${i.releasedCount > 1 ? 's' : ''}${discarded > 0 ? ` · ${discarded} discarded` : ''} · −${fmt$(cost)}`;
+  return { toast: base + (i.note.trim() !== '' ? NOTE_SENT_SUFFIX : ''), cost, clearNote: true };
 }
