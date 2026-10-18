@@ -48,7 +48,7 @@ function game(role: Role, over: { isActive?: boolean; roundId?: number | null } 
     user, roster: [user], config: { ...CONFIG, isActive: over.isActive ?? false }, teamNames: {}, batches: [], sales: {},
     roundId: over.roundId === undefined ? 7 : over.roundId, roundIds: { 1: null, 2: null }, roundStatuses: { 1: null, 2: null }, roundTimes: { 1: { startedAt: null, endedAt: null }, 2: { startedAt: null, endedAt: null } },
     marketItems: [], teamSummary: null, teamFeedback: null, instructorLobby: null, instructorStats: null,
-    instructorStatsRound1: null, instructorStatsRound2: null, qcQueue: null,
+    instructorStatsRound1: null, instructorStatsRound2: null, qcQueue: null, qcQueueSize: null,
   };
 }
 

@@ -46,6 +46,7 @@ function data(role: Role): DemoGameData {
       jokes: [{ joke_id: 71, joke_text: 'One.' }, { joke_id: 72, joke_text: 'Two.' }],
       queue_size: 1,
     },
+    qcQueueSize: null,
   };
 }
 

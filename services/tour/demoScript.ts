@@ -320,6 +320,7 @@ export function initialDemoState(options: DemoOptions): DemoState {
       instructorStatsRound1: null,
       instructorStatsRound2: null,
       qcQueue: null,
+      qcQueueSize: null,
     },
   });
 }

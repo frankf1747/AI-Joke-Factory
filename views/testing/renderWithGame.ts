@@ -36,7 +36,7 @@ export function fakeGame(over: Partial<GameContextType> = {}): GameContextType {
     publishBatch: async () => true, sales: {},
     roundId: 1, roundIds: { 1: 1, 2: 2 }, roundStatuses: { 1: 'ACTIVE', 2: 'CONFIGURED' }, roundTimes: { 1: { startedAt: null, endedAt: null }, 2: { startedAt: null, endedAt: null } },
     marketItems: [], teamSummary: null, teamFeedback: null, instructorLobby: null, instructorStats: null,
-    instructorStatsRound1: null, instructorStatsRound2: null, qcQueue: null,
+    instructorStatsRound1: null, instructorStatsRound2: null, qcQueue: null, qcQueueSize: null,
     ...over,
   };
 }

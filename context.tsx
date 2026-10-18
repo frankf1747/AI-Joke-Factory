@@ -294,6 +294,216 @@ export async function pollTeamFeedback(
   }
 }
 
+/* ---------------------------------------------------------------------------
+   One Marketing poll tick (live work): queue count, queue/next, team summary,
+   feedback and the team's batches. Lifted out of the poll effect so a test can
+   drive it with a fake API; the effect passes the real services, refs and setters.
+
+   queue/next LOCKS the team's next batch to the caller, so it is the only call
+   held back while a batch is on the desk: it runs when the desk is empty, and
+   again once the held batch is MARKETING_QUEUE_NEXT_REFRESH_MS old, so a lock
+   change or the round ending is still seen. Everything else runs every tick.
+   The guard reads refs, never the qcQueue value the effect closed over.
+--------------------------------------------------------------------------- */
+export const MARKETING_QUEUE_NEXT_REFRESH_MS = 10_000;
+
+export interface MarketingPollIo {
+  queueCount(roundId: RoundId): Promise<unknown>;
+  queueNext(roundId: RoundId): Promise<unknown>;
+  teamSummary(roundId: RoundId, teamId: TeamId): Promise<unknown>;
+  listTeamBatches(roundId: RoundId, teamId: TeamId): Promise<unknown>;
+  pollFeedback(
+    role: Role,
+    roundId: RoundId,
+    teamId: TeamId | null,
+    unsupportedRef: { current: boolean },
+  ): Promise<TeamFeedbackResponse | null | undefined>;
+}
+
+export interface MarketingPollDeps {
+  io: MarketingPollIo;
+  role: Role;
+  roundId: RoundId;
+  roundNumber: number;
+  /** The user's assigned team; null when not on one. */
+  teamId: TeamId | null;
+  /** False in a watch tab whose bot is not Marketing on this team: queue/next would lock a batch to the bot. */
+  mayClaim: () => boolean;
+  isCancelled: () => boolean;
+  now?: () => number;
+  refs: {
+    /** Mirror of the qcQueue state (the batch on the desk). */
+    qcQueue: { current: ApiQcQueueNextResponse | null };
+    qcNextRetryAfter: { current: number };
+    /** When queue/next was last asked. */
+    qcNextFetchedAt: { current: number };
+    teamSummaryUnsupported: { current: boolean };
+    teamFeedbackUnsupported: { current: boolean };
+    submittedBatchJokes: { current: Record<string, string[]> };
+    qcRatedHistory: { current: Record<string, Batch> };
+  };
+  set: {
+    queue(q: ApiQcQueueNextResponse | null): void;
+    queueSize(n: number): void;
+    teamSummary(s: ApiTeamSummaryResponse | null): void;
+    teamFeedback(f: TeamFeedbackResponse | null): void;
+    batches(b: Batch[]): void;
+  };
+}
+
+export const MARKETING_POLL_IO: MarketingPollIo = {
+  queueCount: roundId => marketingService.queueCount(roundId),
+  queueNext: roundId => marketingService.queueNext(roundId),
+  teamSummary: (roundId, teamId) => jmService.teamSummary(roundId, teamId),
+  listTeamBatches: (roundId, teamId) => jmService.listTeamBatches(roundId, teamId),
+  pollFeedback: pollTeamFeedback,
+};
+
+export async function pollMarketingWork(deps: MarketingPollDeps): Promise<{
+  summaryTeamId: TeamId | null;
+  didHydrateBatchesFromApi: boolean;
+}> {
+  const { io, role, roundId: effectiveRound, refs, set } = deps;
+  const now = deps.now ?? Date.now;
+  const cancelled = deps.isCancelled;
+  const setQueue = (q: ApiQcQueueNextResponse | null) => {
+    refs.qcQueue.current = q;
+    if (!cancelled()) set.queue(q);
+  };
+
+  // Some backends return 404 "resource not found: batch" when queue is empty.
+  // To avoid noisy errors, check queue/count first and only call queue/next when size > 0.
+  let normalizedQueue: ApiQcQueueNextResponse | null = null;
+  try {
+    const countRaw = await io.queueCount(effectiveRound);
+    const countAny: any = (countRaw as any)?.data ?? countRaw;
+    // Support both queue_size and count field names.
+    const size = Number(countAny?.queue_size ?? countAny?.count ?? 0);
+    // The count belongs to the poll, not to the held batch: report it on every tick.
+    if (!cancelled()) set.queueSize(size);
+    if (!size) {
+      setQueue(null);
+    } else {
+      // While a batch is held, queue/next is only re-asked every
+      // MARKETING_QUEUE_NEXT_REFRESH_MS; the rest of the tick still runs.
+      const held = refs.qcQueue.current !== null;
+      const due = !held || now() - refs.qcNextFetchedAt.current >= MARKETING_QUEUE_NEXT_REFRESH_MS;
+
+      // queue/next LOCKS the team's next batch to the caller. In a watch
+      // tab the caller is the bot, so claim only while the bot's own
+      // engine says it is Marketing on this very team — otherwise leave
+      // qcQueue as it is. Always true in a normal tab. See
+      // services/watchMode.ts mayClaimMarketingBatch.
+      // Only call queue/next if we are not in a backoff period from a recent 404.
+      if (due && deps.mayClaim() && now() >= refs.qcNextRetryAfter.current) {
+        refs.qcNextFetchedAt.current = now();
+        try {
+          const rawQ = await io.queueNext(effectiveRound);
+          const qAny: any = rawQ;
+          const qData = (qAny?.data ?? qAny) as any;
+          // queue/next answers 200 {batch: null, jokes: [], queue_size: N} when every
+          // batch is held by a teammate: CountSubmittedBatchesForTeam counts locked
+          // batches, so queue_size can be > 0 while batch is null. A null batch means
+          // "the queue is not empty but nothing is available to me", which renders
+          // identically to an empty queue — and without this guard QualityControl's
+          // read of qcQueue.batch.batch_id throws and blanks the Marketing screen.
+          normalizedQueue = qData && qData.batch
+            ? {
+                batch: qData.batch,
+                jokes: Array.isArray(qData.jokes) ? qData.jokes : [],
+                queue_size: qData.queue_size ?? size,
+              }
+            : null;
+          setQueue(normalizedQueue);
+          refs.qcNextRetryAfter.current = 0; // success, clear backoff
+        } catch (e) {
+          // If queue/next 404s despite count > 0, it usually means the batch
+          // is already locked by another QC or not available to this user.
+          if (e instanceof ApiError && e.status === 404) {
+            setQueue(null);
+            // Back off for 30 seconds to avoid spamming 404s if count is lying.
+            refs.qcNextRetryAfter.current = now() + 30000;
+          } else {
+            throw e; // rethrow other errors to be caught by outer block
+          }
+        }
+      }
+    }
+  } catch {
+    setQueue(null);
+  }
+
+  // Team summary for QC (rank/points/avg quality). Prefer batch team_id; fallback to assignment team.
+  const summaryTeamId = (normalizedQueue?.batch?.team_id ?? deps.teamId ?? null) as TeamId | null;
+  if (summaryTeamId) {
+    try {
+      if (!refs.teamSummaryUnsupported.current) {
+        const ts = await io.teamSummary(effectiveRound, summaryTeamId);
+        if (!cancelled()) {
+          set.teamSummary((ts as any)?.data ?? ts ?? null);
+        }
+      }
+    } catch (e) {
+      if (e instanceof ApiError && (e.status === 404 || e.code === 'NOT_FOUND')) {
+        refs.teamSummaryUnsupported.current = true;
+      }
+      // ignore summary failures; will retry on next poll if supported
+    }
+  }
+
+  // QC batch history: load team batches from API so refresh/logout can restore submitted/rated batch stats.
+  // Merge with locally persisted QC-rated history to preserve feedback/tags where the API omits them.
+  const qcTeamId = deps.teamId;
+
+  /* Marketing's feedback panel. Gated on the user actually being on a
+     team, because the route is per-team — pollTeamFeedback owns that
+     gate, the Marketing-only role gate and the 404 latch. */
+  const qcFeedback = await io.pollFeedback(role, effectiveRound, qcTeamId, refs.teamFeedbackUnsupported);
+  if (qcFeedback !== undefined && !cancelled()) set.teamFeedback(qcFeedback);
+
+  let didHydrateBatchesFromApi = false;
+  if (qcTeamId) {
+    try {
+      const listRaw = await io.listTeamBatches(effectiveRound, qcTeamId);
+      const listData: any = (listRaw as any)?.data ?? listRaw;
+      const batchesArr: any[] = Array.isArray(listData?.batches) ? listData.batches : [];
+      const mapped = batchesArr.map(b =>
+        mapBatchFromTeamList(
+          deps.roundNumber,
+          qcTeamId,
+          b,
+          refs.submittedBatchJokes.current[`${effectiveRound}:${String(b.batch_id)}`],
+        ),
+      );
+      // Process qcExtra first, then mapped overwrites - so API data (is_published, sold_count) wins
+      const qcExtra = Object.values(refs.qcRatedHistory.current).filter((b: Batch) => b.team_id === qcTeamId);
+      const merged = [...qcExtra, ...mapped].reduce<Record<string, Batch>>((acc, b: Batch) => {
+        const existing = acc[String(b.batch_id)];
+        if (existing) {
+          // Merge: API data wins, but keep local feedback/tags if API doesn't have them
+          acc[String(b.batch_id)] = {
+            ...existing,
+            ...b,
+            feedback: b.feedback ?? existing.feedback,
+            tagSummary: b.tagSummary?.length ? b.tagSummary : existing.tagSummary,
+          };
+        } else {
+          acc[String(b.batch_id)] = b;
+        }
+        return acc;
+      }, {} as Record<string, Batch>);
+      if (!cancelled()) {
+        set.batches(Object.values(merged).sort((a, b) => (a.batch_id - b.batch_id)));
+        didHydrateBatchesFromApi = true;
+      }
+    } catch {
+      // ignore; fallback below
+    }
+  }
+
+  return { summaryTeamId, didHydrateBatchesFromApi };
+}
+
 /* GET /lobby: Go sends ports.LobbySnapshot, PascalCase with no json tags (ApiInstructorLobbyResponse),
    with null for empty Teams/Unassigned; the mock sends the older snake_case shape, customers included.
    Read both into one InstructorLobby. */
@@ -525,6 +735,8 @@ export interface GameContextType {
   instructorStatsRound1: ApiInstructorStatsResponse | null;
   instructorStatsRound2: ApiInstructorStatsResponse | null;
   qcQueue: ApiQcQueueNextResponse | null;
+  /** Batches waiting for Marketing (queue/count `queue_size`), refreshed every poll whether or not a batch is held. Null until known. */
+  qcQueueSize: number | null;
 }
 
 /** Exported so view tests can render a screen with a fake game (views/testing/renderWithGame.ts). */
@@ -574,6 +786,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     2: null,
   });
   const [qcQueue, setQcQueue] = useState<ApiQcQueueNextResponse | null>(null);
+  /** Batches waiting for Marketing, from queue/count; null until the first count. Independent of qcQueue. */
+  const [qcQueueSize, setQcQueueSize] = useState<number | null>(null);
+  /* The Marketing poll closes over its first render, so it reads the held batch and the
+     time of the last queue/next from refs. qcQueueRef mirrors qcQueue. */
+  const qcQueueRef = useRef<ApiQcQueueNextResponse | null>(null);
+  const qcNextFetchedAtRef = useRef<number>(0);
+  useEffect(() => { qcQueueRef.current = qcQueue; }, [qcQueue]);
   const teamSummaryUnsupportedRef = useRef<boolean>(false);
   /* Same latch as teamSummaryUnsupportedRef: the in-browser mock API has no
      /feedback route, so without this every poll tick would fire a doomed
@@ -1258,12 +1477,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const effectiveRound = effectiveRoundId ?? me.round_id ?? null;
           if (!effectiveRound) {
             setQcQueue(null);
+            setQcQueueSize(null);
             return;
           }
           // Avoid spamming endpoints that require an ACTIVE round.
           const canFetchQcWork = isActive || normalizedStatus === 'ENDED';
           if (!canFetchQcWork) {
-            if (!cancelled) setQcQueue(null);
+            if (!cancelled) { setQcQueue(null); setQcQueueSize(null); }
             // Still allow popup roster + local rated history.
             if (!cancelled) {
               const hist = Object.values(qcRatedHistoryRef.current);
@@ -1288,136 +1508,32 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
             return;
           }
-          // QC queue (live work)
-          // Some backends return 404 "resource not found: batch" when queue is empty.
-          // To avoid noisy errors, check queue/count first and only call queue/next when size > 0.
-          let normalizedQueue: ApiQcQueueNextResponse | null = null;
-          try {
-            const countRaw = await marketingService.queueCount(effectiveRound);
-            const countAny: any = (countRaw as any)?.data ?? countRaw;
-            // Support both queue_size and count field names.
-            const size = Number(countAny?.queue_size ?? countAny?.count ?? 0);
-            if (!size) {
-              if (!cancelled) setQcQueue(null);
-            } else {
-              // OPTIMIZATION: If we already have a batch loaded in the UI, don't poll for the next one yet.
-              // This prevents unnecessary 404s and network noise while the user is actively rating.
-              if (qcQueue) return;
-
-              // queue/next LOCKS the team's next batch to the caller. In a watch
-              // tab the caller is the bot, so claim only while the bot's own
-              // engine says it is Marketing on this very team — otherwise leave
-              // qcQueue as it is. Always true in a normal tab. See
-              // services/watchMode.ts mayClaimMarketingBatch.
-              const mayClaim = mayClaimMarketingBatch(teamId);
-
-              // Only call queue/next if we are not in a backoff period from a recent 404.
-              const now = Date.now();
-              if (mayClaim && now >= qcNextRetryAfterRef.current) {
-                try {
-              const rawQ = await marketingService.queueNext(effectiveRound);
-              const qAny: any = rawQ;
-              const qData = (qAny?.data ?? qAny) as any;
-              // queue/next answers 200 {batch: null, jokes: [], queue_size: N} when every
-              // batch is held by a teammate: CountSubmittedBatchesForTeam counts locked
-              // batches, so queue_size can be > 0 while batch is null. A null batch means
-              // "the queue is not empty but nothing is available to me", which renders
-              // identically to an empty queue — and without this guard QualityControl's
-              // read of qcQueue.batch.batch_id throws and blanks the Marketing screen.
-              normalizedQueue = qData && qData.batch
-                ? {
-                    batch: qData.batch,
-                    jokes: Array.isArray(qData.jokes) ? qData.jokes : [],
-                    queue_size: qData.queue_size ?? size,
-                  }
-                : null;
-              if (!cancelled) setQcQueue(normalizedQueue);
-                  qcNextRetryAfterRef.current = 0; // success, clear backoff
-                } catch (e) {
-                  // If queue/next 404s despite count > 0, it usually means the batch 
-                  // is already locked by another QC or not available to this user.
-                  if (e instanceof ApiError && e.status === 404) {
-                    if (!cancelled) setQcQueue(null);
-                    // Back off for 30 seconds to avoid spamming 404s if count is lying.
-                    qcNextRetryAfterRef.current = Date.now() + 30000;
-                  } else {
-                    throw e; // rethrow other errors to be caught by outer block
-                  }
-                }
-              }
-            }
-          } catch {
-            if (!cancelled) setQcQueue(null);
-          }
-
-          // Team summary for QC (rank/points/avg quality). Prefer batch team_id; fallback to assignment team.
-          const summaryTeamId = (normalizedQueue?.batch?.team_id ?? me.assignment?.team_id ?? null) as TeamId | null;
-          if (summaryTeamId) {
-            try {
-              if (!teamSummaryUnsupportedRef.current) {
-                const ts = await jmService.teamSummary(effectiveRound, summaryTeamId);
-                if (!cancelled) {
-                  setTeamSummary((ts as any)?.data ?? ts ?? null);
-                }
-              }
-            } catch (e) {
-              if (e instanceof ApiError && (e.status === 404 || e.code === 'NOT_FOUND')) {
-                teamSummaryUnsupportedRef.current = true;
-              }
-              // ignore summary failures; will retry on next poll if supported
-            }
-          }
-
-          // QC batch history: load team batches from API so refresh/logout can restore submitted/rated batch stats.
-          // Merge with locally persisted QC-rated history to preserve feedback/tags where the API omits them.
-          const qcTeamId = (me.assignment?.team_id ?? null) as TeamId | null;
-
-          /* Marketing's feedback panel. Gated on the user actually being on a
-             team, because the route is per-team — pollTeamFeedback owns that
-             gate, the Marketing-only role gate and the 404 latch. */
-          const qcFeedback = await pollTeamFeedback(role, effectiveRound, qcTeamId, teamFeedbackUnsupportedRef);
-          if (qcFeedback !== undefined && !cancelled) setTeamFeedback(qcFeedback);
-
-          let didHydrateBatchesFromApi = false;
-          if (qcTeamId) {
-            try {
-              const listRaw = await jmService.listTeamBatches(effectiveRound, qcTeamId);
-              const listData: any = (listRaw as any)?.data ?? listRaw;
-              const batchesArr: any[] = Array.isArray(listData?.batches) ? listData.batches : [];
-              const roundNumber = apiRoundNumber ?? config.round ?? 1;
-              const mapped = batchesArr.map(b =>
-                mapBatchFromTeamList(
-                  roundNumber,
-                  qcTeamId,
-                  b,
-                  submittedBatchJokesRef.current[`${effectiveRound}:${String(b.batch_id)}`],
-                ),
-              );
-              // Process qcExtra first, then mapped overwrites - so API data (is_published, sold_count) wins
-              const qcExtra = Object.values(qcRatedHistoryRef.current).filter((b: Batch) => b.team_id === qcTeamId);
-              const merged = [...qcExtra, ...mapped].reduce<Record<string, Batch>>((acc, b: Batch) => {
-                const existing = acc[String(b.batch_id)];
-                if (existing) {
-                  // Merge: API data wins, but keep local feedback/tags if API doesn't have them
-                  acc[String(b.batch_id)] = {
-                    ...existing,
-                    ...b,
-                    feedback: b.feedback ?? existing.feedback,
-                    tagSummary: b.tagSummary?.length ? b.tagSummary : existing.tagSummary,
-                  };
-                } else {
-                  acc[String(b.batch_id)] = b;
-                }
-                return acc;
-              }, {} as Record<string, Batch>);
-              if (!cancelled) {
-                setBatches(Object.values(merged).sort((a, b) => (a.batch_id - b.batch_id)));
-                didHydrateBatchesFromApi = true;
-              }
-            } catch {
-              // ignore; fallback below
-            }
-          }
+          // QC queue (live work), team summary, feedback and batch history: one Marketing tick.
+          const { summaryTeamId, didHydrateBatchesFromApi } = await pollMarketingWork({
+            io: MARKETING_POLL_IO,
+            role,
+            roundId: effectiveRound as RoundId,
+            roundNumber: apiRoundNumber ?? config.round ?? 1,
+            teamId: (me.assignment?.team_id ?? null) as TeamId | null,
+            mayClaim: () => mayClaimMarketingBatch(teamId),
+            isCancelled: () => cancelled,
+            refs: {
+              qcQueue: qcQueueRef,
+              qcNextRetryAfter: qcNextRetryAfterRef,
+              qcNextFetchedAt: qcNextFetchedAtRef,
+              teamSummaryUnsupported: teamSummaryUnsupportedRef,
+              teamFeedbackUnsupported: teamFeedbackUnsupportedRef,
+              submittedBatchJokes: submittedBatchJokesRef,
+              qcRatedHistory: qcRatedHistoryRef,
+            },
+            set: {
+              queue: setQcQueue,
+              queueSize: setQcQueueSize,
+              teamSummary: setTeamSummary,
+              teamFeedback: setTeamFeedback,
+              batches: setBatches,
+            },
+          });
 
           if (popupActive) {
             const popupTeamId = (summaryTeamId ?? me.assignment.team_id ?? null) as TeamId | null;
@@ -1590,6 +1706,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setRoundStatuses({ 1: null, 2: null });
     setRoundTimes(EMPTY_ROUND_TIMES);
     setQcQueue(null);
+    setQcQueueSize(null);
 
     // Clear local caches (avoid leaking state across users).
     submittedBatchJokesRef.current = {};
@@ -2147,6 +2264,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setRoundStatuses({ 1: null, 2: null });
     setRoundTimes(EMPTY_ROUND_TIMES);
     setQcQueue(null);
+    setQcQueueSize(null);
     setTeamNames(INITIAL_TEAM_NAMES);
     submittedBatchJokesRef.current = {};
     qcRatedHistoryRef.current = {};
@@ -2191,6 +2309,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       instructorStatsRound1: instructorStatsByRoundNumber[1],
       instructorStatsRound2: instructorStatsByRoundNumber[2],
       qcQueue,
+      qcQueueSize,
     }}>
       {children}
     </GameContext.Provider>
