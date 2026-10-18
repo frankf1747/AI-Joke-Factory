@@ -1,6 +1,7 @@
-/* Marketing's "Customer feedback" card, with its Expand button.
+/* Marketing's "Customer feedback" card, with its Pop out button, and the
+   static "What customers judge" criteria list below it.
 
-   Expand floats the live feedback above the game (components/PopOutPanel.tsx):
+   Pop out floats the live feedback above the game (components/PopOutPanel.tsx):
    a Document Picture-in-Picture window in Chrome and Edge, a panel pinned to the
    bottom-right of the page elsewhere. The floating copy leads with the pattern
    across the recent jokes (Keep doing / Fix next), then the jokes. While it is
@@ -10,10 +11,10 @@
    `canPopOut` is false in watch mode: the pop-out is for Marketing's own
    screen only, so a watch tab gets the plain card. */
 import React, { useState } from 'react';
-import { PictureInPicture2 } from 'lucide-react';
+import { SquareArrowOutUpRight } from 'lucide-react';
 import { summarizeFeedback, type SummaryItem } from '../services/feedbackSummary';
 import { Card } from './ui';
-import { BRAND } from '../config/brand';
+import { DIMENSIONS } from '../config/dimensions';
 import { FeedbackCard } from './FeedbackCard';
 import { PopOutPanel } from './PopOutPanel';
 import type { FeedbackRow } from '../views/feedback';
@@ -22,11 +23,11 @@ export const CUSTOMER_FEEDBACK_TITLE = 'Customer feedback';
 
 export const FeedbackList: React.FC<{ rows: FeedbackRow[] }> = ({ rows }) =>
   rows.length === 0 ? (
-    <p className="text-sm text-gray-400 italic py-4 text-center">
-      No feedback yet — release jokes to start uncovering the target.
+    <p className="py-4 text-center text-sm italic" style={{ color: 'var(--ink-3)' }}>
+      No feedback yet. Release jokes to start uncovering the target.
     </p>
   ) : (
-    <div className="divide-y divide-gray-100">
+    <div className="[&>*+*]:border-t [&>*+*]:border-[color:var(--rule)]">
       {rows.map(r => <FeedbackCard key={r.joke_id} row={r} />)}
     </div>
   );
@@ -66,6 +67,9 @@ export const FeedbackSummaryBlock: React.FC<{ rows: FeedbackRow[] }> = ({ rows }
   );
 };
 
+const feedbackSubtitle = (n: number) =>
+  `Your latest ${n} released ${n === 1 ? 'joke' : 'jokes'}. Customers say what landed and what missed, never by how much.`;
+
 export interface CustomerFeedbackCardViewProps {
   rows: FeedbackRow[];
   canPopOut: boolean;
@@ -84,29 +88,30 @@ export const CustomerFeedbackCardView: React.FC<CustomerFeedbackCardViewProps> =
       <Card
         tour="mk-feedback"
         title={CUSTOMER_FEEDBACK_TITLE}
-        subtitle="Which criteria landed and which missed — the customers never say by how much"
-        accent={BRAND.sold}
+        subtitle={rows.length === 0 ? undefined : feedbackSubtitle(rows.length)}
         action={canPopOut && !out ? (
           <button
             type="button"
             data-tour="mk-expand"
             onClick={onPopOut}
-            aria-label="Expand: open the feedback in a floating window that stays on top"
+            aria-label="Pop out: open the feedback in a floating window that stays on top"
             title="Open the feedback in a floating window that stays on top"
-            className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+            className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[13.5px] font-medium underline-offset-[3px] hover:underline"
+            style={{ color: 'var(--navy)' }}
           >
-            <PictureInPicture2 size={13} aria-hidden="true" />
-            Expand
+            Pop out
+            <SquareArrowOutUpRight size={14} aria-hidden="true" />
           </button>
         ) : undefined}
       >
         {out ? (
           <div className="flex flex-col items-center gap-2 py-6 text-center">
-            <p className="text-sm text-gray-500">Showing in the floating window</p>
+            <p className="text-sm" style={{ color: 'var(--ink-3)' }}>Showing in the floating window</p>
             <button
               type="button"
               onClick={onBringBack}
-              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+              className="text-[13.5px] font-medium underline-offset-[3px] hover:underline"
+              style={{ color: 'var(--navy)' }}
             >
               Bring back
             </button>
@@ -128,6 +133,29 @@ export const CustomerFeedbackCardView: React.FC<CustomerFeedbackCardViewProps> =
     </>
   );
 };
+
+/** The 12 criteria, static: the 11 matched ones in three columns, then Title Fit
+    set apart, because the title Marketing writes decides it. No tallies here. */
+export const WhatCustomersJudge: React.FC = () => (
+  <Card
+    title="What customers judge"
+    subtitle="12 criteria. Pop out the feedback to see which ones keep landing or missing."
+  >
+    <ul className="grid grid-cols-3 gap-x-3 gap-y-0.5 text-[13.5px]" style={{ color: 'var(--ink-2)' }}>
+      {DIMENSIONS.filter(d => d.hasIdeal).map(d => <li key={d.id} className="py-[3px]">{d.label}</li>)}
+      {DIMENSIONS.filter(d => !d.hasIdeal).map(d => (
+        <li
+          key={d.id}
+          className="col-span-3 mt-1 border-t border-dashed pt-[7px]"
+          style={{ borderColor: 'var(--rule-2)', color: 'var(--ink)' }}
+        >
+          {d.label}
+          <small className="ml-1.5" style={{ color: 'var(--ink-3)' }}>set by the title you write</small>
+        </li>
+      ))}
+    </ul>
+  </Card>
+);
 
 export const CustomerFeedbackCard: React.FC<{ rows: FeedbackRow[]; canPopOut: boolean }> = ({ rows, canPopOut }) => {
   const [popped, setPopped] = useState(false);

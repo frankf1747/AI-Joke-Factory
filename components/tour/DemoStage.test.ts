@@ -122,7 +122,7 @@ describe('the demo plays on the real screen', () => {
     const fees = renderStep(o, 'mk-fees');
     for (const part of ['Where your sales went', 'Shipping', 'Storage', 'Hosting', 'Listing and discard fees']) expect(fees).toContain(part);
     expect(renderStep(o, 'mk-feedback')).toContain('To-Do Overload');
-    expect(renderStep(o, 'mk-expand')).toContain('Expand');
+    expect(renderStep(o, 'mk-expand')).toContain('Pop out');
   });
 
   it('ignores the student\'s own "Fees and wait times" choice and never writes it', () => {

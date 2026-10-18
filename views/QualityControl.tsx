@@ -1,17 +1,16 @@
 import React, { useMemo, useState } from 'react';
 import { useDemoMode, useDemoUi, useGame } from '../context';
 import { Button, Card, StatBox, RoleLayout, Modal, fmt$ } from '../components';
-import { Send, Zap, Star, Trash2 } from 'lucide-react';
+import { Send, Zap, Trash2 } from 'lucide-react';
 import { computeAvgCreatedToPublishSeconds } from '../services/economics';
 import {
   INITIAL_NUDGE_STATE, nudgeReducer, isNudgeOpen,
   type NudgeEvent,
 } from '../services/marketingNudge';
-import { DIMENSIONS } from '../config/dimensions';
 /* The feedback mapper lives in views/feedback.ts; the card, with its Pop out
    button, in components/CustomerFeedbackCard.tsx. */
 import { toFeedbackRows } from './feedback';
-import { CustomerFeedbackCard } from '../components/CustomerFeedbackCard';
+import { CustomerFeedbackCard, WhatCustomersJudge } from '../components/CustomerFeedbackCard';
 import { isWatchMode } from '../services/watchMode';
 import { MARKETING_NOTE_MAX } from '../services/marketingService';
 import { releaseCost, releaseOutcome } from './marketingRelease';
@@ -557,34 +556,9 @@ const QualityControl: React.FC = () => {
             )}
           </div>
 
-          {/* The 12 criteria — so Marketing knows what to coach the Joke Maker on. */}
-          <Card title="The 12 criteria customers judge">
-            <div className="flex flex-wrap gap-1.5">
-              {DIMENSIONS.map(d => {
-                const intrinsic = !d.hasIdeal;
-                return (
-                  <span
-                    key={d.id}
-                    className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border ${
-                      intrinsic
-                        ? 'bg-amber-50 text-amber-800 border-amber-300'
-                        : 'bg-white text-gray-700 border-gray-200'
-                    }`}
-                    title={
-                      intrinsic
-                        ? 'Title Fit — does your title match the joke? This one is yours to control.'
-                        : undefined
-                    }
-                  >
-                    {intrinsic && <Star size={10} />}
-                    {d.label}
-                  </span>
-                );
-              })}
-            </div>
-          </Card>
           {/* Pop out floats this list above the game; never offered in a watch tab. */}
           <CustomerFeedbackCard rows={feedbackRows} canPopOut={!watching} />
+          <WhatCustomersJudge />
         </div>
       </div>
 

@@ -48,7 +48,7 @@ describe('the Next step line on the student screens', () => {
     const line = out.indexOf('Next step');
     expect(line).toBeGreaterThan(out.indexOf('Marketing desk'));
     expect(line).toBeLessThan(out.indexOf('B-9'));
-    expect(line).toBeLessThan(out.indexOf('The 12 criteria customers judge'));
+    expect(line).toBeLessThan(out.indexOf('What customers judge'));
     expect(out).toMatch(/Batch waiting (5\d) s\. Release what&#x27;s good enough\. Storage costs 5¢ a joke each minute\./);
   });
 
