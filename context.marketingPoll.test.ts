@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { pollMarketingWork } from './context';
 import type { MarketingPollDeps, MarketingPollIo } from './context';
+import { ApiError } from './services/apiClient';
 import type { ApiQcQueueNextResponse, Role, RoundId, TeamId } from './types';
 
 /* The Marketing poll runs every 2.5 s. While a batch is on the desk it must keep
@@ -30,6 +31,7 @@ function setup(opts: { queueNext?: () => Promise<unknown>; count?: () => Promise
   };
   const state = { queue: null as ApiQcQueueNextResponse | null, size: null as number | null };
   let clock = 1_000_000;
+  let cancelled = false;
   const deps = (): MarketingPollDeps => ({
     io,
     role: MARKETING,
@@ -37,12 +39,13 @@ function setup(opts: { queueNext?: () => Promise<unknown>; count?: () => Promise
     roundNumber: 2,
     teamId: TEAM,
     mayClaim: () => true,
-    isCancelled: () => false,
+    isCancelled: () => cancelled,
     now: () => clock,
     refs: {
       qcQueue: { current: state.queue },
       qcNextRetryAfter: refs.retry,
       qcNextFetchedAt: refs.fetchedAt,
+      qcQueueGen: refs.gen,
       teamSummaryUnsupported: { current: false },
       teamFeedbackUnsupported: { current: false },
       submittedBatchJokes: { current: {} },
@@ -56,8 +59,8 @@ function setup(opts: { queueNext?: () => Promise<unknown>; count?: () => Promise
       batches: vi.fn(),
     },
   });
-  const refs = { retry: { current: 0 }, fetchedAt: { current: 0 } };
-  return { io, state, deps, advance: (ms: number) => { clock += ms; } };
+  const refs = { retry: { current: 0 }, fetchedAt: { current: 0 }, gen: { current: 0 } };
+  return { io, state, deps, refs, cancel: () => { cancelled = true; }, advance: (ms: number) => { clock += ms; } };
 }
 
 describe('pollMarketingWork', () => {
@@ -129,5 +132,52 @@ describe('pollMarketingWork', () => {
     expect(t.io.queueNext).not.toHaveBeenCalled();
     expect(t.state.size).toBe(2);
     expect(t.io.listTeamBatches).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops a queue/next answer that lands after a desk action bumped the generation', async () => {
+    let resolveNext!: (v: unknown) => void;
+    const t = setup({ queueNext: () => new Promise(r => { resolveNext = r; }) });
+    const tick = pollMarketingWork(t.deps());
+    await vi.waitFor(() => expect(t.io.queueNext).toHaveBeenCalledTimes(1));
+
+    // Marketing releases (or splits) the batch while queue/next is still in flight.
+    t.refs.gen.current += 1;
+    t.state.queue = null;
+    resolveNext({ data: HELD });
+    await tick;
+
+    expect(t.state.queue).toBeNull();
+    expect(t.io.teamSummary).toHaveBeenCalledTimes(1);
+  });
+
+  it('writes neither the ref nor the setter when the tick was cancelled mid-flight', async () => {
+    let resolveNext!: (v: unknown) => void;
+    const t = setup({ queueNext: () => new Promise(r => { resolveNext = r; }) });
+    const d = t.deps();
+    const tick = pollMarketingWork(d);
+    await vi.waitFor(() => expect(t.io.queueNext).toHaveBeenCalledTimes(1));
+
+    t.cancel();
+    resolveNext({ data: HELD });
+    await tick;
+
+    expect(d.refs.qcQueue.current).toBeNull();
+    expect(t.state.queue).toBeNull();
+    expect(t.state.size).toBe(2);
+  });
+
+  it('clears the desk on a queue/next 404 and does not ask again for 30 s', async () => {
+    const t = setup({ queueNext: async () => { throw new ApiError({ status: 404, code: 'NOT_FOUND', message: 'not found' }); } });
+    await pollMarketingWork(t.deps());
+    expect(t.state.queue).toBeNull();
+    expect(t.io.queueNext).toHaveBeenCalledTimes(1);
+
+    t.advance(29_000);
+    await pollMarketingWork(t.deps());
+    expect(t.io.queueNext).toHaveBeenCalledTimes(1);
+
+    t.advance(1_000);
+    await pollMarketingWork(t.deps());
+    expect(t.io.queueNext).toHaveBeenCalledTimes(2);
   });
 });

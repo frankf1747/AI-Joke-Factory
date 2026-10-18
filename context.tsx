@@ -306,6 +306,7 @@ export async function pollTeamFeedback(
    The guard reads refs, never the qcQueue value the effect closed over.
 --------------------------------------------------------------------------- */
 export const MARKETING_QUEUE_NEXT_REFRESH_MS = 10_000;
+const STALE_QUEUE_NEXT = Symbol('stale queue/next');
 
 export interface MarketingPollIo {
   queueCount(roundId: RoundId): Promise<unknown>;
@@ -337,6 +338,8 @@ export interface MarketingPollDeps {
     qcNextRetryAfter: { current: number };
     /** When queue/next was last asked. */
     qcNextFetchedAt: { current: number };
+    /** Bumped by the desk actions (split, unsplit, release) that set the queue themselves. */
+    qcQueueGen: { current: number };
     teamSummaryUnsupported: { current: boolean };
     teamFeedbackUnsupported: { current: boolean };
     submittedBatchJokes: { current: Record<string, string[]> };
@@ -367,8 +370,9 @@ export async function pollMarketingWork(deps: MarketingPollDeps): Promise<{
   const now = deps.now ?? Date.now;
   const cancelled = deps.isCancelled;
   const setQueue = (q: ApiQcQueueNextResponse | null) => {
+    if (cancelled()) return;
     refs.qcQueue.current = q;
-    if (!cancelled()) set.queue(q);
+    set.queue(q);
   };
 
   // Some backends return 404 "resource not found: batch" when queue is empty.
@@ -397,8 +401,12 @@ export async function pollMarketingWork(deps: MarketingPollDeps): Promise<{
       // Only call queue/next if we are not in a backoff period from a recent 404.
       if (due && deps.mayClaim() && now() >= refs.qcNextRetryAfter.current) {
         refs.qcNextFetchedAt.current = now();
+        // A desk action that lands while queue/next is in flight makes its answer stale
+        // (it may still show the batch as it was before the split or the release): drop it.
+        const gen = refs.qcQueueGen.current;
         try {
           const rawQ = await io.queueNext(effectiveRound);
+          if (refs.qcQueueGen.current !== gen) throw STALE_QUEUE_NEXT;
           const qAny: any = rawQ;
           const qData = (qAny?.data ?? qAny) as any;
           // queue/next answers 200 {batch: null, jokes: [], queue_size: N} when every
@@ -417,9 +425,11 @@ export async function pollMarketingWork(deps: MarketingPollDeps): Promise<{
           setQueue(normalizedQueue);
           refs.qcNextRetryAfter.current = 0; // success, clear backoff
         } catch (e) {
-          // If queue/next 404s despite count > 0, it usually means the batch
-          // is already locked by another QC or not available to this user.
-          if (e instanceof ApiError && e.status === 404) {
+          if (e === STALE_QUEUE_NEXT || refs.qcQueueGen.current !== gen) {
+            // Dropped: a desk action landed while this was in flight and already set the queue.
+          } else if (e instanceof ApiError && e.status === 404) {
+            // If queue/next 404s despite count > 0, it usually means the batch
+            // is already locked by another QC or not available to this user.
             setQueue(null);
             // Back off for 30 seconds to avoid spamming 404s if count is lying.
             refs.qcNextRetryAfter.current = now() + 30000;
@@ -792,6 +802,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
      time of the last queue/next from refs. qcQueueRef mirrors qcQueue. */
   const qcQueueRef = useRef<ApiQcQueueNextResponse | null>(null);
   const qcNextFetchedAtRef = useRef<number>(0);
+  /* Bumped by split, unsplit and release, which set qcQueue themselves: a queue/next
+     already in flight when one lands is stale and the poll drops it. */
+  const qcQueueGenRef = useRef<number>(0);
   useEffect(() => { qcQueueRef.current = qcQueue; }, [qcQueue]);
   const teamSummaryUnsupportedRef = useRef<boolean>(false);
   /* Same latch as teamSummaryUnsupportedRef: the in-browser mock API has no
@@ -1521,6 +1534,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               qcQueue: qcQueueRef,
               qcNextRetryAfter: qcNextRetryAfterRef,
               qcNextFetchedAt: qcNextFetchedAtRef,
+              qcQueueGen: qcQueueGenRef,
               teamSummaryUnsupported: teamSummaryUnsupportedRef,
               teamFeedbackUnsupported: teamFeedbackUnsupportedRef,
               submittedBatchJokes: submittedBatchJokesRef,
@@ -1995,10 +2009,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const splitBatch = async (batchId: string, jokes: string[]) => {
     const clean = jokes.map(j => j.trim()).filter(Boolean);
     if (clean.length === 0) return;
+    qcQueueGenRef.current += 1;
     try {
       const updated = await marketingService.splitBatch(Number(batchId) as BatchId, { jokes: clean });
       const q: any = (updated as any)?.data ?? updated;
-      if (q && q.batch) setQcQueue(q as ApiQcQueueNextResponse);
+      qcQueueGenRef.current += 1;
+      if (q && q.batch) {
+        qcNextFetchedAtRef.current = Date.now(); // the desk holds this answer, so no immediate re-ask
+        setQcQueue(q as ApiQcQueueNextResponse);
+      }
     } catch (e) {
       alert('Failed to split batch.');
     }
@@ -2006,10 +2025,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // V2: Marketing re-opens a split batch back into the splitting phase.
   const unsplitBatch = async (batchId: string) => {
+    qcQueueGenRef.current += 1;
     try {
       const updated = await marketingService.unsplitBatch(Number(batchId) as BatchId);
       const q: any = (updated as any)?.data ?? updated;
-      if (q && q.batch) setQcQueue(q as ApiQcQueueNextResponse);
+      qcQueueGenRef.current += 1;
+      if (q && q.batch) {
+        qcNextFetchedAtRef.current = Date.now(); // the desk holds this answer, so no immediate re-ask
+        setQcQueue(q as ApiQcQueueNextResponse);
+      }
     } catch (e) {
       alert('Failed to reopen batch for splitting.');
     }
@@ -2044,8 +2068,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // text — see buildPublishBody.
     const body = buildPublishBody(active.jokes ?? [], publishedIds, jokeTitles, note);
 
+    qcQueueGenRef.current += 1;
     try {
       await marketingService.publish(bid, body);
+      qcQueueGenRef.current += 1;
+      qcNextFetchedAtRef.current = 0; // the desk is empty, so the next tick asks for the next batch
       setQcQueue(null);
       return true;
     } catch (e) {
