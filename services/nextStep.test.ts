@@ -21,12 +21,12 @@ const mk = (over: Partial<MarketingStepInput> = {}): MarketingStepInput => ({
 describe('Joke Maker next step', () => {
   it('rule 1: the round has not started', () => {
     expect(jokeMakerNextStep(jm({ roundActive: false })))
-      .toEqual({ text: 'Get your AI tool ready — the round starts soon.', tone: 'info' });
+      .toEqual({ text: 'Get your AI tool ready. The round starts soon.', tone: 'info' });
   });
 
   it('after the final round has ended: join the debrief, whatever else is true', () => {
     expect(jokeMakerNextStep(jm({ roundActive: false, classOver: true, roundNumber: 2, marketingBacklog: 0 })))
-      .toEqual({ text: 'Round over — join the debrief.', tone: 'info' });
+      .toEqual({ text: 'Round over. Join the debrief.', tone: 'info' });
   });
 
   it('Marketing\'s note never reaches the Next step line: students find it inside the batch', () => {
@@ -38,13 +38,13 @@ describe('Joke Maker next step', () => {
     const step = jokeMakerNextStep(input);
     expect(step.text).not.toContain('Go shorter');
     expect(step.text).not.toContain('Marketing says');
-    expect(step).toEqual({ text: 'Keep writing — every batch is another chance to sell.', tone: 'info' });
+    expect(step).toEqual({ text: 'Keep writing. Every batch is another chance to sell.', tone: 'info' });
   });
 
 
   it('rule 3: Round 2, a last batch of 6 or more jokes', () => {
     expect(jokeMakerNextStep(jm({ roundNumber: 2, lastBatchJokes: 6 }))).toEqual({
-      text: 'Big batches wait longer for feedback — try 2 or 3 jokes next.', tone: 'warn',
+      text: 'Big batches wait longer for feedback. Try 2 or 3 jokes next.', tone: 'warn',
     });
     expect(jokeMakerNextStep(jm({ roundNumber: 2, lastBatchJokes: 5 })).tone).toBe('info');
     expect(jokeMakerNextStep(jm({ roundNumber: 1, lastBatchJokes: 8 })).text).not.toContain('Big batches');
@@ -53,24 +53,24 @@ describe('Joke Maker next step', () => {
 
   it('rule 4: Marketing\'s desk is empty', () => {
     expect(jokeMakerNextStep(jm({ marketingBacklog: 0 }))).toEqual({
-      text: "Marketing's desk is empty — send your next batch of 5.", tone: 'info',
+      text: "Marketing's desk is empty. Send your next batch of 5.", tone: 'info',
     });
     expect(jokeMakerNextStep(jm({ roundNumber: 2, marketingBacklog: 0 })).text)
-      .toBe("Marketing's desk is empty — send a small batch now.");
+      .toBe("Marketing's desk is empty. Send a small batch now.");
     expect(jokeMakerNextStep(jm({ marketingBacklog: null, lastSentAt: NOW })).text)
-      .toBe('Keep writing — every batch is another chance to sell.');
+      .toBe('Keep writing. Every batch is another chance to sell.');
   });
 
   it('rule 5: no batch sent for 90 s', () => {
     expect(jokeMakerNextStep(jm({ lastSentAt: NOW - s(90) }))).toEqual({
-      text: 'No batch sent in 90 s — keep the line moving.', tone: 'warn',
+      text: 'No batch sent in 90 s. Keep the line moving.', tone: 'warn',
     });
     expect(jokeMakerNextStep(jm({ lastSentAt: NOW - s(89) })).tone).toBe('info');
     expect(jokeMakerNextStep(jm({ lastSentAt: null })).tone).toBe('info');
   });
 
   it('rule 6: otherwise', () => {
-    expect(jokeMakerNextStep(jm())).toEqual({ text: 'Keep writing — every batch is another chance to sell.', tone: 'info' });
+    expect(jokeMakerNextStep(jm())).toEqual({ text: 'Keep writing. Every batch is another chance to sell.', tone: 'info' });
   });
 
   it('the first matching rule wins', () => {
@@ -87,43 +87,43 @@ describe('Joke Maker next step', () => {
 describe('Marketing next step', () => {
   it('rule 1: the round has not started', () => {
     expect(marketingNextStep(mk({ roundActive: false, deskBatchSentAt: NOW - s(300) }))).toEqual({
-      text: "Watch the desk — your Joke Maker's first batch is coming.", tone: 'info',
+      text: "Watch the desk. Your Joke Maker's first batch is coming.", tone: 'info',
     });
   });
 
   it('after the final round has ended: join the debrief, whatever else is true', () => {
     expect(marketingNextStep(mk({ roundActive: false, classOver: true, deskBatchSentAt: NOW - s(300) })))
-      .toEqual({ text: 'Round over — join the debrief.', tone: 'info' });
+      .toEqual({ text: 'Round over. Join the debrief.', tone: 'info' });
   });
 
   it('rule 2: a batch on the desk for 45 s or more, priced at the round\'s storage fee', () => {
     expect(marketingNextStep(mk({ deskBatchSentAt: NOW - s(45) }))).toEqual({
-      text: "Batch waiting 45 s — release what's good enough. Storage costs 5¢ a joke each minute.", tone: 'warn',
+      text: "Batch waiting 45 s. Release what's good enough. Storage costs 5¢ a joke each minute.", tone: 'warn',
     });
     expect(marketingNextStep(mk({ deskBatchSentAt: NOW - s(44) })).tone).toBe('info');
     expect(marketingNextStep(mk({ deskBatchSentAt: NOW - s(130.9), storageFeePerJokeMinute: 0.25 })).text)
-      .toBe("Batch waiting 2 min 10 s — release what's good enough. Storage costs 25¢ a joke each minute.");
+      .toBe("Batch waiting 2 min 10 s. Release what's good enough. Storage costs 25¢ a joke each minute.");
   });
 
   it('rule 2: the wait reads in minutes from 60 s, whole minutes from 10 min', () => {
     const waiting = (secs: number) => marketingNextStep(mk({ deskBatchSentAt: NOW - s(secs) })).text;
-    expect(waiting(59)).toContain('Batch waiting 59 s —');
-    expect(waiting(60)).toContain('Batch waiting 1 min —');
-    expect(waiting(120)).toContain('Batch waiting 2 min —');
-    expect(waiting(72)).toContain('Batch waiting 1 min 12 s —');
-    expect(waiting(599)).toContain('Batch waiting 9 min 59 s —');
-    expect(waiting(600)).toContain('Batch waiting 10 min —');
-    expect(waiting(3391)).toContain('Batch waiting 56 min —');
+    expect(waiting(59)).toContain('Batch waiting 59 s.');
+    expect(waiting(60)).toContain('Batch waiting 1 min.');
+    expect(waiting(120)).toContain('Batch waiting 2 min.');
+    expect(waiting(72)).toContain('Batch waiting 1 min 12 s.');
+    expect(waiting(599)).toContain('Batch waiting 9 min 59 s.');
+    expect(waiting(600)).toContain('Batch waiting 10 min.');
+    expect(waiting(3391)).toContain('Batch waiting 56 min.');
   });
 
   it('rule 2: no storage clause when storage is free (CLASSIC)', () => {
     expect(marketingNextStep(mk({ deskBatchSentAt: NOW - s(45), storageFeePerJokeMinute: 0 })).text)
-      .toBe("Batch waiting 45 s — release what's good enough.");
+      .toBe("Batch waiting 45 s. Release what's good enough.");
   });
 
   it('rule 3: the last decision discarded 60 % or more of a batch', () => {
     expect(marketingNextStep(mk({ lastDecision: { published: 2, discarded: 3 } }))).toEqual({
-      text: "You discarded 3 of 5 last time — customers can only buy what's on the shelf.", tone: 'warn',
+      text: "You discarded 3 of 5 last time. Customers can only buy what's on the shelf.", tone: 'warn',
     });
     expect(marketingNextStep(mk({ lastDecision: { published: 3, discarded: 2 } })).tone).toBe('info');
     expect(marketingNextStep(mk({ lastDecision: { published: 0, discarded: 0 } })).tone).toBe('info');
@@ -137,7 +137,7 @@ describe('Marketing next step', () => {
 
   it('rule 5: the desk is empty', () => {
     expect(marketingNextStep(mk({ deskEmpty: true }))).toEqual({
-      text: 'Desk is clear — nudge your Joke Maker to send the next batch.', tone: 'info',
+      text: 'Desk is clear. Nudge your Joke Maker to send the next batch.', tone: 'info',
     });
     expect(marketingNextStep(mk({ deskEmpty: null })).text)
       .toBe("Release what's good enough, then tell your Joke Maker what to change.");
@@ -151,7 +151,7 @@ describe('Marketing next step', () => {
 
   it('the first matching rule wins', () => {
     const all = mk({ deskBatchSentAt: NOW - s(60), lastDecision: { published: 1, discarded: 4 }, topFixNext: 'Topic', deskEmpty: true });
-    expect(marketingNextStep(all).text).toContain('Batch waiting 1 min —');
+    expect(marketingNextStep(all).text).toContain('Batch waiting 1 min.');
     expect(marketingNextStep({ ...all, deskBatchSentAt: NOW - s(10) }).text).toContain('You discarded 4 of 5');
     expect(marketingNextStep({ ...all, deskBatchSentAt: null, lastDecision: null }).text).toContain('fix Topic next');
     expect(marketingNextStep({ ...all, deskBatchSentAt: null, lastDecision: null, topFixNext: null }).text).toContain('Desk is clear');
@@ -239,15 +239,15 @@ describe('the class is over only once the final round has ended', () => {
     })).text;
 
   it('before Round 1 and between rounds, rule 1 stays', () => {
-    expect(jmLine(statuses.beforeR1, false, 1)).toBe('Get your AI tool ready — the round starts soon.');
-    expect(jmLine(statuses.betweenRounds, false, 2)).toBe('Get your AI tool ready — the round starts soon.');
-    expect(mkLine(statuses.betweenRounds, false)).toBe("Watch the desk — your Joke Maker's first batch is coming.");
-    expect(jmLine(statuses.unknown, false, 2)).toBe('Get your AI tool ready — the round starts soon.');
+    expect(jmLine(statuses.beforeR1, false, 1)).toBe('Get your AI tool ready. The round starts soon.');
+    expect(jmLine(statuses.betweenRounds, false, 2)).toBe('Get your AI tool ready. The round starts soon.');
+    expect(mkLine(statuses.betweenRounds, false)).toBe("Watch the desk. Your Joke Maker's first batch is coming.");
+    expect(jmLine(statuses.unknown, false, 2)).toBe('Get your AI tool ready. The round starts soon.');
   });
 
   it('after Round 2 has ended, both seats are sent to the debrief', () => {
-    expect(jmLine(statuses.afterR2, false, 2)).toBe('Round over — join the debrief.');
-    expect(mkLine(statuses.afterR2, false)).toBe('Round over — join the debrief.');
+    expect(jmLine(statuses.afterR2, false, 2)).toBe('Round over. Join the debrief.');
+    expect(mkLine(statuses.afterR2, false)).toBe('Round over. Join the debrief.');
   });
 
   it('while a round runs, the class is not over', () => {
@@ -282,7 +282,7 @@ describe("Marketing's last decision comes from the current round only", () => {
     const input = marketingInputFrom({ ...base, batches: [listed, previous] });
     expect(input.lastDecision).toEqual({ published: 1, discarded: 3 });
     expect(marketingNextStep(input)).toEqual({
-      text: "You discarded 3 of 4 last time — customers can only buy what's on the shelf.", tone: 'warn',
+      text: "You discarded 3 of 4 last time. Customers can only buy what's on the shelf.", tone: 'warn',
     });
     expect(marketingInputFrom({ ...base, batches: [previous] }).lastDecision).toBeNull();
   });

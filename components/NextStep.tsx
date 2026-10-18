@@ -1,30 +1,41 @@
-/* The "Next step" line under the stat tiles of both student screens: a small
-   coloured bar with an arrow, the label "Next step" and one sentence from
-   services/nextStep.ts. Not a live region: Marketing's
-   sentence changes every second and must not be re-announced. Amber for a warning, blue otherwise. NextStepLive
-   keeps its own one-second clock, so only the line re-renders as time
-   passes; the screen's polls re-render it with fresh inputs. */
-import React, { useEffect, useState } from 'react';
-import { ArrowRight } from 'lucide-react';
+/* The "Next step" row of both student screens: a small "Next step" label and
+   one sentence from services/nextStep.ts, no background. Warn tone turns the
+   sentence --warn. When the sentence changes the new text slides in and the row
+   flashes gold (index.css, .jf-next-step[data-changed="true"]). Not a live
+   region: Marketing's sentence changes every second and must not be
+   re-announced. NextStepLive keeps its own one-second clock, so only the row
+   re-renders as time passes; the screen's polls re-render it with fresh
+   inputs. */
+import React, { useEffect, useRef, useState } from 'react';
 import { useDemoMode } from '../context';
 import type { NextStep } from '../services/nextStep';
 
-export const NextStepLine: React.FC<{ step: NextStep }> = ({ step }) => {
-  const warn = step.tone === 'warn';
-  return (
-    <div
-      className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-sm ${
-        warn ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-sky-50 border-sky-200 text-sky-900'
-      }`}
-    >
-      <ArrowRight size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
-      <span>
-        <span className="mr-1.5 text-[11px] font-bold uppercase tracking-wide">Next step</span>
-        {step.text}
-      </span>
-    </div>
-  );
-};
+/** How long data-changed stays on after a change; matches the 2.2 s flash in index.css. */
+const FLASH_MS = 2200;
+
+/** The sentence with its ticking durations ("52 s", "1 min 12 s") blanked out. */
+const signature = (text: string): string => text.replace(/\d+ (?:min|s)\b(?: \d+ s\b)?/g, '#');
+
+/**
+ * True when `next` is a different sentence from `prev`. The first sentence
+ * (prev null) is not a change, and neither is a duration counting up inside the
+ * same sentence ("Batch waiting 52 s" to "53 s"), which would flash every second.
+ */
+export function didChange(prev: string | null, next: string): boolean {
+  return prev !== null && signature(prev) !== signature(next);
+}
+
+export const NextStepLine: React.FC<{ step: NextStep; changed?: boolean }> = ({ step, changed = false }) => (
+  <div
+    className="jf-next-step flex items-baseline gap-2 rounded-md px-2 py-1 -mx-2 text-sm"
+    data-changed={changed ? 'true' : 'false'}
+  >
+    <span className="shrink-0 text-[11px] font-medium text-[color:var(--ink-3)]">Next step</span>
+    <span className={`jf-next-step-text ${step.tone === 'warn' ? 'text-[color:var(--warn)]' : 'text-[color:var(--ink)]'}`}>
+      {step.text}
+    </span>
+  </div>
+);
 
 /** Date.now(), refreshed every `intervalMs` while mounted. */
 export function useNow(intervalMs = 1000, paused = false): number {
@@ -37,9 +48,24 @@ export function useNow(intervalMs = 1000, paused = false): number {
   return now;
 }
 
-/** The line, recomputed every second: `step` maps the current time to the sentence. */
+/** The row, recomputed every second: `step` maps the current time to the sentence. */
 export const NextStepLive: React.FC<{ step: (now: number) => NextStep }> = ({ step }) => {
   // Inside the demo stage the script's clock drives the line; the wall clock is ignored, so don't tick it.
   const now = useNow(1000, useDemoMode());
-  return <NextStepLine step={step(now)} />;
+  const current = step(now);
+  const key = signature(current.text);
+  const previous = useRef<string | null>(null);
+  const [flashing, setFlashing] = useState(false);
+  useEffect(() => {
+    const changed = didChange(previous.current, current.text);
+    previous.current = current.text;
+    if (!changed) return undefined;
+    setFlashing(true);
+    const id = window.setTimeout(() => setFlashing(false), FLASH_MS);
+    return () => window.clearTimeout(id);
+    // Runs only when the sentence itself changes, so a re-render with the same text leaves the flash alone.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  // Keyed by the sentence so a change remounts the row and the slide-in and flash start afresh.
+  return <NextStepLine key={key} step={current} changed={flashing} />;
 };

@@ -16,19 +16,19 @@ describe('the Next step line on the student screens', () => {
     expect(line).toBeGreaterThan(out.indexOf('More numbers'));
     expect(line).toBeGreaterThan(out.indexOf('Created to Publish'));
     expect(line).toBeLessThan(out.indexOf('Jokes by stage'));
-    expect(out).toContain("Marketing&#x27;s desk is empty — send your next batch of 5.");
+    expect(out).toContain("Marketing&#x27;s desk is empty. Send your next batch of 5.");
   });
 
   it('tells a Joke Maker to get ready before the round starts', () => {
     const out = renderWithGame(JokeMaker, {
       user: testUser(Role.JOKE_MAKER), config: { ...TEST_CONFIG, isActive: false }, teamSummary: summary,
     });
-    expect(out).toContain('Get your AI tool ready — the round starts soon.');
+    expect(out).toContain('Get your AI tool ready. The round starts soon.');
   });
 
   it('renders on both screens before anything has loaded (no summary, no batches, no desk)', () => {
     const cases = [
-      [JokeMaker, Role.JOKE_MAKER, 'Keep writing — every batch is another chance to sell.'],
+      [JokeMaker, Role.JOKE_MAKER, 'Keep writing. Every batch is another chance to sell.'],
       [QualityControl, Role.QUALITY_CONTROL, 'Release what&#x27;s good enough, then tell your Joke Maker what to change.'],
     ] as const;
     for (const [view, role, sentence] of cases) {
@@ -49,18 +49,18 @@ describe('the Next step line on the student screens', () => {
     expect(line).toBeGreaterThan(out.indexOf('More numbers'));
     expect(line).toBeGreaterThan(out.indexOf('Content Backlog'));
     expect(line).toBeLessThan(out.indexOf('The 12 criteria customers judge'));
-    expect(out).toMatch(/Batch waiting (5\d) s — release what&#x27;s good enough\. Storage costs 5¢ a joke each minute\./);
+    expect(out).toMatch(/Batch waiting (5\d) s\. Release what&#x27;s good enough\. Storage costs 5¢ a joke each minute\./);
   });
 
   it('sends both seats to the debrief once Round 2 has ended, but not between rounds', () => {
     const over = { ...TEST_CONFIG, isActive: false, round: 2 };
     const cases = [
-      [JokeMaker, Role.JOKE_MAKER, 'Get your AI tool ready — the round starts soon.'],
-      [QualityControl, Role.QUALITY_CONTROL, 'Watch the desk — your Joke Maker&#x27;s first batch is coming.'],
+      [JokeMaker, Role.JOKE_MAKER, 'Get your AI tool ready. The round starts soon.'],
+      [QualityControl, Role.QUALITY_CONTROL, 'Watch the desk. Your Joke Maker&#x27;s first batch is coming.'],
     ] as const;
     for (const [view, role, between] of cases) {
       const ended = renderWithGame(view, { user: testUser(role), config: over, teamSummary: summary, roundStatuses: { 1: 'ENDED', 2: 'ENDED' } });
-      expect(ended).toContain('Round over — join the debrief.');
+      expect(ended).toContain('Round over. Join the debrief.');
       const gap = renderWithGame(view, { user: testUser(role), config: over, teamSummary: summary, roundStatuses: { 1: 'ENDED', 2: 'CONFIGURED' } });
       expect(gap).toContain(between);
       expect(gap).not.toContain('join the debrief');

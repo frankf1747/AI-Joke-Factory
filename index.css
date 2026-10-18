@@ -81,6 +81,22 @@ body {
 }
 .mk-fade-in { animation: mkFade 0.4s ease both; }
 
+/* Next step row: the new sentence slides in and the row flashes gold, fading out. */
+@keyframes jf-next-flash {
+  from { background-color: #fff1b8; }
+  to { background-color: transparent; }
+}
+@keyframes jf-next-in {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: none; }
+}
+.jf-next-step[data-changed="true"] { animation: jf-next-flash 2.2s ease-out both; }
+.jf-next-step[data-changed="true"] .jf-next-step-text { animation: jf-next-in 0.35s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .jf-next-step[data-changed="true"],
+  .jf-next-step[data-changed="true"] .jf-next-step-text { animation: none; }
+}
+
 @keyframes jf-rank-up-flash {
   0% {
     background-position: 0% 50%;

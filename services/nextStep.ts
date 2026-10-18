@@ -58,7 +58,7 @@ export const DISCARD_WARN_SHARE = 0.6;
 /** The game has two rounds; once this one has ended the class moves to the debrief. */
 export const FINAL_ROUND = 2;
 /** Both seats, after the final round has ended (before rule 1). */
-export const CLASS_OVER_TEXT = 'Round over — join the debrief.';
+export const CLASS_OVER_TEXT = 'Round over. Join the debrief.';
 
 type RoundStatusOf = 'CONFIGURED' | 'ACTIVE' | 'ENDED' | null;
 /** True once the final round has ENDED; between rounds (Round 1 ended, Round 2 not started) it is false. */
@@ -71,40 +71,40 @@ const warn = (text: string): NextStep => ({ text, tone: 'warn' });
 
 export function jokeMakerNextStep(i: JokeMakerStepInput): NextStep {
   if (i.classOver) return info(CLASS_OVER_TEXT);
-  if (!i.roundActive) return info('Get your AI tool ready — the round starts soon.');
+  if (!i.roundActive) return info('Get your AI tool ready. The round starts soon.');
   if (i.roundNumber === 2 && i.lastBatchJokes != null && i.lastBatchJokes >= BIG_BATCH_JOKES) {
-    return warn('Big batches wait longer for feedback — try 2 or 3 jokes next.');
+    return warn('Big batches wait longer for feedback. Try 2 or 3 jokes next.');
   }
   if (i.marketingBacklog === 0) {
     return info(i.roundNumber === 1
-      ? "Marketing's desk is empty — send your next batch of 5."
-      : "Marketing's desk is empty — send a small batch now.");
+      ? "Marketing's desk is empty. Send your next batch of 5."
+      : "Marketing's desk is empty. Send a small batch now.");
   }
   if (i.lastSentAt != null && i.now - i.lastSentAt >= JM_IDLE_MS) {
-    return warn('No batch sent in 90 s — keep the line moving.');
+    return warn('No batch sent in 90 s. Keep the line moving.');
   }
-  return info('Keep writing — every batch is another chance to sell.');
+  return info('Keep writing. Every batch is another chance to sell.');
 }
 
 export function marketingNextStep(i: MarketingStepInput): NextStep {
   if (i.classOver) return info(CLASS_OVER_TEXT);
-  if (!i.roundActive) return info("Watch the desk — your Joke Maker's first batch is coming.");
+  if (!i.roundActive) return info("Watch the desk. Your Joke Maker's first batch is coming.");
   if (i.deskBatchSentAt != null) {
     const waited = Math.floor((i.now - i.deskBatchSentAt) / 1000);
     if (waited >= DESK_WAIT_S) {
       const storage = i.storageFeePerJokeMinute > 0 ? ` Storage costs ${fmtPerMinute(i.storageFeePerJokeMinute)}.` : '';
-      return warn(`Batch waiting ${fmtDuration(waited)} — release what's good enough.${storage}`);
+      return warn(`Batch waiting ${fmtDuration(waited)}. Release what's good enough.${storage}`);
     }
   }
   if (i.lastDecision) {
     const { published, discarded } = i.lastDecision;
     const total = published + discarded;
     if (total > 0 && discarded / total >= DISCARD_WARN_SHARE) {
-      return warn(`You discarded ${discarded} of ${total} last time — customers can only buy what's on the shelf.`);
+      return warn(`You discarded ${discarded} of ${total} last time. Customers can only buy what's on the shelf.`);
     }
   }
   if (i.topFixNext) return info(`Tell your Joke Maker: fix ${i.topFixNext} next.`);
-  if (i.deskEmpty === true) return info('Desk is clear — nudge your Joke Maker to send the next batch.');
+  if (i.deskEmpty === true) return info('Desk is clear. Nudge your Joke Maker to send the next batch.');
   return info("Release what's good enough, then tell your Joke Maker what to change.");
 }
 

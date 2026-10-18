@@ -229,16 +229,16 @@ describe('the Next step line runs the real rules on the demo state', () => {
   }));
 
   it('Joke Maker: desk empty, then keep writing while Marketing has the batch; the note never reaches the line', () => {
-    expect(jmLine(at(opts('JOKE_MAKER'), 'jm-welcome'))).toBe("Marketing's desk is empty — send your next batch of 5.");
-    expect(jmLine(at(opts('JOKE_MAKER', 2), 'jm-welcome'))).toBe("Marketing's desk is empty — send a small batch now.");
-    expect(jmLine(at(opts('JOKE_MAKER'), 'jm-next'))).toBe('Keep writing — every batch is another chance to sell.');
+    expect(jmLine(at(opts('JOKE_MAKER'), 'jm-welcome'))).toBe("Marketing's desk is empty. Send your next batch of 5.");
+    expect(jmLine(at(opts('JOKE_MAKER', 2), 'jm-welcome'))).toBe("Marketing's desk is empty. Send a small batch now.");
+    expect(jmLine(at(opts('JOKE_MAKER'), 'jm-next'))).toBe('Keep writing. Every batch is another chance to sell.');
     // The note is read inside the opened batch (the jm-note spotlight), never on the Next step line.
     expect(jmLine(at(opts('JOKE_MAKER'), 'jm-note'))).not.toContain(DEMO_NOTE);
   });
 
   it('Marketing: on its Next step, a batch that has waited too long, with the round\'s storage fee', () => {
     expect(mkLine(at(opts('QUALITY_CONTROL'), 'mk-next'))).toEqual({
-      tone: 'warn', text: "Batch waiting 52 s — release what's good enough. Storage costs 5¢ a joke each minute.",
+      tone: 'warn', text: "Batch waiting 52 s. Release what's good enough. Storage costs 5¢ a joke each minute.",
     });
     expect(mkLine(at(opts('QUALITY_CONTROL', 2, ODD_FEES), 'mk-next')).text).toContain('Storage costs 10¢ a joke each minute.');
   });
