@@ -24,6 +24,7 @@ import type { RoundTimes } from './services/headerRound';
 import { instructorService } from './services/instructorService';
 import type { PatchUserRole } from './services/instructorService';
 import { jmService } from './services/jmService';
+import { queueSizeAfterRelease } from './services/desk';
 import { buildPublishBody, marketingService, publishFailureMessage, toMarketingNote } from './services/marketingService';
 import { customerService } from './services/customerService';
 import { sessionService } from './services/sessionService';
@@ -2074,6 +2075,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       qcQueueGenRef.current += 1;
       qcNextFetchedAtRef.current = 0; // the desk is empty, so the next tick asks for the next batch
       setQcQueue(null);
+      setQcQueueSize(queueSizeAfterRelease); // the released batch no longer waits; the next queue/count corrects it
       return true;
     } catch (e) {
       // The batch stays claimed and the desk keeps its decisions and note, so the

@@ -63,6 +63,13 @@ describe('FeedbackMatrix', () => {
     expect(count(out, '<th scope="row"')).toBe(count(out, 'float-right'));
   });
 
+  it('scopes the corner and each joke header cell as column headers', () => {
+    const out = render();
+    // The corner plus one per joke.
+    expect(count(out, '<th scope="col"')).toBe(1 + JOKES.length);
+    expect(out).toMatch(/<th scope="col"[^>]*>\s*Latest first/);
+  });
+
   it('groups the rows Fix next, then Keep doing, each with the winning side\'s count', () => {
     const out = render();
     expect(out).toContain('Fix next');

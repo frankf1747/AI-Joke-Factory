@@ -131,12 +131,13 @@ export const FeedbackMatrix: React.FC<FeedbackMatrixProps> = ({ jokes, now }) =>
       <table className="-mx-[3px] mt-2.5 w-full table-fixed border-separate border-spacing-[3px] text-[13px]">
         <thead>
           <tr>
-            <th className="w-[39%] pb-1.5 text-left align-bottom text-[11.5px] font-normal" style={{ color: 'var(--ink-4)' }}>
+            <th scope="col" className="w-[39%] pb-1.5 text-left align-bottom text-[11.5px] font-normal" style={{ color: 'var(--ink-4)' }}>
               Latest first
             </th>
             {jokes.map(j => (
               <th
                 key={j.joke_id}
+                scope="col"
                 className="rounded p-0 text-left align-bottom font-medium transition-colors"
                 style={{ background: hot === j.joke_id ? 'var(--navy-tint)' : undefined }}
                 {...hover(j.joke_id)}

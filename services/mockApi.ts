@@ -421,6 +421,9 @@ function listTeamBatches(db: MockDb, round_id: RoundId, team_id: TeamId): ApiTea
         joke_text: j.joke_text,
         joke_title: j.joke_title,
         is_published: !!j.is_published,
+        // The real backend sends publish_status, not is_published (handler/batch.go);
+        // the UI's "Found a buyer" count reads it, so the mock sends it too.
+        publish_status: b.status !== 'RATED' ? 'PENDING' : j.is_published ? 'PUBLISHED' : 'DISCARDED',
         published_at: j.published_at ?? null,
         first_sold_at: j.first_sold_at ?? null,
         sold_count: Object.values(db.purchases).reduce(

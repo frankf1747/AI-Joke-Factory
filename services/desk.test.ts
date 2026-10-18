@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Batch, Joke } from '../types';
-import { latestRelease, moreWaiting, moreWaitingLabel, splitStatus } from './desk';
+import { latestRelease, moreWaiting, moreWaitingLabel, queueSizeAfterRelease, splitStatus } from './desk';
 
 describe('moreWaiting', () => {
   it('does not count the batch on the desk', () => {
@@ -16,6 +16,23 @@ describe('moreWaiting', () => {
   });
   it('never goes below zero', () => {
     expect(moreWaiting(0, true)).toBe(0);
+  });
+});
+
+describe('queueSizeAfterRelease', () => {
+  it('drops the released batch from the count', () => {
+    expect(queueSizeAfterRelease(3)).toBe(2);
+    expect(queueSizeAfterRelease(1)).toBe(0);
+  });
+  it('never goes below zero', () => {
+    expect(queueSizeAfterRelease(0)).toBe(0);
+  });
+  it('stays unknown while the count is unknown', () => {
+    expect(queueSizeAfterRelease(null)).toBeNull();
+  });
+  it('makes the empty desk header right straight after a release', () => {
+    // Two batches queued, one on the desk, then released: one more waiting, not two.
+    expect(moreWaitingLabel(moreWaiting(queueSizeAfterRelease(2), false))).toBe('1 more waiting');
   });
 });
 

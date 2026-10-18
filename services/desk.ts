@@ -11,6 +11,12 @@ export function moreWaiting(queueSize: number | null, hasDeskBatch: boolean): nu
   return Math.max(0, queueSize - (hasDeskBatch ? 1 : 0));
 }
 
+/** The queue count right after a release: the released batch no longer waits. The next
+    queue/count overwrites it; until then this keeps the empty desk header from lagging. */
+export function queueSizeAfterRelease(queueSize: number | null): number | null {
+  return queueSize === null ? null : Math.max(0, queueSize - 1);
+}
+
 /** The desk header's count: "2 more waiting", "nothing else waiting", or null while unknown. */
 export function moreWaitingLabel(n: number | null): string | null {
   if (n === null) return null;
