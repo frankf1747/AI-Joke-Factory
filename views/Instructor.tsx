@@ -2271,7 +2271,7 @@ const Instructor: React.FC = () => {
 
         {/* Lobby Management Panel */}
         {config.status === 'LOBBY' && (
-            <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
+            <Card>
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                     <div>
                         <h2 className="text-xl font-bold text-gray-800 flex items-center">
@@ -2309,7 +2309,7 @@ const Instructor: React.FC = () => {
         )}
 
         {/* Top Controls Bar */}
-        <Card className="border-t-4 border-t-blue-500">
+        <Card>
           <div className="flex flex-col space-y-4">
             {/* Row 1: Game Flow */}
             <div className="flex flex-wrap justify-between items-center gap-4">
@@ -2527,7 +2527,7 @@ const Instructor: React.FC = () => {
         {/* Dashboard grid */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
           {/* Team Management (full width) */}
-          <Card className="xl:col-span-2 border-t-4 border-t-purple-500" title="Team Management (Drag to Move, Click to Switch Role)">
+          <Card className="xl:col-span-2" title="Team Management (Drag to Move, Click to Switch Role)">
             <div className="space-y-4">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Two columns of production teams (JM/Marketing) */}

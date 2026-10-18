@@ -27,4 +27,14 @@ describe('Card (quiet sheet frame)', () => {
     expect(out).not.toContain('border-top');
     expect(out).not.toContain('#ff0000');
   });
+
+  it('sets the border in its own inline style so stray width classes cannot thicken one edge', () => {
+    expect(out).toContain('border:1px solid var(--rule)');
+  });
+
+  it('renders no empty heading when only an action is passed', () => {
+    const o = renderToStaticMarkup(<Card action={<b>Act</b>}>x</Card>);
+    expect(o).toContain('Act');
+    expect(o).not.toContain('<h2');
+  });
 });

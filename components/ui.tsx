@@ -43,13 +43,13 @@ export const Card: React.FC<{
   // The quiet sheet frame, matching ValueStream and JokesByStage.
   <section
     data-tour={tour}
-    className={`border p-4 ${className}`}
-    style={{ background: 'var(--sheet)', borderColor: 'var(--rule)', borderRadius: 'var(--r-3)' }}
+    className={`p-4 ${className}`}
+    style={{ background: 'var(--sheet)', border: '1px solid var(--rule)', borderRadius: 'var(--r-3)' }}
   >
     {(title || action) && (
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold" style={{ color: 'var(--ink)' }}>{title}</h2>
+          {title && <h2 className="text-base font-semibold" style={{ color: 'var(--ink)' }}>{title}</h2>}
           {subtitle && <p className="mt-0.5 text-[13px]" style={{ color: 'var(--ink-3)' }}>{subtitle}</p>}
         </div>
         {action && <div>{action}</div>}
