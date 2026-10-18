@@ -97,18 +97,16 @@ describe('Header', () => {
 });
 
 describe('Marketing screen', () => {
-  it('shows Shipping, Storage and Hosting fee tiles (behind More numbers) with one-line tooltips', () => {
+  it('shows the fees and the wait times (behind Fees and wait times) from the team summary', () => {
     vi.stubGlobal('localStorage', { getItem: () => '1' });
-    const out = marketing({ shipping_cost: 8, storage_cost: 1.5, hosting_cost: 0.2, setup_cost: 8, carrying_cost: 1.7 });
-    expect(out).toContain('Shipping fees');
-    expect(out).toContain('Storage fees');
-    expect(out).toContain('Hosting fees');
+    const out = marketing({ shipping_cost: 8, storage_cost: 1.5, hosting_cost: 0.2, setup_cost: 8, carrying_cost: 1.7, avg_submit_to_publish_s: 161, avg_publish_to_first_sale_s: 52 });
+    expect(out).toContain('Where your sales went');
+    for (const l of ['Shipping', 'Storage', 'Hosting', 'Listing and discard fees']) expect(out).toContain(l);
     expect(out).toContain('$8.00');
     expect(out).toContain('$1.50');
     expect(out).toContain('$0.20');
-    expect(out).toContain('title="Charged per batch you send: $1 for 1–4 jokes, $2 for 5, $3 for 6–10."');
-    expect(out).toContain('title="Every minute a joke waits on Marketing&#x27;s desk costs 5¢."');
-    expect(out).toContain('title="Every minute a released joke sits unsold costs 5¢."');
+    expect(out).toContain('With Marketing 2:41');
+    expect(out).toContain('about 3:33');
     expect(out).not.toContain('Setup cost');
     expect(out).not.toContain('Carrying cost');
   });

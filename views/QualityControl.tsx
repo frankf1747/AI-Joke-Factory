@@ -20,10 +20,10 @@ import { DIMENSIONS, dimById } from '../config/dimensions';
 import { toFeedbackRows } from './feedback';
 import { CustomerFeedbackCard } from '../components/CustomerFeedbackCard';
 import { isWatchMode } from '../services/watchMode';
-import { feeTooltips, fmtMoney, leanFeesOf } from '../services/leanMode';
 import { MARKETING_NOTE_MAX } from '../services/marketingService';
 import { releaseOutcome } from './marketingRelease';
 import { StatTiles, moreTilesKey } from '../components/StatTiles';
+import { FeesAndWaits } from '../components/FeesAndWaits';
 import { Scoreboard } from '../components/Scoreboard';
 import { foundABuyer, rankInputOf } from '../services/scoreboard';
 import { NextStepLive } from '../components/NextStep';
@@ -568,16 +568,10 @@ const QualityControl: React.FC = () => {
     () => computeAvgCreatedToPublishSeconds(batches.filter(b => b.team === user?.team)),
     [batches, user?.team],
   );
-  /* Lean market mode only: the team's shipping, storage and hosting fees and
-     how long a released joke waits for its first buyer. Nothing below renders
-     for a CLASSIC round. The lean charts are instructor-only. */
+  /* Lean market mode: the Fees and wait times disclosure (components/FeesAndWaits.tsx)
+     replaces More numbers. Nothing of it renders for a CLASSIC round. The lean
+     charts are instructor-only. */
   const leanMode = config.marketMode === 'LEAN';
-  const lean = teamSummary?.lean ?? null;
-  const fees = leanFeesOf(lean);
-  const tips = feeTooltips(config);
-  const toFirstSale = lean && lean.avg_publish_to_first_sale_s > 0
-    ? Math.round(lean.avg_publish_to_first_sale_s)
-    : null;
 
   return (
     <RoleLayout tourView={QualityControl}>
@@ -819,26 +813,31 @@ const QualityControl: React.FC = () => {
               publishedJokes={teamSummary ? teamSummary.published_jokes : null}
               foundBuyer={teamSummary ? foundABuyer(batches.filter(b => b.team === user?.team)) : null}
             />
-            <StatTiles
-              storageKey={moreTilesKey('quality_control')}
-              open={demoUi ? demoUi.moreOpen : undefined}
-              tourMore="mk-more"
-              keyTiles={[]}
-              moreTiles={[
-                /* queue_size counts this team's SUBMITTED batches in the round,
-                   including the one locked on the desk. It counts batches, not jokes.
-                   (The mock API still counts every team's.) Task C3 moves it to the desk header. */
-                <StatBox key="backlog" label="Content Backlog" value={queueSize} tone="blue" />,
-                <StatBox key="lead" label="Created to Publish" value={fmtSeconds(avgLeadSec)} tone="sky" />,
-                ...(leanMode ? [<StatBox key="firstsale" label="Publish → first sale" value={fmtSeconds(toFirstSale)} tone="sky" />] : []),
-                <StatBox key="waste" label="Content Waste" value={waste} tone="rose" />,
-                ...(leanMode ? [
-                  <StatBox key="shipping" label="Shipping fees" value={fmtMoney(fees.shipping)} tone="rose" valueClassName="text-xl" title={tips.shipping} />,
-                  <StatBox key="storage" label="Storage fees" value={fmtMoney(fees.storage)} tone="rose" valueClassName="text-xl" title={tips.storage} />,
-                  <StatBox key="hosting" label="Hosting fees" value={fmtMoney(fees.hosting)} tone="rose" valueClassName="text-xl" title={tips.hosting} />,
-                ] : []),
-              ]}
-            />
+            {leanMode ? (
+              <FeesAndWaits
+                summary={teamSummary}
+                config={config}
+                tourId="mk-more"
+                storageKey={moreTilesKey('quality_control')}
+                open={demoUi ? demoUi.moreOpen : undefined}
+                extras={[{ label: 'Content Backlog', value: queueSize }, { label: 'Content Waste', value: waste }]}
+              />
+            ) : (
+              <StatTiles
+                storageKey={moreTilesKey('quality_control')}
+                open={demoUi ? demoUi.moreOpen : undefined}
+                tourMore="mk-more"
+                keyTiles={[]}
+                moreTiles={[
+                  /* queue_size counts this team's SUBMITTED batches in the round,
+                     including the one locked on the desk. It counts batches, not jokes.
+                     (The mock API still counts every team's.) Task C3 moves it to the desk header. */
+                  <StatBox key="backlog" label="Content Backlog" value={queueSize} tone="blue" />,
+                  <StatBox key="lead" label="Created to Publish" value={fmtSeconds(avgLeadSec)} tone="sky" />,
+                  <StatBox key="waste" label="Content Waste" value={waste} tone="rose" />,
+                ]}
+              />
+            )}
           </div>
           <div data-tour="mk-next-step">
             <NextStepLive

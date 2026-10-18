@@ -110,22 +110,22 @@ describe('the demo plays on the real screen', () => {
     expect(renderStep(o, 'mk-note', 0, true)).toContain(`${DEMO_NOTE.length}/500`);
   });
 
-  it('opens "More numbers" for the fees step, with the three fee tiles, and shows the new feedback card', () => {
+  it('opens "Fees and wait times" for the fees step, with the sales chart, and shows the new feedback card', () => {
     const o = opts('QUALITY_CONTROL');
-    expect(renderStep(o, 'mk-scoreboard')).toContain('More numbers');
-    expect(renderStep(o, 'mk-scoreboard')).not.toContain('Shipping fees');
+    expect(renderStep(o, 'mk-scoreboard')).toContain('Fees and wait times');
+    expect(renderStep(o, 'mk-scoreboard')).not.toContain('Where your sales went');
     const fees = renderStep(o, 'mk-fees');
-    for (const tile of ['Fewer numbers', 'Shipping fees', 'Storage fees', 'Hosting fees']) expect(fees).toContain(tile);
+    for (const part of ['Where your sales went', 'Shipping', 'Storage', 'Hosting', 'Listing and discard fees']) expect(fees).toContain(part);
     expect(renderStep(o, 'mk-feedback')).toContain('To-Do Overload');
     expect(renderStep(o, 'mk-expand')).toContain('Expand');
   });
 
-  it('ignores the student\'s own "More numbers" choice and never writes it', () => {
+  it('ignores the student\'s own "Fees and wait times" choice and never writes it', () => {
     storage.setItem('jf_more_tiles_joke_maker', '1');
     storage.setItem('jf_more_tiles_quality_control', '1');
     storage.writes = [];
-    expect(renderStep(opts('JOKE_MAKER'), 'jm-scoreboard')).not.toContain('Fewer numbers');
-    expect(renderStep(opts('QUALITY_CONTROL'), 'mk-scoreboard')).not.toContain('Fewer numbers');
+    expect(renderStep(opts('JOKE_MAKER'), 'jm-scoreboard')).not.toContain('Where your sales went');
+    expect(renderStep(opts('QUALITY_CONTROL'), 'mk-scoreboard')).not.toContain('Where your sales went');
     expect(storage.writes).toEqual([]);
   });
 

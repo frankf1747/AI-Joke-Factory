@@ -11,6 +11,7 @@ import { isWatchMode } from '../services/watchMode';
 import { shippingLine } from '../services/leanMode';
 import { MarketingNoteCallout, MarketingNoteIcon, marketingNoteOf } from '../components/MarketingNote';
 import { StatTiles, moreTilesKey } from '../components/StatTiles';
+import { FeesAndWaits } from '../components/FeesAndWaits';
 import { Scoreboard } from '../components/Scoreboard';
 import { foundABuyer, rankInputOf } from '../services/scoreboard';
 import { NextStepLive } from '../components/NextStep';
@@ -378,16 +379,26 @@ const JokeMaker: React.FC = () => {
               publishedJokes={teamSummary ? teamSummary.published_jokes : null}
               foundBuyer={teamSummary ? foundABuyer(myBatches) : null}
             />
-            <StatTiles
-              storageKey={moreTilesKey('joke_maker')}
-              open={demoUi ? demoUi.moreOpen : undefined}
-              keyTiles={[]}
-              moreTiles={[
-                <StatBox key="lead" label="Created to Publish" value={fmtSeconds(avgLeadSec)} tone="sky" />,
-                <StatBox key="batches" label="Batches" value={batchesCreated} tone="slate" />,
-                <StatBox key="waste" label="Content Waste" value={waste} tone="rose" />,
-              ]}
-            />
+            {leanMode ? (
+              <FeesAndWaits
+                summary={teamSummary}
+                config={config}
+                storageKey={moreTilesKey('joke_maker')}
+                open={demoUi ? demoUi.moreOpen : undefined}
+                extras={[{ label: 'Batches', value: batchesCreated }, { label: 'Content Waste', value: waste }]}
+              />
+            ) : (
+              <StatTiles
+                storageKey={moreTilesKey('joke_maker')}
+                open={demoUi ? demoUi.moreOpen : undefined}
+                keyTiles={[]}
+                moreTiles={[
+                  <StatBox key="lead" label="Created to Publish" value={fmtSeconds(avgLeadSec)} tone="sky" />,
+                  <StatBox key="batches" label="Batches" value={batchesCreated} tone="slate" />,
+                  <StatBox key="waste" label="Content Waste" value={waste} tone="rose" />,
+                ]}
+              />
+            )}
           </div>
           <div data-tour="jm-next-step">
             <NextStepLive
