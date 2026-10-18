@@ -40,8 +40,49 @@ describe('Joke Maker screen', () => {
   it('quotes the three Round 2 tiers and says up to 10 jokes, smaller allowed', () => {
     const out = jokeMaker(2);
     expect(out).toContain('Shipping: $1 for 1–4 jokes · $2 for 5 · $3 for 6–10');
-    expect(out).toContain('Generate up to 10 jokes');
-    expect(out).toContain('smaller batches are fine');
+    expect(out).toContain('make up to 10 jokes per batch');
+  });
+
+  describe('Production line card', () => {
+    const lean = { marketMode: 'LEAN' as const };
+
+    it('puts Next step first in the card, then the paste box, the send row and the shipping line', () => {
+      const out = jokeMaker(1, { ...lean, round1BatchSize: 5 });
+      const at = (t: string) => out.indexOf(`data-tour="${t}"`);
+      expect(out.split('data-tour="jm-next-step"').length).toBe(2);
+      const order = ['jm-next-step', 'jm-draft', 'jm-send', 'jm-shipping'].map(at);
+      expect(order.every(i => i >= 0)).toBe(true);
+      expect([...order].sort((a, b) => a - b)).toEqual(order);
+      expect(out.indexOf('Production Line')).toBeLessThan(at('jm-next-step'));
+    });
+
+    it('says what to make, and where it goes, in plain text', () => {
+      const out = jokeMaker(1, { ...lean, round1BatchSize: 5 });
+      expect(out).toContain('make exactly 5 jokes per batch with any AI tool and paste the whole response below. Marketing will split it into individual jokes.');
+      expect(out).toContain('Stuck? Try work, family, food, tech or animals.');
+      expect(out).toContain('Shipping: $2 per batch of 5');
+      expect(out).not.toContain('bg-blue-50');
+    });
+
+    it('says up to 10 in Round 2', () => {
+      const out = jokeMaker(2, { ...lean, round2BatchLimit: 10 });
+      expect(out).toContain('Round 2:');
+      expect(out).toContain('make up to 10 jokes per batch with any AI tool');
+    });
+
+    it('disables the gold Send to Marketing button while there is no text', () => {
+      const out = jokeMaker(1, lean);
+      const button = out.match(/<button[^>]*>(?:(?!<\/button>).)*Send to Marketing(?:(?!<\/button>).)*<\/button>/s)?.[0] ?? '';
+      expect(button).toContain('disabled=""');
+      expect(button).toContain('Send to Marketing');
+      expect(button).toContain('var(--paper-2)');
+    });
+
+    it('keeps the card controls inside the watch-mode fieldset', () => {
+      const out = jokeMaker(1, lean);
+      const fieldset = out.match(/<fieldset[^>]*>.*<\/fieldset>/s)?.[0] ?? '';
+      for (const t of ['jm-next-step', 'jm-draft', 'jm-send', 'jm-shipping']) expect(fieldset).toContain(`data-tour="${t}"`);
+    });
   });
 
   it('reads the amounts from the round, never from fixed copy', () => {

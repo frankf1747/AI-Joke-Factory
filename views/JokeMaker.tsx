@@ -1,10 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { useDemoUi, useGame } from '../context';
-import { Button, Card, StatBox, RoleLayout, Modal, BRAND } from '../components';
-import { Send, Info, CheckCircle2 } from 'lucide-react';
+import { Card, StatBox, RoleLayout, Modal, BRAND } from '../components';
+import { CheckCircle2 } from 'lucide-react';
 import { Batch } from '../types';
 import { computeAvgCreatedToPublishSeconds } from '../services/economics';
-import { dimById } from '../config/dimensions';
 import { isWatchMode } from '../services/watchMode';
 import { shippingLine } from '../services/leanMode';
 import { ValueStream } from '../components/jokeMaker/ValueStream';
@@ -239,37 +238,57 @@ const JokeMaker: React.FC = () => {
           <fieldset disabled={watching} className="contents">
           <Card title="Production Line" accent={BRAND.production}>
             <div className="space-y-4">
+              <div data-tour="jm-next-step">
+                <NextStepLive
+                  step={now => jokeMakerNextStep(jokeMakerInputFrom({
+                    now: demoUi ? demoUi.clockMs : now,
+                    roundActive: config.isActive, round: config.round, roundStatuses, teamSummary, batches: myBatches,
+                  }))}
+                />
+              </div>
+
               {!config.isActive && (
-                <div className="bg-yellow-50 text-yellow-800 p-3 rounded text-sm font-medium border border-yellow-200">
-                  Game is currently paused. Wait for instructor to start.
+                <div
+                  className="rounded-md px-3 py-2 text-sm font-medium"
+                  style={{ background: 'var(--waiting-bg)', color: 'var(--waiting)' }}
+                >
+                  Game is paused. Wait for the instructor to start.
                 </div>
               )}
 
-              <div className="bg-blue-50 text-blue-800 rounded-lg px-3 py-2.5 text-sm flex items-start gap-2">
-                <Info size={16} className="mt-0.5 shrink-0" />
-                <span>
-                  <b>{isRound1 ? `Round 1:` : `Round 2:`}</b>{' '}
-                  {isRound1
-                    ? <>Generate {targetBatchSize} jokes with any AI tool and paste the whole response below.</>
-                    : <>Generate up to {config.round2BatchLimit} jokes with any AI tool (smaller batches are fine) and paste the whole response below.</>}
-                  {' '}Marketing will split the batch into individual jokes.
-                </span>
-              </div>
+              <p className="text-sm text-[color:var(--ink-2)]">
+                <b className="font-semibold text-[color:var(--ink)]">{isRound1 ? 'Round 1:' : 'Round 2:'}</b>{' '}
+                {isRound1
+                  ? `make exactly ${targetBatchSize} jokes per batch`
+                  : `make up to ${config.round2BatchLimit} jokes per batch`}
+                {' '}with any AI tool and paste the whole response below. Marketing will split it into individual jokes.
+              </p>
 
               <div data-tour="jm-draft">
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   rows={8}
-                  placeholder={`Paste the full AI output here — exactly as you copied it.\n\ne.g.\n1) Why did the... \n2) I told my boss...\n3) ...`}
-                  className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500 resize-y placeholder-gray-400"
+                  placeholder={`Paste the full AI output here, exactly as you copied it.\n\ne.g.\n1) Why did the... \n2) I told my boss...\n3) ...`}
+                  className="w-full border rounded-lg px-3 py-2 text-sm text-[color:var(--ink)] outline-none focus:border-[color:var(--navy)] resize-y placeholder:text-[color:var(--ink-4)]"
+                  style={{
+                    fontFamily: "'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif",
+                    lineHeight: '24px',
+                    backgroundColor: 'var(--sheet)',
+                    borderColor: 'var(--rule-2)',
+                    // Faint rules, one per text line, that scroll with the text.
+                    backgroundImage: 'linear-gradient(to bottom, transparent 23px, var(--rule) 23px)',
+                    backgroundSize: '100% 24px',
+                    backgroundPosition: '0 8px',
+                    backgroundAttachment: 'local',
+                  }}
                   disabled={!config.isActive}
                 />
                 <div className="flex justify-between items-center mt-2">
-                  <p className="text-xs text-gray-400 italic">
-                    Stuck? Try: {(dimById('TOPIC')?.categories ?? []).slice(0, 6).join(' · ')} · …
+                  <p className="text-xs text-[color:var(--ink-3)]">
+                    Stuck? Try work, family, food, tech or animals.
                   </p>
-                  <span className="text-[11px] text-gray-400 tabular-nums">
+                  <span className="text-[11px] text-[color:var(--ink-3)] tabular-nums">
                     {trimmedLen} chars{trimmedLen > 0 && trimmedLen < MIN_RAW_CHARS ? ` · min ${MIN_RAW_CHARS}` : ''}
                   </span>
                 </div>
@@ -281,17 +300,27 @@ const JokeMaker: React.FC = () => {
                     type="checkbox"
                     checked={certified}
                     onChange={(e) => setCertified(e.target.checked)}
-                    className="w-4 h-4 accent-blue-600"
+                    className="w-4 h-4"
+                    style={{ accentColor: 'var(--navy)' }}
                     disabled={!config.isActive}
                   />
-                  <span className="text-sm text-gray-700">I certify these jokes are not offensive.</span>
+                  <span className="text-sm text-[color:var(--ink-2)]">I certify these jokes are not offensive.</span>
                 </label>
-                <Button variant="success" onClick={submit} disabled={!canSubmit}>
-                  <span className="flex items-center gap-1"><span className="font-bold">Send to Marketing</span><Send size={15} /></span>
-                </Button>
+                <button
+                  type="button"
+                  onClick={submit}
+                  disabled={!canSubmit}
+                  className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors disabled:cursor-not-allowed ${
+                    canSubmit
+                      ? 'bg-[color:var(--gold)] hover:bg-[color:var(--gold-2)] text-[color:var(--navy)]'
+                      : 'bg-[color:var(--paper-2)] text-[color:var(--ink-3)]'
+                  }`}
+                >
+                  Send to Marketing <span aria-hidden="true">→</span>
+                </button>
               </div>
               {leanMode && (
-                <div data-tour="jm-shipping" className="text-xs text-gray-500 text-right">
+                <div data-tour="jm-shipping" className="text-xs text-right text-[color:var(--ink-3)]">
                   {shippingLine(config.round, config.round1BatchSize, config)}
                 </div>
               )}
@@ -333,14 +362,6 @@ const JokeMaker: React.FC = () => {
                 ]}
               />
             )}
-          </div>
-          <div data-tour="jm-next-step">
-            <NextStepLive
-              step={now => jokeMakerNextStep(jokeMakerInputFrom({
-                now: demoUi ? demoUi.clockMs : now,
-                roundActive: config.isActive, round: config.round, roundStatuses, teamSummary, batches: myBatches,
-              }))}
-            />
           </div>
           <Card title="Jokes by stage" subtitle="Where your output sits right now">
             <StageDots batches={myBatches} />
