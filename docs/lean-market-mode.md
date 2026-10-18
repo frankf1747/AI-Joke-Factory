@@ -43,9 +43,9 @@ Suggested timeline for a 90-minute session (about 65 minutes of game time):
 
 | Step | Time | Instructor (Instructor screen) | Joke Makers | Marketing |
 |---|---|---|---|---|
-| Setup | 10 min | Presses **Reset Game** if a previous class played, forms teams in the lobby, picks the ideal joke profile. Explains the fees (section 3). | Log in, take their seat, read the brief. | Log in, take their seat, read "The 12 criteria customers judge". |
+| Setup | 10 min | Presses **Reset Game** if a previous class played, forms teams in the lobby, picks the ideal joke profile. Explains the fees (section 3). | Log in, take their seat, read the brief. | Log in, take their seat, read "What customers judge" (the 12 criteria). |
 | Round 1 | 15 min | Presses **Start** on the Round 1 tab. Watches the leaderboard, calls out cues (section 6). Presses **End Round** at about 15 minutes. | Write batches of exactly 5 and press **Send to Marketing**. See "Shipping: $2 per batch of 5". | Split each batch, choose jokes, add a Topic and a title, **Release to market**. Open "Fees and wait times" to watch the shipping, storage and hosting fees. |
-| Debrief 1 | 10 min | Shows the Round 1 leaderboard (Shipping, Storage, Hosting, Lead, Sale) and the lean charts. Asks where the money went. | Discuss. | Discuss; read the Customer feedback panel. |
+| Debrief 1 | 10 min | Shows the Round 1 leaderboard (Shipping, Storage, Hosting, Lead, Sale) and the lean charts. Asks where the money went. | Discuss. | Discuss; read the Customer feedback card. |
 | Round 2 | 15 min | Selects the Round 2 tab, presses **Start**, ends at about 15 minutes. | Batches of 1 to 10 jokes. The line reads "Shipping: $1 for 1–4 jokes · $2 for 5 · $3 for 6–10". | Same desk; in Round 2 Marketing may also discard a whole batch. |
 | Debrief 2 | 15+ min | Opens the **Round 1 vs Round 2** table and works through the debrief prompts in section 6. | Discuss. | Discuss. |
 
@@ -185,7 +185,7 @@ the note under "From Marketing". The Joke Maker does not see the customer feedba
 
 ### Marketing
 
-The next waiting batch appears on the **Marketing Desk** automatically. Marketing **splits** it
+The next waiting batch appears on the **Marketing desk** automatically. Marketing **splits** it
 (Round 1 into exactly 5, Round 2 into up to 10), **decides** which jokes to sell with a Topic and a
 title (in Round 2 it may discard the whole batch), writes an optional **Note to your Joke Maker**,
 and **releases**.
@@ -203,7 +203,7 @@ The round's amounts are $1 for 1–4 jokes, $2 for 5 and $3 for 6–10 in shippi
 minute while a joke waits on Marketing's desk (storage), and 5¢ a joke each minute while a released
 joke sits unsold (hosting).
 
-Under the Scoreboard, the **Next step** line:
+The **Next step** line is the first row of the Marketing desk card:
 
 1. Before the round (and between rounds): "Watch the desk. Your Joke Maker's first batch is
    coming." Once Round 2 has ended: "Round over. Join the debrief."
@@ -216,8 +216,12 @@ Under the Scoreboard, the **Next step** line:
 5. The desk is empty: "Desk is clear. Nudge your Joke Maker to send the next batch."
 6. Otherwise: "Release what's good enough, then tell your Joke Maker what to change."
 
-The **Customer feedback** panel shows which criteria landed and which missed, never by how much,
-and can be popped out above the game.
+The **Customer feedback** card lists the team's latest released jokes with the criteria that landed
+and the ones that missed, never by how much. **Pop out** opens a window that stays on top of the
+game: a criteria × jokes matrix grouped "Fix next" and "Keep doing" (✓ landed, ✕ missed, · not
+mentioned), with a key that shows each joke's text. Browsers without Document Picture-in-Picture
+show the same content in a panel inside the page. Below it, **What customers judge** lists the 12
+criteria.
 
 ---
 

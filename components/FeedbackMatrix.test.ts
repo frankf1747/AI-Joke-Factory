@@ -34,7 +34,7 @@ const JOKES: FeedbackJoke[] = [
 
 const render = (jokes: FeedbackJoke[] = JOKES) => renderToStaticMarkup(createElement(FeedbackMatrix, { jokes, now: NOW }));
 /** The <tr> whose label cell reads `label`. */
-const rowOf = (html: string, label: string) => html.match(new RegExp(`<tr[^>]*><td[^>]*><span[^>]*>${label}</span>.*?</tr>`))?.[0] ?? '';
+const rowOf = (html: string, label: string) => html.match(new RegExp(`<tr[^>]*><th scope="row"[^>]*><span[^>]*>${label}</span>.*?</tr>`))?.[0] ?? '';
 const count = (s: string, needle: string) => s.split(needle).length - 1;
 
 describe('FeedbackMatrix', () => {
@@ -54,6 +54,13 @@ describe('FeedbackMatrix', () => {
     expect(out).toContain('1 buyer<');
     expect(out).toContain('No buyer now');
     expect(out.indexOf('B-5002 #1')).toBeLessThan(out.indexOf('B-5002 #2'));
+  });
+
+  it('labels each criterion row with a row header cell', () => {
+    const out = render();
+    expect(out).toContain('<th scope="row"');
+    // One per criterion row, and each row also carries its "×n" count.
+    expect(count(out, '<th scope="row"')).toBe(count(out, 'float-right'));
   });
 
   it('groups the rows Fix next, then Keep doing, each with the winning side\'s count', () => {
@@ -88,7 +95,7 @@ describe('FeedbackMatrix', () => {
     expect(out).toContain('Your latest 4 released jokes');
     expect(out).toContain('No word yet: Humor Style, Complexity.');
     const energy = rowOf(out, 'Energy');
-    expect(count(energy, '<td')).toBe(5);
+    expect(count(energy, '<td')).toBe(4); // the label is a <th scope="row">, then one cell per joke
     // Each row's last cell is the unread joke's, and it is never marked.
     for (const label of ['Energy', 'Topic', 'Clarity', 'Title Fit']) {
       expect(rowOf(out, label)).toMatch(/aria-label="not mentioned"[^>]*>·<\/td><\/tr>$/);

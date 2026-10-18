@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DEMO_JOKES, DEMO_NOTE, DEMO_RAW_BATCH, DEMO_T0, DEMO_TIMES, EARLIER_JOKES, NEXT_BATCH_ID, SENT_BATCH_ID, TYPING_SHARE,
+  DEMO_FEEDBACK_JOKE_COUNT, DEMO_JOKES, DEMO_NOTE, DEMO_RAW_BATCH, DEMO_T0, DEMO_TIMES, EARLIER_JOKES, NEXT_BATCH_ID, SENT_BATCH_ID, TYPING_SHARE,
   buildDemoState, demoFrame, demoFrameKey, demoOptionsFor, initialDemoState, revealTyping, typedLength,
   type DemoOptions, type DemoState, type TourMoney,
 } from './demoScript';
@@ -13,6 +13,7 @@ import { jokeDetail, jokeState, type JokeState } from '../jokeState';
 import { foundABuyer } from '../scoreboard';
 import { jokeMakerInputFrom, jokeMakerNextStep, marketingInputFrom, marketingNextStep } from '../nextStep';
 import { toFeedbackRows } from '../../views/feedback';
+import { feedbackJokeContext } from '../feedbackJokeContext';
 import { TEST_CONFIG } from '../../views/testing/renderWithGame';
 import type { TourRole } from './seen';
 
@@ -265,6 +266,30 @@ describe('buildDemoState', () => {
     expect(feedback.improve_dimensions.length).toBeGreaterThan(0);
   });
 
+  it('Marketing: the feedback rows name real demo jokes, are capped at the feedback count and carry five criteria each', () => {
+    const o = opts('QUALITY_CONTROL');
+    for (const id of ['mk-welcome', 'mk-feedback', 'mk-expand']) {
+      const s = at(o, id);
+      const rows = toFeedbackRows(s.game.teamFeedback);
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows.length).toBeLessThanOrEqual(DEMO_FEEDBACK_JOKE_COUNT);
+      for (const r of rows) expect(r.good.length + r.improve.length).toBe(5);
+      const joined = feedbackJokeContext(rows, s.game.batches);
+      // Every column of the pop-out matrix can be headed "B-{id} #{position}" and has its text for the key.
+      for (const j of joined) {
+        expect(j.batchId).not.toBeNull();
+        expect(j.position).not.toBeNull();
+        expect(j.text).toBeTruthy();
+        expect(j.releasedAt).not.toBeNull();
+      }
+    }
+    const rows = toFeedbackRows(at(o, 'mk-feedback').game.teamFeedback);
+    expect(rows).toHaveLength(DEMO_FEEDBACK_JOKE_COUNT);
+    expect(rows[0].joke_title).toBe('To-Do Overload');
+    const joined = feedbackJokeContext(rows, at(o, 'mk-feedback').game.batches);
+    expect(joined.map(j => `B-${j.batchId} #${j.position}`)).toEqual(['B-102 #1', 'B-101 #4', 'B-101 #3']);
+  });
+
   it('the Joke Maker tour never opens Fees and wait times', () => {
     const o = opts('JOKE_MAKER');
     for (let k = 0; k < stepsOf(o).length; k++) expect(endOf(o, k).ui.feesOpen).toBe(false);
@@ -293,11 +318,18 @@ describe('the Next step line runs the real rules on the demo state', () => {
     expect(jmLine(at(opts('JOKE_MAKER'), 'jm-note'))).not.toContain(DEMO_NOTE);
   });
 
-  it('Marketing: on its Next step, a batch that has waited too long, with the round\'s storage fee', () => {
-    expect(mkLine(at(opts('QUALITY_CONTROL'), 'mk-next'))).toEqual({
+  it('Marketing: the Next step step comes second, with the desk still clear', () => {
+    const line = mkLine(at(opts('QUALITY_CONTROL'), 'mk-next'));
+    expect(at(opts('QUALITY_CONTROL'), 'mk-next').game.qcQueue).toBeNull();
+    expect(line.tone).not.toBe('warn');
+    expect(line.text).not.toContain('Batch waiting');
+  });
+
+  it('Marketing: once the next batch has waited too long, the line says so, with the round\'s storage fee', () => {
+    expect(mkLine(at(opts('QUALITY_CONTROL'), 'mk-fees'))).toEqual({
       tone: 'warn', text: "Batch waiting 52 s. Release what's good enough. Storage costs 5¢ a joke each minute.",
     });
-    expect(mkLine(at(opts('QUALITY_CONTROL', 2, ODD_FEES), 'mk-next')).text).toContain('Storage costs 10¢ a joke each minute.');
+    expect(mkLine(at(opts('QUALITY_CONTROL', 2, ODD_FEES), 'mk-fees')).text).toContain('Storage costs 10¢ a joke each minute.');
   });
 });
 

@@ -100,7 +100,7 @@ describe('the demo plays on the real screen', () => {
   it('the Next step line reads the demo, not the wall clock', () => {
     expect(renderStep(opts('JOKE_MAKER'), 'jm-next')).toContain('Marketing&#x27;s desk is empty. Send your next batch of 5.');
     expect(renderStep(opts('JOKE_MAKER'), 'jm-shipping')).toContain('Keep writing. Every batch is another chance to sell.');
-    expect(renderStep(opts('QUALITY_CONTROL'), 'mk-next')).toContain(
+    expect(renderStep(opts('QUALITY_CONTROL'), 'mk-fees')).toContain(
       'Batch waiting 52 s. Release what&#x27;s good enough. Storage costs 5¢ a joke each minute.',
     );
   });

@@ -27,7 +27,7 @@
    in the Marketing tour a third batch, #103, is sent at 320 and has waited
    52 s when the Next step line is shown. */
 import type { ApiTeamSummaryResponse, Batch, GameConfig, Joke, JokeId, Role, User } from '../../types';
-import type { LeanTeamStats, TeamFeedbackResponse } from '../../types/api';
+import type { FeedbackJoke, LeanTeamStats, TeamFeedbackResponse } from '../../types/api';
 import { computeProfit } from '../economics';
 import { STANDARD_SHIPMENT_JOKES, shippingFeeFor } from '../leanMode';
 import { SIM_CONFIG } from '../../config/simConfig';
@@ -268,19 +268,24 @@ function demoConfig(o: DemoOptions): GameConfig {
   };
 }
 
+/** The round's `feedback_joke_count` (its default): the feedback card never lists more jokes than this. */
+export const DEMO_FEEDBACK_JOKE_COUNT = 3;
+
+/* Each joke's customer read is 5 of the 12 criteria, pass or fail. The ids are jokes of the demo
+   batches, so the pop-out matrix can head each column "B-{id} #{position}". */
 const EARLIER_FEEDBACK: TeamFeedbackResponse = {
   jokes: [
     {
       joke_id: demoJokeId(EARLIER_BATCH_ID, 3), joke_title: 'Desk Plant Solidarity', was_bought: true,
-      good_dimensions: ['TOPIC', 'LENGTH', 'CLARITY'], improve_dimensions: ['WORDPLAY'],
+      good_dimensions: ['TOPIC', 'LENGTH', 'CLARITY'], improve_dimensions: ['WORDPLAY', 'ENERGY'],
     },
     {
       joke_id: demoJokeId(EARLIER_BATCH_ID, 2), joke_title: 'Coffee Confidential', was_bought: true,
-      good_dimensions: ['TOPIC', 'STRUCTURE'], improve_dimensions: ['FRESHNESS', 'WORDPLAY'],
+      good_dimensions: ['TOPIC', 'STRUCTURE', 'LENGTH'], improve_dimensions: ['FRESHNESS', 'WORDPLAY'],
     },
     {
       joke_id: demoJokeId(EARLIER_BATCH_ID, 0), joke_title: 'Reaction Overload', was_bought: false,
-      good_dimensions: ['LENGTH'], improve_dimensions: ['TOPIC', 'SETUP_PAYOFF', 'TITLE_FIT'],
+      good_dimensions: ['LENGTH', 'CLARITY'], improve_dimensions: ['TOPIC', 'SETUP_PAYOFF', 'TITLE_FIT'],
     },
   ],
 };
@@ -426,21 +431,15 @@ export const firstSale = (s: DemoState) =>
 export const swapOutSale = (s: DemoState) =>
   mapJoke(s, SENT_BATCH_ID, DEMO_KEEP[1].index, j => ({ ...j, sold_count: 0, first_sold_at: iso(DEMO_TIMES.released) }));
 
-/** The customers' read on that sale reaches Marketing's feedback card: ✓ and ✗ criteria boxes. */
+/** The customers' read on that sale reaches Marketing's feedback card, newest first; the oldest row drops off the list. */
 export function customersReport(s: DemoState): DemoState {
   const id = demoJokeId(SENT_BATCH_ID, DEMO_KEEP[0].index);
   const rest = (s.game.teamFeedback?.jokes ?? []).filter(j => j.joke_id !== id);
-  return withGame(s, {
-    teamFeedback: {
-      jokes: [
-        {
-          joke_id: id, joke_title: DEMO_KEEP[0].title, was_bought: true,
-          good_dimensions: ['TOPIC', 'LENGTH', 'STRUCTURE'], improve_dimensions: ['WORDPLAY'],
-        },
-        ...rest,
-      ],
-    },
-  });
+  const newest: FeedbackJoke = {
+    joke_id: id, joke_title: DEMO_KEEP[0].title, was_bought: true,
+    good_dimensions: ['TOPIC', 'LENGTH', 'STRUCTURE'], improve_dimensions: ['WORDPLAY', 'ENERGY'],
+  };
+  return withGame(s, { teamFeedback: { jokes: [newest, ...rest].slice(0, DEMO_FEEDBACK_JOKE_COUNT) } });
 }
 
 /* ---------------------------------------------------------------- frames */

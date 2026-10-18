@@ -77,9 +77,14 @@ export const FeedbackMatrix: React.FC<FeedbackMatrixProps> = ({ jokes, now }) =>
     if (isOpen) next.add(id); else next.delete(id);
     return next;
   });
+  // Open the key row first, then scroll once React has committed the open <details>:
+  // scrolling a still-closed row would stop short of the joke text. The frame belongs
+  // to the row's own window, which is the pop-out window when the matrix is floating.
   const openKeyRow = (id: number) => {
     setOpenFor(id, true);
-    keyRows.current.get(id)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    const row = keyRows.current.get(id);
+    const view = row?.ownerDocument.defaultView;
+    view?.requestAnimationFrame(() => row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
   };
   const hover = (id: number) => ({ onMouseEnter: () => setHot(id), onMouseLeave: () => setHot(null) });
 
@@ -90,10 +95,10 @@ export const FeedbackMatrix: React.FC<FeedbackMatrixProps> = ({ jokes, now }) =>
       </tr>
       {items.map(item => (
         <tr key={item.id}>
-          <td className="h-6 whitespace-nowrap" style={{ color: 'var(--ink)' }}>
+          <th scope="row" className="h-6 whitespace-nowrap text-left font-normal" style={{ color: 'var(--ink)' }}>
             <span className="inline-block max-w-[calc(100%-32px)] overflow-hidden text-ellipsis align-middle">{item.label}</span>
             <b className="float-right pr-0.5 text-xs font-semibold leading-6" style={{ fontFamily: MONO, color: countColor }}>×{item.count}</b>
-          </td>
+          </th>
           {jokes.map(j => {
             const m = markOf(j, item.id);
             return (

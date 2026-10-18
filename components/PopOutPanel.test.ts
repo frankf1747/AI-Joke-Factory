@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
-  POP_OUT_HEIGHT, POP_OUT_WIDTH, PopOutPanel, clampPanelPosition, onPopOutClosed, preparePopOutWindow, requestPopOutWindow,
+  POP_OUT_HEIGHT, POP_OUT_WIDTH, PopOutPanel, clampPanelPosition, continuesDrag, onPopOutClosed, preparePopOutWindow, requestPopOutWindow,
   supportsDocumentPiP, tailwindCdnSrc,
 } from './PopOutPanel';
 
@@ -110,6 +110,17 @@ describe('PopOutPanel', () => {
     expect(out).toContain('title="Drag to move"');
     expect(out).toContain('overflow-y-auto');
     expect(out).toContain('the rows');
+  });
+});
+
+describe('continuesDrag', () => {
+  it('follows the pointer that started the drag while a button is held', () => {
+    expect(continuesDrag({ pointerId: 7 }, { pointerId: 7, buttons: 1 })).toBe(true);
+  });
+  it('stops when no button is held any more, for another pointer, or with no drag', () => {
+    expect(continuesDrag({ pointerId: 7 }, { pointerId: 7, buttons: 0 })).toBe(false);
+    expect(continuesDrag({ pointerId: 7 }, { pointerId: 8, buttons: 1 })).toBe(false);
+    expect(continuesDrag(null, { pointerId: 7, buttons: 1 })).toBe(false);
   });
 });
 

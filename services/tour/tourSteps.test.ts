@@ -26,8 +26,8 @@ describe('stepsFor', () => {
 
   it('Marketing: twelve steps, the same in both rounds', () => {
     const want = [
-      'mk-welcome', 'mk-arrives', 'mk-pick', 'mk-title', 'mk-note', 'mk-release', 'mk-scoreboard', 'mk-fees',
-      'mk-next', 'mk-feedback', 'mk-expand', 'mk-goal',
+      'mk-welcome', 'mk-next', 'mk-arrives', 'mk-pick', 'mk-title', 'mk-note', 'mk-release', 'mk-scoreboard', 'mk-fees',
+      'mk-feedback', 'mk-expand', 'mk-goal',
     ];
     expect(ids(stepsFor('QUALITY_CONTROL', R1))).toEqual(want);
     expect(ids(stepsFor('QUALITY_CONTROL', R2))).toEqual(want);
@@ -97,18 +97,36 @@ describe('captions (spec §4, verbatim)', () => {
   it('Marketing, at the default fees', () => {
     expect(text(stepsFor('QUALITY_CONTROL', R1))).toEqual([
       ["You're Marketing.", 'You decide which jokes go to market. Listing a joke costs $0.10, and each sale earns $1.'],
-      ['A batch arrives.', "Your Joke Maker's batch lands here. Split it into separate jokes."],
-      ['Pick the winners — quickly.', "Keep the jokes customers will buy and drop the rest (dropping costs $0.01). Don't be too strict: customers can only buy what's on the shelf."],
-      ['Topic and title.', 'Give each joke a topic and a title. A good title helps it sell.'],
+      ['Your next step.', "The top of the Marketing desk watches the game and tells you what to do next. Glance at it whenever you're unsure."],
+      ['A batch arrives.', "Your Joke Maker's batch lands on your desk. Cut it into separate jokes: click between two jokes and press Enter."],
+      ['Pick the winners, quickly.', "Tick the jokes customers will buy and leave the rest to be discarded (discarding costs $0.01). Don't be too strict: customers can only buy what's on the shelf."],
+      ['Topic and title.', 'Choose a topic from the dropdown and write a title for each joke you sell. A good title helps it sell.'],
       ['Tell your Joke Maker.', 'Say what to change next. Your note is sent with this batch.'],
-      ['Release.', 'Released jokes go on the market, where customers start buying.'],
+      ['Release.', 'Release to market puts the jokes you ticked on the market, where customers start buying. The tally beside it shows what it costs.'],
       ['Your scoreboard.', 'Your team rank, by profit, sits beside your profit and sales. "Found a buyer" shows how many of your released jokes have sold so far.'],
       ['Fees add up.', '"Fees and wait times" shows where your sales went. Every batch pays shipping. A batch waiting on your desk pays storage (5¢ a joke each minute), and an unsold joke pays hosting (5¢ a joke each minute). Release quickly.'],
-      ['Your next step.', 'This line watches the game and tells you what to do next, like releasing a batch that has waited too long.'],
       ['What customers said.', 'For your latest jokes: which criteria landed and which missed. It never says by how much.'],
-      ['Keep it in view.', 'Expand opens the feedback in a floating window that stays on top while you work.'],
+      ['Keep it in view.', 'Pop out opens a window that stays on top while you work. It groups the criteria into "Fix next" and "Keep doing".'],
       ['Your goal.', 'Ship what sells, tell your Joke Maker why, and improve every batch.'],
     ]);
+  });
+
+  it('Marketing captions describe the redesigned desk, not the old one', () => {
+    const body = (id: string) => captionText(MARKETING_STEPS.find(s => s.id === id)!, R1);
+    expect(body('mk-title')).toMatch(/topic/);
+    expect(body('mk-title')).toMatch(/title/);
+    expect(body('mk-title')).not.toMatch(/chips/i);
+    expect(body('mk-expand')).toContain('window');
+    expect(body('mk-expand')).toContain('Fix next');
+    expect(body('mk-expand')).not.toContain('Expand');
+    expect(body('mk-next')).toContain('top of the Marketing desk');
+    for (const step of MARKETING_STEPS) {
+      const all = `${step.title} ${captionText(step, R1)}`;
+      for (const old of ['Expand', 'chips', 'All Clear', 'Split the batch', 'Pick the winners —']) expect(all).not.toContain(old);
+      expect(all).not.toMatch(/[—!]/);
+    }
+    // Marketing's own note is never quoted: only the note step talks about it.
+    expect(MARKETING_STEPS.filter(s => /note/i.test(captionText(s, R1))).map(s => s.id)).toEqual(['mk-note']);
   });
 
   it('every amount comes from the round: non-default fees show in the captions', () => {
@@ -119,8 +137,8 @@ describe('captions (spec §4, verbatim)', () => {
     };
     const mk = stepsFor('QUALITY_CONTROL', { roundNumber: 1, fees: odd }).map(s => s.body);
     expect(mk[0]).toBe('You decide which jokes go to market. Listing a joke costs $0.25, and each sale earns $2.');
-    expect(mk[2]).toContain('(dropping costs $0.05)');
-    expect(mk[7]).toContain('pays storage (10¢ a joke each minute), and an unsold joke pays hosting (2.5¢ a joke each minute).');
+    expect(mk[3]).toContain('(discarding costs $0.05)');
+    expect(mk[8]).toContain('pays storage (10¢ a joke each minute), and an unsold joke pays hosting (2.5¢ a joke each minute).');
     expect(stepsFor('JOKE_MAKER', { roundNumber: 1, fees: odd })[4].body).toBe(
       'Each batch of 5 costs $1.50 to ship, so keep them coming but make them count.',
     );

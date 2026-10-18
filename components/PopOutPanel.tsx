@@ -170,6 +170,13 @@ export function clampPanelPosition(pos: Point, size: Size, viewport: Size): Poin
   return { x: clamp(pos.x, viewport.width - size.width), y: clamp(pos.y, viewport.height - size.height) };
 }
 
+/** True when a pointermove should move the panel: it belongs to the drag in progress and a button is
+    still held. A move with no button down means the release happened where no pointerup reached us
+    (outside the window, or over a tooltip), so the drag is over even though the capture lingers. */
+export function continuesDrag(drag: { pointerId: number } | null, move: { pointerId: number; buttons: number }): boolean {
+  return drag != null && drag.pointerId === move.pointerId && move.buttons !== 0;
+}
+
 const EDGE = 24;
 
 /** The in-page fallback: POP_OUT_WIDTH × POP_OUT_HEIGHT within the viewport, opening
@@ -205,7 +212,11 @@ export const PopOutFallbackPanel: React.FC<{ title: string; onClose: () => void;
   };
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const d = drag.current;
-    if (!d || d.pointerId !== e.pointerId) return;
+    if (!d) return;
+    if (!continuesDrag(d, e)) {
+      endDrag(e);
+      return;
+    }
     setPos(clampToView({ x: e.clientX - d.dx, y: e.clientY - d.dy }));
   };
   const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -232,6 +243,7 @@ export const PopOutFallbackPanel: React.FC<{ title: string; onClose: () => void;
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
+        onLostPointerCapture={endDrag}
         className="flex shrink-0 cursor-grab touch-none select-none items-center justify-between py-1 pl-3 pr-1.5 active:cursor-grabbing"
         style={{ background: 'var(--paper-2)' }}
       >

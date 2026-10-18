@@ -81,21 +81,26 @@ export const MARKETING_STEPS: readonly DemoStep[] = [
     body: ({ fees }) => `You decide which jokes go to market. Listing a joke costs ${fmtFee(fees.costOfPublishing)}, and each sale earns ${fmtFee(fees.marketPrice)}.`,
   },
   {
+    id: 'mk-next', target: 'mk-next-step',
+    title: 'Your next step.',
+    body: "The top of the Marketing desk watches the game and tells you what to do next. Glance at it whenever you're unsure.",
+  },
+  {
     id: 'mk-arrives', target: 'mk-desk',
     title: 'A batch arrives.',
-    body: "Your Joke Maker's batch lands here. Split it into separate jokes.",
+    body: "Your Joke Maker's batch lands on your desk. Cut it into separate jokes: click between two jokes and press Enter.",
     onEnter: batchArrives, beats: [{ atMs: 3000, apply: splitOnDesk }],
   },
   {
     id: 'mk-pick', target: 'mk-jokes', durationMs: 9000,
-    title: 'Pick the winners — quickly.',
-    body: ({ fees }) => `Keep the jokes customers will buy and drop the rest (dropping costs ${fmtFee(fees.costOfDiscard)}). Don't be too strict: customers can only buy what's on the shelf.`,
+    title: 'Pick the winners, quickly.',
+    body: ({ fees }) => `Tick the jokes customers will buy and leave the rest to be discarded (discarding costs ${fmtFee(fees.costOfDiscard)}). Don't be too strict: customers can only buy what's on the shelf.`,
     onEnter: pick(0), beats: [{ atMs: 1500, apply: pick(1) }, { atMs: 3000, apply: pick(2) }],
   },
   {
     id: 'mk-title', target: 'mk-topic-title',
     title: 'Topic and title.',
-    body: 'Give each joke a topic and a title. A good title helps it sell.',
+    body: 'Choose a topic from the dropdown and write a title for each joke you sell. A good title helps it sell.',
     onEnter: topicsAndTitles, typing: 'mkTitle',
   },
   {
@@ -107,7 +112,7 @@ export const MARKETING_STEPS: readonly DemoStep[] = [
   {
     id: 'mk-release', target: 'mk-release', durationMs: 5000,
     title: 'Release.',
-    body: 'Released jokes go on the market, where customers start buying.',
+    body: 'Release to market puts the jokes you ticked on the market, where customers start buying. The tally beside it shows what it costs.',
   },
   {
     id: 'mk-scoreboard', target: 'mk-stats',
@@ -122,11 +127,6 @@ export const MARKETING_STEPS: readonly DemoStep[] = [
     onEnter: s => nextBatchArrives(openFees(s)),
   },
   {
-    id: 'mk-next', target: 'mk-next-step',
-    title: 'Your next step.',
-    body: 'This line watches the game and tells you what to do next, like releasing a batch that has waited too long.',
-  },
-  {
     id: 'mk-feedback', target: 'mk-feedback',
     title: 'What customers said.',
     body: 'For your latest jokes: which criteria landed and which missed. It never says by how much.',
@@ -135,7 +135,7 @@ export const MARKETING_STEPS: readonly DemoStep[] = [
   {
     id: 'mk-expand', target: 'mk-expand', durationMs: 5000,
     title: 'Keep it in view.',
-    body: 'Expand opens the feedback in a floating window that stays on top while you work.',
+    body: 'Pop out opens a window that stays on top while you work. It groups the criteria into "Fix next" and "Keep doing".',
   },
   {
     id: 'mk-goal', target: null, finishLabel: 'Start',
