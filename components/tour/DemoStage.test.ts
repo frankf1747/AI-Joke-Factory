@@ -86,6 +86,10 @@ describe('the demo plays on the real screen', () => {
     expect(note).toContain('From Marketing');
     expect(note).toContain(DEMO_NOTE);
     expect(note).toContain('Team Demo');
+    // The opened batch shows a card per joke with its state detail.
+    for (const part of ['1 buyer', 'Sold before, swapped out', 'No buyer yet, on market 20 s', 'Not released by Marketing', 'To-Do Overload']) {
+      expect(note).toContain(part);
+    }
   });
 
   it('shows the round\'s shipping line: Round 1 one size, Round 2 three', () => {
@@ -94,7 +98,8 @@ describe('the demo plays on the real screen', () => {
   });
 
   it('the Next step line reads the demo, not the wall clock', () => {
-    expect(renderStep(opts('JOKE_MAKER'), 'jm-next')).toContain('Keep writing. Every batch is another chance to sell.');
+    expect(renderStep(opts('JOKE_MAKER'), 'jm-next')).toContain('Marketing&#x27;s desk is empty. Send your next batch of 5.');
+    expect(renderStep(opts('JOKE_MAKER'), 'jm-shipping')).toContain('Keep writing. Every batch is another chance to sell.');
     expect(renderStep(opts('QUALITY_CONTROL'), 'mk-next')).toContain(
       'Batch waiting 52 s. Release what&#x27;s good enough. Storage costs 5¢ a joke each minute.',
     );

@@ -79,7 +79,7 @@ const JokeMaker: React.FC = () => {
     if (leanMode && !sent) return;
     setInput('');
     setCertified(false);
-    setToast('Batch sent to Marketing — they will split & rate it.');
+    setToast('Batch sent to Marketing. They will split and rate it.');
     window.setTimeout(() => setToast(null), 2600);
   };
 

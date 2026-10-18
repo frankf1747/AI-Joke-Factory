@@ -22,7 +22,8 @@
 
    Timeline (seconds after T0): batch #101 sent at 0 and released at 60 with
    4 of its 5 jokes sold since (10 sales); the tour opens at 240; the Joke Maker sends
-   #102 at 250; Marketing releases it at 310 (3 kept, 2 dropped, with a note);
+   #102 at 250; Marketing releases it at 310 (3 kept, 2 dropped, with a note; the Joke
+   Maker reads the note at 330, so the opened batch shows how long its jokes have been on the market);
    in the Marketing tour a third batch, #103, is sent at 320 and has waited
    52 s when the Next step line is shown. */
 import type { ApiTeamSummaryResponse, Batch, GameConfig, Joke, JokeId, Role, User } from '../../types';
@@ -62,6 +63,11 @@ export const EARLIER_JOKES: readonly string[] = [
   'I finally emptied my inbox, and three new meetings moved in.',
 ];
 
+/** The earlier batch's market titles, in the order of EARLIER_JOKES. */
+const EARLIER_TITLES: readonly string[] = [
+  'Reaction Overload', 'Snooze Rebellion', 'Coffee Confidential', 'Desk Plant Solidarity', 'Inbox Zero Lasted',
+];
+
 /** Marketing's note on the new batch. */
 export const DEMO_NOTE = 'Customers loved the work jokes. Keep them short and end on a twist.';
 
@@ -88,8 +94,8 @@ const iso = (seconds: number) => new Date(at(seconds)).toISOString();
 
 /** Seconds after T0 of each moment in the script. */
 export const DEMO_TIMES = {
-  earlierSent: 0, earlierReleased: 60, tourStart: 240, sent: 250, arrivedOnDesk: 255,
-  released: 310, nextSent: 320, nextSeen: 372,
+  earlierSent: 0, earlierReleased: 60, earlierFirstSale: 135, tourStart: 240, sent: 250, arrivedOnDesk: 255,
+  released: 310, noteRead: 330, nextSent: 320, nextSeen: 372,
 } as const;
 
 /** What a caption or a demo number may quote: the round's prices and Lean fees. */
@@ -164,9 +170,9 @@ function batch(id: number, jokes: Joke[], sentS: number, extra: Partial<Batch> =
   };
 }
 
-/** A sent batch as the team's browser shows it: the pasted jokes, all still with Marketing. */
+/** A sent batch as the team's browser shows it: the pasted jokes, all still with Marketing (PENDING). */
 const waitingBatch = (id: number, sentS: number) =>
-  batch(id, DEMO_JOKES.map((text, n) => joke(demoJokeId(id, n), text)), sentS);
+  batch(id, DEMO_JOKES.map((text, n) => joke(demoJokeId(id, n), text, { publish_status: 'PENDING' })), sentS);
 
 const waitingCount = (s: DemoState) => s.game.batches.filter(b => b.status === 'SUBMITTED').length;
 /** Jokes a batch is charged for: its jokes, or the standard 5 while unsplit. */
@@ -284,7 +290,9 @@ export function initialDemoState(options: DemoOptions): DemoState {
   const earlier = batch(
     EARLIER_BATCH_ID,
     EARLIER_JOKES.map((text, n) => joke(demoJokeId(EARLIER_BATCH_ID, n), text, {
-      is_published: true, sold_count: EARLIER_SALES[n],
+      is_published: true, publish_status: 'PUBLISHED', joke_title: EARLIER_TITLES[n],
+      published_at: iso(DEMO_TIMES.earlierReleased), sold_count: EARLIER_SALES[n],
+      first_sold_at: EARLIER_SALES[n] > 0 ? iso(DEMO_TIMES.earlierFirstSale) : null,
     })),
     DEMO_TIMES.earlierSent,
     { status: 'PROCESSED', rated_at: iso(DEMO_TIMES.earlierReleased), ratedAt: at(DEMO_TIMES.earlierReleased) },
@@ -329,8 +337,9 @@ export function sendBatch(s: DemoState): DemoState {
   return withGame(cleared, { batches: [...cleared.game.batches, waitingBatch(SENT_BATCH_ID, DEMO_TIMES.sent)] });
 }
 
-/** The sent batch's row is expanded in Value stream. */
-export const openSentBatch = (s: DemoState) => withUi(s, { jmOpenBatchIds: [String(SENT_BATCH_ID)] });
+/** The sent batch's row is expanded in Value stream, a little after the release (so "on market" has a time). */
+export const openSentBatch = (s: DemoState) =>
+  clockAt(withUi(s, { jmOpenBatchIds: [String(SENT_BATCH_ID)] }), DEMO_TIMES.noteRead);
 
 /* ---------------------------------------------------------------- script: Marketing */
 
@@ -388,14 +397,19 @@ export const nextBatchArrives = (s: DemoState) => landOnDesk(s, NEXT_BATCH_ID, D
 
 /** Marketing releases #102: 3 jokes on the market, 2 dropped, with its note. The desk is clear again. */
 export function releaseSentBatch(s: DemoState): DemoState {
-  const keep = new Set(DEMO_KEEP.map(k => k.index));
+  const keep = new Map(DEMO_KEEP.map(k => [k.index, k.title]));
   const released = mapBatch(s, SENT_BATCH_ID, b => ({
     ...b,
     status: 'PROCESSED',
     rated_at: iso(DEMO_TIMES.released),
     ratedAt: at(DEMO_TIMES.released),
     marketing_note: DEMO_NOTE,
-    jokes: DEMO_JOKES.map((text, n) => joke(demoJokeId(SENT_BATCH_ID, n), text, { is_published: keep.has(n), sold_count: 0 })),
+    jokes: DEMO_JOKES.map((text, n) => joke(demoJokeId(SENT_BATCH_ID, n), text, keep.has(n)
+      ? {
+        is_published: true, publish_status: 'PUBLISHED', joke_title: keep.get(n), published_at: iso(DEMO_TIMES.released),
+        sold_count: 0, first_sold_at: null,
+      }
+      : { is_published: false, publish_status: 'DISCARDED', joke_title: null, sold_count: 0, first_sold_at: null })),
   }));
   const cleared = withUi(released, { mkSelectedIds: [], mkTopics: {}, mkTitles: {}, mkNote: '' });
   return clockAt(withGame(cleared, { qcQueue: null }), DEMO_TIMES.released);
@@ -403,7 +417,13 @@ export function releaseSentBatch(s: DemoState): DemoState {
 
 /** A customer buys the first joke Marketing kept. */
 export const firstSale = (s: DemoState) =>
-  mapJoke(s, SENT_BATCH_ID, DEMO_KEEP[0].index, j => ({ ...j, sold_count: (j.sold_count ?? 0) + 1 }));
+  mapJoke(s, SENT_BATCH_ID, DEMO_KEEP[0].index, j => ({
+    ...j, sold_count: (j.sold_count ?? 0) + 1, first_sold_at: j.first_sold_at ?? iso(DEMO_TIMES.released),
+  }));
+
+/** A customer bought the second kept joke and swapped it out again: sold before, no buyers now. No sale is counted. */
+export const swapOutSale = (s: DemoState) =>
+  mapJoke(s, SENT_BATCH_ID, DEMO_KEEP[1].index, j => ({ ...j, sold_count: 0, first_sold_at: iso(DEMO_TIMES.released) }));
 
 /** The customers' read on that sale reaches Marketing's feedback card: ✓ and ✗ criteria boxes. */
 export function customersReport(s: DemoState): DemoState {

@@ -17,7 +17,7 @@ const text = (steps: ReadonlyArray<{ title: string; body: unknown }>) => steps.m
 describe('stepsFor', () => {
   it('Joke Maker: ten steps, the same in both rounds', () => {
     const want = [
-      'jm-welcome', 'jm-write', 'jm-send', 'jm-shipping', 'jm-next', 'jm-value-stream', 'jm-note', 'jm-scoreboard',
+      'jm-welcome', 'jm-next', 'jm-write', 'jm-send', 'jm-shipping', 'jm-value-stream', 'jm-note', 'jm-scoreboard',
       'jm-customers', 'jm-goal',
     ];
     expect(ids(stepsFor('JOKE_MAKER', R1))).toEqual(want);
@@ -72,12 +72,12 @@ describe('captions (spec §4, verbatim)', () => {
   it('Joke Maker, Round 1, at the default fees', () => {
     expect(text(stepsFor('JOKE_MAKER', R1))).toEqual([
       ["You're the Joke Maker.", "Your team earns money when AI customers buy your jokes. Here's your screen in one minute."],
+      ['Your next step.', "The top of the Production line watches the game and tells you what to do next. Glance at it whenever you're unsure."],
       ['Write, then paste.', 'Write jokes with your AI tool and paste the whole reply here. Marketing splits it into separate jokes.'],
       ['Send a batch.', 'Tick the box and press Send to Marketing. Each send is one batch.'],
       ['Every batch pays shipping.', 'Each batch of 5 costs $2 to ship, so keep them coming but make them count.'],
-      ['Your next step.', "This line watches the game and tells you what to do next. Glance at it whenever you're unsure."],
-      ['Follow your batches.', 'Each row is a batch. The dots show where every joke is: with Marketing, on the market, sold or wasted.'],
-      ["Read Marketing's note.", 'Marketing tells you what customers liked and what to change. Read it before you write the next batch.'],
+      ['Follow your batches.', 'Each row is a batch and each square is a joke. Outline means with Marketing, green is selling, amber is waiting for a buyer and grey was not released. Open a row to see each joke.'],
+      ["Read Marketing's note.", 'Open a batch and Marketing\'s note sits above its jokes. It says what customers liked and what to change. Read it before you write the next batch.'],
       ['Your scoreboard.', 'Team rank, by profit, is your place among all teams, and profit is sales minus fees. "Found a buyer" counts the jokes that have sold. "Fees and wait times" shows where the money went.'],
       ['How customers buy.', 'AI customers are picky: they judge every joke on 12 criteria and only buy the ones that fit what they like. Better-aimed jokes beat lots of random ones.'],
       ['Your goal.', 'Keep the line moving, learn from each batch, and improve the next one.'],
@@ -85,7 +85,7 @@ describe('captions (spec §4, verbatim)', () => {
   });
 
   it('Joke Maker, Round 2: the shipping step lists the three sizes', () => {
-    expect(stepsFor('JOKE_MAKER', R2)[3].body).toBe(
+    expect(stepsFor('JOKE_MAKER', R2)[4].body).toBe(
       'You choose the size now: $1 for 1–4 jokes, $2 for 5, $3 for 6–10. Smaller batches come back with feedback sooner.',
     );
     // Every other caption is the same in both rounds.
@@ -121,10 +121,10 @@ describe('captions (spec §4, verbatim)', () => {
     expect(mk[0]).toBe('You decide which jokes go to market. Listing a joke costs $0.25, and each sale earns $2.');
     expect(mk[2]).toContain('(dropping costs $0.05)');
     expect(mk[7]).toContain('pays storage (10¢ a joke each minute), and an unsold joke pays hosting (2.5¢ a joke each minute).');
-    expect(stepsFor('JOKE_MAKER', { roundNumber: 1, fees: odd })[3].body).toBe(
+    expect(stepsFor('JOKE_MAKER', { roundNumber: 1, fees: odd })[4].body).toBe(
       'Each batch of 5 costs $1.50 to ship, so keep them coming but make them count.',
     );
-    expect(stepsFor('JOKE_MAKER', { roundNumber: 2, fees: odd })[3].body).toBe(
+    expect(stepsFor('JOKE_MAKER', { roundNumber: 2, fees: odd })[4].body).toBe(
       'You choose the size now: $0.50 for 1–4 jokes, $1.50 for 5, $4 for 6–10. Smaller batches come back with feedback sooner.',
     );
   });
@@ -143,6 +143,17 @@ describe('captions (spec §4, verbatim)', () => {
       }
     }
     expect(mkFees.body(R1)).toContain('Fees and wait times');
+  });
+
+  it('Joke Maker captions use the redesigned screen words, never the old stage names', () => {
+    for (const step of JOKE_MAKER_STEPS) {
+      const text = captionText(step, R1);
+      for (const old of ['In review', 'On market', 'wasted', 'sold or', 'dots']) expect(text).not.toContain(old);
+      expect(text).not.toMatch(/[—!]/);
+    }
+    // Marketing's note is only mentioned by its own step: it is meant to be found inside the opened batch.
+    const mentions = JOKE_MAKER_STEPS.filter(s => /note/i.test(captionText(s, R1))).map(s => s.id);
+    expect(mentions).toEqual(['jm-note']);
   });
 
   it('captionText leaves a plain caption alone', () => {

@@ -10,7 +10,7 @@
 import { fmtCents, fmtFee, fmtPerMinute } from '../leanMode';
 import {
   batchArrives, certify, customersReport, firstSale, nextBatchArrives, openFees, openSentBatch, pick,
-  releaseSentBatch, sendBatch, splitOnDesk, topicsAndTitles, typeDraft, writeNote,
+  releaseSentBatch, sendBatch, splitOnDesk, swapOutSale, topicsAndTitles, typeDraft, writeNote,
   type DemoStep, type TourRound,
 } from './demoScript';
 import type { TourRole } from './seen';
@@ -20,6 +20,11 @@ export const JOKE_MAKER_STEPS: readonly DemoStep[] = [
     id: 'jm-welcome', target: null,
     title: "You're the Joke Maker.",
     body: "Your team earns money when AI customers buy your jokes. Here's your screen in one minute.",
+  },
+  {
+    id: 'jm-next', target: 'jm-next-step',
+    title: 'Your next step.',
+    body: "The top of the Production line watches the game and tells you what to do next. Glance at it whenever you're unsure.",
   },
   {
     id: 'jm-write', target: 'jm-draft', durationMs: 7000,
@@ -41,20 +46,15 @@ export const JOKE_MAKER_STEPS: readonly DemoStep[] = [
       : `You choose the size now: ${fmtFee(fees.shippingFeeSmall)} for 1–4 jokes, ${fmtFee(fees.shippingFeeStandard)} for 5, ${fmtFee(fees.shippingFeeLarge)} for 6–10. Smaller batches come back with feedback sooner.`),
   },
   {
-    id: 'jm-next', target: 'jm-next-step',
-    title: 'Your next step.',
-    body: "This line watches the game and tells you what to do next. Glance at it whenever you're unsure.",
-  },
-  {
     id: 'jm-value-stream', target: 'jm-value-stream',
     title: 'Follow your batches.',
-    body: 'Each row is a batch. The dots show where every joke is: with Marketing, on the market, sold or wasted.',
-    beats: [{ atMs: 2000, apply: releaseSentBatch }, { atMs: 4000, apply: firstSale }],
+    body: 'Each row is a batch and each square is a joke. Outline means with Marketing, green is selling, amber is waiting for a buyer and grey was not released. Open a row to see each joke.',
+    beats: [{ atMs: 2000, apply: releaseSentBatch }, { atMs: 3000, apply: swapOutSale }, { atMs: 4000, apply: firstSale }],
   },
   {
     id: 'jm-note', target: 'jm-marketing-note',
     title: "Read Marketing's note.",
-    body: 'Marketing tells you what customers liked and what to change. Read it before you write the next batch.',
+    body: "Open a batch and Marketing's note sits above its jokes. It says what customers liked and what to change. Read it before you write the next batch.",
     onEnter: openSentBatch,
   },
   {

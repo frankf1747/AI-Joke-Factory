@@ -166,7 +166,7 @@ offensive." and presses **Send to Marketing**. The brief reads "Generate 5 jokes
 shipping line quotes the round's fees: "Shipping: $2 per batch of 5" in Round 1, "Shipping: $1 for
 1–4 jokes · $2 for 5 · $3 for 6–10" in Round 2. There is no WIP limit: the Joke Maker can always send.
 
-Under the Scoreboard, the **Next step** line gives one instruction, the first that applies:
+The **Next step** line is the first row of the Production line card. It gives one instruction, the first that applies:
 
 1. Before the round (and between rounds): "Get your AI tool ready. The round starts soon." Once
    Round 2 has ended: "Round over. Join the debrief."

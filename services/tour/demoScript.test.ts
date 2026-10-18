@@ -9,6 +9,8 @@ import { EMPTY_DEMO_UI } from './demoUi';
 import { stepDuration } from './tourMachine';
 import { computeProfit, countJokesSold } from '../economics';
 import { leanFeesOf, shippingFeeFor } from '../leanMode';
+import { jokeDetail, jokeState, type JokeState } from '../jokeState';
+import { foundABuyer } from '../scoreboard';
 import { jokeMakerInputFrom, jokeMakerNextStep, marketingInputFrom, marketingNextStep } from '../nextStep';
 import { toFeedbackRows } from '../../views/feedback';
 import { TEST_CONFIG } from '../../views/testing/renderWithGame';
@@ -94,6 +96,58 @@ describe('the sample data', () => {
   });
 });
 
+describe('joke states in the demo (publish_status, published_at, first_sold_at)', () => {
+  const o = opts('JOKE_MAKER');
+  const sentBatch = (s: DemoState) => s.game.batches.find(b => b.batch_id === SENT_BATCH_ID)!;
+  const statesOf = (s: DemoState) => sentBatch(s).jokes.map(j => jokeState(j, sentBatch(s)));
+
+  it('the opened batch shows every state: selling, lost its buyers, no buyer yet and not released', () => {
+    const s = at(o, 'jm-note');
+    expect(statesOf(s)).toEqual(['selling', 'not-released', 'lost-buyers', 'not-released', 'no-buyer'] satisfies JokeState[]);
+    const details = sentBatch(s).jokes.map(j => jokeDetail(j, s.ui.clockMs, sentBatch(s)));
+    expect(details).toEqual([
+      '1 buyer', 'Not released by Marketing', 'Sold before, swapped out', 'Not released by Marketing', 'No buyer yet, on market 20 s',
+    ]);
+  });
+
+  it('every published joke in the demo has a title, a publish time and a non-empty detail', () => {
+    for (const k of [0, 5, 6, 9]) {
+      const s = buildDemoState(stepsOf(o), k, o, 99_999);
+      for (const b of s.game.batches) {
+        for (const j of b.jokes.filter(x => x.publish_status === 'PUBLISHED')) {
+          expect(j.joke_title).toBeTruthy();
+          expect(j.published_at).toBeTruthy();
+          expect(jokeDetail(j, s.ui.clockMs, b).length).toBeGreaterThan(0);
+          // Sold jokes carry first_sold_at; is_published agrees with publish_status.
+          if ((j.sold_count ?? 0) > 0) expect(j.first_sold_at).toBeTruthy();
+          expect(j.is_published).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('the earlier batch is published with 4 of its 5 jokes sold, one still without a buyer', () => {
+    const earlier = initialDemoState(o).game.batches[0];
+    expect(earlier.jokes.every(j => j.publish_status === 'PUBLISHED' && j.joke_title && j.published_at)).toBe(true);
+    expect(earlier.jokes.map(j => jokeState(j, earlier))).toEqual(['no-buyer', 'selling', 'selling', 'selling', 'selling']);
+    expect(foundABuyer([earlier])).toBe(4);
+  });
+
+  it('a batch waiting for Marketing has only pending jokes, and Marketing\'s dropped jokes are discarded', () => {
+    const sent = at(o, 'jm-send', 3000);
+    expect(sentBatch(sent).jokes.every(j => j.publish_status === 'PENDING')).toBe(true);
+    const dropped = sentBatch(at(o, 'jm-note')).jokes.filter(j => j.publish_status === 'DISCARDED');
+    expect(dropped).toHaveLength(2);
+    expect(dropped.every(j => j.is_published === false && (j.sold_count ?? 0) === 0)).toBe(true);
+  });
+
+  it('the Joke Maker scoreboard counts the jokes that found a buyer', () => {
+    const s = endOf(o, stepsOf(o).length - 1);
+    // 4 earlier + the first sale + the joke that sold and was swapped out.
+    expect(foundABuyer(s.game.batches)).toBe(6);
+  });
+});
+
 describe('buildDemoState', () => {
   it('is deterministic: the same step and time always rebuild the same state', () => {
     for (const o of ALL) {
@@ -143,11 +197,12 @@ describe('buildDemoState', () => {
     expect(countJokesSold(s.game.batches)).toBe(5);
     expect(s.game.teamSummary!.jokes_created).toBe(10);
     expect(computeProfit({ created: 10, published: 8, sold: 11 }, DEFAULT_FEES)).toBeCloseTo(10.18, 10);
-    // Shipping 2 × $2, storage 10 joke-minutes × 5¢, hosting: 1 unsold earlier joke for 250 s × 5¢.
+    // Shipping 2 × $2, storage 10 joke-minutes × 5¢, hosting: 1 unsold earlier joke for 270 s and
+    // 2 unsold new jokes for 20 s each (the note is read 20 s after the release) × 5¢.
     expect(leanFeesOf(s.game.teamSummary!.lean)).toEqual({
-      shipping: 4, storage: expect.closeTo(0.5, 10), hosting: expect.closeTo((250 / 60) * 0.05, 10),
+      shipping: 4, storage: expect.closeTo(0.5, 10), hosting: expect.closeTo((310 / 60) * 0.05, 10),
     });
-    expect(s.game.teamSummary!.profit!).toBeCloseTo(10.18 - 4 - 0.5 - (250 / 60) * 0.05, 10);
+    expect(s.game.teamSummary!.profit!).toBeCloseTo(10.18 - 4 - 0.5 - (310 / 60) * 0.05, 10);
   });
 
   it('the profit shown at the end of both tours is positive, at the default fees and in Round 2', () => {
@@ -231,7 +286,9 @@ describe('the Next step line runs the real rules on the demo state', () => {
   it('Joke Maker: desk empty, then keep writing while Marketing has the batch; the note never reaches the line', () => {
     expect(jmLine(at(opts('JOKE_MAKER'), 'jm-welcome'))).toBe("Marketing's desk is empty. Send your next batch of 5.");
     expect(jmLine(at(opts('JOKE_MAKER', 2), 'jm-welcome'))).toBe("Marketing's desk is empty. Send a small batch now.");
-    expect(jmLine(at(opts('JOKE_MAKER'), 'jm-next'))).toBe('Keep writing. Every batch is another chance to sell.');
+    // The Next step step comes first now, before anything is sent, so the line is still the desk-empty one.
+    expect(jmLine(at(opts('JOKE_MAKER'), 'jm-next'))).toBe("Marketing's desk is empty. Send your next batch of 5.");
+    expect(jmLine(at(opts('JOKE_MAKER'), 'jm-shipping'))).toBe('Keep writing. Every batch is another chance to sell.');
     // The note is read inside the opened batch (the jm-note spotlight), never on the Next step line.
     expect(jmLine(at(opts('JOKE_MAKER'), 'jm-note'))).not.toContain(DEMO_NOTE);
   });
