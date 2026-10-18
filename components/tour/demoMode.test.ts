@@ -38,7 +38,7 @@ function data(role: Role): DemoGameData {
   const user = testUser(role, 99);
   return {
     user, roster: [user], config: TEST_CONFIG, teamNames: { '99': 'Team Demo' },
-    batches: [], sales: {}, roundId: 1, roundIds: { 1: 1, 2: null }, roundStatuses: { 1: 'ACTIVE', 2: null },
+    batches: [], sales: {}, roundId: 1, roundIds: { 1: 1, 2: null }, roundStatuses: { 1: 'ACTIVE', 2: null }, roundTimes: { 1: { startedAt: null, endedAt: null }, 2: { startedAt: null, endedAt: null } },
     marketItems: [], teamSummary: null, teamFeedback: null, instructorLobby: null, instructorStats: null,
     instructorStatsRound1: null, instructorStatsRound2: null,
     qcQueue: {

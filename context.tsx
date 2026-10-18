@@ -20,6 +20,7 @@ import type {
 } from './types';
 import type { TeamFeedbackResponse } from './types/api';
 import { teamApi } from './services/api';
+import type { RoundTimes } from './services/headerRound';
 import { instructorService } from './services/instructorService';
 import type { PatchUserRole } from './services/instructorService';
 import { jmService } from './services/jmService';
@@ -151,6 +152,29 @@ function normalizeRoundStatus(s: string | undefined | null): 'ACTIVE' | 'ENDED' 
   if (upper.includes('ENDED')) return 'ENDED';
   if (upper.includes('CONFIGURED')) return 'CONFIGURED';
   return null;
+}
+
+/** ISO string from the API to ms epoch; null when missing or unparseable. */
+function parseRoundTime(iso: unknown): number | null {
+  if (typeof iso !== 'string' || !iso) return null;
+  const ms = Date.parse(iso);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function roundTimesFrom(r1: any, r2: any): RoundTimes {
+  return {
+    1: { startedAt: parseRoundTime(r1?.started_at), endedAt: parseRoundTime(r1?.ended_at) },
+    2: { startedAt: parseRoundTime(r2?.started_at), endedAt: parseRoundTime(r2?.ended_at) },
+  };
+}
+
+const EMPTY_ROUND_TIMES: RoundTimes = {
+  1: { startedAt: null, endedAt: null },
+  2: { startedAt: null, endedAt: null },
+};
+
+function sameRoundTimes(a: RoundTimes, b: RoundTimes): boolean {
+  return ([1, 2] as const).every(n => a[n].startedAt === b[n].startedAt && a[n].endedAt === b[n].endedAt);
 }
 
 export function mapBatchFromTeamList(
@@ -486,6 +510,8 @@ export interface GameContextType {
   roundIds: { 1: RoundId | null; 2: RoundId | null };
   /** Each round's normalized status, from /rounds/active (null = unknown). Polled for the instructor and for seated students. */
   roundStatuses: { 1: RoundStatus | null; 2: RoundStatus | null };
+  /** Each round's start and end (ms epoch, null when unknown), from /rounds/active whatever the round's status. */
+  roundTimes: RoundTimes;
   marketItems: ApiMarketItem[];
   teamSummary: ApiTeamSummaryResponse | null;
   /* Per-joke pass/fail feedback for the signed-in user's team. Dimension IDS
@@ -531,6 +557,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [roundId, setRoundId] = useState<RoundId | null>(null);
   const [roundIds, setRoundIds] = useState<{ 1: RoundId | null; 2: RoundId | null }>({ 1: null, 2: null });
   const [roundStatuses, setRoundStatuses] = useState<{ 1: RoundStatus | null; 2: RoundStatus | null }>({ 1: null, 2: null });
+  const [roundTimes, setRoundTimes] = useState<RoundTimes>(EMPTY_ROUND_TIMES);
   const [roster, setRoster] = useState<User[]>([]);
   const [teamNames, setTeamNames] = useState<Record<string, string>>(INITIAL_TEAM_NAMES);
 
@@ -695,6 +722,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               setRoundIds(prev => (prev[1] === ids[1] && prev[2] === ids[2] ? prev : ids));
               const sts = { 1: round1Status, 2: r2Status };
               setRoundStatuses(prev => (prev[1] === sts[1] && prev[2] === sts[2] ? prev : sts));
+              const times = roundTimesFrom(r1, r2);
+              setRoundTimes(prev => (sameRoundTimes(prev, times) ? prev : times));
             }
 
             const activeRound = rounds.find((r: any) => pickStatus(r) === 'ACTIVE') ?? null;
@@ -995,6 +1024,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Both rounds' statuses, so a student screen can tell "between rounds" from "class over".
         const sts = { 1: round1Status, 2: pickStatus(r2) };
         setRoundStatuses(prev => (prev[1] === sts[1] && prev[2] === sts[2] ? prev : sts));
+        const times = roundTimesFrom(r1, r2);
+        setRoundTimes(prev => (sameRoundTimes(prev, times) ? prev : times));
 
         const activeRound = rounds.find(r => pickStatus(r) === 'ACTIVE') ?? null;
         // If nothing is ACTIVE, prefer Round 2 once Round 1 has ended.
@@ -1557,6 +1588,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setInstructorStatsByRoundNumber({ 1: null, 2: null });
     setRoundIds({ 1: null, 2: null });
     setRoundStatuses({ 1: null, 2: null });
+    setRoundTimes(EMPTY_ROUND_TIMES);
     setQcQueue(null);
 
     // Clear local caches (avoid leaking state across users).
@@ -2113,6 +2145,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setInstructorStatsByRoundNumber({ 1: null, 2: null });
     setRoundIds({ 1: null, 2: null });
     setRoundStatuses({ 1: null, 2: null });
+    setRoundTimes(EMPTY_ROUND_TIMES);
     setQcQueue(null);
     setTeamNames(INITIAL_TEAM_NAMES);
     submittedBatchJokesRef.current = {};
@@ -2149,6 +2182,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       roundId,
       roundIds,
       roundStatuses,
+      roundTimes,
       marketItems,
       teamSummary,
       teamFeedback,

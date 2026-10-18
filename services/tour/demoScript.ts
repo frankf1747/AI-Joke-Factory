@@ -302,6 +302,7 @@ export function initialDemoState(options: DemoOptions): DemoState {
       roundId: 1,
       roundIds: { 1: 1, 2: null },
       roundStatuses: { 1: 'ACTIVE', 2: null },
+      roundTimes: { 1: { startedAt: null, endedAt: null }, 2: { startedAt: null, endedAt: null } },
       marketItems: [],
       teamSummary: null,
       teamFeedback: EARLIER_FEEDBACK,
