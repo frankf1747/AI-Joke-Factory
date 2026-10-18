@@ -382,7 +382,7 @@ export class MarketingPage {
     return this.page.getByText('Marketing Desk', { exact: true });
   }
   get allClear(): Locator {
-    return this.page.getByRole('heading', { name: 'All Clear!' });
+    return this.page.getByRole('heading', { name: 'Desk is clear' });
   }
   get splitterBanner(): Locator {
     return this.page.getByText('Split the batch.', { exact: true });
@@ -538,7 +538,7 @@ export class MarketingPage {
        to its empty state, because the batch has left Marketing's queue. That
        transition IS the receipt, so assert on it rather than on a message the
        UI never shows. Verified against the live deployment. */
-    await expect(this.page.getByRole('heading', { name: /All Clear/i })).toBeVisible({
+    await expect(this.page.getByRole('heading', { name: /Desk is clear/i })).toBeVisible({
       timeout: POLL_BUDGET_MS,
     });
   }

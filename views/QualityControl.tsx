@@ -1,13 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { useDemoMode, useDemoUi, useGame } from '../context';
 import { Button, Card, StatBox, RoleLayout, Modal, fmt$ } from '../components';
-import { Send, Zap, Star, CheckCircle2, Trash2 } from 'lucide-react';
+import { Send, Zap, Star, Trash2 } from 'lucide-react';
 import { computeAvgCreatedToPublishSeconds } from '../services/economics';
 import {
   INITIAL_NUDGE_STATE, nudgeReducer, isNudgeOpen,
   type NudgeEvent,
 } from '../services/marketingNudge';
-import { DIMENSIONS, dimById } from '../config/dimensions';
+import { DIMENSIONS } from '../config/dimensions';
 /* The feedback mapper lives in views/feedback.ts; the card, with its Pop out
    button, in components/CustomerFeedbackCard.tsx. */
 import { toFeedbackRows } from './feedback';
@@ -22,8 +22,9 @@ import { foundABuyer, rankInputOf } from '../services/scoreboard';
 import { NextStepLive } from '../components/NextStep';
 import { BatchSplitter } from '../components/marketing/BatchSplitter';
 import { DeskBar } from '../components/marketing/DeskBar';
-import { JokePick, PickFields } from '../components/marketing/JokePick';
-import { moreWaiting, moreWaitingLabel } from '../services/desk';
+import { JokePick, PickFields, pickReady } from '../components/marketing/JokePick';
+import { DeskClear } from '../components/marketing/DeskClear';
+import { latestRelease, moreWaiting, moreWaitingLabel } from '../services/desk';
 import { marketingInputFrom, marketingNextStep } from '../services/nextStep';
 
 /* ---- Helpers ---- */
@@ -34,6 +35,7 @@ const fmtSeconds = (s: number | null) => {
   const r = s % 60;
   return `${m}m ${r}s`;
 };
+const MONO = "'IBM Plex Mono', ui-monospace, monospace";
 const ordinal = (n: number) => {
   const s = ['th', 'st', 'nd', 'rd'];
   const v = n % 100;
@@ -187,9 +189,7 @@ const QualityControl: React.FC = () => {
   // from the payload. `every` over an empty basket is vacuously true, which is
   // exactly what lets a Round 2 discard-all through.
   const canRelease = (submittingIds.length > 0 || mayPublishNothing) && submittingIds.every(
-    id =>
-      topics[id] &&
-      (titles[id] || '').trim().length > 0,
+    id => pickReady(topics[id], titles[id]),
   );
 
   const release = async () => {
@@ -239,6 +239,11 @@ const QualityControl: React.FC = () => {
   /* Phase gate: a raw-text batch with no jokes yet must be split first. */
   const deskBatch = qcQueue?.batch ?? null;
   const waitingLabel = moreWaitingLabel(moreWaiting(qcQueueSize, deskBatch !== null));
+  /* The empty desk: the recap reads this team's own batches; the round status is
+     the reliable "round over" signal (queue/next answers 409 then). */
+  const teamBatches = useMemo(() => batches.filter(b => b.team === user?.team), [batches, user?.team]);
+  const lastRelease = useMemo(() => latestRelease(teamBatches), [teamBatches]);
+  const roundOver = roundStatuses?.[config.round === 2 ? 2 : 1] === 'ENDED';
   const rawText = qcQueue?.batch?.raw_text;
   const needsSplit = !!(rawText && rawText.trim()) && incomingJokes.length === 0;
 
@@ -378,13 +383,7 @@ const QualityControl: React.FC = () => {
                 }}
               />
             ) : orderIds.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="bg-green-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <CheckCircle2 className="text-green-500" size={32} />
-                </div>
-                <h3 className="text-lg font-medium text-gray-900">All Clear!</h3>
-                <p className="text-gray-500">Waiting for Joke Maker to submit new batches.</p>
-              </div>
+              <DeskClear roundOver={roundOver} last={lastRelease} />
             ) : (
               <div>
                 <div className="mb-3 flex items-baseline justify-between gap-4">
@@ -429,7 +428,7 @@ const QualityControl: React.FC = () => {
                       dragProps={{
                         draggable: !watching,
                         onDragStart: (e) => {
-                          if (watching || (e.target as HTMLElement).closest('button, input, textarea, select')) {
+                          if (watching || (e.target as HTMLElement).closest('button, input, textarea, select, label')) {
                             e.preventDefault();
                             return;
                           }
@@ -483,8 +482,8 @@ const QualityControl: React.FC = () => {
 
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-[13.5px]" style={{ color: 'var(--ink-2)' }}>
-                      Selling <b className="font-mono font-semibold">{submittingIds.length}</b>, discarding{' '}
-                      <b className="font-mono font-semibold">{orderIds.length - submittingIds.length}</b>,{' '}
+                      Selling <b className="font-semibold tabular-nums" style={{ fontFamily: MONO }}>{submittingIds.length}</b>, discarding{' '}
+                      <b className="font-semibold tabular-nums" style={{ fontFamily: MONO }}>{orderIds.length - submittingIds.length}</b>,{' '}
                       <span style={{ color: 'var(--ink-3)' }}>{`costs ${fmt$(tallyCost)}`}</span>
                     </span>
                     <button

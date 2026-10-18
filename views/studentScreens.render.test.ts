@@ -374,6 +374,56 @@ describe('Marketing desk card', () => {
   });
 });
 
+describe('Desk clear', () => {
+  const joke = (n: number, over: Partial<Batch['jokes'][number]> = {}) => ({
+    joke_id: n, id: String(n), joke_text: `Joke ${n}`, content: `Joke ${n}`, joke_title: `Title ${n}`,
+    publish_status: 'PUBLISHED' as const, sold_count: 0, is_published: true, ...over,
+  });
+  const released = (over: Partial<Batch> = {}): Batch => ({
+    batch_id: 5004, round_id: 1, team_id: 1, status: 'PROCESSED', id: '5004', team: '1', round: 1,
+    submittedAt: 1_000, ratedAt: 2_000, marketing_note: 'Shorter setups sell.',
+    jokes: [joke(1), joke(2), joke(3), joke(4, { publish_status: 'DISCARDED', is_published: false }), joke(5, { publish_status: 'DISCARDED', is_published: false })],
+    ...over,
+  });
+  const clear = (over: Parameters<typeof renderWithGame>[1] = {}) => renderWithGame(QualityControl, {
+    user: testUser(Role.QUALITY_CONTROL), teamSummary: summary({}), qcQueue: null, qcQueueSize: 0, ...over,
+  });
+  const text = (out: string) => out.replace(/<[^>]+>/g, '').replace(/&#x27;/g, "'");
+
+  it('says the desk is clear and recaps the last release, with no batch bar', () => {
+    const out = clear({ batches: [released()] });
+    expect(out).toContain('>Desk is clear</h3>');
+    const t = text(out);
+    expect(t).toContain("Your Joke Maker's next batch shows up here as soon as they send it.");
+    expect(t).toContain('Last release, B-5004');
+    expect(t).toContain('3 to market, 2 discarded, note sent');
+    expect(t).not.toContain('Round over');
+    expect(out).not.toContain('All Clear');
+    expect(out).not.toContain('>Split</span>');
+    expect(out).toContain('data-tour="mk-desk"');
+  });
+
+  it('leaves out "note sent" when the batch had no note', () => {
+    const out = text(clear({ batches: [released({ marketing_note: undefined })] }));
+    expect(out).toContain('3 to market, 2 discarded');
+    expect(out).not.toContain('note sent');
+  });
+
+  it('shows no recap row before anything is released, or for another team', () => {
+    expect(text(clear())).not.toContain('Last release');
+    expect(text(clear({ batches: [released({ team: '2' })] }))).not.toContain('Last release');
+    expect(text(clear())).toContain('Desk is clear');
+  });
+
+  it('once the round has ended, says so instead and keeps the recap', () => {
+    const out = text(clear({ batches: [released()], roundStatuses: { 1: 'ENDED', 2: 'CONFIGURED' } }));
+    expect(out).toContain('Round over. Nothing more to release.');
+    expect(out).not.toContain('Desk is clear');
+    expect(out).not.toContain("next batch shows up here");
+    expect(out).toContain('Last release, B-5004');
+  });
+});
+
 describe('Split stage', () => {
   const render = (props: Partial<Parameters<typeof BatchSplitter>[0]>) => renderToStaticMarkup(
     createElement(BatchSplitter, {

@@ -19,10 +19,15 @@ const FIELD_STYLE: React.CSSProperties = {
   color: 'var(--ink)',
 };
 
+/** A selected joke is ready to ship when it has a topic and a non-blank title. */
+export function pickReady(topic: string | undefined, title: string | undefined): boolean {
+  return !!topic && (title ?? '').trim().length > 0;
+}
+
 /** The status words of a card: what a selected joke still needs, or "Discard". */
 export function pickStatus(selected: boolean, topic: string | undefined, title: string | undefined): string {
   if (!selected) return 'Discard';
-  return topic && (title ?? '').trim() ? 'To market' : 'Needs a topic and a title';
+  return pickReady(topic, title) ? 'To market' : 'Needs a topic and a title';
 }
 
 /** Topic select and Market title input, side by side. Shared by the card and the decision dialog. */
@@ -99,7 +104,8 @@ export const JokePick: React.FC<{
   index, total, jokeId, text, selected, topic, title, dragging, readOnly,
   onSelect, onToggle, onDeselect, onTopic, onTitle, onMove, dragProps,
 }) => {
-  const complete = selected && !!topic && (title ?? '').trim().length > 0;
+  const complete = selected && pickReady(topic, title);
+  const checkboxRef = React.useRef<HTMLSpanElement>(null);
   return (
     <div
       data-pick={jokeId}
@@ -122,6 +128,7 @@ export const JokePick: React.FC<{
           <GripVertical size={15} />
         </span>
         <span
+          ref={checkboxRef}
           role="checkbox"
           aria-checked={selected}
           aria-label={`Sell joke #${index + 1}`}
@@ -165,7 +172,7 @@ export const JokePick: React.FC<{
           <div>
             <button
               type="button"
-              onClick={onDeselect}
+              onClick={() => { onDeselect(); checkboxRef.current?.focus(); }}
               className="text-[13px] font-medium underline-offset-2 hover:underline"
               style={{ color: 'var(--navy)' }}
             >
