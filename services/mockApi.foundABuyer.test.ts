@@ -78,12 +78,19 @@ describe('mock team batch list', () => {
     expect(foundABuyer([mapped])).toBe(3);
   });
 
-  it('lists a batch Marketing has not released yet as PENDING', async () => {
+  it('lists a split batch Marketing has not released yet as PENDING', async () => {
     await startRound();
     const next: any = await mockApiRequest('/v1/marketing/queue/next');
     const { batch_id, team_id, round_id } = next.data.batch;
+    // The stocked batch arrives unsplit (no jokes), so split it first.
+    const split: any = await mockApiRequest(`/v1/marketing/batches/${batch_id}/split`, {
+      method: 'POST',
+      body: { jokes: ['one', 'two', 'three'] },
+    });
+    expect(split.ok).toBe(true);
     const res: any = await mockApiRequest(`/v1/rounds/${round_id}/teams/${team_id}/batches`);
     const listed = res.data.batches.find((b: any) => b.batch_id === batch_id);
+    expect(listed.jokes.length).toBe(3);
     expect(listed.jokes.every((j: any) => j.publish_status === 'PENDING')).toBe(true);
   });
 });
