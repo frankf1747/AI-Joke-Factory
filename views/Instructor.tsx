@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useGame } from '../context';
 import { Button, Card, RoleLayout, Modal } from '../components';
-import { Play, RefreshCw, Settings, Clock, StopCircle, GripVertical, Users, CheckCircle, Maximize2, X, Trash2 } from 'lucide-react';
+import { RefreshCw, Settings, Clock, GripVertical, Users, CheckCircle, Maximize2, X, Trash2 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   LineChart, Line, Legend, ScatterChart, Scatter, LabelList
@@ -12,6 +12,8 @@ import { BotPanel, botPanelRequested } from '../components/BotPanel';
 import { isWatchMode } from '../services/watchMode';
 import type { IdealDimension } from '../config/dimensions';
 import { LeanDebrief } from '../components/LeanDebrief';
+import { ControlBar } from '../components/instructor/ControlBar';
+import { defaultViewRound, instructorPhase } from '../services/instructorPhase';
 import { LeanChartsPanel } from '../components/leanCharts/LeanChartsPanel';
 import { useLeanCharts } from '../services/useLeanCharts';
 import { leanChartsVisibility, leanRoundFlags, resolveLeanChartsRound } from '../services/leanCharts';
@@ -37,7 +39,7 @@ const fmtSeconds = (s: number) => (s > 0 ? `${Math.round(s)}s` : '—');
 
 const Instructor: React.FC = () => {
   const { 
-    config, updateConfig, setGameActive, setRound, resetGame, toggleTeamPopup,
+    config, updateConfig, setGameActive, resetGame, toggleTeamPopup,
     roster, teamNames, updateTeamName, updateUser,
     formTeams, resetToLobby
     , instructorStats
@@ -61,7 +63,8 @@ const Instructor: React.FC = () => {
   /** After Apply: which rounds the fees were written to, e.g. "Fees applied to Rounds 1 and 2". */
   const [feeNotice, setFeeNotice] = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [showEndRound1Confirm, setShowEndRound1Confirm] = useState(false);
+  // The round the End Round confirm is open for, or null when it is closed.
+  const [endConfirmRound, setEndConfirmRound] = useState<1 | 2 | null>(null);
 
   // Expanded Chart State
   const [expandedChart, setExpandedChart] = useState<string | null>(null);
@@ -81,12 +84,18 @@ const Instructor: React.FC = () => {
   const [hoveredSalesSeriesKey, setHoveredSalesSeriesKey] = useState<string | null>(null);
   const [hoveredSequenceSeriesKey, setHoveredSequenceSeriesKey] = useState<string | null>(null);
   const [hoveredUnratedSeriesKey, setHoveredUnratedSeriesKey] = useState<string | null>(null);
-  const [leaderboardRoundTab, setLeaderboardRoundTab] = useState<1 | 2>((config.round === 2 ? 2 : 1) as 1 | 2);
-  const leaderboardRoundTouchedRef = useRef(false);
-  // Lean charts: the round their R1/R2 control shows. It follows the current
-  // round until the instructor picks one, like the leaderboard tab.
-  const [leanChartsRound, setLeanChartsRound] = useState<1 | 2>((config.round === 2 ? 2 : 1) as 1 | 2);
-  const leanChartsRoundTouchedRef = useRef(false);
+  // The round the leaderboard, charts and debrief show (spec decision 6). UI only:
+  // Start, End and the popups act on config.round, which the poll sets, and nothing
+  // here calls setRound. It follows the phase (Round 2 once it has started) until
+  // the instructor picks a round in the control bar.
+  const phase = instructorPhase(roundStatuses);
+  const round2Started = roundStatuses[2] === 'ACTIVE' || roundStatuses[2] === 'ENDED';
+  const [viewRound, setViewRound] = useState<1 | 2>(() => defaultViewRound(phase));
+  useEffect(() => { setViewRound(defaultViewRound(phase)); }, [phase]);
+  // Lean charts: the round they show. It follows viewRound; resolveLeanChartsRound
+  // may move it off a round that has no Lean charts to show.
+  const [leanChartsRound, setLeanChartsRound] = useState<1 | 2>(viewRound);
+  useEffect(() => { setLeanChartsRound(viewRound); }, [viewRound]);
   const [scatterXMetric, setScatterXMetric] = useState<string>('total_sales');
   const [scatterYMode, setScatterYMode] = useState<'metric' | 'ratio'>('metric');
   const [scatterYMetric, setScatterYMetric] = useState<string>('profit');
@@ -240,23 +249,11 @@ const Instructor: React.FC = () => {
     setSequenceTab(defaultMode);
     setUnratedTab(defaultMode);
     setScatterRoundMode(defaultMode);
-    
-    if (!leaderboardRoundTouchedRef.current) {
-      setLeaderboardRoundTab((config.round === 2 ? 2 : 1) as 1 | 2);
-    }
-    if (!leanChartsRoundTouchedRef.current) {
-      setLeanChartsRound((config.round === 2 ? 2 : 1) as 1 | 2);
-    }
   }, [config.round, config.isActive]);
-
-  // A round cannot be resumed: POST /start on an ENDED round answers 409 "round already
-  // ended" (usecase/instructor.go). Once the selected round has ended, Start gives way to
-  // a disabled "Ended". An unknown status (null) still offers Start: the server decides.
-  const selectedRoundEnded = selectedRoundStatus === 'ENDED';
 
   const statsR1 = instructorStatsRound1 ?? null;
   const statsR2 = instructorStatsRound2 ?? null;
-  const leaderboardStatsSelected = (leaderboardRoundTab === 1 ? statsR1 : statsR2) ?? instructorStats ?? null;
+  const leaderboardStatsSelected = (viewRound === 1 ? statsR1 : statsR2) ?? instructorStats ?? null;
 
   /* Lean charts replace the five Classic chart cards when the round their
      round control shows is Lean — the leaderboard's rule: its stats rows carry
@@ -290,7 +287,6 @@ const Instructor: React.FC = () => {
   useEffect(() => {
     const next = resolveLeanChartsRound(leanChartsRound, leanRounds, config.round === 2 ? 2 : 1, leanCurrentStarted);
     if (next !== leanChartsRound) {
-      leanChartsRoundTouchedRef.current = false;
       setLeanChartsRound(next);
     }
   }, [leanChartsRound, leanRounds, config.round, leanCurrentStarted]);
@@ -2110,9 +2106,7 @@ const Instructor: React.FC = () => {
                   if (!ok) return;
 
                   // Reset leaderboard UI state (data is cleared in resetGame()).
-                  leaderboardRoundTouchedRef.current = false;
-                  setLeaderboardRoundTab(1);
-                  leanChartsRoundTouchedRef.current = false;
+                  setViewRound(1);
                   setLeanChartsRound(1);
                   setLeaderboardSortKey('profit');
                   setLeaderboardSortDir('desc');
@@ -2134,34 +2128,36 @@ const Instructor: React.FC = () => {
           </div>
         </Modal>
 
-        {/* End Round 1 Confirm Modal */}
+        {/* End Round confirm, for both rounds */}
         <Modal
-          isOpen={showEndRound1Confirm}
-          onClose={() => setShowEndRound1Confirm(false)}
-          title="End Round 1"
+          isOpen={endConfirmRound !== null}
+          onClose={() => setEndConfirmRound(null)}
+          title={`End Round ${endConfirmRound ?? ''} now?`}
         >
           <div className="space-y-4">
-            <p className="text-sm text-gray-700">
-              End Round 1 now? This will advance the game to Round 2.
+            <p className="text-sm" style={{ color: 'var(--ink-2)' }}>
+              {endConfirmRound === 1
+                ? 'Students stop sending and releasing jokes, and the game moves to Round 2.'
+                : 'Students stop sending and releasing jokes, and both rounds are over.'}
             </p>
             <div className="grid grid-cols-2 gap-3 mt-6">
-              <Button variant="secondary" onClick={() => setShowEndRound1Confirm(false)} className="w-full">
-                Cancel
+              <Button variant="outline" onClick={() => setEndConfirmRound(null)} className="w-full">
+                Keep playing
               </Button>
               <Button
                 variant="danger"
                 className="w-full font-bold"
                 onClick={() => {
-                  setShowEndRound1Confirm(false);
+                  setEndConfirmRound(null);
                   endRound();
                 }}
               >
-                Yes, End Round
+                {`End Round ${endConfirmRound ?? ''}`}
               </Button>
             </div>
           </div>
         </Modal>
-        
+
         {/* Expanded Chart Modal */}
         <Modal 
             isOpen={!!expandedChart} 
@@ -2187,12 +2183,10 @@ const Instructor: React.FC = () => {
                         <button
                           key={r}
                           type="button"
-                          onClick={() => {
-                            leaderboardRoundTouchedRef.current = true;
-                            setLeaderboardRoundTab(r as 1 | 2);
-                          }}
+                          onClick={() => setViewRound(r as 1 | 2)}
+                          disabled={r === 2 && !round2Started}
                           className={`px-3 py-1.5 rounded text-sm font-bold ${
-                            leaderboardRoundTab === r ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
+                            viewRound === r ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
                           }`}
                           title={r === 1 ? 'Round 1 leaderboard' : 'Round 2 leaderboard'}
                         >
@@ -2269,6 +2263,26 @@ const Instructor: React.FC = () => {
             )}
         </Modal>
 
+        <ControlBar
+          statuses={roundStatuses}
+          viewRound={viewRound}
+          onViewRound={setViewRound}
+          arrivalWindowSeconds={config.arrivalWindowSeconds}
+          teamsPlaying={productionTeamCount(roster)}
+          showTeammates={config.showTeamPopup}
+          onShowTeammates={show => toggleTeamPopup(show)}
+          onStart={async () => {
+            // Start acts on config.round, the round the poll sets. Starting Round 2
+            // closes the teammate popups first and syncs the switch.
+            if (config.round === 2) {
+              await toggleTeamPopup(false);
+            }
+            await setGameActive(true);
+          }}
+          onEnd={() => setEndConfirmRound(config.round === 2 ? 2 : 1)}
+          onOpenDebrief={() => document.getElementById('instructor-debrief')?.scrollIntoView({ behavior: 'smooth' })}
+        />
+
         {/* Lobby Management Panel */}
         {config.status === 'LOBBY' && (
             <Card>
@@ -2308,106 +2322,9 @@ const Instructor: React.FC = () => {
             </Card>
         )}
 
-        {/* Top Controls Bar */}
+        {/* Settings */}
         <Card>
           <div className="flex flex-col space-y-4">
-            {/* Row 1: Game Flow */}
-            <div className="flex flex-wrap justify-between items-center gap-4">
-              <div className="flex items-center space-x-4">
-                 <div className="flex items-center bg-gray-100 rounded-lg p-1.5">
-                   <button 
-                     className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${config.round === 1 ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:bg-gray-200'}`}
-                     onClick={() => setRound(1)}
-                   >
-                     Round 1
-                   </button>
-                   <button 
-                     className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${config.round === 2 ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:bg-gray-200'}`}
-                     onClick={() => setRound(2)}
-                   >
-                     Round 2
-                   </button>
-                 </div>
-                 
-                 <div className="flex items-center space-x-2 bg-slate-100 px-4 py-2 rounded-lg text-slate-700 font-mono text-xl">
-                    <Clock size={20} />
-                    <span>{formatTime(config.elapsedTime)}</span>
-                 </div>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                 {config.isActive ? (
-                   <Button
-                     disabled
-                     variant="secondary"
-                     className="w-32 flex justify-center items-center gap-2"
-                     title="Round is active"
-                   >
-                     Active
-                   </Button>
-                 ) : selectedRoundEnded ? (
-                   <Button
-                     disabled
-                     variant="secondary"
-                     className="w-32 flex justify-center items-center gap-2"
-                     title="Round has ended"
-                   >
-                     Ended
-                   </Button>
-                 ) : (
-                 <Button 
-                    onClick={async () => {
-                      // When starting Round 2, force-close team popups and sync the toggle state.
-                      if (config.round === 2) {
-                        await toggleTeamPopup(false);
-                      }
-                      await setGameActive(true);
-                    }}
-                     variant="success"
-                   className="w-32 flex justify-center items-center gap-2"
-                 >
-                     <Play size={16} /> Start
-                 </Button>
-                 )}
-                 
-                 <Button 
-                  onClick={async () => {
-                    if (config.round === 1) {
-                      setShowEndRound1Confirm(true);
-                      return;
-                    }
-                    await endRound();
-                  }}
-                   disabled={!config.isActive}
-                   variant="danger"
-                   className="bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                 >
-                   <StopCircle size={16} className="mr-1 inline" /> End Round
-                 </Button>
-                 
-                 <div className="w-px h-8 bg-gray-300 mx-2"></div>
-                 
-                <Button onClick={() => setShowResetConfirm(true)} variant="danger" className="p-2" title="Reset Game (Clear All)">
-                   <RefreshCw size={16} />
-                 </Button>
-                 
-              </div>
-            </div>
-
-            {/* Row 2: Round 2 Controls */}
-            {config.round === 2 && (
-              <div className="flex items-center justify-center p-4 bg-indigo-50 rounded-lg border border-indigo-100">
-                <span className="text-indigo-900 font-medium mr-4">Round 2 Setup:</span>
-                <Button 
-                   onClick={() => toggleTeamPopup(!config.showTeamPopup)}
-                   variant={config.showTeamPopup ? 'danger' : 'primary'}
-                   className="shadow-sm"
-                >
-                  {config.showTeamPopup ? 'Hide Team Members (Close Popups)' : 'Show Team Members (Open Popups)'}
-                </Button>
-              </div>
-            )}
-            
             {/* Row 3: Configurations (single line, wrap on narrow screens) */}
             <div className="flex flex-wrap items-center gap-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
               <div className="flex items-center space-x-3">
@@ -2506,6 +2423,12 @@ const Instructor: React.FC = () => {
                 onChange={next => updateConfig({ idealProfile: next })}
                 disabled={config.isActive}
               />
+            </div>
+
+            <div className="flex justify-end">
+              <Button onClick={() => setShowResetConfirm(true)} variant="outline" className="inline-flex items-center gap-2 text-sm">
+                <RefreshCw size={14} aria-hidden="true" /> Reset game
+              </Button>
             </div>
           </div>
         </Card>
@@ -2662,12 +2585,10 @@ const Instructor: React.FC = () => {
                     <button
                       key={r}
                       type="button"
-                      onClick={() => {
-                        leaderboardRoundTouchedRef.current = true;
-                        setLeaderboardRoundTab(r as 1 | 2);
-                      }}
+                      onClick={() => setViewRound(r as 1 | 2)}
+                      disabled={r === 2 && !round2Started}
                       className={`px-2 py-1 rounded text-xs font-bold ${
-                        leaderboardRoundTab === r ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
+                        viewRound === r ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
                       }`}
                       title={r === 1 ? 'Round 1 leaderboard' : 'Round 2 leaderboard'}
                     >
@@ -2689,18 +2610,17 @@ const Instructor: React.FC = () => {
           </Card>
 
           {statsR2 && [statsR1, statsR2].some(st => (st?.leaderboard ?? []).some(r => r.lean != null)) && (
-            <Card className="xl:col-span-2" title="Round 1 vs Round 2" subtitle="Same rules and fees in both rounds, per team">
+            <div id="instructor-debrief" className="xl:col-span-2 scroll-mt-4">
+            <Card title="Round 1 vs Round 2" subtitle="Same rules and fees in both rounds, per team">
               <LeanDebrief r1={statsR1} r2={statsR2} teamNames={teamNames} />
             </Card>
+            </div>
           )}
           
           {showLeanCharts ? (
             <LeanChartsPanel
               round={leanChartsRound}
-              onRoundChange={(r) => {
-                leanChartsRoundTouchedRef.current = true;
-                setLeanChartsRound(r);
-              }}
+              onRoundChange={r => { if (r === 1 || round2Started) setViewRound(r); }}
               leanRounds={leanRounds}
               r1={leanChartsR1}
               r2={leanChartsR2}

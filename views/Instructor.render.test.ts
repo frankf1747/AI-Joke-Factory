@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import Instructor from './Instructor';
+import { ControlBar, type ControlBarProps } from '../components/instructor/ControlBar';
 import { TEST_CONFIG, renderWithGame, testUser } from './testing/renderWithGame';
 import { Role } from '../types';
 import { leanConfigFromRound } from '../services/leanMode';
@@ -65,37 +66,125 @@ describe('Instructor screen, one Lean rule set', () => {
 });
 
 /* POST /start on an ENDED round answers 409 "round already ended"
-   (usecase/instructor.go): a round cannot be resumed, so the control offers
-   Start only while the selected round is CONFIGURED. */
-describe('Instructor screen, the Start control', () => {
+   (usecase/instructor.go): a round cannot be resumed, so the control bar offers
+   Start only while the round it would start is CONFIGURED. There is no pause. */
+describe('Instructor screen, the control bar', () => {
   const stopped = { ...TEST_CONFIG, isActive: false };
-  const r2Stats = { round_id: 2, leaderboard: [] };
-  const startButton = /<button[^>]*>(?:(?!<\/button>).)*Start<\/button>/s;
+  // An ended Round 1 has Lean stats; without them the page falls back to the Classic charts.
+  const r1Stats = {
+    round_id: 1,
+    leaderboard: [{
+      rank: 1, team: { id: 1, name: 'Team 1' }, points: 0, total_sales: 0, unsold_jokes: 0, discarded_jokes: 0,
+      batches_processed: 0, profit: 0, total_jokes: 0, published_jokes: 0,
+      lean: { batches_submitted: 0, setup_cost: 0, carrying_cost: 0, avg_submit_to_publish_s: 0, avg_publish_to_first_sale_s: 0, batch_series: [] },
+    }],
+  };
+  const startButton = (n: number) => new RegExp(`<button[^>]*>(?:(?!</button>).)*Start Round ${n}(?:(?!</button>).)*</button>`, 's');
 
-  it('offers Start when the selected round is CONFIGURED', () => {
+  it('between rounds: the status sentence, the teammates switch, Start Round 2 and no Resume', () => {
     const out = renderWithGame(Instructor, {
-      user: instructor, config: { ...stopped, round: 2 }, roundStatuses: { 1: 'ENDED', 2: 'CONFIGURED' },
+      user: instructor, config: { ...stopped, round: 2 }, roundStatuses: { 1: 'ENDED', 2: 'CONFIGURED' }, instructorStatsRound1: r1Stats,
     });
-    expect(out).toMatch(startButton);
+    expect(out).toContain('Round 1 is over');
+    expect(out).toContain('Show students their teammates, then start Round 2 when the room is ready.');
+    expect(out).toMatch(/<input[^>]*type="checkbox"[^>]*role="switch"/);
+    expect(out).toContain('Show students their teammates</label>');
+    expect(out).toMatch(startButton(2));
+    expect(out).not.toMatch(/<button[^>]*disabled=""[^>]*>(?:(?!<\/button>).)*Start Round 2/s);
     expect(out).not.toContain('Resume');
+    expect(out).toMatch(/Round 1<small[^>]*>ended<\/small>/);
+    expect(out).toMatch(/Round 2<small[^>]*>not started<\/small>/);
   });
 
-  it('offers no Start or Resume once Round 2 has ended, only a disabled Ended', () => {
+  it('while Round 1 runs: the teams playing and when customers stop arriving (900 s reads 15:00)', () => {
+    const roster = [1, 2].flatMap(t => [testUser(Role.JOKE_MAKER, t), testUser(Role.QUALITY_CONTROL, t)])
+      .map((u, i) => ({ ...u, id: String(i + 10), user_id: i + 10 }));
+    const out = renderWithGame(Instructor, {
+      user: instructor, roster, config: { ...TEST_CONFIG, arrivalWindowSeconds: 900 }, roundStatuses: { 1: 'ACTIVE', 2: 'CONFIGURED' },
+    });
+    expect(out).toContain('Round 1 is running');
+    expect(out).toContain('2 teams playing. Customers stop arriving at 15:00; end the round around then.');
+    expect(out).toContain('End Round 1');
+    expect(out).not.toMatch(startButton(1));
+    expect(out).not.toContain('Resume');
+    expect(out).not.toContain('Pause');
+  });
+
+  it('in the lobby: Start Round 1 and the arrival window in minutes', () => {
+    const out = renderWithGame(Instructor, {
+      user: instructor, config: { ...stopped, arrivalWindowSeconds: 900 }, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' },
+    });
+    expect(out).toContain('Seat every pair, check the setup, then start. Customers arrive over 15 minutes from Start.');
+    expect(out).toMatch(startButton(1));
+  });
+
+  it('once both rounds have ended: Open debrief and no Start', () => {
     const out = renderWithGame(Instructor, {
       user: instructor, config: { ...stopped, round: 2 }, roundStatuses: { 1: 'ENDED', 2: 'ENDED' },
-      instructorStatsRound2: r2Stats,
+      instructorStatsRound2: { round_id: 2, leaderboard: [] },
     });
+    expect(out).toContain('Both rounds ended. Open Debrief to compare the rounds.');
+    expect(out).toContain('Open debrief');
+    expect(out).not.toMatch(startButton(1));
+    expect(out).not.toMatch(startButton(2));
     expect(out).not.toContain('Resume');
-    expect(out).not.toMatch(startButton);
-    expect(out).toMatch(/<button[^>]*disabled=""[^>]*>Ended<\/button>/);
   });
 
-  it('offers no Start once Round 1 has ended while Round 1 is selected', () => {
-    const out = renderWithGame(Instructor, {
-      user: instructor, config: { ...stopped, round: 1 }, roundStatuses: { 1: 'ENDED', 2: 'CONFIGURED' },
+  it('keeps the Round 2 segment disabled until Round 2 has started', () => {
+    const before = renderWithGame(Instructor, {
+      user: instructor, config: { ...stopped, round: 2 }, roundStatuses: { 1: 'ENDED', 2: 'CONFIGURED' }, instructorStatsRound1: r1Stats,
     });
-    expect(out).not.toMatch(startButton);
-    expect(out).toMatch(/<button[^>]*disabled=""[^>]*>Ended<\/button>/);
+    expect(before).toMatch(/<button[^>]*disabled=""[^>]*>Round 2<small/);
+    const running = renderWithGame(Instructor, {
+      user: instructor, config: { ...TEST_CONFIG, round: 2 }, roundStatuses: { 1: 'ENDED', 2: 'ACTIVE' },
+    });
+    expect(running).not.toMatch(/<button[^>]*disabled=""[^>]*>Round 2<small/);
+    expect(running).toMatch(/Round 2<small[^>]*>running<\/small>/);
+  });
+});
+
+/* The control bar is hook-free, so the test calls it and walks the element tree
+   to press its buttons (renderToStaticMarkup cannot click). */
+describe('ControlBar, the round control views and never retargets', () => {
+  type El = { type: unknown; props: Record<string, any> };
+  const textOf = (n: any): string =>
+    n == null || typeof n === 'boolean' ? '' : typeof n === 'string' || typeof n === 'number' ? String(n)
+      : Array.isArray(n) ? n.map(textOf).join('') : textOf(n.props?.children);
+  const buttons = (n: any, acc: El[] = []): El[] => {
+    if (Array.isArray(n)) n.forEach(c => buttons(c, acc));
+    else if (n && typeof n === 'object' && 'props' in n) {
+      if (n.type === 'button') acc.push(n);
+      buttons(n.props.children, acc);
+    }
+    return acc;
+  };
+  const props = (over: Partial<ControlBarProps> = {}): ControlBarProps => ({
+    statuses: { 1: 'ENDED', 2: 'CONFIGURED' }, viewRound: 1, onViewRound: vi.fn(),
+    arrivalWindowSeconds: 900, teamsPlaying: 3, showTeammates: false, onShowTeammates: vi.fn(),
+    onStart: vi.fn(), onEnd: vi.fn(), onOpenDebrief: vi.fn(), ...over,
+  });
+
+  it('pressing Round 1 changes the viewed round only, and Start still targets Round 2', () => {
+    const p = props({ statuses: { 1: 'ENDED', 2: 'ACTIVE' }, viewRound: 2 });
+    const r1 = buttons(ControlBar(p)).find(b => textOf(b).startsWith('Round 1'))!;
+    r1.props.onClick();
+    expect(p.onViewRound).toHaveBeenCalledWith(1);
+    expect(p.onStart).not.toHaveBeenCalled();
+    expect(p.onEnd).not.toHaveBeenCalled();
+
+    const between = props({ viewRound: 1 });
+    const labels = buttons(ControlBar(between)).map(textOf);
+    expect(labels).toContain('Start Round 2');
+    expect(labels).not.toContain('Start Round 1');
+  });
+
+  it('End Round asks the parent to confirm for both rounds', () => {
+    for (const statuses of [{ 1: 'ACTIVE', 2: 'CONFIGURED' }, { 1: 'ENDED', 2: 'ACTIVE' }] as const) {
+      const p = props({ statuses });
+      const end = buttons(ControlBar(p)).find(b => textOf(b).startsWith('End Round'))!;
+      end.props.onClick();
+      expect(p.onEnd).toHaveBeenCalledTimes(1);
+    }
   });
 });
 
