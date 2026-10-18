@@ -3,6 +3,7 @@ import Instructor from './Instructor';
 import { TEST_CONFIG, renderWithGame, testUser } from './testing/renderWithGame';
 import { Role } from '../types';
 import { leanConfigFromRound } from '../services/leanMode';
+import { DEFAULT_IDEAL_PROFILE } from '../config/dimensions';
 
 // Instructor reads window.location.search while rendering (the bot panel switch).
 vi.stubGlobal('window', { location: { search: '' } });
@@ -112,5 +113,17 @@ describe('Instructor screen, the Live Market', () => {
     const long = renderWithGame(Instructor, { user: instructor, marketItems: [item(1, 'x'.repeat(181))] });
     expect(long).toContain('Show more');
     expect(long).not.toContain('Page ');
+  });
+});
+
+describe('Instructor screen, the hidden ideal joke', () => {
+  const between = { ...TEST_CONFIG, isActive: false };
+  it('shows the stored ideal in the picker (Topic Animals selected)', () => {
+    const out = renderWithGame(Instructor, {
+      user: instructor, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' },
+      config: { ...between, idealProfile: { ...DEFAULT_IDEAL_PROFILE, TOPIC: 'Animals' } },
+    });
+    expect(out).toMatch(/<option value="Animals" selected="">Animals<\/option>/);
+    expect(out).not.toMatch(/<option value="Work" selected="">/);
   });
 });

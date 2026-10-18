@@ -1,4 +1,4 @@
-import type { LeanTeamStats, LobbyResponse } from './types/api';
+import type { InstructorRound, LeanTeamStats, LobbyResponse } from './types/api';
 
 
 /**
@@ -241,6 +241,17 @@ export interface ApiActiveRoundResponse {
 
 export interface ApiInstructorRoundConfigResponse {
   data: { round: ApiRound };
+}
+
+/**
+ * The instructor projection of a round (types/api.ts InstructorRound): the public round plus the
+ * hidden engine knobs. `ideal_profile` is absent, not null, when none is stored.
+ */
+export type ApiInstructorRound = InstructorRound;
+
+/** GET /v1/instructor/rounds/:id/config, after apiRequest has unwrapped {data}. */
+export interface ApiInstructorRoundReadResponse {
+  round: ApiInstructorRound;
 }
 
 export interface ApiTeamSummaryResponse {

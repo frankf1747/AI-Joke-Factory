@@ -6,6 +6,7 @@ import type {
   ApiInstructorLoginRequest,
   ApiInstructorLoginResponse,
   ApiInstructorRoundConfigResponse,
+  ApiInstructorRoundReadResponse,
   RoundId,
   TeamId,
   UserId,
@@ -90,6 +91,15 @@ export const instructorService = {
     },
   ): Promise<ApiInstructorRoundConfigResponse> {
     return apiRequest<ApiInstructorRoundConfigResponse>(`/v1/instructor/rounds/${round_id}/config`, { method: 'POST', body });
+  },
+
+  /**
+   * GET /config — the stored round config and hidden ideal joke (instructor only). The body is
+   * the snake_case instructor round DTO POST /config returns; ideal_profile is absent when none
+   * is stored. A backend without this route answers 404: callers treat that as "nothing stored".
+   */
+  getRoundConfig(round_id: RoundId | number): Promise<ApiInstructorRoundReadResponse> {
+    return apiRequest<ApiInstructorRoundReadResponse>(`/v1/instructor/rounds/${round_id}/config`, { method: 'GET' });
   },
 
   popups(round_id: RoundId, body: { is_popped_active: boolean }): Promise<ApiInstructorRoundConfigResponse> {

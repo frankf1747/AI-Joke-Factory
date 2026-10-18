@@ -58,6 +58,8 @@ type MockRound = {
   started_at: string | null;
   ended_at: string | null;
   is_popped_active?: boolean;
+  /** What the instructor last saved; absent until one is (like the real round). */
+  ideal_profile?: Record<string, string>;
 };
 
 /* Lean market mode fields every public round carries on newer backends. The
@@ -687,6 +689,33 @@ function route(
       return ok(resp, 200);
     }
 
+    if (method === 'GET' && sub === '/config') {
+      // The instructor projection, snake_case like POST /config. The mock keeps no hidden engine
+      // knobs of its own, so it reports the backend defaults for them.
+      return ok(
+        {
+          round: {
+            id: db.round.id,
+            round_number: db.round.round_number,
+            status: db.round.status,
+            customer_budget: db.round.customer_budget,
+            batch_size: db.round.batch_size,
+            max_batch_size: db.round.batch_size,
+            market_price: SIM_CONFIG.economics.marketPrice,
+            cost_of_publishing: SIM_CONFIG.economics.costOfPublishing,
+            cost_of_discard: SIM_CONFIG.economics.costOfDiscard,
+            started_at: db.round.started_at,
+            ended_at: db.round.ended_at,
+            is_popped_active: db.round.is_popped_active ?? false,
+            buy_threshold: 0.6, jitter: 0.05, swap_margin: 0.1, feedback_pass_threshold: 0.7, preference_base: 2,
+            ...(db.round.ideal_profile ? { ideal_profile: db.round.ideal_profile } : {}),
+            ...MOCK_ROUND_MARKET_FIELDS,
+          },
+        },
+        200,
+      );
+    }
+
     if ((method === 'PUT' || method === 'POST') && sub === '/config') {
       // Every field of the real dto.ConfigRequest is a Go pointer and therefore optional;
       // omitted values keep the existing round (usecase.MergeConfig). The caller sends only
@@ -697,7 +726,11 @@ function route(
         customer_budget?: number;
         batch_size?: number;
         is_popped_active?: boolean;
+        ideal_profile?: Record<string, string>;
       };
+      if (body.ideal_profile && typeof body.ideal_profile === 'object') {
+        db.round.ideal_profile = { ...body.ideal_profile };
+      }
       if (body.customer_budget !== undefined) {
         const customer_budget = Number(body.customer_budget);
         if (!Number.isFinite(customer_budget)) {
@@ -789,6 +822,10 @@ function route(
     }
 
     if (method === 'POST' && sub === '/start') {
+      const startBody = (opts.body ?? {}) as { ideal_profile?: Record<string, string> };
+      if (startBody.ideal_profile && typeof startBody.ideal_profile === 'object') {
+        db.round.ideal_profile = { ...startBody.ideal_profile };
+      }
       db.round.status = 'ACTIVE';
       db.round.started_at = isoNow();
       db.round.ended_at = null;

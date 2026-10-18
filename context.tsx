@@ -32,7 +32,7 @@ import { ApiError } from './services/apiClient';
 import { clearPersisted, getWatchIdentity, isWatchMode, mayClaimMarketingBatch } from './services/watchMode';
 import { setMockRoundNumber } from './services/mockApi';
 import { DEFAULT_IDEAL_PROFILE } from './config/dimensions';
-import { DEFAULT_CUSTOMER_BUDGET, customerBudgetFromRound } from './services/roundConfig';
+import { DEFAULT_CUSTOMER_BUDGET, configFromInstructorRound, customerBudgetFromRound } from './services/roundConfig';
 import { LEAN_DEFAULTS, MARKET_MODE_LOCKED_TEXT, WIP_LIMIT_TEXT, configSaveErrorText, isMarketModeLocked, isWipLimitReached, leanConfigFromRound, leanConfigToBody, leanTargetRounds, saveRoundConfig } from './services/leanMode';
 import { isCompleteProfile } from './components/IdealProfilePicker';
 import type { DemoUi } from './services/tour/demoUi';
@@ -846,6 +846,42 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   const [config, setConfig] = useState<GameConfig>(initialConfig());
+
+  /* The stored config and hidden ideal joke, read back from the backend (instructor only), so a
+     reload shows what was saved rather than the defaults. Fetched on mount and when the viewed
+     round changes, never on an interval, so it cannot clobber an edit in progress; an edit made
+     while a fetch was in flight (updateConfig bumps the counter) discards that fetch's result. */
+  const configEditSeqRef = useRef(0);
+  /** Latched when the backend has no GET /config route (404/405): today's defaults stay, no retries. */
+  const roundConfigUnsupportedRef = useRef(false);
+  const isInstructorUser = user?.role === ('INSTRUCTOR' as Role);
+
+  const loadStoredRoundConfig = async (targetRoundId: RoundId): Promise<boolean> => {
+    if (roundConfigUnsupportedRef.current) return false;
+    const editsBefore = configEditSeqRef.current;
+    try {
+      const res = await instructorService.getRoundConfig(targetRoundId);
+      if (configEditSeqRef.current !== editsBefore) return false;
+      const patch = configFromInstructorRound(res.round);
+      if (patch.customerBudget !== undefined) storedBudgetRef.current = patch.customerBudget;
+      setConfig(prev => ({ ...prev, ...patch }));
+      return true;
+    } catch (e) {
+      if (e instanceof ApiError && (e.status === 404 || e.status === 405)) {
+        if (!roundConfigUnsupportedRef.current) console.warn('This backend cannot read the round config back (no GET /config); showing defaults.');
+        roundConfigUnsupportedRef.current = true;
+      }
+      return false;
+    }
+  };
+
+  const viewedRoundId = roundIds[config.round === 2 ? 2 : 1];
+  useEffect(() => {
+    if (!isInstructorUser || !viewedRoundId) return;
+    void loadStoredRoundConfig(viewedRoundId);
+    // loadStoredRoundConfig only reads refs and state setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isInstructorUser, viewedRoundId]);
 
   // Restore local caches across refresh (best-effort). Not in a watch tab:
   // these shared caches belong to the instructor or another user of this
@@ -1714,6 +1750,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
        session it was tripped in. */
     teamSummaryUnsupportedRef.current = false;
     teamFeedbackUnsupportedRef.current = false;
+    roundConfigUnsupportedRef.current = false;
     setInstructorLobby(null);
     setInstructorStats(null);
     setInstructorStatsByRoundNumber({ 1: null, 2: null });
@@ -1731,6 +1768,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateConfig = async (updates: Partial<GameConfig>): Promise<ConfigSaveResult> => {
     const previous = config;
+    configEditSeqRef.current += 1;
     setConfig(prev => ({ ...prev, ...updates }));
 
     // Client-only knobs: the marketing nudge timers are React state by design and have no

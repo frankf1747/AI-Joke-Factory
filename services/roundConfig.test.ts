@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_CUSTOMER_BUDGET, buildApplyUpdates, customerBudgetFromRound } from './roundConfig';
+import { DEFAULT_CUSTOMER_BUDGET, buildApplyUpdates, customerBudgetFromRound, configFromInstructorRound } from './roundConfig';
+import { DEFAULT_IDEAL_PROFILE } from '../config/dimensions';
 import { feeValuesOf } from '../components/FeeConfigFields';
 import { TEST_CONFIG } from '../views/testing/renderWithGame';
 
@@ -49,5 +50,30 @@ describe('buildApplyUpdates (what Apply sends)', () => {
     expect(buildApplyUpdates({ local: local({ nudge1: 1 }), config, ...all })).toEqual({ marketingNudge1Seconds: 5 });
     const fees = { ...feeValuesOf(config), customersPerTeam: 20 };
     expect(buildApplyUpdates({ local: local({ fees }), config, ...all, canEditLean: false })).toEqual({});
+  });
+});
+
+describe('configFromInstructorRound (the stored config read back after a reload)', () => {
+  const stored = { id: 1, round_number: 1, status: 'CONFIGURED', customer_budget: 4, market_price: 2, cost_of_publishing: 0.3, cost_of_discard: 0.05 } as any;
+
+  it('shows the stored ideal joke: TOPIC Animals, not the default Work', () => {
+    const got = configFromInstructorRound({ ...stored, ideal_profile: { ...DEFAULT_IDEAL_PROFILE, TOPIC: 'Animals' } });
+    expect(got.idealProfile?.TOPIC).toBe('Animals');
+    expect(DEFAULT_IDEAL_PROFILE.TOPIC).toBe('Work');
+  });
+
+  it('falls back to the default profile when none is stored', () => {
+    expect(configFromInstructorRound(stored).idealProfile).toEqual(DEFAULT_IDEAL_PROFILE);
+  });
+
+  it('keeps a default for a dimension the stored profile lacks or blanks, and drops unknown keys', () => {
+    const got = configFromInstructorRound({ ...stored, ideal_profile: { TOPIC: 'Animals', LENGTH: '', TITLE_FIT: 'Perfect' } });
+    expect(got.idealProfile).toEqual({ ...DEFAULT_IDEAL_PROFILE, TOPIC: 'Animals' });
+  });
+
+  it('fills the numbers the CONFIG row shows, and leaves out those the round does not send', () => {
+    expect(configFromInstructorRound(stored)).toMatchObject({ customerBudget: 4, marketPrice: 2, costOfPublishing: 0.3, costOfDiscard: 0.05 });
+    const bare = configFromInstructorRound({ id: 1, round_number: 1, status: 'CONFIGURED', customer_budget: 0 } as any);
+    expect(Object.keys(bare).sort()).toEqual(['idealProfile']);
   });
 });

@@ -3,7 +3,8 @@
  * shows, and the settings Apply sends.
  */
 import { changedFees, type FeeConfigValues } from '../components/FeeConfigFields';
-import type { GameConfig } from '../types';
+import type { ApiInstructorRound, GameConfig } from '../types';
+import { DEFAULT_IDEAL_PROFILE, IDEAL_DIMENSIONS } from '../config/dimensions';
 
 /** The backend's default customer budget (domain defaults), used before any round has been read. */
 export const DEFAULT_CUSTOMER_BUDGET = 3;
@@ -21,6 +22,34 @@ export function customerBudgetFromRound(
 ): number {
   const stored = Number(round?.customer_budget);
   return Number.isFinite(stored) && stored > 0 ? stored : known;
+}
+
+/**
+ * What the stored round (GET /config) puts back on the instructor screen after a reload: the
+ * hidden ideal joke and the numbers the CONFIG row shows. The profile is always returned whole
+ * (a default for any dimension the round lacks, nothing for TITLE_FIT or an unknown key), so the
+ * picker never shows a blank. Numbers the round does not send are left out, so a spread over the
+ * current config keeps what it had.
+ */
+export function configFromInstructorRound(
+  round: Partial<ApiInstructorRound> | null | undefined,
+): Partial<Pick<GameConfig, 'idealProfile' | 'customerBudget' | 'marketPrice' | 'costOfPublishing' | 'costOfDiscard'>> {
+  const stored: Record<string, unknown> = round?.ideal_profile ?? {};
+  const idealProfile: Record<string, string> = { ...DEFAULT_IDEAL_PROFILE };
+  for (const dim of IDEAL_DIMENSIONS) {
+    const v = stored[dim.id];
+    if (typeof v === 'string' && v !== '') idealProfile[dim.id] = v;
+  }
+  const out: ReturnType<typeof configFromInstructorRound> = { idealProfile };
+  const budget = Number(round?.customer_budget);
+  if (Number.isFinite(budget) && budget > 0) out.customerBudget = budget;
+  const price = Number(round?.market_price);
+  if (round?.market_price != null && Number.isFinite(price) && price > 0) out.marketPrice = price;
+  const publishing = Number(round?.cost_of_publishing);
+  if (round?.cost_of_publishing != null && Number.isFinite(publishing) && publishing >= 0) out.costOfPublishing = publishing;
+  const discard = Number(round?.cost_of_discard);
+  if (round?.cost_of_discard != null && Number.isFinite(discard) && discard >= 0) out.costOfDiscard = discard;
+  return out;
 }
 
 export interface ApplyInputs {
