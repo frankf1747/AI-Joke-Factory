@@ -26,14 +26,14 @@ export function customerBudgetFromRound(
 
 /**
  * What the stored round (GET /config) puts back on the instructor screen after a reload: the
- * hidden ideal joke and the numbers the CONFIG row shows. The profile is always returned whole
+ * hidden ideal joke and the numbers the CONFIG row shows (the screen does not show the cost of discard, so it is not read). The profile is always returned whole
  * (a default for any dimension the round lacks, nothing for TITLE_FIT or an unknown key), so the
  * picker never shows a blank. Numbers the round does not send are left out, so a spread over the
  * current config keeps what it had.
  */
 export function configFromInstructorRound(
   round: Partial<ApiInstructorRound> | null | undefined,
-): Partial<Pick<GameConfig, 'idealProfile' | 'customerBudget' | 'marketPrice' | 'costOfPublishing' | 'costOfDiscard'>> {
+): Partial<Pick<GameConfig, 'idealProfile' | 'customerBudget' | 'marketPrice' | 'costOfPublishing'>> {
   const stored: Record<string, unknown> = round?.ideal_profile ?? {};
   const idealProfile: Record<string, string> = { ...DEFAULT_IDEAL_PROFILE };
   for (const dim of IDEAL_DIMENSIONS) {
@@ -47,9 +47,47 @@ export function configFromInstructorRound(
   if (round?.market_price != null && Number.isFinite(price) && price > 0) out.marketPrice = price;
   const publishing = Number(round?.cost_of_publishing);
   if (round?.cost_of_publishing != null && Number.isFinite(publishing) && publishing >= 0) out.costOfPublishing = publishing;
-  const discard = Number(round?.cost_of_discard);
-  if (round?.cost_of_discard != null && Number.isFinite(discard) && discard >= 0) out.costOfDiscard = discard;
   return out;
+}
+
+export type StoredConfigFields = ReturnType<typeof configFromInstructorRound>;
+
+export interface StoredConfigContext {
+  /** The round the result was fetched for is still the round in view. */
+  roundStillViewed: boolean;
+  /** Nothing has been read back yet this session, so nothing on screen is known. */
+  isFirstLoad: boolean;
+  /** Config keys the instructor edited while the fetch was in flight; they win. */
+  editedKeys: ReadonlySet<keyof GameConfig>;
+}
+
+/**
+ * The part of a GET /config result that may go on the screen (spread it over the config).
+ *  - A result for a round that is no longer in view changes nothing.
+ *  - A round with a stored ideal_profile gives its profile and numbers.
+ *  - A round without one is "never configured" (the GET cannot tell it from defaults): on first
+ *    load it gives the default profile and its numbers; on a round change it changes nothing, so
+ *    Round 2 keeps Round 1's ideal joke and prices on screen, as it did before this read-back.
+ *  - Keys the instructor edited while the fetch was in flight are left out.
+ */
+export function storedConfigPatch(
+  round: Partial<ApiInstructorRound> | null | undefined,
+  ctx: StoredConfigContext,
+): StoredConfigFields {
+  if (!ctx.roundStillViewed) return {};
+  const hasStoredProfile = Object.keys(round?.ideal_profile ?? {}).length > 0;
+  if (!hasStoredProfile && !ctx.isFirstLoad) return {};
+  const patch: Record<string, unknown> = { ...configFromInstructorRound(round) };
+  for (const key of ctx.editedKeys) delete patch[key];
+  return patch as StoredConfigFields;
+}
+
+/**
+ * True when a GET /config failure means this backend has no such route (405, or a 404 that is not
+ * the domain NOT_FOUND envelope, which is how a real route answers for an unknown round).
+ */
+export function isRouteMissing(e: { status: number; code?: string }): boolean {
+  return e.status === 405 || (e.status === 404 && e.code !== 'NOT_FOUND');
 }
 
 export interface ApplyInputs {

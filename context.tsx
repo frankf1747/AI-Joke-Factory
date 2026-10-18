@@ -32,7 +32,7 @@ import { ApiError } from './services/apiClient';
 import { clearPersisted, getWatchIdentity, isWatchMode, mayClaimMarketingBatch } from './services/watchMode';
 import { setMockRoundNumber } from './services/mockApi';
 import { DEFAULT_IDEAL_PROFILE } from './config/dimensions';
-import { DEFAULT_CUSTOMER_BUDGET, configFromInstructorRound, customerBudgetFromRound } from './services/roundConfig';
+import { DEFAULT_CUSTOMER_BUDGET, customerBudgetFromRound, isRouteMissing, storedConfigPatch } from './services/roundConfig';
 import { LEAN_DEFAULTS, MARKET_MODE_LOCKED_TEXT, WIP_LIMIT_TEXT, configSaveErrorText, isMarketModeLocked, isWipLimitReached, leanConfigFromRound, leanConfigToBody, leanTargetRounds, saveRoundConfig } from './services/leanMode';
 import { isCompleteProfile } from './components/IdealProfilePicker';
 import type { DemoUi } from './services/tour/demoUi';
@@ -849,25 +849,39 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   /* The stored config and hidden ideal joke, read back from the backend (instructor only), so a
      reload shows what was saved rather than the defaults. Fetched on mount and when the viewed
-     round changes, never on an interval, so it cannot clobber an edit in progress; an edit made
-     while a fetch was in flight (updateConfig bumps the counter) discards that fetch's result. */
-  const configEditSeqRef = useRef(0);
-  /** Latched when the backend has no GET /config route (404/405): today's defaults stay, no retries. */
+     round changes, never on an interval. A result applies only while its round is still the one
+     in view (setRound and the poll change config.round without updateConfig), and never over a
+     key the instructor edited while it was in flight. See storedConfigPatch for the rules. */
+  const configEditCounterRef = useRef(0);
+  const configEditSeqByKeyRef = useRef(new Map<keyof GameConfig, number>());
+  /** The round the stored config is being read for; updated by the effect below. */
+  const viewedRoundIdRef = useRef<RoundId | null>(null);
+  /** False until a stored config has been applied this session (then nothing on screen is known). */
+  const storedConfigLoadedRef = useRef(false);
+  /** Latched when the backend has no GET /config route: today's defaults stay, no retries. */
   const roundConfigUnsupportedRef = useRef(false);
   const isInstructorUser = user?.role === ('INSTRUCTOR' as Role);
 
   const loadStoredRoundConfig = async (targetRoundId: RoundId): Promise<boolean> => {
     if (roundConfigUnsupportedRef.current) return false;
-    const editsBefore = configEditSeqRef.current;
+    const editsBefore = configEditCounterRef.current;
     try {
       const res = await instructorService.getRoundConfig(targetRoundId);
-      if (configEditSeqRef.current !== editsBefore) return false;
-      const patch = configFromInstructorRound(res.round);
+      const editedKeys = new Set<keyof GameConfig>();
+      configEditSeqByKeyRef.current.forEach((seq, key) => { if (seq > editsBefore) editedKeys.add(key); });
+      const patch = storedConfigPatch(res.round, {
+        roundStillViewed: viewedRoundIdRef.current === targetRoundId,
+        isFirstLoad: !storedConfigLoadedRef.current,
+        editedKeys,
+      });
+      if (Object.keys(patch).length === 0) return false;
+      storedConfigLoadedRef.current = true;
+      // Start compares against this, so it is only ever set from the round in view (patch is empty otherwise).
       if (patch.customerBudget !== undefined) storedBudgetRef.current = patch.customerBudget;
       setConfig(prev => ({ ...prev, ...patch }));
       return true;
     } catch (e) {
-      if (e instanceof ApiError && (e.status === 404 || e.status === 405)) {
+      if (e instanceof ApiError && isRouteMissing(e)) {
         if (!roundConfigUnsupportedRef.current) console.warn('This backend cannot read the round config back (no GET /config); showing defaults.');
         roundConfigUnsupportedRef.current = true;
       }
@@ -877,6 +891,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const viewedRoundId = roundIds[config.round === 2 ? 2 : 1];
   useEffect(() => {
+    viewedRoundIdRef.current = isInstructorUser ? viewedRoundId : null;
     if (!isInstructorUser || !viewedRoundId) return;
     void loadStoredRoundConfig(viewedRoundId);
     // loadStoredRoundConfig only reads refs and state setters.
@@ -1751,6 +1766,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     teamSummaryUnsupportedRef.current = false;
     teamFeedbackUnsupportedRef.current = false;
     roundConfigUnsupportedRef.current = false;
+    storedConfigLoadedRef.current = false;
     setInstructorLobby(null);
     setInstructorStats(null);
     setInstructorStatsByRoundNumber({ 1: null, 2: null });
@@ -1768,7 +1784,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateConfig = async (updates: Partial<GameConfig>): Promise<ConfigSaveResult> => {
     const previous = config;
-    configEditSeqRef.current += 1;
+    const editSeq = ++configEditCounterRef.current;
+    for (const key of Object.keys(updates) as (keyof GameConfig)[]) configEditSeqByKeyRef.current.set(key, editSeq);
     setConfig(prev => ({ ...prev, ...updates }));
 
     // Client-only knobs: the marketing nudge timers are React state by design and have no

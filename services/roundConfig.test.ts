@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_CUSTOMER_BUDGET, buildApplyUpdates, customerBudgetFromRound, configFromInstructorRound } from './roundConfig';
+import { DEFAULT_CUSTOMER_BUDGET, buildApplyUpdates, customerBudgetFromRound, configFromInstructorRound, storedConfigPatch, isRouteMissing } from './roundConfig';
 import { DEFAULT_IDEAL_PROFILE } from '../config/dimensions';
 import { feeValuesOf } from '../components/FeeConfigFields';
 import { TEST_CONFIG } from '../views/testing/renderWithGame';
@@ -72,8 +72,57 @@ describe('configFromInstructorRound (the stored config read back after a reload)
   });
 
   it('fills the numbers the CONFIG row shows, and leaves out those the round does not send', () => {
-    expect(configFromInstructorRound(stored)).toMatchObject({ customerBudget: 4, marketPrice: 2, costOfPublishing: 0.3, costOfDiscard: 0.05 });
+    expect(configFromInstructorRound(stored)).toMatchObject({ customerBudget: 4, marketPrice: 2, costOfPublishing: 0.3 });
+    expect(configFromInstructorRound(stored)).not.toHaveProperty('costOfDiscard');
     const bare = configFromInstructorRound({ id: 1, round_number: 1, status: 'CONFIGURED', customer_budget: 0 } as any);
     expect(Object.keys(bare).sort()).toEqual(['idealProfile']);
+  });
+});
+
+describe('storedConfigPatch (when a GET /config result may touch the screen)', () => {
+  const animals = { ...DEFAULT_IDEAL_PROFILE, TOPIC: 'Animals' };
+  const withProfile = { id: 2, round_number: 2, status: 'CONFIGURED', customer_budget: 5, market_price: 2, cost_of_publishing: 0.3, ideal_profile: animals } as any;
+  const noProfile = { id: 2, round_number: 2, status: 'CONFIGURED', customer_budget: 3, market_price: 1, cost_of_publishing: 0.1 } as any;
+  const ctx = { roundStillViewed: true, isFirstLoad: false, editedKeys: new Set<keyof typeof TEST_CONFIG>() };
+
+  it('changes nothing when the round it was fetched for is no longer the one in view', () => {
+    expect(storedConfigPatch(withProfile, { ...ctx, roundStillViewed: false, isFirstLoad: true })).toEqual({});
+  });
+
+  it('on first load with no stored profile, shows the default profile and the stored numbers', () => {
+    const patch = storedConfigPatch(noProfile, { ...ctx, isFirstLoad: true });
+    expect(patch.idealProfile).toEqual(DEFAULT_IDEAL_PROFILE);
+    expect(patch).toMatchObject({ customerBudget: 3, marketPrice: 1, costOfPublishing: 0.1 });
+  });
+
+  it('on a round change to a round with no stored profile, keeps the profile and prices on screen', () => {
+    expect(storedConfigPatch(noProfile, ctx)).toEqual({});
+    expect(storedConfigPatch({ ...noProfile, ideal_profile: {} }, ctx)).toEqual({});
+  });
+
+  it('on a round change to a round with a stored profile, takes the profile and numbers', () => {
+    const patch = storedConfigPatch(withProfile, ctx);
+    expect(patch.idealProfile?.TOPIC).toBe('Animals');
+    expect(patch).toMatchObject({ customerBudget: 5, marketPrice: 2, costOfPublishing: 0.3 });
+  });
+
+  it('skips only the keys edited while the fetch was in flight', () => {
+    const patch = storedConfigPatch(withProfile, { ...ctx, editedKeys: new Set(['idealProfile', 'marketPrice']) });
+    expect(patch).not.toHaveProperty('idealProfile');
+    expect(patch).not.toHaveProperty('marketPrice');
+    expect(patch).toMatchObject({ customerBudget: 5, costOfPublishing: 0.3 });
+  });
+});
+
+describe('isRouteMissing (the GET /config latch)', () => {
+  it('latches on a 405 and on a 404 that is not the domain NOT_FOUND envelope', () => {
+    expect(isRouteMissing({ status: 405 })).toBe(true);
+    expect(isRouteMissing({ status: 404 })).toBe(true);
+    expect(isRouteMissing({ status: 404, code: 'ROUTE_NOT_FOUND' })).toBe(true);
+  });
+  it('does not latch on a 404 for an unknown round, or on other failures', () => {
+    expect(isRouteMissing({ status: 404, code: 'NOT_FOUND' })).toBe(false);
+    expect(isRouteMissing({ status: 500 })).toBe(false);
+    expect(isRouteMissing({ status: 401 })).toBe(false);
   });
 });

@@ -700,7 +700,7 @@ function route(
             status: db.round.status,
             customer_budget: db.round.customer_budget,
             batch_size: db.round.batch_size,
-            max_batch_size: db.round.batch_size,
+            max_batch_size: db.round.batch_size, // stand-in: the mock keeps one batch size, not a Round 2 cap
             market_price: SIM_CONFIG.economics.marketPrice,
             cost_of_publishing: SIM_CONFIG.economics.costOfPublishing,
             cost_of_discard: SIM_CONFIG.economics.costOfDiscard,
