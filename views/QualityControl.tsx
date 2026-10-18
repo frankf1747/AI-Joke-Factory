@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useDemoMode, useDemoUi, useGame } from '../context';
 import { Button, Card, StatBox, RoleLayout, Modal, SectionLabel, BRAND, fmt$ } from '../components';
-import type { StatBoxTone } from '../components';
 import {
   Send, Zap, GripVertical, ChevronUp, ChevronDown, Check, X as XIcon,
   Star, CheckCircle2, MousePointerClick,
@@ -10,7 +9,7 @@ import {
   DollarSign, Plane, HeartPulse, Medal, Landmark, Coffee, Languages,
   Pencil, type LucideIcon,
 } from 'lucide-react';
-import { computeAvgCreatedToPublishSeconds, countJokesSold } from '../services/economics';
+import { computeAvgCreatedToPublishSeconds } from '../services/economics';
 import {
   INITIAL_NUDGE_STATE, nudgeReducer, isNudgeOpen,
   type NudgeEvent,
@@ -25,6 +24,8 @@ import { feeTooltips, fmtMoney, leanFeesOf } from '../services/leanMode';
 import { MARKETING_NOTE_MAX } from '../services/marketingService';
 import { releaseOutcome } from './marketingRelease';
 import { StatTiles, moreTilesKey } from '../components/StatTiles';
+import { Scoreboard } from '../components/Scoreboard';
+import { foundABuyer } from '../services/scoreboard';
 import { NextStepLive } from '../components/NextStep';
 import { marketingInputFrom, marketingNextStep } from '../services/nextStep';
 
@@ -556,25 +557,15 @@ const QualityControl: React.FC = () => {
 
   /* Stats. Profit replaces avg-score — Marketing bears the cost, so it can go
      negative. Waste = jokes the team discarded (created but never published). */
-  const myRank = teamSummary?.rank ?? '—';
   const queueSize = qcQueue?.queue_size ?? incomingJokes.length;
   const jokesCreated = teamSummary?.jokes_created ?? 0;
   const jokesPublished = teamSummary?.jokes_published ?? 0;
   const waste = Math.max(0, jokesCreated - jokesPublished);
-  const profitRaw = teamSummary?.profit;
-  const profitLabel = profitRaw == null ? '—' : fmt$(profitRaw);
-  const profitTone: StatBoxTone =
-    profitRaw == null ? 'slate' : profitRaw < 0 ? 'rose' : 'emerald';
   // Created → Publish: avg seconds this team's batches spend between the Joke
   // Maker submitting them and Marketing releasing them — the same measure the
   // Joke Maker sees. It's Marketing's own turnaround, so it's theirs to improve.
   const avgLeadSec = useMemo(
     () => computeAvgCreatedToPublishSeconds(batches.filter(b => b.team === user?.team)),
-    [batches, user?.team],
-  );
-  // Jokes sold at least once — not total sales, which counts every customer.
-  const jokesSold = useMemo(
-    () => countJokesSold(batches.filter(b => b.team === user?.team)),
     [batches, user?.team],
   );
   /* Lean market mode only: the team's shipping, storage and hosting fees and
@@ -819,31 +810,36 @@ const QualityControl: React.FC = () => {
 
         {/* RIGHT: stats + customer-feedback learning panel */}
         <div className="space-y-5">
-          <StatTiles
-            storageKey={moreTilesKey('quality_control')}
-            open={demoUi ? demoUi.moreOpen : undefined}
-            tourKey="mk-stats"
-            tourMore="mk-more"
-            keyTiles={[
-              <StatBox key="profit" label="Profit" value={profitLabel} tone={profitTone} />,
-              <StatBox key="rank" label="Current Team Rank" value={String(myRank)} tone="rank" />,
-              <StatBox key="sold" label="Jokes Sold / Made" value={`${jokesSold}/${jokesCreated}`} tone="sky" />,
-              /* queue_size counts this team's SUBMITTED batches in the round,
-                 including the one locked on the desk. It counts batches, not jokes.
-                 (The mock API still counts every team's.) */
-              <StatBox key="backlog" label="Content Backlog" value={queueSize} tone="blue" />,
-            ]}
-            moreTiles={[
-              <StatBox key="lead" label="Created to Publish" value={fmtSeconds(avgLeadSec)} tone="sky" />,
-              ...(leanMode ? [<StatBox key="firstsale" label="Publish → first sale" value={fmtSeconds(toFirstSale)} tone="sky" />] : []),
-              <StatBox key="waste" label="Content Waste" value={waste} tone="rose" />,
-              ...(leanMode ? [
-                <StatBox key="shipping" label="Shipping fees" value={fmtMoney(fees.shipping)} tone="rose" valueClassName="text-xl" title={tips.shipping} />,
-                <StatBox key="storage" label="Storage fees" value={fmtMoney(fees.storage)} tone="rose" valueClassName="text-xl" title={tips.storage} />,
-                <StatBox key="hosting" label="Hosting fees" value={fmtMoney(fees.hosting)} tone="rose" valueClassName="text-xl" title={tips.hosting} />,
-              ] : []),
-            ]}
-          />
+          <div className="space-y-2">
+            <Scoreboard
+              tourId="mk-stats"
+              rank={teamSummary?.rank ?? null}
+              profit={teamSummary?.profit}
+              totalSales={teamSummary ? teamSummary.total_sales : null}
+              publishedJokes={teamSummary ? teamSummary.published_jokes : null}
+              foundBuyer={teamSummary ? foundABuyer(batches.filter(b => b.team === user?.team)) : null}
+            />
+            <StatTiles
+              storageKey={moreTilesKey('quality_control')}
+              open={demoUi ? demoUi.moreOpen : undefined}
+              tourMore="mk-more"
+              keyTiles={[]}
+              moreTiles={[
+                /* queue_size counts this team's SUBMITTED batches in the round,
+                   including the one locked on the desk. It counts batches, not jokes.
+                   (The mock API still counts every team's.) Task C3 moves it to the desk header. */
+                <StatBox key="backlog" label="Content Backlog" value={queueSize} tone="blue" />,
+                <StatBox key="lead" label="Created to Publish" value={fmtSeconds(avgLeadSec)} tone="sky" />,
+                ...(leanMode ? [<StatBox key="firstsale" label="Publish → first sale" value={fmtSeconds(toFirstSale)} tone="sky" />] : []),
+                <StatBox key="waste" label="Content Waste" value={waste} tone="rose" />,
+                ...(leanMode ? [
+                  <StatBox key="shipping" label="Shipping fees" value={fmtMoney(fees.shipping)} tone="rose" valueClassName="text-xl" title={tips.shipping} />,
+                  <StatBox key="storage" label="Storage fees" value={fmtMoney(fees.storage)} tone="rose" valueClassName="text-xl" title={tips.storage} />,
+                  <StatBox key="hosting" label="Hosting fees" value={fmtMoney(fees.hosting)} tone="rose" valueClassName="text-xl" title={tips.hosting} />,
+                ] : []),
+              ]}
+            />
+          </div>
           <div data-tour="mk-next-step">
             <NextStepLive
               step={now => marketingNextStep(marketingInputFrom({

@@ -1,17 +1,18 @@
 import React, { useMemo, useState } from 'react';
 import { useDemoUi, useGame } from '../context';
-import { Button, Card, StatBox, RoleLayout, Modal, BRAND, fmt$ } from '../components';
-import type { StatBoxTone } from '../components';
+import { Button, Card, StatBox, RoleLayout, Modal, BRAND } from '../components';
 import {
   Send, ChevronRight, Info, CheckCircle2,
 } from 'lucide-react';
 import { Batch } from '../types';
-import { computeAvgCreatedToPublishSeconds, countJokesSold } from '../services/economics';
+import { computeAvgCreatedToPublishSeconds } from '../services/economics';
 import { dimById } from '../config/dimensions';
 import { isWatchMode } from '../services/watchMode';
 import { shippingLine } from '../services/leanMode';
 import { MarketingNoteCallout, MarketingNoteIcon, marketingNoteOf } from '../components/MarketingNote';
 import { StatTiles, moreTilesKey } from '../components/StatTiles';
+import { Scoreboard } from '../components/Scoreboard';
+import { foundABuyer } from '../services/scoreboard';
 import { NextStepLive } from '../components/NextStep';
 import { jokeMakerInputFrom, jokeMakerNextStep } from '../services/nextStep';
 
@@ -226,19 +227,8 @@ const JokeMaker: React.FC = () => {
     return next;
   });
 
-  /* Stats. Profit is shown here so the team feels the cost of low-quality jokes —
-     it can and should go negative. Costs are Marketing's ($0.10 published /
-     $0.01 discarded); creating jokes is free. */
-  const myRank = teamSummary?.rank ?? '—';
-  // "Total" = every joke this team has put into the factory. Note jokes only
-  // become records once Marketing splits the batch, so this reads 0 until then.
-  const totalJokes = teamSummary?.jokes_created ?? 0;
-  // Jokes sold at least once — not total sales, which counts every customer.
-  const jokesSold = useMemo(() => countJokesSold(myBatches), [myBatches]);
-  const profitRaw = teamSummary?.profit;
-  const profitLabel = profitRaw == null ? '—' : fmt$(profitRaw);
-  const profitTone: StatBoxTone =
-    profitRaw == null ? 'slate' : profitRaw < 0 ? 'rose' : 'emerald';
+  /* Stats. The Scoreboard shows rank, profit, jokes that found a buyer and sales
+     (profit can and should go negative, so the team feels the cost of weak jokes). */
   const batchesCreated = teamSummary?.batches_created ?? myBatches.length;
   // Waste = jokes that failed to reach market (rated but not published) + published-but-unsold.
   // Compute directly from batches so it matches the "Wasted" row in StageDots exactly.
@@ -379,21 +369,26 @@ const JokeMaker: React.FC = () => {
 
         {/* RIGHT: stat tiles + Jokes by stage */}
         <div className="space-y-5">
-          <StatTiles
-            storageKey={moreTilesKey('joke_maker')}
-            open={demoUi ? demoUi.moreOpen : undefined}
-            tourKey="jm-stats"
-            keyTiles={[
-              <StatBox key="profit" label="Profit" value={profitLabel} tone={profitTone} />,
-              <StatBox key="rank" label="Current Team Rank" value={String(myRank)} tone="rank" />,
-              <StatBox key="sold" label="Jokes Sold / Made" value={`${jokesSold}/${totalJokes}`} tone="blue" />,
-              <StatBox key="lead" label="Created to Publish" value={fmtSeconds(avgLeadSec)} tone="sky" />,
-            ]}
-            moreTiles={[
-              <StatBox key="batches" label="Batches" value={batchesCreated} tone="slate" />,
-              <StatBox key="waste" label="Content Waste" value={waste} tone="rose" />,
-            ]}
-          />
+          <div className="space-y-2">
+            <Scoreboard
+              tourId="jm-stats"
+              rank={teamSummary?.rank ?? null}
+              profit={teamSummary?.profit}
+              totalSales={teamSummary ? teamSummary.total_sales : null}
+              publishedJokes={teamSummary ? teamSummary.published_jokes : null}
+              foundBuyer={teamSummary ? foundABuyer(myBatches) : null}
+            />
+            <StatTiles
+              storageKey={moreTilesKey('joke_maker')}
+              open={demoUi ? demoUi.moreOpen : undefined}
+              keyTiles={[]}
+              moreTiles={[
+                <StatBox key="lead" label="Created to Publish" value={fmtSeconds(avgLeadSec)} tone="sky" />,
+                <StatBox key="batches" label="Batches" value={batchesCreated} tone="slate" />,
+                <StatBox key="waste" label="Content Waste" value={waste} tone="rose" />,
+              ]}
+            />
+          </div>
           <div data-tour="jm-next-step">
             <NextStepLive
               step={now => jokeMakerNextStep(jokeMakerInputFrom({

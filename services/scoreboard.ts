@@ -1,0 +1,40 @@
+/* Pure helpers for the Scoreboard (spec 4.3). */
+import type { Batch } from '../types';
+
+export interface RankMovement {
+  kind: 'up' | 'down' | 'same' | 'lead' | 'none';
+  /** Places moved; 0 unless kind is 'up' or 'down'. */
+  by: number;
+}
+
+/**
+ * How the rank moved between two successful polls. Rank 1 is "lead" whatever
+ * came before; no previous rank (first poll, or after a reload) is "same";
+ * no current rank (round not started) is "none". A lower number is better.
+ */
+export function rankMovement(prev: number | null, now: number | null): RankMovement {
+  if (now == null) return { kind: 'none', by: 0 };
+  if (now === 1) return { kind: 'lead', by: 0 };
+  if (prev == null || prev === now) return { kind: 'same', by: 0 };
+  return now < prev ? { kind: 'up', by: prev - now } : { kind: 'down', by: now - prev };
+}
+
+/**
+ * Jokes that found a buyer: PUBLISHED with first_sold_at set. A joke whose
+ * buyer swapped it out (sold_count back to 0) still counts. This is not the
+ * summary's sold_jokes_count, which is LEAST(published_jokes, total_sales).
+ */
+export function foundABuyer(batches: Batch[]): number {
+  let n = 0;
+  for (const b of batches) {
+    for (const j of b.jokes) if (j.publish_status === 'PUBLISHED' && j.first_sold_at) n += 1;
+  }
+  return n;
+}
+
+/** "$4.50", "−$6.55" (U+2212), or "—" when there is no figure yet. */
+export function formatProfit(profit: number | null | undefined): string {
+  if (profit == null) return '—';
+  const amount = `$${Math.abs(profit).toFixed(2)}`;
+  return profit < 0 ? `−${amount}` : amount;
+}

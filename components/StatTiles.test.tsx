@@ -31,6 +31,13 @@ describe('StatTiles', () => {
     const out = renderToStaticMarkup(<StatTiles keyTiles={key} moreTiles={[]} storageKey="k" />);
     expect(out).not.toContain('<button');
   });
+  it('with no key tiles: no key grid, only the disclosure, and tourMore survives', () => {
+    const out = renderToStaticMarkup(<StatTiles keyTiles={[]} moreTiles={more} storageKey="k" tourKey="x-key" tourMore="x-more" initialOpen />);
+    expect(out).not.toContain('x-key');
+    expect(out).toContain('data-tour="x-more"');
+    expect(out).toContain('MoreC');
+    expect(out).toContain('Fewer numbers');
+  });
   it('reads the remembered choice from localStorage', () => {
     vi.stubGlobal('localStorage', { getItem: (k: string) => (k === 'k' ? '1' : null) });
     expect(readMoreOpen('k')).toBe(true);
@@ -49,26 +56,35 @@ const inOrder = (xs: number[]) => xs.every((x, i) => x >= 0 && (i === 0 || x > x
 describe('student screens', () => {
   const jm = () => renderWithGame(JokeMaker, { user: testUser(Role.JOKE_MAKER) });
   const mk = (config = TEST_CONFIG) => renderWithGame(QualityControl, { user: testUser(Role.QUALITY_CONTROL), config });
-  const JM_KEY = ['Profit', 'Current Team Rank', 'Jokes Sold / Made', 'Created to Publish'];
-  const MK_KEY = ['Profit', 'Current Team Rank', 'Jokes Sold / Made', 'Content Backlog'];
+  const scoreboardCopy = ['Team rank, by profit', 'Profit', 'Found a buyer', 'Sales'];
 
-  it('Joke Maker: four key tiles in order, Batches and Content Waste folded', () => {
+  it('Joke Maker: the Scoreboard replaces the key tiles; Batches, Created to Publish and Content Waste folded', () => {
     const out = jm();
-    expect(inOrder(labels(out, JM_KEY))).toBe(true);
-    expect(out).not.toContain('Batches');
-    expect(out).not.toContain('Content Waste');
-    expect(out).not.toContain('text-xl');
+    expect(out).toContain('data-tour="jm-stats"');
+    expect(inOrder(labels(out, scoreboardCopy))).toBe(true);
+    for (const gone of ['Current Team Rank', 'Jokes Sold / Made']) expect(out).not.toContain(gone);
+    for (const folded of ['Batches', 'Created to Publish', 'Content Waste']) expect(out).not.toContain(folded);
+    expect(out).toContain('More numbers');
+    expect(out).not.toContain('text-xl" title');
   });
-  it('Marketing: four key tiles in order, the rest folded', () => {
+  it('Marketing: the Scoreboard replaces the key tiles; the rest folded', () => {
     const out = mk();
-    expect(inOrder(labels(out, MK_KEY))).toBe(true);
-    for (const l of ['Publish → first sale', 'Content Waste', 'Shipping fees', 'Storage fees', 'Hosting fees']) expect(out).not.toContain(l);
-    expect(out).not.toContain('text-xl');
+    expect(out).toContain('data-tour="mk-stats"');
+    expect(inOrder(labels(out, scoreboardCopy))).toBe(true);
+    for (const gone of ['Current Team Rank', 'Jokes Sold / Made']) expect(out).not.toContain(gone);
+    for (const l of ['Content Backlog', 'Created to Publish', 'Publish → first sale', 'Content Waste', 'Shipping fees', 'Storage fees', 'Hosting fees']) expect(out).not.toContain(l);
+    expect(out).toContain('More numbers');
+  });
+  it('before the round starts the Scoreboard shows dashes on both screens', () => {
+    for (const out of [jm(), mk()]) expect(out).toContain('>—<');
   });
   it('open (remembered): extra tiles appear; fee tiles only in Lean', () => {
     vi.stubGlobal('localStorage', { getItem: () => '1' });
     expect(jm()).toContain('Content Waste');
     expect(jm()).toContain('Batches');
+    expect(jm()).toContain('Created to Publish');
+    expect(mk()).toContain('Content Backlog');
+    expect(mk()).toContain('data-tour="mk-more"');
     expect(mk()).toContain('Shipping fees');
     const std = mk({ ...TEST_CONFIG, marketMode: 'CLASSIC' });
     expect(std).toContain('Content Waste');
