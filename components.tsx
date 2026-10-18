@@ -46,13 +46,15 @@ export const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: stri
  *  tour has its own key: services/tour/seen.ts TOUR_SEEN_PREFIX. */
 export const TUTORIAL_SEEN_PREFIX = 'jf_tutorial_seen_v1:';
 
+/** The first-time prompt, a quiet text button beside the "?" (spec 4.1). */
+export const TOUR_PROMPT_TEXT = 'Take the 1-minute tour';
 /** The students' "?" button. */
 export const TOUR_REPLAY_LABEL = 'Replay the 1-minute tour';
 
 const HEADER_ICON_BUTTON =
   'inline-flex h-8 w-8 items-center justify-center rounded-md text-[color:var(--ink-3)] hover:bg-[color:var(--paper-2)] hover:text-[color:var(--navy)] transition-colors';
 
-type TourPhase = 'pending' | 'idle' | 'tour';
+type TourPhase = 'pending' | 'idle' | 'tour' | 'prompt';
 
 /**
  * The header's "?" button and what opens on its own. Kept as its own component
@@ -62,8 +64,8 @@ type TourPhase = 'pending' | 'idle' | 'tour';
  * Instructor: the "How this works" modal, opened once on its own.
  * Joke Maker and Marketing: the guided tour of their own screen
  * (components/tour/GuidedTour.tsx). It plays on its own the first time, when
- * the round is not ACTIVE; a student arriving mid-round gets only the "?",
- * which replays it (services/tour/seen.ts launchMode).
+ * the round is not ACTIVE; a student arriving mid-round gets a quiet "Take the
+ * 1-minute tour" text button (with a dismiss), and "?" replays it (services/tour/seen.ts launchMode).
  * A watch tab gets none of this: it shows someone else's seat, and a seen-flag
  * written there would land in the shared localStorage of whoever else uses the
  * browser.
@@ -102,8 +104,7 @@ const TutorialLauncher: React.FC<{ role: Role; tourView?: React.ComponentType }>
   const [phase, setPhase] = React.useState<TourPhase>('pending');
   if (phase === 'pending' && tourRole && roundId != null) {
     const mode = launchMode({ role: tourRole, watch, seen: readTourSeen(tourRole), roundActive: config.isActive });
-    // A mid-round arrival ('prompt') gets no pill any more: the header's "?" is the way in.
-    setPhase(mode === 'tour' ? 'tour' : 'idle');
+    setPhase(mode === 'none' ? 'idle' : mode);
   }
 
   if (watch) return null;
@@ -130,6 +131,26 @@ const TutorialLauncher: React.FC<{ role: Role; tourView?: React.ComponentType }>
 
   return (
     <>
+      {phase === 'prompt' && (
+        <span role="status" className="flex items-center">
+          <button
+            onClick={() => setPhase('tour')}
+            className="text-sm font-medium text-[color:var(--navy)] hover:underline underline-offset-2"
+          >
+            {TOUR_PROMPT_TEXT}
+          </button>
+          <button
+            onClick={() => {
+              markTourSeen(tourRole);
+              setPhase('idle');
+            }}
+            className={HEADER_ICON_BUTTON}
+            aria-label="Dismiss the tour prompt"
+          >
+            <X size={14} />
+          </button>
+        </span>
+      )}
       <button
         onClick={() => setPhase('tour')}
         className={HEADER_ICON_BUTTON}
