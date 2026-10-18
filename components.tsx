@@ -1,8 +1,11 @@
 import React from 'react';
-import { LogOut, User as UserIcon, X, Trophy, TrendingUp, Tag, Info, HelpCircle } from 'lucide-react';
-import { useDemoMode, useGame } from './context';
+import { LogOut, X, Trophy, TrendingUp, Tag, Info, HelpCircle } from 'lucide-react';
+import { useDemoMode, useDemoUi, useGame } from './context';
 import { Role } from './types';
 import { isWatchMode } from './services/watchMode';
+import { fmtClock, pairNames } from './services/format';
+import { headerRound, type HeaderRound } from './services/headerRound';
+import { useNow } from './components/NextStep';
 import Tutorial from './components/Tutorial';
 import { GuidedTour, TourErrorBoundary } from './components/tour/GuidedTour';
 import { isTourRole, launchMode, markTourSeen, readTourSeen, recordTourEnd } from './services/tour/seen';
@@ -43,12 +46,13 @@ export const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: stri
  *  tour has its own key: services/tour/seen.ts TOUR_SEEN_PREFIX. */
 export const TUTORIAL_SEEN_PREFIX = 'jf_tutorial_seen_v1:';
 
-/** The mid-round prompt (spec §3.3). */
-export const TOUR_PROMPT_TEXT = 'New here? Watch the 1-minute tour';
 /** The students' "?" button. */
 export const TOUR_REPLAY_LABEL = 'Replay the 1-minute tour';
 
-type TourPhase = 'pending' | 'idle' | 'tour' | 'prompt';
+const HEADER_ICON_BUTTON =
+  'inline-flex h-8 w-8 items-center justify-center rounded-md text-[color:var(--ink-3)] hover:bg-[color:var(--paper-2)] hover:text-[color:var(--navy)] transition-colors';
+
+type TourPhase = 'pending' | 'idle' | 'tour';
 
 /**
  * The header's "?" button and what opens on its own. Kept as its own component
@@ -58,8 +62,8 @@ type TourPhase = 'pending' | 'idle' | 'tour' | 'prompt';
  * Instructor: the "How this works" modal, opened once on its own.
  * Joke Maker and Marketing: the guided tour of their own screen
  * (components/tour/GuidedTour.tsx). It plays on its own the first time, when
- * the round is not ACTIVE; a student arriving mid-round gets a dismissible
- * prompt instead, and "?" replays it (services/tour/seen.ts launchMode).
+ * the round is not ACTIVE; a student arriving mid-round gets only the "?",
+ * which replays it (services/tour/seen.ts launchMode).
  * A watch tab gets none of this: it shows someone else's seat, and a seen-flag
  * written there would land in the shared localStorage of whoever else uses the
  * browser.
@@ -98,7 +102,8 @@ const TutorialLauncher: React.FC<{ role: Role; tourView?: React.ComponentType }>
   const [phase, setPhase] = React.useState<TourPhase>('pending');
   if (phase === 'pending' && tourRole && roundId != null) {
     const mode = launchMode({ role: tourRole, watch, seen: readTourSeen(tourRole), roundActive: config.isActive });
-    setPhase(mode === 'none' ? 'idle' : mode);
+    // A mid-round arrival ('prompt') gets no pill any more: the header's "?" is the way in.
+    setPhase(mode === 'tour' ? 'tour' : 'idle');
   }
 
   if (watch) return null;
@@ -108,7 +113,7 @@ const TutorialLauncher: React.FC<{ role: Role; tourView?: React.ComponentType }>
       <>
         <button
           onClick={() => setModalOpen(true)}
-          className="text-gray-400 hover:text-blue-600 transition-colors"
+          className={HEADER_ICON_BUTTON}
           title="How this works"
           aria-label="Open the tutorial"
         >
@@ -127,33 +132,12 @@ const TutorialLauncher: React.FC<{ role: Role; tourView?: React.ComponentType }>
     <>
       <button
         onClick={() => setPhase('tour')}
-        className="text-gray-400 hover:text-blue-600 transition-colors"
+        className={HEADER_ICON_BUTTON}
         title={TOUR_REPLAY_LABEL}
         aria-label={TOUR_REPLAY_LABEL}
       >
         <HelpCircle size={18} />
       </button>
-      {phase === 'prompt' && (
-        <div
-          role="status"
-          className="fixed top-[4.5rem] left-4 right-4 sm:left-auto z-20 flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 py-1 pl-3 pr-1 text-sm text-amber-900 shadow-md"
-          style={{ marginLeft: 0 }}
-        >
-          <button onClick={() => setPhase('tour')} className="flex-1 text-left font-semibold underline-offset-2 hover:underline">
-            {TOUR_PROMPT_TEXT}
-          </button>
-          <button
-            onClick={() => {
-              markTourSeen(tourRole);
-              setPhase('idle');
-            }}
-            className="rounded-full p-1 text-amber-700 hover:bg-amber-100"
-            aria-label="Dismiss the tour prompt"
-          >
-            <X size={14} />
-          </button>
-        </div>
-      )}
       {phase === 'tour' && (
         /* GuidedTour's own render (plan, demo frame, controls) can throw too; with
            no other boundary in the app that would blank everything. Any error ends
@@ -181,61 +165,101 @@ const TutorialLauncher: React.FC<{ role: Role; tourView?: React.ComponentType }>
   );
 };
 
+const ROLE_LABEL: Partial<Record<Role, string>> = {
+  [Role.JOKE_MAKER]: 'Joke Maker',
+  [Role.QUALITY_CONTROL]: 'Marketing',
+  [Role.CUSTOMER]: 'Customer',
+  [Role.INSTRUCTOR]: 'Instructor',
+};
+
+const ANDON = {
+  'not-started': { word: 'Not started', color: 'var(--ink-3)' },
+  running: { word: 'Running', color: 'var(--selling)' },
+  over: { word: 'Round over', color: 'var(--navy)' },
+} as const;
+
+/** The round the header shows, its state and clock, ticking each second. Inside the tour's demo
+ *  stage the script's clock drives it, as it does the Next step line. */
+function useHeaderRound(): HeaderRound {
+  const { config, roundStatuses, roundTimes } = useGame();
+  const demoUi = useDemoUi();
+  const wallNow = useNow(1000, demoUi !== null);
+  return headerRound({
+    selectedRound: config.round === 2 ? 2 : 1,
+    statuses: roundStatuses,
+    times: roundTimes,
+    now: demoUi ? demoUi.clockMs : wallNow,
+  });
+}
+
+/** The header's centre: state lamp, state word, round and clock. */
+const Andon: React.FC<{ h: HeaderRound }> = ({ h }) => {
+  const { word, color } = ANDON[h.state];
+  return (
+    <div className="flex items-center gap-3" data-header-state={h.state}>
+      <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0" style={{ background: color }} />
+      <span className="text-sm font-semibold" style={{ color }}>{word}</span>
+      <span className="text-sm text-[color:var(--ink-2)]">Round {h.round}</span>
+      <span className="flex items-baseline gap-1.5">
+        <span className="font-mono text-base font-medium tabular-nums text-[color:var(--ink)]">{fmtClock(h.clockSecs)}</span>
+        <span className="text-[11px] text-[color:var(--ink-3)]">{h.clockLabel}</span>
+      </span>
+    </div>
+  );
+};
+
 export const RoleLayout: React.FC<{
   children: React.ReactNode;
   /** The screen this layout wraps. The students' guided tour replays it with sample data. */
   tourView?: React.ComponentType;
 }> = ({ children, tourView }) => {
-  const { user, logout, config, teamNames } = useGame();
+  const { user, logout, teamNames, teamSummary } = useGame();
   /* Inside the guided tour's demo stage the header has no tutorial launcher: it
      would start a tour inside the tour and write seen-flags to localStorage. */
   const demoMode = useDemoMode();
+  const round = useHeaderRound();
 
   if (!user) return null;
 
-  const showTeamBadge = user.role !== Role.CUSTOMER && user.role !== Role.INSTRUCTOR;
-  // Use the registry name if available, else fallback to "Team X"
-  const displayTeamName = teamNames[user.team] || `Team ${user.team}`;
+  const isStudent = user.role === Role.JOKE_MAKER || user.role === Role.QUALITY_CONTROL;
+  // Local registry name, then the summary's name, then "Team n".
+  const teamName = teamNames[user.team] || teamSummary?.team?.name || `Team ${user.team}`;
+  const roleLabel = ROLE_LABEL[user.role] ?? user.role;
+  const subtitle = isStudent ? `${teamName}, ${roleLabel}` : roleLabel;
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      <header className={`bg-white border-b border-gray-200 sticky ${isWatchMode() ? 'top-9' : 'top-0'} z-10 shadow-sm`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-             <div className="flex flex-col">
-               <span className="font-bold text-lg text-gray-800">The Joke Factory</span>
-               <span className="text-xs text-gray-500">Round {config.round} • {config.isActive ? 'Active' : 'Paused'}</span>
-             </div>
+    <div className="min-h-screen flex flex-col" style={{ background: 'var(--paper)' }}>
+      <header
+        className={`sticky ${isWatchMode() ? 'top-9' : 'top-0'} z-10 border-b`}
+        style={{ background: 'var(--sheet)', borderColor: 'var(--rule)' }}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+          <div className="flex flex-col min-w-0 flex-1 basis-0">
+            <span className="font-semibold text-base leading-tight text-[color:var(--ink)]">The Joke Factory</span>
+            <span className="text-xs truncate text-[color:var(--ink-3)]">{subtitle}</span>
           </div>
-          
-          <div className="flex items-center space-x-6">
-             {showTeamBadge && (
-               <div className="flex items-baseline space-x-2 bg-gray-100 px-3 py-1 rounded-full">
-                 <span className="text-xs font-bold text-gray-500 uppercase leading-none">Team</span>
-                 <span className="font-semibold text-blue-600 leading-none">{displayTeamName}</span>
-               </div>
-             )}
-             
-             {/* UCLA Logo next to User Icon */}
-             <img 
-               src="https://www.anderson.ucla.edu/themes/custom/ucla_anderson/logo.svg" 
-               alt="UCLA Anderson" 
-               className="h-10 w-auto object-contain hidden sm:block"
-             />
 
-             <div className="flex items-center space-x-2">
-                <UserIcon size={16} className="text-gray-400" />
-                <span className="text-sm font-medium">{user.name} ({user.role.replace('_', ' ')})</span>
-             </div>
-             {!demoMode && <TutorialLauncher role={user.role} tourView={tourView} />}
-             {/* A watch tab has no session of its own to end, and logging out would only strand it on a login screen. */}
-             {!isWatchMode() && (
-               <button onClick={logout} className="text-gray-400 hover:text-red-500 transition-colors" title="Logout">
-                 <LogOut size={18} />
-               </button>
-             )}
+          <Andon h={round} />
+
+          <div className="flex items-center justify-end gap-3 min-w-0 flex-1 basis-0">
+            <img
+              src="https://www.anderson.ucla.edu/themes/custom/ucla_anderson/logo.svg"
+              alt="UCLA Anderson"
+              className="h-8 w-auto object-contain hidden md:block"
+            />
+            {user.role !== Role.INSTRUCTOR && (
+              <span className="hidden sm:block text-sm truncate text-[color:var(--ink-2)]">{pairNames(user.display_name)}</span>
+            )}
+            {!demoMode && <TutorialLauncher role={user.role} tourView={tourView} />}
+            {/* A watch tab has no session of its own to end, and logging out would only strand it on a login screen. */}
+            {!isWatchMode() && (
+              <button onClick={logout} className={HEADER_ICON_BUTTON} title="Sign out" aria-label="Sign out">
+                <LogOut size={18} />
+              </button>
+            )}
           </div>
         </div>
+        <div aria-hidden="true" className="h-[3px] w-full" style={{ background: ANDON[round.state].color }} />
       </header>
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {children}

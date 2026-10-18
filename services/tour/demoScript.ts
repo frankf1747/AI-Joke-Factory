@@ -302,7 +302,8 @@ export function initialDemoState(options: DemoOptions): DemoState {
       roundId: 1,
       roundIds: { 1: 1, 2: null },
       roundStatuses: { 1: 'ACTIVE', 2: null },
-      roundTimes: { 1: { startedAt: null, endedAt: null }, 2: { startedAt: null, endedAt: null } },
+      // Round 1 opened at the demo's start, so the header clock (driven by ui.clockMs) reads a few minutes, not 00:00.
+      roundTimes: { 1: { startedAt: at(0), endedAt: null }, 2: { startedAt: null, endedAt: null } },
       marketItems: [],
       teamSummary: null,
       teamFeedback: EARLIER_FEEDBACK,

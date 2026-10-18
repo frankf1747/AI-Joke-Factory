@@ -53,6 +53,49 @@ describe('Joke Maker screen', () => {
   });
 });
 
+describe('Header', () => {
+  const header = (over: Partial<Parameters<typeof renderWithGame>[1]> = {}) => renderWithGame(JokeMaker, {
+    user: { ...testUser(Role.JOKE_MAKER), display_name: 'priya_tomás', team: '3' },
+    roundStatuses: { 1: 'ACTIVE', 2: 'CONFIGURED' },
+    roundTimes: { 1: { startedAt: Date.now() - 439_000, endedAt: null }, 2: { startedAt: null, endedAt: null } },
+    teamSummary: null,
+    ...over,
+  });
+
+  it('shows the running round, its clock, the pair and the tour button', () => {
+    const out = header();
+    expect(out).toContain('Running');
+    expect(out).toContain('Round 1');
+    expect(out).toMatch(/\d\d:\d\d/);
+    expect(out).toContain('elapsed');
+    expect(out).toContain('Priya and Tomás');
+    expect(out).toContain('Team 3, Joke Maker');
+    expect(out).toContain('aria-label="Replay the 1-minute tour"');
+    expect(out).not.toContain('New here? Watch');
+  });
+
+  it('uses the team name from the summary when no name is stored locally', () => {
+    expect(header({ teamSummary: { ...summary({}), team: { id: 3, name: 'Team Alpha' } } })).toContain('Team Alpha, Joke Maker');
+  });
+
+  it('says Round over with the total once the round has ended', () => {
+    const out = header({
+      roundStatuses: { 1: 'ENDED', 2: 'CONFIGURED' },
+      roundTimes: { 1: { startedAt: 0, endedAt: 3_600_000 }, 2: { startedAt: null, endedAt: null } },
+    });
+    expect(out).toContain('Round over');
+    expect(out).toContain('60:00');
+    expect(out).toContain('total');
+  });
+
+  it('says Not started before the round opens', () => {
+    const out = header({ roundStatuses: { 1: 'CONFIGURED', 2: null } });
+    expect(out).toContain('Not started');
+    expect(out).toContain('00:00');
+    expect(out).toContain('not started');
+  });
+});
+
 describe('Marketing screen', () => {
   it('shows Shipping, Storage and Hosting fee tiles (behind More numbers) with one-line tooltips', () => {
     vi.stubGlobal('localStorage', { getItem: () => '1' });

@@ -15,12 +15,15 @@ vi.mock('./GuidedTour', async () => {
 });
 
 import { GameContext } from '../../context';
-import { RoleLayout, TOUR_PROMPT_TEXT, TOUR_REPLAY_LABEL } from '../../components';
+import { RoleLayout, TOUR_REPLAY_LABEL } from '../../components';
 import { demoGameContext, type DemoGameData } from '../../services/tour/demoGame';
 import { TOUR_SEEN_PREFIX } from '../../services/tour/seen';
 import { TOUR_SEEN_PREFIX as E2E_TOUR_SEEN_PREFIX } from '../../scripts/e2e/browser/session';
 import { Role, type GameConfig, type User } from '../../types';
 import { TEST_CONFIG } from '../../views/testing/renderWithGame';
+
+/** The gold pill the header no longer shows. */
+const OLD_PILL_TEXT = 'New here? Watch the 1-minute tour';
 
 class SpyStorage {
   map = new Map<string, string>();
@@ -69,14 +72,15 @@ describe('a student\'s first visit', () => {
     it(`${role}: the tour plays on its own while the round is not ACTIVE`, () => {
       const html = render(role);
       expect(html).toContain(`data-test-tour="${role}"`);
-      expect(html).not.toContain(TOUR_PROMPT_TEXT);
+      expect(html).not.toContain(OLD_PILL_TEXT);
       expect(html).toContain(`aria-label="${TOUR_REPLAY_LABEL}"`);
     });
 
-    it(`${role}: mid-round, a prompt instead of the tour`, () => {
+    it(`${role}: mid-round, no tour and no pill, only the "?"`, () => {
       const html = render(role, { isActive: true });
-      expect(html).toContain(TOUR_PROMPT_TEXT);
-      expect(html).toContain('aria-label="Dismiss the tour prompt"');
+      expect(html).not.toContain(OLD_PILL_TEXT);
+      expect(html).not.toContain('Dismiss the tour prompt');
+      expect(html).toContain(`aria-label="${TOUR_REPLAY_LABEL}"`);
       expect(html).not.toContain('data-test-tour');
     });
   }
@@ -84,7 +88,7 @@ describe('a student\'s first visit', () => {
   it('waits for the round\'s state before deciding, so a mid-round arrival is never shown the tour by mistake', () => {
     const html = render(Role.JOKE_MAKER, { roundId: null });
     expect(html).not.toContain('data-test-tour');
-    expect(html).not.toContain(TOUR_PROMPT_TEXT);
+    expect(html).not.toContain(OLD_PILL_TEXT);
     expect(html).toContain(`aria-label="${TOUR_REPLAY_LABEL}"`);
   });
 
@@ -103,7 +107,7 @@ describe('a student who has seen it', () => {
     for (const isActive of [false, true]) {
       const html = render(Role.JOKE_MAKER, { isActive });
       expect(html).not.toContain('data-test-tour');
-      expect(html).not.toContain(TOUR_PROMPT_TEXT);
+      expect(html).not.toContain(OLD_PILL_TEXT);
       expect(html).toContain(`aria-label="${TOUR_REPLAY_LABEL}"`);
     }
   });
@@ -119,7 +123,7 @@ describe('no auto-play', () => {
     storage.broken = true;
     const html = render(Role.QUALITY_CONTROL);
     expect(html).not.toContain('data-test-tour');
-    expect(html).not.toContain(TOUR_PROMPT_TEXT);
+    expect(html).not.toContain(OLD_PILL_TEXT);
     expect(html).toContain(`aria-label="${TOUR_REPLAY_LABEL}"`);
   });
 
@@ -130,7 +134,7 @@ describe('no auto-play', () => {
     for (const role of [Role.JOKE_MAKER, Role.QUALITY_CONTROL]) {
       const html = render(role);
       expect(html).not.toContain('data-test-tour');
-      expect(html).not.toContain(TOUR_PROMPT_TEXT);
+      expect(html).not.toContain(OLD_PILL_TEXT);
       expect(html).not.toContain(TOUR_REPLAY_LABEL);
     }
   });

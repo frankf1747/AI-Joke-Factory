@@ -168,3 +168,15 @@ describe('StatTiles open from the outside (the demo)', () => {
     expect(out).toContain('data-tour="x-more"');
   });
 });
+
+describe('the demo header', () => {
+  for (const role of ROLES) {
+    it(`${role}: reads Running with a few minutes on the demo clock, never wall time or 00:00`, () => {
+      const o = opts(role);
+      const html = renderStep(o, stepsOf(o)[0].id);
+      expect(html).toContain('Running');
+      expect(html).toContain('04:00');
+      expect(html).not.toContain('00:00');
+    });
+  }
+});
