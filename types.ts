@@ -1,4 +1,4 @@
-import type { LeanTeamStats } from './types/api';
+import type { LeanTeamStats, LobbyResponse } from './types/api';
 
 
 /**
@@ -250,9 +250,10 @@ export interface ApiTeamSummaryResponse {
   published_jokes: number;
   unprocessed_batches: number;
   unsold_jokes?: number;
+  sold_jokes_count?: number;
+  discarded_jokes?: number;
   jokes_created?: number;
   jokes_published?: number;
-  cost_breakdown?: { revenue: number; publish_cost: number; discard_cost: number; profit: number };
   /** Lean rounds only: the team's fees so far (read through services/leanMode.ts leanFeesOf). */
   lean?: LeanTeamStats;
 }
@@ -262,11 +263,21 @@ export interface ApiTeamBatchesResponse {
     batch_id: BatchId;
     status: BatchStatus;
     submitted_at: string;
+    // V2 name, null until Marketing decides; rated_at is the pre-V2 (mock) name.
+    processed_at?: string | null;
     rated_at?: string;
     // No avg_score / passes_count / feedback / tag_summary: V2 removed ratings,
     // and the batch listing (handler/batch.go) never carried a feedback column
     // or a tag summary in the first place.
-    jokes?: Array<{ joke_id: JokeId; joke_text: string }>;
+    jokes?: Array<{
+      joke_id: JokeId;
+      joke_text: string;
+      joke_title?: string | null;
+      publish_status?: 'PENDING' | 'PUBLISHED' | 'DISCARDED';
+      published_at?: string | null;
+      sold_count?: number;
+      first_sold_at?: string | null;
+    }>;
     // Marketing's note to the Joke Maker; absent on backends before migration 0004.
     marketing_note?: string | null;
   }>;
@@ -292,7 +303,18 @@ export interface ApiCreateBatchResponse {
 }
 
 export interface ApiQcQueueNextResponse {
-  batch: { batch_id: BatchId; round_id: RoundId; team_id: TeamId; submitted_at: string; raw_text?: string };
+  // Null when every waiting batch is held by a teammate (queue_size can still be > 0).
+  batch: {
+    batch_id: BatchId;
+    round_id: RoundId;
+    team_id: TeamId;
+    status?: BatchStatus;
+    submitted_at: string;
+    locked_at?: string | null;
+    locked_by?: UserId | null;
+    // The Joke Maker's blob; null once Marketing has split the batch.
+    raw_text?: string | null;
+  } | null;
   // Empty until Marketing splits the raw_text into individual jokes.
   jokes: Array<{ joke_id: JokeId; joke_text: string }>;
   queue_size: number;
@@ -352,16 +374,23 @@ export interface ApiMarketBuyReturnResponse {
   team_points_awarded: { team_id: TeamId; points_delta: number };
 }
 
-export interface ApiInstructorLobbyResponse {
-  round_id: RoundId;
+/** GET /v1/instructor/rounds/{rid}/lobby as Go sends it: ports.LobbySnapshot has no json
+ *  tags, so the keys are PascalCase (RoundID, Summary, Teams, Unassigned) apart from the
+ *  nested domain.Team; Teams and Unassigned are null when empty. See types/api.ts. */
+export type ApiInstructorLobbyResponse = LobbyResponse;
+
+/** The lobby as the client holds it, after normalizeInstructorLobby (context.tsx), which
+ *  also reads the mock backend's older snake_case shape. Go has no customers; only the
+ *  mock sends them, so `customers` is [] against the real backend. */
+export interface InstructorLobby {
+  round_id: RoundId | null;
   summary: {
     waiting: number;
     assigned: number;
     dropped: number;
     team_count: number;
-    customer_count: number;
   };
-  teams: Array<{ team: Team; members: Array<{ user_id: UserId; display_name: string; role: ApiRole }> }>;
+  teams: Array<{ team: { id: TeamId; name: string }; members: Array<{ user_id: UserId; display_name: string; role: ApiRole | null }> }>;
   customers: Array<{ user_id: UserId; display_name: string; role: ApiRole }>;
   unassigned: Array<{ user_id: UserId; display_name: string; status: ParticipantStatus }>;
 }

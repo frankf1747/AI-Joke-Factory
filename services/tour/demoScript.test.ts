@@ -175,7 +175,7 @@ describe('buildDemoState', () => {
   it('Marketing: the batch arrives unsplit, splits into five, three are kept, then it is released', () => {
     const o = opts('QUALITY_CONTROL');
     const before = at(o, 'mk-arrives').game.qcQueue!;
-    expect(before.batch.raw_text).toBe(DEMO_RAW_BATCH);
+    expect(before.batch!.raw_text).toBe(DEMO_RAW_BATCH);
     expect(before.jokes).toEqual([]);
     expect(before.queue_size).toBe(1);
     expect(at(o, 'mk-arrives', 3000).game.qcQueue!.jokes.map(j => j.joke_text)).toEqual([...DEMO_JOKES]);
@@ -198,7 +198,7 @@ describe('buildDemoState', () => {
     expect(at(o, 'mk-scoreboard').ui.moreOpen).toBe(false);
     const fees = at(o, 'mk-fees');
     expect(fees.ui.moreOpen).toBe(true);
-    expect(fees.game.qcQueue!.batch.batch_id).toBe(NEXT_BATCH_ID);
+    expect(fees.game.qcQueue!.batch!.batch_id).toBe(NEXT_BATCH_ID);
     expect(fees.game.teamSummary!.unprocessed_batches).toBe(1);
     const lean = leanFeesOf(fees.game.teamSummary!.lean);
     expect(lean.shipping).toBe(6);
@@ -228,11 +228,12 @@ describe('the Next step line runs the real rules on the demo state', () => {
     feedbackRows: toFeedbackRows(s.game.teamFeedback),
   }));
 
-  it('Joke Maker: desk empty, then keep writing while Marketing has the batch, then Marketing\'s note', () => {
+  it('Joke Maker: desk empty, then keep writing while Marketing has the batch; the note never reaches the line', () => {
     expect(jmLine(at(opts('JOKE_MAKER'), 'jm-welcome'))).toBe("Marketing's desk is empty — send your next batch of 5.");
     expect(jmLine(at(opts('JOKE_MAKER', 2), 'jm-welcome'))).toBe("Marketing's desk is empty — send a small batch now.");
     expect(jmLine(at(opts('JOKE_MAKER'), 'jm-next'))).toBe('Keep writing — every batch is another chance to sell.');
-    expect(jmLine(at(opts('JOKE_MAKER'), 'jm-note'))).toBe(`Marketing says: “${DEMO_NOTE}” — use it in your next batch.`);
+    // The note is read inside the opened batch (the jm-note spotlight), never on the Next step line.
+    expect(jmLine(at(opts('JOKE_MAKER'), 'jm-note'))).not.toContain(DEMO_NOTE);
   });
 
   it('Marketing: on its Next step, a batch that has waited too long, with the round\'s storage fee', () => {

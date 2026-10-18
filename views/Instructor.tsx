@@ -108,8 +108,8 @@ const Instructor: React.FC = () => {
   const [marketSortKey, setMarketSortKey] = useState<'id' | 'sales'>('id');
   const [marketSortDir, setMarketSortDir] = useState<'asc' | 'desc'>('desc');
   const [expandedMarketJokeIds, setExpandedMarketJokeIds] = useState<Record<string, boolean>>({});
+  const [marketPage, setMarketPage] = useState(1);
   const [wasteChartMode, setWasteChartMode] = useState<'count' | 'rate'>('count');
-  const [round2ResumeHint, setRound2ResumeHint] = useState(false);
   const [localSalesOverTime, setLocalSalesOverTime] = useState<
     Array<{ event_index: number; timestamp: string; team_id: number; team_name: string; total_sales: number }>
   >([]);
@@ -249,15 +249,10 @@ const Instructor: React.FC = () => {
     }
   }, [config.round, config.isActive]);
 
-  // Clear "resume" hint once Round 2 becomes active or user switches away from Round 2.
-  useEffect(() => {
-    if (config.isActive || config.round !== 2) setRound2ResumeHint(false);
-  }, [config.isActive, config.round]);
-
-  const shouldShowRound2Resume =
-    config.round === 2 &&
-    !config.isActive &&
-    (round2ResumeHint || Boolean(instructorStatsRound2?.round_id));
+  // A round cannot be resumed: POST /start on an ENDED round answers 409 "round already
+  // ended" (usecase/instructor.go). Once the selected round has ended, Start gives way to
+  // a disabled "Ended". An unknown status (null) still offers Start: the server decides.
+  const selectedRoundEnded = selectedRoundStatus === 'ENDED';
 
   const statsR1 = instructorStatsRound1 ?? null;
   const statsR2 = instructorStatsRound2 ?? null;
@@ -309,9 +304,12 @@ const Instructor: React.FC = () => {
     return (rows || []).map(row => {
       const teamId = Number(row.team.id);
       const teamName = teamNames[String(teamId)] || row.team.name;
+      // Go's DENSE_RANK by profit (ties share a rank); 0 or absent (e.g. the mock) means none.
+      const rank = Number(row.rank);
       return {
         team_id: teamId,
         team_name: teamName,
+        rank: Number.isFinite(rank) && rank > 0 ? rank : null,
         batches_processed: Number(row.batches_processed ?? 0),
         published_jokes: Number(row.published_jokes ?? 0),
         discarded_jokes: Number(row.discarded_jokes ?? 0),
@@ -634,11 +632,15 @@ const Instructor: React.FC = () => {
   });
   }, [leaderboardBase, leaderboardSortKey, leaderboardSortDir, leaderboardIsLean, leanByTeam]);
 
-  // Flash a colorful highlight when a team moves up in the currently displayed ranking.
+  // The rank a row shows: the backend's when it sent one, else the row's position.
+  // Rank belongs to the team, not to the current sort.
+  const displayedRank = (row: { rank: number | null }, idx: number) => row.rank ?? idx + 1;
+
+  // Flash a colorful highlight when a team moves up in the displayed rank.
   useEffect(() => {
     const currPos: Record<string, number> = {};
     leaderboardSorted.forEach((row, idx) => {
-      currPos[String(row.team_id)] = idx;
+      currPos[String(row.team_id)] = displayedRank(row, idx);
     });
 
     const prevPos = prevLeaderboardPosRef.current;
@@ -1072,7 +1074,7 @@ const Instructor: React.FC = () => {
                 key={String(row.team_id)}
                 className={`hover:bg-gray-50 ${rankUpTeamIds.includes(String(row.team_id)) ? 'jf-leaderboard-rankup' : ''}`}
               >
-                <td className="px-3 py-2 font-mono text-gray-700">{idx + 1}</td>
+                <td className="px-3 py-2 font-mono text-gray-700">{displayedRank(row, idx)}</td>
                 <td className="px-3 py-2 font-semibold text-gray-900">{row.team_name}</td>
                 <td className="px-3 py-2 text-right text-gray-800">{row.batches_processed}</td>
                 <td className="px-3 py-2 text-right text-gray-800">{row.published_jokes}</td>
@@ -2334,7 +2336,25 @@ const Instructor: React.FC = () => {
               </div>
 
               <div className="flex items-center space-x-2">
-                 {!config.isActive ? (
+                 {config.isActive ? (
+                   <Button
+                     disabled
+                     variant="secondary"
+                     className="w-32 flex justify-center items-center gap-2"
+                     title="Round is active"
+                   >
+                     Active
+                   </Button>
+                 ) : selectedRoundEnded ? (
+                   <Button
+                     disabled
+                     variant="secondary"
+                     className="w-32 flex justify-center items-center gap-2"
+                     title="Round has ended"
+                   >
+                     Ended
+                   </Button>
+                 ) : (
                  <Button 
                     onClick={async () => {
                       // When starting Round 2, force-close team popups and sync the toggle state.
@@ -2346,17 +2366,8 @@ const Instructor: React.FC = () => {
                      variant="success"
                    className="w-32 flex justify-center items-center gap-2"
                  >
-                     <Play size={16} /> {shouldShowRound2Resume ? 'Resume' : 'Start'}
+                     <Play size={16} /> Start
                  </Button>
-                 ) : (
-                   <Button
-                     disabled
-                     variant="secondary"
-                     className="w-32 flex justify-center items-center gap-2"
-                     title="Round is active"
-                   >
-                     Active
-                   </Button>
                  )}
                  
                  <Button 
@@ -2365,8 +2376,6 @@ const Instructor: React.FC = () => {
                       setShowEndRound1Confirm(true);
                       return;
                     }
-                    // Round 2 end => immediately show "Resume" (backend supports resuming Round 2).
-                    if (config.round === 2) setRound2ResumeHint(true);
                     await endRound();
                   }}
                    disabled={!config.isActive}
@@ -3181,9 +3190,9 @@ const Instructor: React.FC = () => {
                     });
 
                     const pageSize = 20;
-                    const [page] = [Math.max(1, Math.min(pageSize, pageSize))]; // placeholder to avoid lint
                     const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
-                    const [currentPage, setCurrentPage] = React.useState(1);
+                    const currentPage = marketPage;
+                    const setCurrentPage = setMarketPage;
                     const paged = rows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
                     if (rows.length === 0) {

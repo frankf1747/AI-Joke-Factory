@@ -501,7 +501,7 @@ const QualityControl: React.FC = () => {
   }, [config.showTeamPopup]);
 
   /* Phase gate: a raw-text batch with no jokes yet must be split first. */
-  const rawText = (qcQueue?.batch as any)?.raw_text as string | undefined;
+  const rawText = qcQueue?.batch?.raw_text;
   const needsSplit = !!(rawText && rawText.trim()) && incomingJokes.length === 0;
   const splitTarget = config.round === 1 ? config.round1BatchSize : null;
 
@@ -828,9 +828,9 @@ const QualityControl: React.FC = () => {
               <StatBox key="profit" label="Profit" value={profitLabel} tone={profitTone} />,
               <StatBox key="rank" label="Current Team Rank" value={String(myRank)} tone="rank" />,
               <StatBox key="sold" label="Jokes Sold / Made" value={`${jokesSold}/${jokesCreated}`} tone="sky" />,
-              /* TODO(backend): queue_size from the mock API counts every SUBMITTED
-                 batch in the round across ALL teams, and counts batches rather than
-                 jokes. Point this at the real per-team backlog endpoint when it lands. */
+              /* queue_size counts this team's SUBMITTED batches in the round,
+                 including the one locked on the desk. It counts batches, not jokes.
+                 (The mock API still counts every team's.) */
               <StatBox key="backlog" label="Content Backlog" value={queueSize} tone="blue" />,
             ]}
             moreTiles={[

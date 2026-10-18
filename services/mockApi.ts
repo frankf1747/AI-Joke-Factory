@@ -7,7 +7,6 @@ import type {
   ApiCreateBatchRequest,
   ApiCreateBatchResponse,
   ApiCustomerBudgetResponse,
-  ApiInstructorLobbyResponse,
   ApiInstructorStatsResponse,
   ApiMarketBuyReturnResponse,
   ApiMarketResponse,
@@ -571,7 +570,9 @@ function route(
 
       const waiting = unassigned.length;
       const assigned = Object.values(db.assignments).filter(a => a.role != null).length;
-      const resp: ApiInstructorLobbyResponse = {
+      // The mock keeps its older snake_case lobby (customers included); Go's is PascalCase
+      // (ApiInstructorLobbyResponse). normalizeInstructorLobby (context.tsx) reads both.
+      const resp = {
         round_id,
         summary: {
           waiting,
@@ -834,14 +835,6 @@ function route(
         jokes_created: stats.jokes_created,
         jokes_published: stats.jokes_published,
         profit: Number(profit.toFixed(2)),
-        cost_breakdown: {
-          revenue: Number((stats.total_sales * rates.marketPrice).toFixed(2)),
-          publish_cost: Number((stats.jokes_published * rates.costOfPublishing).toFixed(2)),
-          discard_cost: Number(
-            (Math.max(0, stats.jokes_created - stats.jokes_published) * rates.costOfDiscard).toFixed(2),
-          ),
-          profit: Number(profit.toFixed(2)),
-        },
       };
       return ok(resp, 200);
     }

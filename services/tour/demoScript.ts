@@ -226,12 +226,6 @@ export function settle(s: DemoState): DemoState {
     unsold_jokes: Math.max(0, published - sales),
     jokes_created: created,
     jokes_published: published,
-    cost_breakdown: {
-      revenue: sales * fees.marketPrice,
-      publish_cost: published * fees.costOfPublishing,
-      discard_cost: (created - published) * fees.costOfDiscard,
-      profit: classic,
-    },
     lean: leanStats,
   };
   const qcQueue = s.game.qcQueue ? { ...s.game.qcQueue, queue_size: waiting } : null;
@@ -354,7 +348,7 @@ export const batchArrives = (s: DemoState) => landOnDesk(s, SENT_BATCH_ID, DEMO_
 
 /** Marketing splits the batch on its desk into its five jokes. */
 export function splitOnDesk(s: DemoState): DemoState {
-  if (!s.game.qcQueue) return s;
+  if (!s.game.qcQueue?.batch) return s;
   const id = s.game.qcQueue.batch.batch_id;
   return withGame(s, {
     qcQueue: { ...s.game.qcQueue, jokes: DEMO_JOKES.map((text, n) => ({ joke_id: demoJokeId(id, n) as JokeId, joke_text: text })) },

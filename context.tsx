@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import type {
-  ApiInstructorLobbyResponse,
   ApiInstructorStatsResponse,
   ApiMarketItem,
   ApiQcQueueNextResponse,
@@ -9,6 +8,7 @@ import type {
   Batch,
   BatchId,
   GameConfig,
+  InstructorLobby,
   Joke,
   JokeId,
   Role,
@@ -168,16 +168,16 @@ export function mapBatchFromTeamList(
         joke_text: j.joke_text,
         id: String(j.joke_id),
         content: j.joke_text,
-        sold_count: (j as any)?.sold_count ?? (j as any)?.soldCount ?? undefined,
+        sold_count: j.sold_count ?? (j as any)?.soldCount ?? undefined,
         is_bought: (j as any)?.is_bought ?? (j as any)?.isBought ?? undefined,
         // The backend sends publish_status: PENDING | PUBLISHED | DISCARDED. is_published is
         // kept as the UI's vocabulary, derived here at the boundary.
         is_published:
-          (j as any)?.publish_status != null
-            ? (j as any).publish_status === 'PUBLISHED'
+          j.publish_status != null
+            ? j.publish_status === 'PUBLISHED'
             : ((j as any)?.is_published ?? (j as any)?.isPublished ?? undefined),
-        first_sold_at: (j as any)?.first_sold_at ?? (j as any)?.firstSoldAt ?? null,
-        published_at: (j as any)?.published_at ?? (j as any)?.publishedAt ?? null,
+        first_sold_at: j.first_sold_at ?? (j as any)?.firstSoldAt ?? null,
+        published_at: j.published_at ?? (j as any)?.publishedAt ?? null,
         topic: (j as any)?.topic ?? (j as any)?.category ?? undefined,
       } as any))
     : (jokeTexts || []).map((txt, idx) => {
@@ -193,7 +193,7 @@ export function mapBatchFromTeamList(
   const submittedAt = teamBatches.submitted_at ? Date.parse(teamBatches.submitted_at) : undefined;
   // The backend renamed rated_at -> processed_at in V2 (handler/batch.go). Accept both so a
   // stale mock response still maps.
-  const ratedAtRaw = (teamBatches as any).processed_at ?? (teamBatches as any).rated_at;
+  const ratedAtRaw = teamBatches.processed_at ?? teamBatches.rated_at;
   const ratedAt = ratedAtRaw ? Date.parse(ratedAtRaw) : undefined;
 
   return {
@@ -266,6 +266,49 @@ export async function pollTeamFeedback(
     // ignore; retry on the next poll if supported
     return undefined;
   }
+}
+
+/* GET /lobby: Go sends ports.LobbySnapshot, PascalCase with no json tags (ApiInstructorLobbyResponse),
+   with null for empty Teams/Unassigned; the mock sends the older snake_case shape, customers included.
+   Read both into one InstructorLobby. */
+export function normalizeInstructorLobby(raw: any, fallbackRoundId: RoundId | null): InstructorLobby {
+  const data = raw?.data ?? raw ?? {};
+  const teamsArr: any[] = Array.isArray(data?.Teams ?? data?.teams) ? (data.Teams ?? data.teams) : [];
+  const customersArr: any[] = Array.isArray(data?.Customers ?? data?.customers) ? (data.Customers ?? data.customers) : [];
+  const unassignedArr: any[] = Array.isArray(data?.Unassigned ?? data?.unassigned) ? (data.Unassigned ?? data.unassigned) : [];
+  return {
+    round_id: data?.RoundID ?? data?.round_id ?? fallbackRoundId,
+    summary: {
+      waiting: data?.Summary?.Waiting ?? data?.summary?.waiting ?? 0,
+      assigned: data?.Summary?.Assigned ?? data?.summary?.assigned ?? 0,
+      dropped: data?.Summary?.Dropped ?? data?.summary?.dropped ?? 0,
+      team_count: data?.Summary?.TeamCount ?? data?.summary?.team_count ?? teamsArr.length,
+    },
+    teams: teamsArr.map(t => {
+      const members: any[] = Array.isArray(t.Members ?? t.members) ? (t.Members ?? t.members) : [];
+      const team = t.Team ?? t.team ?? {};
+      const teamId = team.ID ?? team.Id ?? team.id ?? t.TeamID ?? t.team_id;
+      const teamName = team.Name ?? team.name ?? `Team ${teamId ?? ''}`;
+      return {
+        team: { id: Number(teamId) as TeamId, name: String(teamName) },
+        members: members.map(m => ({
+          user_id: Number(m.UserID ?? m.user_id) as UserId,
+          display_name: String(m.DisplayName ?? m.display_name ?? ''),
+          role: m.Role ?? m.role ?? null,
+        })),
+      };
+    }),
+    customers: customersArr.map(c => ({
+      user_id: Number(c.UserID ?? c.user_id) as UserId,
+      display_name: String(c.DisplayName ?? c.display_name ?? ''),
+      role: c.Role ?? c.role ?? 'CUSTOMER',
+    })),
+    unassigned: unassignedArr.map(u => ({
+      user_id: Number(u.UserID ?? u.user_id) as UserId,
+      display_name: String(u.DisplayName ?? u.display_name ?? ''),
+      status: u.Status ?? u.status ?? 'WAITING',
+    })),
+  };
 }
 
 export function normalizeInstructorStats(raw: any): ApiInstructorStatsResponse {
@@ -449,7 +492,7 @@ export interface GameContextType {
      selling jokes. Null until the first successful poll (and in mock mode,
      which has no /feedback route). */
   teamFeedback: TeamFeedbackResponse | null;
-  instructorLobby: ApiInstructorLobbyResponse | null;
+  instructorLobby: InstructorLobby | null;
   instructorStats: ApiInstructorStatsResponse | null;
   instructorStatsRound1: ApiInstructorStatsResponse | null;
   instructorStatsRound2: ApiInstructorStatsResponse | null;
@@ -495,7 +538,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [marketItems, setMarketItems] = useState<ApiMarketItem[]>([]);
   const [teamSummary, setTeamSummary] = useState<ApiTeamSummaryResponse | null>(null);
   const [teamFeedback, setTeamFeedback] = useState<TeamFeedbackResponse | null>(null);
-  const [instructorLobby, setInstructorLobby] = useState<ApiInstructorLobbyResponse | null>(null);
+  const [instructorLobby, setInstructorLobby] = useState<InstructorLobby | null>(null);
   const [instructorStats, setInstructorStats] = useState<ApiInstructorStatsResponse | null>(null);
   const [instructorStatsByRoundNumber, setInstructorStatsByRoundNumber] = useState<Record<1 | 2, ApiInstructorStatsResponse | null>>({
     1: null,
@@ -833,49 +876,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
 
             if (!cancelled) {
-              const lobbyAny: any = rawLobby;
-              const data = lobbyAny?.data ?? lobbyAny;
-
-              const teamsArr: any[] = Array.isArray(data?.Teams ?? data?.teams) ? (data.Teams ?? data.teams) : [];
-              const customersArr: any[] = Array.isArray(data?.Customers ?? data?.customers) ? (data.Customers ?? data.customers) : [];
-              const unassignedArr: any[] = Array.isArray(data?.Unassigned ?? data?.unassigned) ? (data.Unassigned ?? data.unassigned) : [];
-
-              const lobbyNormalized = {
-                round_id: data?.RoundID ?? data?.round_id ?? effectiveRoundId,
-                summary: {
-                  waiting: data?.Summary?.Waiting ?? data?.summary?.waiting ?? 0,
-                  assigned: data?.Summary?.Assigned ?? data?.summary?.assigned ?? 0,
-                  dropped: data?.Summary?.Dropped ?? data?.summary?.dropped ?? 0,
-                  team_count: data?.Summary?.TeamCount ?? data?.summary?.team_count ?? teamsArr.length,
-                  customer_count: data?.Summary?.CustomerCount ?? data?.summary?.customer_count ?? customersArr.length,
-                },
-                teams: teamsArr.map(t => {
-                  const members = Array.isArray(t.Members ?? t.members) ? (t.Members ?? t.members) : [];
-                  const team = t.Team ?? t.team ?? {};
-                  const teamId = team.ID ?? team.Id ?? team.id ?? t.TeamID ?? t.team_id;
-                  const teamName = team.Name ?? team.name ?? `Team ${teamId ?? ''}`;
-                  return {
-                    team: { id: Number(teamId) as TeamId, name: String(teamName) },
-                    members: members.map(m => ({
-                      user_id: Number(m.UserID ?? m.user_id) as UserId,
-                      display_name: String(m.DisplayName ?? m.display_name ?? ''),
-                      role: m.Role ?? m.role ?? null,
-                    })),
-                  };
-                }),
-                customers: customersArr.map(c => ({
-                  user_id: Number(c.UserID ?? c.user_id) as UserId,
-                  display_name: String(c.DisplayName ?? c.display_name ?? ''),
-                  role: c.Role ?? c.role ?? 'CUSTOMER',
-                })),
-                unassigned: unassignedArr.map(u => ({
-                  user_id: Number(u.UserID ?? u.user_id) as UserId,
-                  display_name: String(u.DisplayName ?? u.display_name ?? ''),
-                  status: u.Status ?? u.status ?? 'WAITING',
-                })),
-              };
-
-              setInstructorLobby(lobbyNormalized as any);
+              const lobbyNormalized = normalizeInstructorLobby(rawLobby, effectiveRoundId);
+              setInstructorLobby(lobbyNormalized);
               if (stats) {
                 const norm = normalizeInstructorStats((stats as any)?.data ?? stats ?? null);
                 setInstructorStats(norm);
@@ -1093,49 +1095,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               }
             }
             if (!cancelled) {
-              const lobbyAny: any = rawLobby;
-              const data = lobbyAny?.data ?? lobbyAny;
-
-              const teamsArr: any[] = Array.isArray(data?.Teams ?? data?.teams) ? (data.Teams ?? data.teams) : [];
-              const customersArr: any[] = Array.isArray(data?.Customers ?? data?.customers) ? (data.Customers ?? data.customers) : [];
-              const unassignedArr: any[] = Array.isArray(data?.Unassigned ?? data?.unassigned) ? (data.Unassigned ?? data.unassigned) : [];
-
-              const lobbyNormalized = {
-                round_id: data?.RoundID ?? data?.round_id ?? me.round_id,
-                summary: {
-                  waiting: data?.Summary?.Waiting ?? data?.summary?.waiting ?? 0,
-                  assigned: data?.Summary?.Assigned ?? data?.summary?.assigned ?? 0,
-                  dropped: data?.Summary?.Dropped ?? data?.summary?.dropped ?? 0,
-                  team_count: data?.Summary?.TeamCount ?? data?.summary?.team_count ?? teamsArr.length,
-                  customer_count: data?.Summary?.CustomerCount ?? data?.summary?.customer_count ?? customersArr.length,
-                },
-                teams: teamsArr.map(t => {
-                  const members = Array.isArray(t.Members ?? t.members) ? (t.Members ?? t.members) : [];
-                  const team = t.Team ?? t.team ?? {};
-                  const teamId = team.ID ?? team.Id ?? team.id ?? t.TeamID ?? t.team_id;
-                  const teamName = team.Name ?? team.name ?? `Team ${teamId ?? ''}`;
-                  return {
-                    team: { id: Number(teamId) as TeamId, name: String(teamName) },
-                    members: members.map(m => ({
-                      user_id: Number(m.UserID ?? m.user_id) as UserId,
-                      display_name: String(m.DisplayName ?? m.display_name ?? ''),
-                      role: m.Role ?? m.role ?? null,
-                    })),
-                  };
-                }),
-                customers: customersArr.map(c => ({
-                  user_id: Number(c.UserID ?? c.user_id) as UserId,
-                  display_name: String(c.DisplayName ?? c.display_name ?? ''),
-                  role: c.Role ?? c.role ?? 'CUSTOMER',
-                })),
-                unassigned: unassignedArr.map(u => ({
-                  user_id: Number(u.UserID ?? u.user_id) as UserId,
-                  display_name: String(u.DisplayName ?? u.display_name ?? ''),
-                  status: u.Status ?? u.status ?? 'WAITING',
-                })),
-              };
-
-              setInstructorLobby(lobbyNormalized as any);
+              const lobbyNormalized = normalizeInstructorLobby(rawLobby, me.round_id);
+              setInstructorLobby(lobbyNormalized);
               if (stats) setInstructorStats(normalizeInstructorStats((stats as any)?.data ?? stats ?? null));
 
               // Build roster for instructor drag/drop (teams + customers + unassigned)
@@ -1696,7 +1657,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     (async () => {
       try {
-        const lobby = await instructorService.lobby(roundId);
+        // Go's lobby is PascalCase with null rosters when empty: read it through the normalizer.
+        const lobby = normalizeInstructorLobby(await instructorService.lobby(roundId), roundId);
         const userIds: UserId[] = [];
         lobby.teams.forEach(t => t.members.forEach(m => userIds.push(m.user_id)));
         lobby.customers.forEach(c => userIds.push(c.user_id));

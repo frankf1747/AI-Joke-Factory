@@ -62,3 +62,55 @@ describe('Instructor screen, one Lean rule set', () => {
     expect(ok).not.toContain('Shipping fees must rise');
   });
 });
+
+/* POST /start on an ENDED round answers 409 "round already ended"
+   (usecase/instructor.go): a round cannot be resumed, so the control offers
+   Start only while the selected round is CONFIGURED. */
+describe('Instructor screen, the Start control', () => {
+  const stopped = { ...TEST_CONFIG, isActive: false };
+  const r2Stats = { round_id: 2, leaderboard: [] };
+  const startButton = /<button[^>]*>(?:(?!<\/button>).)*Start<\/button>/s;
+
+  it('offers Start when the selected round is CONFIGURED', () => {
+    const out = renderWithGame(Instructor, {
+      user: instructor, config: { ...stopped, round: 2 }, roundStatuses: { 1: 'ENDED', 2: 'CONFIGURED' },
+    });
+    expect(out).toMatch(startButton);
+    expect(out).not.toContain('Resume');
+  });
+
+  it('offers no Start or Resume once Round 2 has ended, only a disabled Ended', () => {
+    const out = renderWithGame(Instructor, {
+      user: instructor, config: { ...stopped, round: 2 }, roundStatuses: { 1: 'ENDED', 2: 'ENDED' },
+      instructorStatsRound2: r2Stats,
+    });
+    expect(out).not.toContain('Resume');
+    expect(out).not.toMatch(startButton);
+    expect(out).toMatch(/<button[^>]*disabled=""[^>]*>Ended<\/button>/);
+  });
+
+  it('offers no Start once Round 1 has ended while Round 1 is selected', () => {
+    const out = renderWithGame(Instructor, {
+      user: instructor, config: { ...stopped, round: 1 }, roundStatuses: { 1: 'ENDED', 2: 'CONFIGURED' },
+    });
+    expect(out).not.toMatch(startButton);
+    expect(out).toMatch(/<button[^>]*disabled=""[^>]*>Ended<\/button>/);
+  });
+});
+
+describe('Instructor screen, the Live Market', () => {
+  const item = (id: number, text = `Joke ${id}`) => ({
+    joke_id: id, joke_text: text, joke_title: `Title ${id}`, team_id: 1, team_name: 'Team 1', sold_count: 0,
+  });
+
+  it('pages 20 jokes at a time and offers Show more past 180 characters', () => {
+    const items = [item(1, 'x'.repeat(181)), ...Array.from({ length: 20 }, (_, i) => item(i + 2))];
+    const out = renderWithGame(Instructor, { user: instructor, marketItems: items });
+    expect(out).toContain('Page 1 / 2');
+    expect(out).toContain('Title 21');
+    expect(out).not.toContain('Title 1<');
+    const long = renderWithGame(Instructor, { user: instructor, marketItems: [item(1, 'x'.repeat(181))] });
+    expect(long).toContain('Show more');
+    expect(long).not.toContain('Page ');
+  });
+});

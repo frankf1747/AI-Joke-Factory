@@ -24,8 +24,8 @@ export interface JokeMakerStepInput {
   lastSentAt: number | null;
   /** Joke count of the latest sent batch; null while it is unsplit (or unknown). */
   lastBatchJokes: number | null;
-  /** The latest processed batch's note from Marketing, when it has one; notedAt = when Marketing processed it (ms epoch). */
-  latestNote: { text: string; notedAt: number } | null;
+  /* No Marketing note here on purpose: students find the note inside the batch
+     in the Value stream, so the Next step line never quotes it. */
 }
 
 export interface MarketingStepInput {
@@ -45,8 +45,6 @@ export interface MarketingStepInput {
   topFixNext: string | null;
 }
 
-/** A note counts as fresh while it was written (its batch processed) at most this long ago. */
-export const NOTE_FRESH_MS = 120_000;
 /** Round 2: a last batch of at least this many jokes earns the small-batch hint. */
 export const BIG_BATCH_JOKES = 6;
 /** The Joke Maker is idle once this long has passed since the last batch. */
@@ -55,8 +53,6 @@ export const JM_IDLE_MS = 90_000;
 export const DESK_WAIT_S = 45;
 /** Discarding at least this share of a batch earns the empty-shelf warning. */
 export const DISCARD_WARN_SHARE = 0.6;
-/** Notes are quoted up to this many characters. */
-export const NOTE_QUOTE_CHARS = 80;
 
 /** The game has two rounds; once this one has ended the class moves to the debrief. */
 export const FINAL_ROUND = 2;
@@ -72,20 +68,9 @@ function classOverFrom(roundActive: boolean, statuses: Readonly<Record<1 | 2, Ro
 const info = (text: string): NextStep => ({ text, tone: 'info' });
 const warn = (text: string): NextStep => ({ text, tone: 'warn' });
 
-/** Marketing's note on one line: whitespace runs collapsed, cut at 80 characters with "…". */
-export function quoteNote(text: string): string {
-  const flat = text.replace(/\s+/g, ' ').trim();
-  const chars = Array.from(flat);
-  return chars.length > NOTE_QUOTE_CHARS ? `${chars.slice(0, NOTE_QUOTE_CHARS).join('')}…` : flat;
-}
-
 export function jokeMakerNextStep(i: JokeMakerStepInput): NextStep {
   if (i.classOver) return info(CLASS_OVER_TEXT);
   if (!i.roundActive) return info('Get your AI tool ready — the round starts soon.');
-  const note = i.latestNote?.text.trim() ? i.latestNote : null;
-  if (note && i.now - note.notedAt <= NOTE_FRESH_MS) {
-    return info(`Marketing says: “${quoteNote(note.text)}” — use it in your next batch.`);
-  }
   if (i.roundNumber === 2 && i.lastBatchJokes != null && i.lastBatchJokes >= BIG_BATCH_JOKES) {
     return warn('Big batches wait longer for feedback — try 2 or 3 jokes next.');
   }
@@ -100,13 +85,22 @@ export function jokeMakerNextStep(i: JokeMakerStepInput): NextStep {
   return info('Keep writing — every batch is another chance to sell.');
 }
 
+/** A desk wait: "45 s", "1 min", "1 min 12 s", then whole minutes from 10 min ("56 min"). */
+function fmtWait(secs: number): string {
+  if (secs < 60) return `${secs} s`;
+  const min = Math.floor(secs / 60);
+  const rest = secs % 60;
+  return min >= 10 || rest === 0 ? `${min} min` : `${min} min ${rest} s`;
+}
+
 export function marketingNextStep(i: MarketingStepInput): NextStep {
   if (i.classOver) return info(CLASS_OVER_TEXT);
   if (!i.roundActive) return info("Watch the desk — your Joke Maker's first batch is coming.");
   if (i.deskBatchSentAt != null) {
     const waited = Math.floor((i.now - i.deskBatchSentAt) / 1000);
     if (waited >= DESK_WAIT_S) {
-      return warn(`Batch waiting ${waited} s — release what's good enough. Storage costs ${fmtPerMinute(i.storageFeePerJokeMinute)}.`);
+      const storage = i.storageFeePerJokeMinute > 0 ? ` Storage costs ${fmtPerMinute(i.storageFeePerJokeMinute)}.` : '';
+      return warn(`Batch waiting ${fmtWait(waited)} — release what's good enough.${storage}`);
     }
   }
   if (i.lastDecision) {
@@ -153,8 +147,6 @@ export function jokeMakerInputFrom(a: {
   batches: readonly Batch[];
 }): JokeMakerStepInput {
   const lastSent = latestBy(a.batches, b => b.submittedAt);
-  const lastProcessed = latestBy(a.batches.filter(isProcessed), b => b.ratedAt ?? b.submittedAt);
-  const noteText = lastProcessed?.marketing_note ?? null;
   return {
     now: a.now,
     roundActive: a.roundActive,
@@ -163,9 +155,6 @@ export function jokeMakerInputFrom(a: {
     marketingBacklog: finiteOrNull(a.teamSummary?.unprocessed_batches),
     lastSentAt: lastSent?.submittedAt ?? null,
     lastBatchJokes: lastSent && lastSent.jokes.length > 0 ? lastSent.jokes.length : null,
-    latestNote: noteText && noteText.trim() && lastProcessed && (lastProcessed.ratedAt ?? lastProcessed.submittedAt) != null
-      ? { text: noteText, notedAt: (lastProcessed.ratedAt ?? lastProcessed.submittedAt) as number }
-      : null,
   };
 }
 

@@ -59,3 +59,30 @@ describe('Instructor leaderboard, Lean columns', () => {
     expect(out).not.toContain('Push rules vs lean rules');
   });
 });
+
+/* Go ranks the leaderboard with DENSE_RANK() OVER (ORDER BY profit DESC), so
+   tied teams share a rank. The # column shows that rank, not the row index. */
+describe('Instructor leaderboard, rank', () => {
+  const classic = (id: number, rank: number, profit: number): ApiInstructorStatsResponse['leaderboard'][number] => ({
+    rank, team: { id, name: `Team ${id}` }, points: 0, total_sales: 10, unsold_jokes: 0, discarded_jokes: 1,
+    batches_processed: 3, profit, total_jokes: 9, published_jokes: 8,
+  });
+  const rankCells = (out: string) =>
+    [...out.matchAll(/<td class="px-3 py-2 font-mono text-gray-700">(\d+)<\/td>/g)].map(m => Number(m[1]));
+
+  it('shows the backend rank, so tied teams share it', () => {
+    const out = renderWithGame(Instructor, {
+      user: instructor,
+      instructorStatsRound1: { round_id: 1, leaderboard: [classic(1, 1, 5), classic(2, 1, 5), classic(3, 2, 3)] },
+    });
+    expect(rankCells(out)).toEqual([1, 1, 2]);
+  });
+
+  it('falls back to the row position when the backend sends no rank', () => {
+    const out = renderWithGame(Instructor, {
+      user: instructor,
+      instructorStatsRound1: { round_id: 1, leaderboard: [classic(1, 0, 5), classic(2, 0, 4), classic(3, 0, 3)] },
+    });
+    expect(rankCells(out)).toEqual([1, 2, 3]);
+  });
+});

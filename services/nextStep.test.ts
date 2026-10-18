@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  jokeMakerInputFrom, jokeMakerNextStep, marketingInputFrom, marketingNextStep, quoteNote,
+  jokeMakerInputFrom, jokeMakerNextStep, marketingInputFrom, marketingNextStep,
   type JokeMakerStepInput, type MarketingStepInput,
 } from './nextStep';
 import type { Batch, Joke } from '../types';
@@ -11,7 +11,7 @@ const s = (seconds: number) => seconds * 1000;
 
 const jm = (over: Partial<JokeMakerStepInput> = {}): JokeMakerStepInput => ({
   now: NOW, roundActive: true, classOver: false, roundNumber: 1, marketingBacklog: 1, lastSentAt: NOW - s(10), lastBatchJokes: 5,
-  latestNote: null, ...over,
+  ...over,
 });
 const mk = (over: Partial<MarketingStepInput> = {}): MarketingStepInput => ({
   now: NOW, roundActive: true, classOver: false, storageFeePerJokeMinute: 0.05, deskBatchSentAt: null, deskEmpty: false,
@@ -20,7 +20,7 @@ const mk = (over: Partial<MarketingStepInput> = {}): MarketingStepInput => ({
 
 describe('Joke Maker next step', () => {
   it('rule 1: the round has not started', () => {
-    expect(jokeMakerNextStep(jm({ roundActive: false, latestNote: { text: 'More puns', notedAt: NOW } })))
+    expect(jokeMakerNextStep(jm({ roundActive: false })))
       .toEqual({ text: 'Get your AI tool ready — the round starts soon.', tone: 'info' });
   });
 
@@ -29,40 +29,18 @@ describe('Joke Maker next step', () => {
       .toEqual({ text: 'Round over — join the debrief.', tone: 'info' });
   });
 
-  it('rule 2: quotes Marketing\'s note on the latest processed batch for 2 minutes after it was sent', () => {
-    const note = (ago: number) => jm({ latestNote: { text: 'Shorter setups, more puns.', notedAt: NOW - s(ago) } });
-    expect(jokeMakerNextStep(note(119))).toEqual({
-      text: 'Marketing says: “Shorter setups, more puns.” — use it in your next batch.', tone: 'info',
-    });
-    expect(jokeMakerNextStep(note(120)).text).toContain('Marketing says');
-    expect(jokeMakerNextStep(note(121)).text).not.toContain('Marketing says');
-  });
-
-  it('rule 2: a batch that waited on the desk still shows its note, timed from when it was processed', () => {
+  it('Marketing\'s note never reaches the Next step line: students find it inside the batch', () => {
     const batches = [
-      batch(1, { status: 'PROCESSED', submittedAt: NOW - s(300), ratedAt: NOW - s(30), jokes: [joke(1, true)], marketing_note: 'Go shorter' }),
+      batch(1, { status: 'PROCESSED', submittedAt: NOW - s(60), ratedAt: NOW - s(5), jokes: [joke(1, true)], marketing_note: 'Go shorter' }),
     ];
     const input = jokeMakerInputFrom({ now: NOW, roundActive: true, round: 1, teamSummary: { unprocessed_batches: 1 }, batches });
-    expect(input.latestNote).toEqual({ text: 'Go shorter', notedAt: NOW - s(30) });
-    expect(jokeMakerNextStep(input).text).toContain('Marketing says: “Go shorter”');
-    const noRated = batch(2, { status: 'PROCESSED', submittedAt: NOW - s(30), jokes: [joke(1, true)], marketing_note: 'Hi' });
-    expect(jokeMakerInputFrom({ now: NOW, roundActive: true, round: 1, teamSummary: null, batches: [noRated] }).latestNote)
-      .toEqual({ text: 'Hi', notedAt: NOW - s(30) });
+    expect(input).not.toHaveProperty('latestNote');
+    const step = jokeMakerNextStep(input);
+    expect(step.text).not.toContain('Go shorter');
+    expect(step.text).not.toContain('Marketing says');
+    expect(step).toEqual({ text: 'Keep writing — every batch is another chance to sell.', tone: 'info' });
   });
 
-  it('rule 2: cuts a long note at 80 characters and keeps it on one line', () => {
-    const long = `${'a'.repeat(79)}bc and more`;
-    expect(quoteNote(long)).toBe(`${'a'.repeat(79)}b…`);
-    expect(quoteNote('x'.repeat(80))).toBe('x'.repeat(80));
-    expect(quoteNote('Line one.\n\n  Line two.')).toBe('Line one. Line two.');
-    expect(quoteNote(`${'😀'.repeat(81)}`)).toBe(`${'😀'.repeat(80)}…`);
-    expect(jokeMakerNextStep(jm({ latestNote: { text: long, notedAt: NOW } })).text)
-      .toBe(`Marketing says: “${'a'.repeat(79)}b…” — use it in your next batch.`);
-  });
-
-  it('rule 2: a blank note says nothing', () => {
-    expect(jokeMakerNextStep(jm({ latestNote: { text: '   ', notedAt: NOW } })).text).not.toContain('Marketing says');
-  });
 
   it('rule 3: Round 2, a last batch of 6 or more jokes', () => {
     expect(jokeMakerNextStep(jm({ roundNumber: 2, lastBatchJokes: 6 }))).toEqual({
@@ -97,13 +75,12 @@ describe('Joke Maker next step', () => {
 
   it('the first matching rule wins', () => {
     const all = jm({
-      roundNumber: 2, latestNote: { text: 'Go short', notedAt: NOW - s(5) }, lastBatchJokes: 10,
+      roundNumber: 2, lastBatchJokes: 10,
       marketingBacklog: 0, lastSentAt: NOW - s(200),
     });
-    expect(jokeMakerNextStep(all).text).toContain('Marketing says');
-    expect(jokeMakerNextStep({ ...all, latestNote: null }).text).toContain('Big batches');
-    expect(jokeMakerNextStep({ ...all, latestNote: null, lastBatchJokes: 3 }).text).toContain('desk is empty');
-    expect(jokeMakerNextStep({ ...all, latestNote: null, lastBatchJokes: 3, marketingBacklog: 2 }).text).toContain('No batch sent');
+    expect(jokeMakerNextStep(all).text).toContain('Big batches');
+    expect(jokeMakerNextStep({ ...all, lastBatchJokes: 3 }).text).toContain('desk is empty');
+    expect(jokeMakerNextStep({ ...all, lastBatchJokes: 3, marketingBacklog: 2 }).text).toContain('No batch sent');
   });
 });
 
@@ -125,7 +102,23 @@ describe('Marketing next step', () => {
     });
     expect(marketingNextStep(mk({ deskBatchSentAt: NOW - s(44) })).tone).toBe('info');
     expect(marketingNextStep(mk({ deskBatchSentAt: NOW - s(130.9), storageFeePerJokeMinute: 0.25 })).text)
-      .toBe("Batch waiting 130 s — release what's good enough. Storage costs 25¢ a joke each minute.");
+      .toBe("Batch waiting 2 min 10 s — release what's good enough. Storage costs 25¢ a joke each minute.");
+  });
+
+  it('rule 2: the wait reads in minutes from 60 s, whole minutes from 10 min', () => {
+    const waiting = (secs: number) => marketingNextStep(mk({ deskBatchSentAt: NOW - s(secs) })).text;
+    expect(waiting(59)).toContain('Batch waiting 59 s —');
+    expect(waiting(60)).toContain('Batch waiting 1 min —');
+    expect(waiting(120)).toContain('Batch waiting 2 min —');
+    expect(waiting(72)).toContain('Batch waiting 1 min 12 s —');
+    expect(waiting(599)).toContain('Batch waiting 9 min 59 s —');
+    expect(waiting(600)).toContain('Batch waiting 10 min —');
+    expect(waiting(3391)).toContain('Batch waiting 56 min —');
+  });
+
+  it('rule 2: no storage clause when storage is free (CLASSIC)', () => {
+    expect(marketingNextStep(mk({ deskBatchSentAt: NOW - s(45), storageFeePerJokeMinute: 0 })).text)
+      .toBe("Batch waiting 45 s — release what's good enough.");
   });
 
   it('rule 3: the last decision discarded 60 % or more of a batch', () => {
@@ -158,7 +151,7 @@ describe('Marketing next step', () => {
 
   it('the first matching rule wins', () => {
     const all = mk({ deskBatchSentAt: NOW - s(60), lastDecision: { published: 1, discarded: 4 }, topFixNext: 'Topic', deskEmpty: true });
-    expect(marketingNextStep(all).text).toContain('Batch waiting 60 s');
+    expect(marketingNextStep(all).text).toContain('Batch waiting 1 min —');
     expect(marketingNextStep({ ...all, deskBatchSentAt: NOW - s(10) }).text).toContain('You discarded 4 of 5');
     expect(marketingNextStep({ ...all, deskBatchSentAt: null, lastDecision: null }).text).toContain('fix Topic next');
     expect(marketingNextStep({ ...all, deskBatchSentAt: null, lastDecision: null, topFixNext: null }).text).toContain('Desk is clear');
@@ -184,21 +177,19 @@ describe('inputs from the screens\' data', () => {
     const input = jokeMakerInputFrom({ now: NOW, roundActive: true, round: 2, teamSummary: { unprocessed_batches: 1 }, batches });
     expect(input).toEqual({
       now: NOW, roundActive: true, classOver: false, roundNumber: 2, marketingBacklog: 1, lastSentAt: NOW - s(20), lastBatchJokes: null,
-      latestNote: { text: 'Go shorter', notedAt: NOW - s(40) },
     });
   });
 
-  it('the Joke Maker sees no note when the latest processed batch has none, and no backlog before the summary loads', () => {
+  it('no backlog before the summary loads; the last batch size comes from the latest sent batch', () => {
     const batches = [
       batch(1, { status: 'PROCESSED', submittedAt: NOW - s(100), ratedAt: NOW - s(90), jokes: [joke(1)], marketing_note: 'Go shorter' }),
       batch(2, { status: 'PROCESSED', submittedAt: NOW - s(50), ratedAt: NOW - s(30), jokes: [joke(2), joke(3)], marketing_note: null }),
     ];
     const input = jokeMakerInputFrom({ now: NOW, roundActive: true, round: 1, teamSummary: null, batches });
-    expect(input.latestNote).toBeNull();
     expect(input.marketingBacklog).toBeNull();
     expect(input.lastBatchJokes).toBe(2);
     expect(jokeMakerInputFrom({ now: NOW, roundActive: true, round: 1, teamSummary: null, batches: [] }))
-      .toMatchObject({ lastSentAt: null, lastBatchJokes: null, latestNote: null });
+      .toMatchObject({ lastSentAt: null, lastBatchJokes: null });
   });
 
   it('Marketing reads the desk, the last decision and the top Fix next item', () => {

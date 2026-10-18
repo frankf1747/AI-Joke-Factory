@@ -27,10 +27,10 @@ describe('NextStepLine', () => {
 
   it('shows text as text, never as markup', () => {
     const out = renderToStaticMarkup(createElement(NextStepLine, {
-      step: { text: 'Marketing says: “<b>hi</b>” — use it in your next batch.', tone: 'info' },
+      step: { text: 'Keep <b>writing</b> — every batch is another chance to sell.', tone: 'info' },
     }));
-    expect(out).not.toContain('<b>hi</b>');
-    expect(out).toContain('&lt;b&gt;hi&lt;/b&gt;');
+    expect(out).not.toContain('<b>writing</b>');
+    expect(out).toContain('&lt;b&gt;writing&lt;/b&gt;');
   });
 });
 
