@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { CustomerFeedbackCardView, WhatCustomersJudge } from './CustomerFeedbackCard';
 import { DIMENSIONS } from '../config/dimensions';
 import type { FeedbackRow } from '../views/feedback';
+import type { Batch } from '../types';
 
 const ROWS: FeedbackRow[] = [{
   joke_id: 9101, joke_title: 'Corporate Comedy', was_bought: true,
@@ -13,9 +14,17 @@ const ROWS: FeedbackRow[] = [{
   good: [{ id: 'CLARITY', label: 'Clarity' }], improve: [{ id: 'ENERGY', label: 'Energy' }],
 }];
 
+const BATCHES = [{
+  batch_id: 5002, round_id: 1, team_id: 1, status: 'PROCESSED', id: '5002',
+  jokes: [
+    { joke_id: 9100, joke_text: 'A standup that sprawls.', id: '9100', content: '', sold_count: 0 },
+    { joke_id: 9101, joke_text: 'Synergy, but funny.', id: '9101', content: '', sold_count: 2 },
+  ],
+}] as unknown as Batch[];
+
 const render = (props: Partial<Parameters<typeof CustomerFeedbackCardView>[0]> = {}) =>
   renderToStaticMarkup(createElement(CustomerFeedbackCardView, {
-    rows: ROWS, canPopOut: true, popped: false, onPopOut: () => {}, onBringBack: () => {}, ...props,
+    rows: ROWS, batches: BATCHES, canPopOut: true, popped: false, onPopOut: () => {}, onBringBack: () => {}, ...props,
   }));
 
 describe('CustomerFeedbackCardView', () => {
@@ -77,16 +86,30 @@ describe('CustomerFeedbackCardView', () => {
     }
   });
 
-  it('while popped out, the card says so with exactly one Bring back; the window leads with the pattern', () => {
+  it('while popped out, the card says so with exactly one Bring back; the window shows the matrix and its key', () => {
     const out = render({ popped: true });
     expect(out).toContain('Showing in the floating window');
     expect(out.split('Bring back')).toHaveLength(2);
     expect(out).not.toContain('data-tour="mk-expand"');
-    expect(out).toContain('Keep doing');
-    expect(out).toContain('Fix next');
     // No Document PiP under node, so the floating copy is the in-page panel.
     expect(out).toContain('role="dialog"');
-    expect(out.split('Corporate Comedy')).toHaveLength(2);
+    expect(out).toContain('What customers keep telling you');
+    expect(out).toContain('Keep doing');
+    expect(out).toContain('Fix next');
+    // Joined to the batch list: the column header and the key carry the joke's batch, position and text.
+    expect(out).toContain('B-5002 #2');
+    expect(out).toContain('B-5002, joke #2');
+    expect(out).toContain('Synergy, but funny.');
+    expect(out).toContain('2 buyers');
+    // The card's own list is not in the window any more.
+    expect(out).not.toContain('Landed</span>');
+  });
+
+  it('the window says there is no feedback yet when there is none', () => {
+    const out = render({ rows: [], popped: true });
+    expect(out).toContain('role="dialog"');
+    expect(out).not.toContain('What customers keep telling you');
+    expect(out.split('No feedback yet. Release jokes to start uncovering the target.')).toHaveLength(2);
   });
 
   it('shows the empty state when there is no feedback yet', () => {

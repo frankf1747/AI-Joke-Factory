@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
-  POP_OUT_HEIGHT, POP_OUT_WIDTH, PopOutPanel, onPopOutClosed, preparePopOutWindow, requestPopOutWindow,
+  POP_OUT_HEIGHT, POP_OUT_WIDTH, PopOutPanel, clampPanelPosition, onPopOutClosed, preparePopOutWindow, requestPopOutWindow,
   supportsDocumentPiP, tailwindCdnSrc,
 } from './PopOutPanel';
 
@@ -25,12 +25,13 @@ describe('supportsDocumentPiP', () => {
 });
 
 describe('requestPopOutWindow', () => {
-  it('asks for a 360 × 520 window and titles it', async () => {
+  it('asks for an 840 × 820 window and titles it', async () => {
     const pip = fakePipWindow();
     const requestWindow = vi.fn(async () => pip);
     const got = await requestPopOutWindow({ documentPictureInPicture: { requestWindow } }, 'Customer feedback');
-    expect(requestWindow).toHaveBeenCalledWith({ width: 360, height: 520 });
-    expect([POP_OUT_WIDTH, POP_OUT_HEIGHT]).toEqual([360, 520]);
+    expect(requestWindow).toHaveBeenCalledWith({ width: 840, height: 820 });
+    expect(POP_OUT_WIDTH).toBe(840);
+    expect(POP_OUT_HEIGHT).toBe(820);
     expect(got).toBe(pip);
     expect(got!.document.title).toBe('Customer feedback');
   });
@@ -97,15 +98,32 @@ describe('PopOutPanel', () => {
   it('renders nothing while closed', () => {
     expect(renderToStaticMarkup(createElement(PopOutPanel, { title: 'Customer feedback', open: false, onClose: () => {} }, 'rows'))).toBe('');
   });
-  it('without Document PiP, opens as the in-page panel: header, close button, 360 px wide, at most 70 % high', () => {
+  it('without Document PiP, opens as the in-page panel: header, close button, 840 × 820 within the viewport, bottom-right', () => {
     const out = renderToStaticMarkup(createElement(PopOutPanel, { title: 'Customer feedback', open: true, onClose: () => {} }, 'the rows'));
     expect(out).toContain('role="dialog"');
     expect(out).toContain('aria-label="Customer feedback"');
     expect(out).toContain('aria-label="Close Customer feedback"');
-    expect(out).toContain('width:360px');
-    expect(out).toContain('max-height:70vh');
-    expect(out).toContain('fixed bottom-4 right-4');
+    expect(out).toContain('width:min(840px, 100vw - 48px)');
+    expect(out).toContain('height:min(820px, 100vh - 48px)');
+    expect(out).not.toContain('70vh');
+    expect(out).toContain('right:24px;bottom:24px');
+    expect(out).toContain('title="Drag to move"');
     expect(out).toContain('overflow-y-auto');
     expect(out).toContain('the rows');
+  });
+});
+
+describe('clampPanelPosition', () => {
+  const size = { width: 840, height: 820 };
+  const viewport = { width: 1440, height: 900 };
+  it('leaves a position that keeps the panel on screen', () => {
+    expect(clampPanelPosition({ x: 100, y: 40 }, size, viewport)).toEqual({ x: 100, y: 40 });
+  });
+  it('pulls the panel back fully on screen from every edge', () => {
+    expect(clampPanelPosition({ x: -50, y: -10 }, size, viewport)).toEqual({ x: 0, y: 0 });
+    expect(clampPanelPosition({ x: 900, y: 300 }, size, viewport)).toEqual({ x: 600, y: 80 });
+  });
+  it('pins the panel to the top-left when the viewport is smaller than it', () => {
+    expect(clampPanelPosition({ x: 30, y: 30 }, size, { width: 600, height: 500 })).toEqual({ x: 0, y: 0 });
   });
 });

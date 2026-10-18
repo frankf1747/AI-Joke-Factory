@@ -557,7 +557,7 @@ const QualityControl: React.FC = () => {
           </div>
 
           {/* Pop out floats this list above the game; never offered in a watch tab. */}
-          <CustomerFeedbackCard rows={feedbackRows} canPopOut={!watching} />
+          <CustomerFeedbackCard rows={feedbackRows} batches={teamBatches} canPopOut={!watching} />
           <WhatCustomersJudge />
         </div>
       </div>

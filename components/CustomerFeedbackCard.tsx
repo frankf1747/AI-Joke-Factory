@@ -3,8 +3,9 @@
 
    Pop out floats the live feedback above the game (components/PopOutPanel.tsx):
    a Document Picture-in-Picture window in Chrome and Edge, a panel pinned to the
-   bottom-right of the page elsewhere. The floating copy leads with the pattern
-   across the recent jokes (Keep doing / Fix next), then the jokes. While it is
+   bottom-right of the page elsewhere (it can be dragged). The floating copy is
+   the criteria × jokes matrix with its joke key (components/FeedbackMatrix.tsx);
+   the batch list supplies each joke's batch, position and text. While it is
    out, the card stays in place and says "Showing in the floating window", with
    a single "Bring back" to close it.
 
@@ -12,11 +13,12 @@
    screen only, so a watch tab gets the plain card. */
 import React, { useState } from 'react';
 import { SquareArrowOutUpRight } from 'lucide-react';
-import { summarizeFeedback, type SummaryItem } from '../services/feedbackSummary';
 import { Card } from './ui';
 import { DIMENSIONS } from '../config/dimensions';
 import { FeedbackCard } from './FeedbackCard';
 import { PopOutPanel } from './PopOutPanel';
+import { FeedbackMatrixLive } from './FeedbackMatrix';
+import type { Batch } from '../types';
 import type { FeedbackRow } from '../views/feedback';
 
 export const CUSTOMER_FEEDBACK_TITLE = 'Customer feedback';
@@ -32,46 +34,13 @@ export const FeedbackList: React.FC<{ rows: FeedbackRow[] }> = ({ rows }) =>
     </div>
   );
 
-const SummaryRow: React.FC<{ label: string; items: SummaryItem[]; tone: 'keep' | 'fix' }> = ({ label, items, tone }) => (
-  <div className="flex items-start gap-2">
-    <span className="w-20 shrink-0 pt-0.5 text-[13px] font-semibold text-gray-700">{label}</span>
-    <div className="flex flex-wrap gap-1.5">
-      {items.length === 0 ? (
-        <span className="text-[13px] text-gray-400">—</span>
-      ) : items.map(i => (
-        <span
-          key={i.id}
-          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-            tone === 'keep' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'
-          }`}
-        >
-          {i.label} ×{i.count}
-        </span>
-      ))}
-    </div>
-  </div>
-);
-
-/** The pattern across the shown jokes: what to keep doing, what to fix next. */
-export const FeedbackSummaryBlock: React.FC<{ rows: FeedbackRow[] }> = ({ rows }) => {
-  const s = summarizeFeedback(rows);
-  if (s.keep.length === 0 && s.fix.length === 0) return null;
-  return (
-    <div className="mb-3 space-y-2 rounded-lg bg-slate-50 p-3">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-        What customers keep telling you
-      </p>
-      <SummaryRow label="Keep doing" items={s.keep} tone="keep" />
-      <SummaryRow label="Fix next" items={s.fix} tone="fix" />
-    </div>
-  );
-};
-
 const feedbackSubtitle = (n: number) =>
   `Your latest ${n} released ${n === 1 ? 'joke' : 'jokes'}. Customers say what landed and what missed, never by how much.`;
 
 export interface CustomerFeedbackCardViewProps {
   rows: FeedbackRow[];
+  /** This team's batches, for the pop-out's joke key. */
+  batches: Batch[];
   canPopOut: boolean;
   popped: boolean;
   onPopOut: () => void;
@@ -80,7 +49,7 @@ export interface CustomerFeedbackCardViewProps {
 
 /** Stateless, so tests can render both states. */
 export const CustomerFeedbackCardView: React.FC<CustomerFeedbackCardViewProps> = ({
-  rows, canPopOut, popped, onPopOut, onBringBack,
+  rows, batches, canPopOut, popped, onPopOut, onBringBack,
 }) => {
   const out = canPopOut && popped;
   return (
@@ -125,8 +94,7 @@ export const CustomerFeedbackCardView: React.FC<CustomerFeedbackCardViewProps> =
       {canPopOut && (
         <PopOutPanel title={CUSTOMER_FEEDBACK_TITLE} open={out} onClose={onBringBack}>
           <div className="p-1">
-            <FeedbackSummaryBlock rows={rows} />
-            <FeedbackList rows={rows} />
+            {rows.length === 0 ? <FeedbackList rows={rows} /> : <FeedbackMatrixLive rows={rows} batches={batches} />}
           </div>
         </PopOutPanel>
       )}
@@ -157,11 +125,14 @@ export const WhatCustomersJudge: React.FC = () => (
   </Card>
 );
 
-export const CustomerFeedbackCard: React.FC<{ rows: FeedbackRow[]; canPopOut: boolean }> = ({ rows, canPopOut }) => {
+export const CustomerFeedbackCard: React.FC<{ rows: FeedbackRow[]; batches: Batch[]; canPopOut: boolean }> = ({
+  rows, batches, canPopOut,
+}) => {
   const [popped, setPopped] = useState(false);
   return (
     <CustomerFeedbackCardView
       rows={rows}
+      batches={batches}
       canPopOut={canPopOut}
       popped={popped}
       onPopOut={() => setPopped(true)}

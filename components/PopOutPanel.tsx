@@ -6,7 +6,9 @@
    into its body through a React portal, so the content stays live from the same
    state. Everywhere else — and whenever requestWindow rejects, for example
    because the click was not a user gesture — it shows PopOutFallbackPanel, a
-   panel fixed to the bottom-right of the page.
+   panel of the same size (shrunk to fit the viewport) that opens at the
+   bottom-right of the page and can be dragged by its title bar; it is kept
+   fully on screen while dragged and when the page is resized.
 
    Styling the PiP window. The app styles itself with the Tailwind Play CDN,
    which generates a <style> tag in the page's <head> from the classes it sees in
@@ -29,8 +31,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
-export const POP_OUT_WIDTH = 360;
-export const POP_OUT_HEIGHT = 520;
+export const POP_OUT_WIDTH = 840;
+export const POP_OUT_HEIGHT = 820;
 
 /** The slice of the Document Picture-in-Picture API this file uses (not in TS's DOM lib yet). */
 interface DocumentPictureInPictureApi {
@@ -159,30 +161,95 @@ export interface PopOutPanelProps {
   children: React.ReactNode;
 }
 
-/** The in-page fallback: fixed bottom-right, 360 px wide, at most 70 % of the viewport high. */
+type Point = { x: number; y: number };
+type Size = { width: number; height: number };
+
+/** The top-left corner that keeps a `size` panel fully inside `viewport`, as near to `pos` as it can. */
+export function clampPanelPosition(pos: Point, size: Size, viewport: Size): Point {
+  const clamp = (v: number, max: number) => Math.min(Math.max(v, 0), Math.max(0, max));
+  return { x: clamp(pos.x, viewport.width - size.width), y: clamp(pos.y, viewport.height - size.height) };
+}
+
+const EDGE = 24;
+
+/** The in-page fallback: POP_OUT_WIDTH × POP_OUT_HEIGHT within the viewport, opening
+    bottom-right; dragged by its title bar and always kept fully on screen. */
 export const PopOutFallbackPanel: React.FC<{ title: string; onClose: () => void; children: React.ReactNode }> = ({
   title, onClose, children,
-}) => (
-  <div
-    role="dialog"
-    aria-label={title}
-    className="fixed bottom-4 right-4 z-40 flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl"
-    style={{ width: POP_OUT_WIDTH, maxWidth: 'calc(100vw - 2rem)', maxHeight: '70vh' }}
-  >
-    <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-3 py-2">
-      <span className="text-sm font-semibold text-gray-800">{title}</span>
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label={`Close ${title}`}
-        className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+}) => {
+  const panelRef = useRef<HTMLDivElement>(null);
+  // null: still at its opening place, bottom-right. Then the dragged top-left corner.
+  const [pos, setPos] = useState<Point | null>(null);
+  const drag = useRef<{ pointerId: number; dx: number; dy: number } | null>(null);
+
+  const clampToView = (p: Point): Point => {
+    const panel = panelRef.current;
+    if (!panel) return p;
+    return clampPanelPosition(p, { width: panel.offsetWidth, height: panel.offsetHeight },
+      { width: window.innerWidth, height: window.innerHeight });
+  };
+
+  useEffect(() => {
+    const onResize = () => setPos(p => (p ? clampToView(p) : p));
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const panel = panelRef.current;
+    if (e.button !== 0 || !panel || (e.target as Element).closest('button')) return;
+    const r = panel.getBoundingClientRect();
+    drag.current = { pointerId: e.pointerId, dx: e.clientX - r.left, dy: e.clientY - r.top };
+    e.currentTarget.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  };
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    if (!d || d.pointerId !== e.pointerId) return;
+    setPos(clampToView({ x: e.clientX - d.dx, y: e.clientY - d.dy }));
+  };
+  const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (drag.current?.pointerId === e.pointerId) drag.current = null;
+  };
+
+  return (
+    <div
+      ref={panelRef}
+      role="dialog"
+      aria-label={title}
+      className="fixed z-40 flex flex-col overflow-hidden rounded-xl shadow-2xl"
+      style={{
+        width: `min(${POP_OUT_WIDTH}px, 100vw - ${2 * EDGE}px)`,
+        height: `min(${POP_OUT_HEIGHT}px, 100vh - ${2 * EDGE}px)`,
+        ...(pos ? { left: pos.x, top: pos.y } : { right: EDGE, bottom: EDGE }),
+        background: 'var(--sheet)',
+        border: '1px solid var(--rule)',
+      }}
+    >
+      <div
+        title="Drag to move"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        className="flex shrink-0 cursor-grab touch-none select-none items-center justify-between py-1 pl-3 pr-1.5 active:cursor-grabbing"
+        style={{ background: 'var(--paper-2)' }}
       >
-        <X size={16} />
-      </button>
+        <span className="text-[12.5px] font-medium" style={{ color: 'var(--ink-2)' }}>{title}</span>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={`Close ${title}`}
+          className="rounded p-1 hover:bg-[color:var(--rule)]"
+          style={{ color: 'var(--ink-3)' }}
+        >
+          <X size={16} />
+        </button>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto p-3.5">{children}</div>
     </div>
-    <div className="min-h-0 flex-1 overflow-y-auto p-3">{children}</div>
-  </div>
-);
+  );
+};
 
 type Mode = { kind: 'closed' } | { kind: 'pending' } | { kind: 'pip'; win: Window } | { kind: 'panel' };
 
