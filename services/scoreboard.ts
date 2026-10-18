@@ -48,6 +48,17 @@ export function nextRankState(state: RankState, input: { rank: number | null; ro
 }
 
 /**
+ * The reducer's input for a team summary. Rank and round come from the same
+ * object so they always change together: config.round flips before the new
+ * round's summary arrives and would pair a new round with the old rank.
+ */
+export function rankInputOf(
+  summary: { rank: number; round_id: number } | null | undefined,
+): { rank: number | null; round: number | null } {
+  return { rank: summary?.rank ?? null, round: summary?.round_id ?? null };
+}
+
+/**
  * Jokes that found a buyer: PUBLISHED with first_sold_at set. A joke whose
  * buyer swapped it out (sold_count back to 0) still counts. This is not the
  * summary's sold_jokes_count, which is LEAST(published_jokes, total_sales).

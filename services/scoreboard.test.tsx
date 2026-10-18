@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { INITIAL_RANK_STATE, foundABuyer, formatProfit, nextRankState, rankMovement, type RankState } from './scoreboard';
+import { INITIAL_RANK_STATE, foundABuyer, formatProfit, nextRankState, rankInputOf, rankMovement, type RankState } from './scoreboard';
 import { Scoreboard } from '../components/Scoreboard';
 import type { Batch, Joke } from '../types';
 
@@ -100,6 +100,25 @@ describe('nextRankState', () => {
   it('is idempotent for repeated identical input', () => {
     const [a, b] = run([[2, 1], [2, 1]]);
     expect(b).toEqual(a);
+  });
+});
+
+describe('rankInputOf and the round change', () => {
+  const sum = (round_id: number, rank: number) => ({ round_id, rank });
+  it('reads rank and round from the same summary; none without one', () => {
+    expect(rankInputOf(sum(2, 5))).toEqual({ rank: 5, round: 2 });
+    expect(rankInputOf(null)).toEqual({ rank: null, round: null });
+    expect(rankInputOf(undefined)).toEqual({ rank: null, round: null });
+  });
+  it('the summaries the views pass: up 1, then no change in Round 2, then up 1', () => {
+    let st = INITIAL_RANK_STATE;
+    const step = (s: ReturnType<typeof sum> | null) => (st = nextRankState(st, rankInputOf(s))).move;
+    expect(step(sum(1, 3))).toEqual({ kind: 'same', by: 0 });
+    expect(step(sum(1, 2))).toEqual({ kind: 'up', by: 1 });
+    // Round 2 is configured but its summary has not arrived: the Round 1 summary is still the latest.
+    expect(step(sum(1, 2))).toEqual({ kind: 'up', by: 1 });
+    expect(step(sum(2, 5))).toEqual({ kind: 'same', by: 0 });
+    expect(step(sum(2, 4))).toEqual({ kind: 'up', by: 1 });
   });
 });
 

@@ -12,7 +12,7 @@ import { shippingLine } from '../services/leanMode';
 import { MarketingNoteCallout, MarketingNoteIcon, marketingNoteOf } from '../components/MarketingNote';
 import { StatTiles, moreTilesKey } from '../components/StatTiles';
 import { Scoreboard } from '../components/Scoreboard';
-import { foundABuyer } from '../services/scoreboard';
+import { foundABuyer, rankInputOf } from '../services/scoreboard';
 import { NextStepLive } from '../components/NextStep';
 import { jokeMakerInputFrom, jokeMakerNextStep } from '../services/nextStep';
 
@@ -372,8 +372,7 @@ const JokeMaker: React.FC = () => {
           <div className="space-y-2">
             <Scoreboard
               tourId="jm-stats"
-              rank={teamSummary?.rank ?? null}
-              round={config.round}
+              {...rankInputOf(teamSummary)}
               profit={teamSummary?.profit}
               totalSales={teamSummary ? teamSummary.total_sales : null}
               publishedJokes={teamSummary ? teamSummary.published_jokes : null}

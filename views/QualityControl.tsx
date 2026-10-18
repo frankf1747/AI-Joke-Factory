@@ -25,7 +25,7 @@ import { MARKETING_NOTE_MAX } from '../services/marketingService';
 import { releaseOutcome } from './marketingRelease';
 import { StatTiles, moreTilesKey } from '../components/StatTiles';
 import { Scoreboard } from '../components/Scoreboard';
-import { foundABuyer } from '../services/scoreboard';
+import { foundABuyer, rankInputOf } from '../services/scoreboard';
 import { NextStepLive } from '../components/NextStep';
 import { marketingInputFrom, marketingNextStep } from '../services/nextStep';
 
@@ -813,8 +813,7 @@ const QualityControl: React.FC = () => {
           <div className="space-y-2">
             <Scoreboard
               tourId="mk-stats"
-              rank={teamSummary?.rank ?? null}
-              round={config.round}
+              {...rankInputOf(teamSummary)}
               profit={teamSummary?.profit}
               totalSales={teamSummary ? teamSummary.total_sales : null}
               publishedJokes={teamSummary ? teamSummary.published_jokes : null}
