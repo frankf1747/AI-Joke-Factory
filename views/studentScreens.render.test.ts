@@ -69,6 +69,7 @@ describe('Header', () => {
     expect(out).toMatch(/\d\d:\d\d/);
     expect(out).toContain('elapsed');
     expect(out).toContain('Priya and Tomás');
+    expect(out).toContain('title="Priya and Tomás"');
     expect(out).toContain('Team 3, Joke Maker');
     expect(out).toContain('aria-label="Replay the 1-minute tour"');
     expect(out).not.toContain('New here? Watch');

@@ -47,7 +47,9 @@ export const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: stri
 export const TUTORIAL_SEEN_PREFIX = 'jf_tutorial_seen_v1:';
 
 /** The first-time prompt, a quiet text button beside the "?" (spec 4.1). */
-export const TOUR_PROMPT_TEXT = 'Take the 1-minute tour';
+export const TOUR_PROMPT_TEXT = 'Take the tour';
+/** Its accessible name and tooltip: the full phrase. */
+export const TOUR_PROMPT_LABEL = 'Take the 1-minute tour';
 /** The students' "?" button. */
 export const TOUR_REPLAY_LABEL = 'Replay the 1-minute tour';
 
@@ -132,10 +134,12 @@ const TutorialLauncher: React.FC<{ role: Role; tourView?: React.ComponentType }>
   return (
     <>
       {phase === 'prompt' && (
-        <span role="status" className="flex items-center">
+        <span role="status" className="flex shrink-0 items-center">
           <button
             onClick={() => setPhase('tour')}
-            className="text-sm font-medium text-[color:var(--navy)] hover:underline underline-offset-2"
+            className="whitespace-nowrap text-sm font-medium text-[color:var(--navy)] hover:underline underline-offset-2"
+            title={TOUR_PROMPT_LABEL}
+            aria-label={TOUR_PROMPT_LABEL}
           >
             {TOUR_PROMPT_TEXT}
           </button>
@@ -217,7 +221,7 @@ function useHeaderRound(): HeaderRound {
 const Andon: React.FC<{ h: HeaderRound }> = ({ h }) => {
   const { word, color } = ANDON[h.state];
   return (
-    <div className="flex items-center gap-3" data-header-state={h.state}>
+    <div className="flex shrink-0 items-center gap-3 whitespace-nowrap" data-header-state={h.state}>
       <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0" style={{ background: color }} />
       <span className="text-sm font-semibold" style={{ color }}>{word}</span>
       <span className="text-sm text-[color:var(--ink-2)]">Round {h.round}</span>
@@ -255,21 +259,27 @@ export const RoleLayout: React.FC<{
         style={{ background: 'var(--sheet)', borderColor: 'var(--rule)' }}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-          <div className="flex flex-col min-w-0 flex-1 basis-0">
+          {/* Width budget at 1280 px (1216 px inside the padding): the andon is about 300 px and never
+              wraps; the rest splits 2 : 3 so the right side, which carries the most, gets about 530 px.
+              Right side: logo about 130 + prompt about 80 + x 32 + ? 32 + sign out 32 + gaps leaves
+              about 150 px (20 characters) for the pair names, which truncate with a tooltip. */}
+          <div className="flex flex-col min-w-0" style={{ flex: '1 1 0' }}>
             <span className="font-semibold text-base leading-tight text-[color:var(--ink)]">The Joke Factory</span>
             <span className="text-xs truncate text-[color:var(--ink-3)]">{subtitle}</span>
           </div>
 
           <Andon h={round} />
 
-          <div className="flex items-center justify-end gap-3 min-w-0 flex-1 basis-0">
+          <div className="flex items-center justify-end gap-2 min-w-0" style={{ flex: '1.5 1 0' }}>
             <img
               src="https://www.anderson.ucla.edu/themes/custom/ucla_anderson/logo.svg"
               alt="UCLA Anderson"
-              className="h-8 w-auto object-contain hidden md:block"
+              className="h-7 w-auto shrink-0 object-contain hidden lg:block mr-2"
             />
             {user.role !== Role.INSTRUCTOR && (
-              <span className="hidden sm:block text-sm truncate text-[color:var(--ink-2)]">{pairNames(user.display_name)}</span>
+              <span className="hidden sm:block min-w-0 truncate text-sm text-[color:var(--ink-2)]" title={pairNames(user.display_name)}>
+                {pairNames(user.display_name)}
+              </span>
             )}
             {!demoMode && <TutorialLauncher role={user.role} tourView={tourView} />}
             {/* A watch tab has no session of its own to end, and logging out would only strand it on a login screen. */}

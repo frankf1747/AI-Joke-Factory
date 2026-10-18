@@ -65,7 +65,7 @@ export interface LaunchInput {
   roundActive: boolean;
 }
 
-/** 'tour' auto-plays, 'prompt' shows the header's "Take the 1-minute tour" text button, 'none' does neither. */
+/** 'tour' auto-plays, 'prompt' shows the header's "Take the tour" text button, 'none' does neither. */
 export type LaunchMode = 'tour' | 'prompt' | 'none';
 
 export function launchMode({ role, watch, seen, roundActive }: LaunchInput): LaunchMode {
