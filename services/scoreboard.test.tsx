@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { foundABuyer, formatProfit, rankMovement } from './scoreboard';
+import { INITIAL_RANK_STATE, foundABuyer, formatProfit, nextRankState, rankMovement, type RankState } from './scoreboard';
 import { Scoreboard } from '../components/Scoreboard';
 import type { Batch, Joke } from '../types';
 
@@ -54,8 +54,54 @@ describe('formatProfit', () => {
 });
 
 const board = (over: Partial<React.ComponentProps<typeof Scoreboard>> = {}) => renderToStaticMarkup(
-  <Scoreboard rank={2} profit={4.5} totalSales={9} publishedJokes={6} foundBuyer={4} tourId="jm-stats" {...over} />,
+  <Scoreboard rank={2} round={1} profit={4.5} totalSales={9} publishedJokes={6} foundBuyer={4} tourId="jm-stats" {...over} />,
 );
+
+const run = (inputs: Array<[number | null, number | null]>): RankState[] => {
+  const out: RankState[] = [];
+  let st = INITIAL_RANK_STATE;
+  for (const [rank, round] of inputs) { st = nextRankState(st, { rank, round }); out.push(st); }
+  return out;
+};
+
+describe('nextRankState', () => {
+  it('3 to 2 is up 1, held on 2 again, then 4 is down 2', () => {
+    const [first, up, held, down] = run([[3, 1], [2, 1], [2, 1], [4, 1]]);
+    expect(first.move).toEqual({ kind: 'same', by: 0 });
+    expect(up.move).toEqual({ kind: 'up', by: 1 });
+    expect(held.move).toEqual({ kind: 'up', by: 1 });
+    expect(down.move).toEqual({ kind: 'down', by: 2 });
+  });
+  it('a round change resets to same, whatever the old tag', () => {
+    const [, , r2] = run([[3, 1], [5, 1], [2, 2]]);
+    expect(r2.move).toEqual({ kind: 'same', by: 0 });
+    expect(r2.prevRank).toBe(2);
+    const [, , , next] = run([[3, 1], [5, 1], [2, 2], [1, 2]]);
+    expect(next.move).toEqual({ kind: 'lead', by: 0 });
+  });
+  it('the first rank of a new round at 1 still leads', () => {
+    expect(run([[3, 1], [1, 2]])[1].move).toEqual({ kind: 'lead', by: 0 });
+  });
+  it('reaching rank 1 is lead, and holds while it stays 1', () => {
+    const [, lead, still] = run([[2, 1], [1, 1], [1, 1]]);
+    expect(lead.move).toEqual({ kind: 'lead', by: 0 });
+    expect(still.move).toEqual({ kind: 'lead', by: 0 });
+  });
+  it('a null rank shows none, keeps the previous rank, and the next rank compares to it', () => {
+    const [, gone, back, moved] = run([[3, 1], [null, 1], [3, 1], [2, 1]]);
+    expect(gone.move).toEqual({ kind: 'none', by: 0 });
+    expect(gone.prevRank).toBe(3);
+    expect(back.move).toEqual({ kind: 'same', by: 0 });
+    expect(moved.move).toEqual({ kind: 'up', by: 1 });
+  });
+  it('before any summary, with no round yet: none', () => {
+    expect(run([[null, null]])[0].move).toEqual({ kind: 'none', by: 0 });
+  });
+  it('is idempotent for repeated identical input', () => {
+    const [a, b] = run([[2, 1], [2, 1]]);
+    expect(b).toEqual(a);
+  });
+});
 
 describe('Scoreboard', () => {
   it('rank 1: the ordinal with its suffix, and In the lead', () => {
@@ -91,7 +137,7 @@ describe('Scoreboard', () => {
     expect(board({ tourId: 'mk-stats' })).toContain('data-tour="mk-stats"');
   });
   it('no summary: every value is a dash', () => {
-    const out = board({ rank: null, profit: null, totalSales: null, publishedJokes: null, foundBuyer: null });
+    const out = board({ rank: null, round: null, profit: null, totalSales: null, publishedJokes: null, foundBuyer: null });
     expect(out.match(/—/g)?.length).toBe(4);
     expect(out).not.toContain('no change');
     expect(out).not.toContain('In the lead');

@@ -19,6 +19,34 @@ export function rankMovement(prev: number | null, now: number | null): RankMovem
   return now < prev ? { kind: 'up', by: prev - now } : { kind: 'down', by: now - prev };
 }
 
+export interface RankState {
+  /** The rank from the last summary that carried one, within `round`. */
+  prevRank: number | null;
+  round: number | null;
+  /** The tag on show; an up or down tag is held until the rank changes again. */
+  move: RankMovement;
+}
+
+export const INITIAL_RANK_STATE: RankState = { prevRank: null, round: null, move: { kind: 'none', by: 0 } };
+
+/**
+ * One step of the movement tag. A new round clears the previous rank, so the
+ * first rank of a round reads "same" (or "lead" at 1); a rank that did not
+ * change holds the tag; a missing rank (no summary) shows none but keeps the
+ * previous rank for the next summary.
+ */
+export function nextRankState(state: RankState, input: { rank: number | null; round: number | null }): RankState {
+  const { rank, round } = input;
+  if (round !== state.round) {
+    return { prevRank: rank, round, move: rankMovement(null, rank) };
+  }
+  if (rank == null) return { ...state, move: { kind: 'none', by: 0 } };
+  if (rank === state.prevRank) {
+    return state.move.kind === 'none' ? { ...state, move: rankMovement(null, rank) } : state;
+  }
+  return { prevRank: rank, round, move: rankMovement(state.prevRank, rank) };
+}
+
 /**
  * Jokes that found a buyer: PUBLISHED with first_sold_at set. A joke whose
  * buyer swapped it out (sold_count back to 0) still counts. This is not the

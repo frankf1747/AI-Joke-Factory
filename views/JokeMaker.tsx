@@ -373,6 +373,7 @@ const JokeMaker: React.FC = () => {
             <Scoreboard
               tourId="jm-stats"
               rank={teamSummary?.rank ?? null}
+              round={config.round}
               profit={teamSummary?.profit}
               totalSales={teamSummary ? teamSummary.total_sales : null}
               publishedJokes={teamSummary ? teamSummary.published_jokes : null}

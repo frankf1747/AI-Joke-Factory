@@ -18,6 +18,7 @@ const tokens: Record<string, string> = {
   '--navy-tint': '#e8eef2',
   '--gold': '#ffd100',
   '--gold-2': '#f2c500',
+  '--gold-tint': '#ffeb99',
   '--selling': '#2e7d52',
   '--selling-bg': '#eaf2ec',
   '--waiting': '#8a6400',

@@ -40,6 +40,7 @@
   --navy-tint: #e8eef2;    /* selected and hover fills */
   --gold:    #ffd100;      /* primary button only */
   --gold-2:  #f2c500;
+  --gold-tint: #ffeb99;    /* "In the lead" tag */
   --selling: #2e7d52;      /* joke has sales, profit up */
   --selling-bg: #eaf2ec;
   --waiting: #8a6400;      /* released, no buyer yet */

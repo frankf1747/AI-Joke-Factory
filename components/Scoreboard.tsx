@@ -2,39 +2,32 @@
    a movement tag, profit, jokes that found a buyer, and sales. Imports nothing
    from the components barrel (it pulls in context). Values the round has not
    produced yet (no team summary) show "—". */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef } from 'react';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import { ordinal } from '../services/format';
-import { formatProfit, rankMovement, type RankMovement } from '../services/scoreboard';
+import { INITIAL_RANK_STATE, formatProfit, nextRankState, type RankMovement, type RankState } from '../services/scoreboard';
 
 const DASH = '—';
 
 const LABEL = 'text-[11px] font-medium text-[color:var(--ink-3)]';
 
 /**
- * The movement since the previous successful summary. `prev` lives in a ref
- * and moves only when a summary brings a rank, so the tag holds until the
- * rank changes again; a first rank, or one after a reload, reads "no change".
+ * The movement since the previous successful summary, from the pure
+ * nextRankState. The state lives in a ref and is advanced during render, so the
+ * tag is never one render stale; the step is idempotent for the same inputs,
+ * which keeps repeat renders safe.
  */
-function useRankMovement(rank: number | null): RankMovement {
-  const prev = useRef<number | null>(null);
-  const [movement, setMovement] = useState<RankMovement>(() => rankMovement(null, rank));
-  useEffect(() => {
-    if (rank == null) {
-      setMovement({ kind: 'none', by: 0 });
-      return;
-    }
-    if (rank !== prev.current) setMovement(rankMovement(prev.current, rank));
-    prev.current = rank;
-  }, [rank]);
-  return movement;
+function useRankMovement(rank: number | null, round: number | null): RankMovement {
+  const state = useRef<RankState>(INITIAL_RANK_STATE);
+  state.current = nextRankState(state.current, { rank, round });
+  return state.current.move;
 }
 
 const MovementTag: React.FC<{ movement: RankMovement }> = ({ movement }) => {
   const base = 'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold';
   switch (movement.kind) {
     case 'lead':
-      return <span className={base} style={{ background: '#ffeb99', color: 'var(--navy)' }}>In the lead</span>;
+      return <span className={base} style={{ background: 'var(--gold-tint)', color: 'var(--navy)' }}>In the lead</span>;
     case 'up':
       return (
         <span className={base} style={{ background: 'var(--selling-bg)', color: 'var(--selling)' }}>
@@ -56,6 +49,8 @@ const MovementTag: React.FC<{ movement: RankMovement }> = ({ movement }) => {
 
 export const Scoreboard: React.FC<{
   rank: number | null;
+  /** The round number; a new round clears the previous rank. */
+  round: number | null;
   profit: number | null | undefined;
   totalSales: number | null;
   publishedJokes: number | null;
@@ -63,8 +58,8 @@ export const Scoreboard: React.FC<{
   foundBuyer: number | null;
   /** data-tour id for the guided tour. */
   tourId: 'jm-stats' | 'mk-stats';
-}> = ({ rank, profit, totalSales, publishedJokes, foundBuyer, tourId }) => {
-  const movement = useRankMovement(rank);
+}> = ({ rank, round, profit, totalSales, publishedJokes, foundBuyer, tourId }) => {
+  const movement = useRankMovement(rank, round);
   const place = rank == null ? null : ordinal(rank);
   const loss = profit != null && profit < 0;
   return (

@@ -814,6 +814,7 @@ const QualityControl: React.FC = () => {
             <Scoreboard
               tourId="mk-stats"
               rank={teamSummary?.rank ?? null}
+              round={config.round}
               profit={teamSummary?.profit}
               totalSales={teamSummary ? teamSummary.total_sales : null}
               publishedJokes={teamSummary ? teamSummary.published_jokes : null}
