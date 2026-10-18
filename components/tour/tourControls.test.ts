@@ -18,13 +18,13 @@ describe('tourControls', () => {
     expect(tourControls({ ...INITIAL_TOUR_STATE, index: 2 }, STEPS, false).nextLabel).toBe('Start');
   });
 
-  it('turns Skip into a primary "Round started — go to the game" once the round goes ACTIVE mid-tour', () => {
+  it('turns Skip into a primary "Round started. Go to the game." once the round goes ACTIVE mid-tour', () => {
     expect(tourControls(INITIAL_TOUR_STATE, STEPS, false)).toMatchObject({ skipLabel: SKIP_LABEL, skipPrimary: false });
     expect(SKIP_LABEL).toBe('Skip tour');
     expect(tourControls({ ...INITIAL_TOUR_STATE, index: 1 }, STEPS, true)).toMatchObject({
-      skipLabel: 'Round started — go to the game', skipPrimary: true,
+      skipLabel: 'Round started. Go to the game.', skipPrimary: true,
     });
-    expect(ROUND_STARTED_LABEL).toBe('Round started — go to the game');
+    expect(ROUND_STARTED_LABEL).toBe('Round started. Go to the game.');
   });
 });
 

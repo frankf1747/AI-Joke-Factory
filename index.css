@@ -60,6 +60,7 @@
   --r-sm: 6px;
   --r-md: 8px;
   --r-lg: 12px;
+  --r-3: 12px;      /* sheet radius */
   --r-full: 9999px;
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06);

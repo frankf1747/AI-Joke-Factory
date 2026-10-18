@@ -4,7 +4,7 @@ import { tourProgress, type TourAction, type TourState, type TourStep } from '..
 
 export const SKIP_LABEL = 'Skip tour';
 /** Spec §3.3: shown, styled as primary, once the student's round goes ACTIVE mid-tour. */
-export const ROUND_STARTED_LABEL = 'Round started — go to the game';
+export const ROUND_STARTED_LABEL = 'Round started. Go to the game.';
 
 export interface TourControls {
   stepText: string;

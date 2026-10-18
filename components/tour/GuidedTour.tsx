@@ -6,7 +6,7 @@
    the tour's lifetime, so no click or focus reaches it. The steps, prices and
    fees are read once, when the tour starts (tourPlan): the round
    changing mid-tour does not reshuffle the steps, it only turns Skip into
-   "Round started — go to the game".
+   "Round started. Go to the game.".
 
    The clock is one interval sending `tick` to the step machine
    (services/tour/tourMachine.ts); the demo state is rebuilt from (step,

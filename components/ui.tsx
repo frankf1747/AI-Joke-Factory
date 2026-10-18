@@ -35,26 +35,28 @@ export const Card: React.FC<{
   title?: string;
   subtitle?: string;
   action?: React.ReactNode;
+  /** @deprecated No effect. The quiet design forbids coloured edge lines; kept so existing call sites compile. */
   accent?: string;
   /** `data-tour` id: the guided tour can spotlight this card (services/tour/tourSteps.ts). */
   tour?: string;
-}> = ({ children, className = '', title, subtitle, action, accent, tour }) => (
-  <div
+}> = ({ children, className = '', title, subtitle, action, tour }) => (
+  // The quiet sheet frame, matching ValueStream and JokesByStage.
+  <section
     data-tour={tour}
-    className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden ${className}`}
-    style={accent ? { borderTop: `3px solid ${accent}` } : undefined}
+    className={`border p-4 ${className}`}
+    style={{ background: 'var(--sheet)', borderColor: 'var(--rule)', borderRadius: 'var(--r-3)' }}
   >
     {(title || action) && (
-      <div className="px-4 py-3 bg-gray-50/70 border-b border-gray-100 flex justify-between items-center">
+      <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <div className="font-semibold text-gray-800 text-sm">{title}</div>
-          {subtitle && <div className="text-xs text-gray-400 mt-0.5">{subtitle}</div>}
+          <h2 className="text-base font-semibold" style={{ color: 'var(--ink)' }}>{title}</h2>
+          {subtitle && <p className="mt-0.5 text-[13px]" style={{ color: 'var(--ink-3)' }}>{subtitle}</p>}
         </div>
         {action && <div>{action}</div>}
       </div>
     )}
-    <div className="p-4">{children}</div>
-  </div>
+    {children}
+  </section>
 );
 
 export type StatBoxTone =

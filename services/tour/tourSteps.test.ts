@@ -76,7 +76,7 @@ describe('captions (spec §4, verbatim)', () => {
       ['Write, then paste.', 'Write jokes with your AI tool and paste the whole reply here. Marketing splits it into separate jokes.'],
       ['Send a batch.', 'Tick the box and press Send to Marketing. Each send is one batch.'],
       ['Every batch pays shipping.', 'Each batch of 5 costs $2 to ship, so keep them coming but make them count.'],
-      ['Follow your batches.', 'Each row is a batch and each square is a joke. Outline means with Marketing, green is selling, amber is waiting for a buyer and grey was not released. Open a row to see each joke.'],
+      ['Follow your batches.', 'Each row is a batch and each square is a joke. Outline means with Marketing, green is selling, amber is waiting for a buyer, pale green sold before but lost its buyer, and grey was not released. Open a row to see each joke.'],
       ["Read Marketing's note.", 'Open a batch and Marketing\'s note sits above its jokes. It says what customers liked and what to change. Read it before you write the next batch.'],
       ['Your scoreboard.', 'Team rank, by profit, is your place among all teams, and profit is sales minus fees. "Found a buyer" counts the jokes that have sold. "Fees and wait times" shows where the money went.'],
       ['How customers buy.', 'AI customers are picky: they judge every joke on 12 criteria and only buy the ones that fit what they like. Better-aimed jokes beat lots of random ones.'],

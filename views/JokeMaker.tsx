@@ -132,13 +132,13 @@ const JokeMaker: React.FC = () => {
       </Modal>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* LEFT: Production Line + Value stream */}
+        {/* LEFT: Production line + Value stream */}
         <div className="lg:col-span-2 space-y-6">
           {/* Read-only in watch mode: this tab shows a bot's seat and must not act for it.
               A disabled fieldset disables every control inside natively; `contents`
               keeps it out of the layout. The rest of the view stays interactive. */}
           <fieldset disabled={watching} className="contents">
-          <Card title="Production Line" accent={BRAND.production}>
+          <Card title="Production line" accent={BRAND.production}>
             <div className="space-y-4">
               <div data-tour="jm-next-step">
                 <NextStepLive

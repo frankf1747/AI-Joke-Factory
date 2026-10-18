@@ -32,6 +32,7 @@ const tokens: Record<string, string> = {
   '--chart-never-sold': '#7a4f9a',
   '--chart-discards': '#bdb7ab',
   '--chart-round-1': '#a7aaa8',
+  '--r-3': '12px',
 };
 
 describe('design tokens and fonts', () => {

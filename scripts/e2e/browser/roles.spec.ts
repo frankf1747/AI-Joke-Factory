@@ -258,7 +258,7 @@ export class JokeMakerPage {
   }
 
   get productionLine(): Locator {
-    return this.page.getByText('Production Line', { exact: true });
+    return this.page.getByText('Production line', { exact: true });
   }
   get pausedBanner(): Locator {
     return this.page.getByText('Game is currently paused. Wait for instructor to start.');

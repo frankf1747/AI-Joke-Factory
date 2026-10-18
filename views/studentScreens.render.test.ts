@@ -53,7 +53,7 @@ describe('Joke Maker screen', () => {
       const order = ['jm-next-step', 'jm-draft', 'jm-send', 'jm-shipping'].map(at);
       expect(order.every(i => i >= 0)).toBe(true);
       expect([...order].sort((a, b) => a - b)).toEqual(order);
-      expect(out.indexOf('Production Line')).toBeLessThan(at('jm-next-step'));
+      expect(out.indexOf('Production line')).toBeLessThan(at('jm-next-step'));
     });
 
     it('says what to make, and where it goes, in plain text', () => {

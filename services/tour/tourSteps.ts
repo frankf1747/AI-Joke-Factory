@@ -48,7 +48,7 @@ export const JOKE_MAKER_STEPS: readonly DemoStep[] = [
   {
     id: 'jm-value-stream', target: 'jm-value-stream',
     title: 'Follow your batches.',
-    body: 'Each row is a batch and each square is a joke. Outline means with Marketing, green is selling, amber is waiting for a buyer and grey was not released. Open a row to see each joke.',
+    body: 'Each row is a batch and each square is a joke. Outline means with Marketing, green is selling, amber is waiting for a buyer, pale green sold before but lost its buyer, and grey was not released. Open a row to see each joke.',
     beats: [{ atMs: 2000, apply: releaseSentBatch }, { atMs: 3000, apply: swapOutSale }, { atMs: 4000, apply: firstSale }],
   },
   {
