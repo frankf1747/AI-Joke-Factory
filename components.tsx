@@ -48,7 +48,7 @@ export const TUTORIAL_SEEN_PREFIX = 'jf_tutorial_seen_v1:';
 
 /** The first-time prompt, a quiet text button beside the "?" (spec 4.1). */
 export const TOUR_PROMPT_TEXT = 'Take the tour';
-/** Its accessible name and tooltip: the full phrase. */
+/** Its hover hint: the full phrase. The accessible name stays the visible text. */
 export const TOUR_PROMPT_LABEL = 'Take the 1-minute tour';
 /** The students' "?" button. */
 export const TOUR_REPLAY_LABEL = 'Replay the 1-minute tour';
@@ -139,7 +139,6 @@ const TutorialLauncher: React.FC<{ role: Role; tourView?: React.ComponentType }>
             onClick={() => setPhase('tour')}
             className="whitespace-nowrap text-sm font-medium text-[color:var(--navy)] hover:underline underline-offset-2"
             title={TOUR_PROMPT_LABEL}
-            aria-label={TOUR_PROMPT_LABEL}
           >
             {TOUR_PROMPT_TEXT}
           </button>
