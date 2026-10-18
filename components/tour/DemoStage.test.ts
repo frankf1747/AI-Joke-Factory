@@ -108,8 +108,8 @@ describe('the demo plays on the real screen', () => {
   it('splits the batch, picks three and types the note on Marketing\'s desk', () => {
     const o = opts('QUALITY_CONTROL');
     expect(renderStep(o, 'mk-arrives', 0)).toContain('to cut. The wording stays as written.');
-    expect(renderStep(o, 'mk-arrives', 3000)).toContain('Click to add');
-    expect(renderStep(o, 'mk-pick', 3000).split('Selected to submit')).toHaveLength(4);
+    expect(renderStep(o, 'mk-arrives', 3000)).toContain('>Discard<');
+    expect(renderStep(o, 'mk-pick', 3000).match(/aria-checked="true"/g)).toHaveLength(3);
     expect(renderStep(o, 'mk-note', 7000)).toContain(`${DEMO_NOTE.length}/500`);
     expect(renderStep(o, 'mk-note', 0)).toContain('0/500');
     expect(renderStep(o, 'mk-note', 0, true)).toContain(`${DEMO_NOTE.length}/500`);

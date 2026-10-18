@@ -420,3 +420,113 @@ describe('Split stage', () => {
     expect(confirmButton(out)).toMatch(DISABLED);
   });
 });
+
+describe('Choose stage', () => {
+  const JOKES = [101, 102, 103, 104, 105].map(id => ({ joke_id: id, joke_text: `Joke text ${id}` }));
+  const choose = (ui: Partial<typeof EMPTY_DEMO_UI>, over: Parameters<typeof renderWithGame>[1] = {}) => renderToStaticMarkup(
+    createElement(GameContext.Provider, {
+      value: fakeGame({
+        user: testUser(Role.QUALITY_CONTROL),
+        teamSummary: summary({}),
+        qcQueueSize: 1,
+        qcQueue: {
+          batch: { batch_id: 5004, round_id: 1, team_id: 1, submitted_at: '2026-10-18T12:00:00Z', raw_text: null },
+          jokes: JOKES, queue_size: 1,
+        },
+        ...over,
+      }),
+    }, createElement(DemoModeContext.Provider, { value: { ...EMPTY_DEMO_UI, ...ui } }, createElement(QualityControl))),
+  );
+  /* Three of five picked; the first has a topic and a title, the others are missing one or both. */
+  const THREE = {
+    mkSelectedIds: [101, 102, 103],
+    mkTopics: { 101: 'Work', 102: 'Food' },
+    mkTitles: { 101: 'The Self-Starter' },
+  };
+  const cards = (out: string) => out.split('data-pick="').slice(1);
+
+  it('marks the three picked cards selected and shows Deselect on each', () => {
+    const out = choose(THREE);
+    expect(out.match(/aria-checked="true"/g)).toHaveLength(3);
+    expect(out.match(/aria-checked="false"/g)).toHaveLength(2);
+    expect(out.match(/>Deselect</g)).toHaveLength(3);
+  });
+
+  it('says what is missing on a selected card and "To market" when it is complete', () => {
+    const out = choose(THREE);
+    expect(out.match(/>Needs a topic and a title</g)).toHaveLength(2);
+    expect(out.match(/>To market</g)).toHaveLength(1);
+    expect(cards(out)[0]).toContain('>To market<');
+    expect(cards(out)[1]).toContain('>Needs a topic and a title<');
+    expect(cards(out)[2]).toContain('>Needs a topic and a title<');
+  });
+
+  it('labels the two unselected cards Discard', () => {
+    const out = choose(THREE);
+    expect(out.match(/>Discard</g)).toHaveLength(2);
+    expect(cards(out)[3]).toContain('>Discard<');
+    expect(cards(out)[4]).toContain('>Discard<');
+  });
+
+  it('tallies the sale: Selling 3, discarding 2, costs $0.32', () => {
+    expect(choose(THREE).replace(/<[^>]+>/g, '')).toContain('Selling 3, discarding 2, costs $0.32');
+  });
+
+  it('keeps the four tour targets on the screen', () => {
+    const out = choose(THREE);
+    for (const t of ['mk-jokes', 'mk-topic-title', 'mk-note', 'mk-release', 'mk-desk']) {
+      expect(out).toContain(`data-tour="${t}"`);
+    }
+  });
+
+  it('offers the 15 topics in a select, with a Topic placeholder, on selected cards only', () => {
+    const out = choose(THREE);
+    const selects = out.match(/<select[^>]*>.*?<\/select>/gs) ?? [];
+    expect(selects).toHaveLength(3);
+    const options = selects[0].match(/<option[^>]*>[^<]*<\/option>/g) ?? [];
+    expect(options).toHaveLength(16);
+    expect(options[0]).toContain('>Topic<');
+    expect(selects[0]).toContain('required');
+    for (const t of ['Work', 'Relationships', 'Family', 'Food', 'Technology', 'Animals', 'School', 'Money', 'Travel', 'Health', 'Sports', 'Politics', 'Everyday', 'Language', 'Other']) {
+      expect(selects[0]).toContain(`>${t}</option>`);
+    }
+    expect(cards(out)[3]).not.toContain('<select');
+  });
+
+  it('shows the title counter, the header line and the note box', () => {
+    const out = choose(THREE);
+    expect(out).toContain('0/120');
+    expect(out).toContain('16/120');
+    expect(out.replace(/<[^>]+>/g, '')).toContain('Choose what to sell. Every joke you sell needs a topic and a title. The rest are discarded.');
+    expect(out).toContain('Back to splitting');
+    expect(out).toContain('Note to your Joke Maker, sent with this batch');
+    expect(out).toContain('0/500');
+  });
+
+  const releaseButton = (out: string) =>
+    out.match(/<button[^>]*data-tour="mk-release"[^>]*>(?:(?!<\/button>).)*<\/button>/s)?.[0] ?? '';
+
+  it('keeps Release to market disabled until every selected joke has a topic and a title', () => {
+    const incomplete = releaseButton(choose(THREE));
+    expect(incomplete).toContain('Release to market');
+    expect(incomplete).toMatch(/\sdisabled=""/);
+    const ready = releaseButton(choose({
+      mkSelectedIds: [101], mkTopics: { 101: 'Work' }, mkTitles: { 101: 'The Self-Starter' },
+    }));
+    expect(ready).toContain('Release to market');
+    expect(ready).not.toMatch(/\sdisabled=""/);
+  });
+
+  it('Round 1 with nothing selected: disabled Release, tally of zero sold', () => {
+    const out = choose({});
+    expect(releaseButton(out)).toMatch(/\sdisabled=""/);
+    expect(out.replace(/<[^>]+>/g, '')).toContain('Selling 0, discarding 5, costs $0.05');
+  });
+
+  it('Round 2 with nothing selected keeps the Discard batch path', () => {
+    const out = choose({}, { config: { ...TEST_CONFIG, round: 2 } });
+    const button = releaseButton(out);
+    expect(button).toContain('Discard batch · 5 jokes');
+    expect(button).not.toMatch(/\sdisabled=""/);
+  });
+});

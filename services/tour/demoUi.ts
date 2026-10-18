@@ -17,7 +17,7 @@ export interface DemoUi {
   jmCertified: boolean;
   /** Joke Maker: Value stream batches shown expanded, by Batch.id. */
   jmOpenBatchIds: string[];
-  /** Marketing: joke ids marked "Selected to submit". */
+  /** Marketing: joke ids picked to sell. */
   mkSelectedIds: number[];
   /** Marketing: Topic per joke id. */
   mkTopics: Record<number, string>;

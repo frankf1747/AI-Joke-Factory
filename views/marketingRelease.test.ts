@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { releaseOutcome } from './marketingRelease';
+import { releaseCost, releaseOutcome } from './marketingRelease';
 
 const base = { releasedCount: 2, batchSize: 5, costOfPublishing: 0.1, costOfDiscard: 0.01 };
 
@@ -38,5 +38,13 @@ describe('releaseOutcome', () => {
 
   it('a failed publish shows no toast and keeps the typed note', () => {
     expect(releaseOutcome({ ...base, ok: false, note: 'Keep this' })).toEqual({ toast: null, cost: 0, clearNote: false });
+  });
+});
+
+describe('releaseCost', () => {
+  it('charges sold jokes at the listing fee and the rest at the discard fee, to the cent', () => {
+    expect(releaseCost(3, 5, 0.1, 0.01)).toBe(0.32);
+    expect(releaseCost(0, 5, 0.1, 0.01)).toBe(0.05);
+    expect(releaseCost(5, 5, 0.1, 0.01)).toBe(0.5);
   });
 });

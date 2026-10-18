@@ -1,14 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useDemoMode, useDemoUi, useGame } from '../context';
-import { Button, Card, StatBox, RoleLayout, Modal, SectionLabel, fmt$ } from '../components';
-import {
-  Send, Zap, GripVertical, ChevronUp, ChevronDown, Check,
-  Star, CheckCircle2, MousePointerClick,
-  Scissors, Trash2,
-  Briefcase, Heart, Users, Utensils, Cpu, PawPrint, GraduationCap,
-  DollarSign, Plane, HeartPulse, Medal, Landmark, Coffee, Languages,
-  Pencil, type LucideIcon,
-} from 'lucide-react';
+import { Button, Card, StatBox, RoleLayout, Modal, fmt$ } from '../components';
+import { Send, Zap, Star, CheckCircle2, Trash2 } from 'lucide-react';
 import { computeAvgCreatedToPublishSeconds } from '../services/economics';
 import {
   INITIAL_NUDGE_STATE, nudgeReducer, isNudgeOpen,
@@ -21,7 +14,7 @@ import { toFeedbackRows } from './feedback';
 import { CustomerFeedbackCard } from '../components/CustomerFeedbackCard';
 import { isWatchMode } from '../services/watchMode';
 import { MARKETING_NOTE_MAX } from '../services/marketingService';
-import { releaseOutcome } from './marketingRelease';
+import { releaseCost, releaseOutcome } from './marketingRelease';
 import { StatTiles, moreTilesKey } from '../components/StatTiles';
 import { FeesAndWaits } from '../components/FeesAndWaits';
 import { Scoreboard } from '../components/Scoreboard';
@@ -29,29 +22,9 @@ import { foundABuyer, rankInputOf } from '../services/scoreboard';
 import { NextStepLive } from '../components/NextStep';
 import { BatchSplitter } from '../components/marketing/BatchSplitter';
 import { DeskBar } from '../components/marketing/DeskBar';
+import { JokePick, PickFields } from '../components/marketing/JokePick';
 import { moreWaiting, moreWaitingLabel } from '../services/desk';
 import { marketingInputFrom, marketingNextStep } from '../services/nextStep';
-
-/* ---- Icons for the backend's Topic categories. Keyed by the category string
-   itself so the picker stays in step with config/dimensions automatically: add
-   a Topic upstream and it renders here, iconless, rather than disappearing. ---- */
-const TOPIC_ICONS: Record<string, LucideIcon> = {
-  Work: Briefcase,
-  Relationships: Heart,
-  Family: Users,
-  Food: Utensils,
-  Technology: Cpu,
-  Animals: PawPrint,
-  School: GraduationCap,
-  Money: DollarSign,
-  Travel: Plane,
-  Health: HeartPulse,
-  Sports: Medal,
-  Politics: Landmark,
-  Everyday: Coffee,
-  Language: Languages,
-  Other: Pencil,
-};
 
 /* ---- Helpers ---- */
 const fmtSeconds = (s: number | null) => {
@@ -66,61 +39,6 @@ const ordinal = (n: number) => {
   const v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 };
-
-/* ============================ Shared release fields ============================
-   A joke can't go to market without a Topic and a title. The second decision
-   nudge has to collect both inside its dialog — telling a team "publish now" and
-   then making them close the popup to type a title would be a dead end. So both
-   fields live here and are rendered identically on the card and in the dialog. */
-
-const TOPIC_CATEGORIES = dimById('TOPIC')?.categories ?? [];
-
-const TopicPicker: React.FC<{
-  value?: string;
-  onPick: (topic: string) => void;
-}> = ({ value, onPick }) => (
-  <div>
-    <SectionLabel className="mb-1.5">
-      Topic <span className="text-rose-500">· required</span>
-    </SectionLabel>
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5">
-      {TOPIC_CATEGORIES.map(topic => {
-        const on = value === topic;
-        const Ic = TOPIC_ICONS[topic];
-        return (
-          <button
-            key={topic}
-            onClick={() => onPick(topic)}
-            className={`inline-flex items-center justify-center gap-1 text-[11px] px-2 py-1.5 rounded-md border transition-colors ${
-              on ? 'bg-[#005587] text-white border-[#005587]' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100'
-            }`}
-          >
-            {Ic && <Ic size={12} />} {topic}
-          </button>
-        );
-      })}
-    </div>
-  </div>
-);
-
-const TitleField: React.FC<{
-  value?: string;
-  onChange: (text: string) => void;
-  hint?: string;
-}> = ({ value, onChange, hint = '(this joke)' }) => (
-  <div>
-    <SectionLabel className="mb-1.5">
-      Market title <span className="text-gray-400">{hint}</span>
-    </SectionLabel>
-    <input
-      value={value || ''}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder="A short market title for this joke…"
-      maxLength={120}
-      className="w-full bg-white border border-gray-300 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#8bb8e8]"
-    />
-  </div>
-);
 
 /* ============================ Marketing screen ============================ */
 const QualityControl: React.FC = () => {
@@ -237,6 +155,13 @@ const QualityControl: React.FC = () => {
     });
   };
 
+  const setSelected = (id: number, on: boolean) => setSelectedIds(s => {
+    if (s.has(id) === on) return s;
+    const n = new Set(s);
+    on ? n.add(id) : n.delete(id);
+    return n;
+  });
+
   const jokeById = (id: number) => incomingJokes.find(j => j.id === id);
   // TEMP (ranking disabled): was `(id, idx) => idx === 0 || selectedIds.has(id)`,
   // which force-shipped the top card. Nothing ships unless it's chosen now.
@@ -255,6 +180,8 @@ const QualityControl: React.FC = () => {
      doesn't add a charge — it just settles the decision. The copy says "count as
      waste" rather than "costs you" for exactly that reason. */
   const discardAllCost = orderIds.length * config.costOfDiscard;
+  /* The footer tally: the same formula the release toast charges (views/marketingRelease.ts). */
+  const tallyCost = releaseCost(submittingIds.length, orderIds.length, config.costOfPublishing, config.costOfDiscard);
 
   // Every submitted joke needs a topic + title, so none can be silently dropped
   // from the payload. `every` over an empty basket is vacuously true, which is
@@ -459,120 +386,60 @@ const QualityControl: React.FC = () => {
                 <p className="text-gray-500">Waiting for Joke Maker to submit new batches.</p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {/* Escape hatch: re-open this batch in the splitting phase if the split was wrong. */}
-                <div className="flex justify-end">
+              <div>
+                <div className="mb-3 flex items-baseline justify-between gap-4">
+                  <p className="m-0 text-sm" style={{ color: 'var(--ink-2)' }}>
+                    Choose what to sell. Every joke you sell needs a <b>topic</b> and a <b>title</b>. The rest are discarded.
+                  </p>
+                  {/* Escape hatch: re-open this batch in the splitting phase if the split was wrong. */}
                   <button
+                    type="button"
                     onClick={() => { if (qcQueue) unsplitBatch(String(qcQueue.batch.batch_id)); }}
-                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#00456e] bg-[#8bb8e8]/20 border border-[#8bb8e8] px-2.5 py-1 rounded-md hover:bg-[#8bb8e8]"
+                    className="shrink-0 text-[13px] font-medium underline-offset-2 hover:underline"
+                    style={{ color: 'var(--navy)' }}
                     title="Re-open this batch to fix the splitting"
                   >
-                    <Scissors size={12} /> Back to splitting
+                    Back to splitting
                   </button>
                 </div>
-                <div data-tour="mk-jokes" className="space-y-3">
+                <div data-tour="mk-jokes">
                 {orderIds.map((id, idx) => {
                   const j = jokeById(id);
                   if (!j) return null;
-                  // TEMP (ranking disabled): `isRankOne` used to override the
-                  // selected state on the top card. Every card is now equal —
-                  // position is just where it sits in the list.
-                  const selected = selectedIds.has(id);
-                  const submitting = selected;
-                  const dragging = dragIdx === idx;
+                  // TEMP (ranking disabled): every card is equal; position is
+                  // just where it sits in the list.
                   return (
-                    <div
+                    <JokePick
                       key={id}
-                      onClick={(e) => {
-                        if (watching) return;
-                        if ((e.target as HTMLElement).closest('button, input, textarea')) return;
-                        toggle(id);
+                      index={idx}
+                      total={orderIds.length}
+                      jokeId={id}
+                      text={j.text}
+                      selected={selectedIds.has(id)}
+                      topic={topics[id]}
+                      title={titles[id]}
+                      dragging={dragIdx === idx}
+                      readOnly={watching}
+                      onSelect={() => setSelected(id, true)}
+                      onToggle={() => toggle(id)}
+                      onDeselect={() => setSelected(id, false)}
+                      onTopic={(topic) => setTopics(t => ({ ...t, [id]: topic }))}
+                      onTitle={(v) => setTitles(t => ({ ...t, [id]: v }))}
+                      onMove={(dir) => move(idx, dir)}
+                      dragProps={{
+                        draggable: !watching,
+                        onDragStart: (e) => {
+                          if (watching || (e.target as HTMLElement).closest('button, input, textarea, select')) {
+                            e.preventDefault();
+                            return;
+                          }
+                          setDragIdx(idx);
+                        },
+                        onDragOver: (e) => onDragOver(e, idx),
+                        onDragEnd: endDrag,
+                        onDrop: endDrag,
                       }}
-                      draggable={!watching}
-                      onDragStart={(e) => {
-                        if (watching) {
-                          e.preventDefault();
-                          return;
-                        }
-                        if ((e.target as HTMLElement).closest('button, input, textarea')) {
-                          e.preventDefault();
-                          return;
-                        }
-                        setDragIdx(idx);
-                      }}
-                      onDragOver={(e) => onDragOver(e, idx)}
-                      onDragEnd={endDrag}
-                      onDrop={endDrag}
-                      className={`rounded-xl border-2 p-4 ${watching ? 'cursor-default' : 'cursor-pointer'} transition-all shadow-sm hover:shadow-md ${
-                        dragging ? 'opacity-40' : ''
-                      } ${
-                        selected
-                          ? 'bg-green-50 border-green-400 ring-2 ring-green-200'
-                          : 'bg-white border-gray-200 hover:border-[#8bb8e8]'
-                      }`}
-                    >
-                      {/* TEMP (ranking disabled): the top card used to show an
-                          amber "Rank 1 — always submits" banner here. */}
-                      {selected ? (
-                        <div className="mb-3 flex items-center justify-center gap-1.5 text-xs font-semibold rounded-md px-3 py-2 bg-green-600 text-white">
-                          <Check size={14} />
-                          Selected to submit
-                        </div>
-                      ) : (
-                        <div className="mb-3 flex items-center justify-center gap-1.5 text-xs font-medium rounded-md px-3 py-2 bg-white border border-dashed border-gray-300 text-gray-500">
-                          <MousePointerClick size={13} />
-                          Click to add
-                        </div>
-                      )}
-
-                      <div className="flex items-start gap-3">
-                        {/* TEMP (ranking disabled): this was a 44px black "RANK 1st"
-                            tile for the top three and a grey "Unranked" dash below.
-                            It's now a quiet position count — the cards can still be
-                            ordered, but the number no longer passes judgement. */}
-                        <span
-                          className="shrink-0 flex items-center justify-center w-[18px] h-[18px] mt-1 rounded-full bg-gray-100 text-gray-400 text-[10px] font-semibold tabular-nums leading-none"
-                          title={`Card ${idx + 1} of ${orderIds.length}`}
-                        >
-                          {idx + 1}
-                        </span>
-                        <blockquote className="flex-1 border-l-[3px] border-[#8bb8e8] pl-3 py-0.5">
-                          <p className="joke-font text-gray-900 text-[17px] leading-relaxed text-pretty">{j.text}</p>
-                        </blockquote>
-                        <div className="shrink-0 flex flex-col items-center gap-0.5">
-                          <GripVertical size={16} className="text-gray-300" />
-                          <button
-                            onClick={() => move(idx, -1)}
-                            disabled={idx === 0}
-                            title="Move up"
-                            className="text-gray-400 hover:text-gray-700 disabled:opacity-25 disabled:cursor-not-allowed"
-                          >
-                            <ChevronUp size={15} />
-                          </button>
-                          <button
-                            onClick={() => move(idx, 1)}
-                            disabled={idx === orderIds.length - 1}
-                            title="Move down"
-                            className="text-gray-400 hover:text-gray-700 disabled:opacity-25 disabled:cursor-not-allowed"
-                          >
-                            <ChevronDown size={15} />
-                          </button>
-                        </div>
-                      </div>
-
-                      {submitting && (
-                        <div data-tour="mk-topic-title" className="mt-3 space-y-3">
-                          <TopicPicker
-                            value={topics[id]}
-                            onPick={(topic) => setTopics(t => ({ ...t, [id]: topic }))}
-                          />
-                          <TitleField
-                            value={titles[id]}
-                            onChange={(v) => setTitles(t => ({ ...t, [id]: v }))}
-                          />
-                        </div>
-                      )}
-                    </div>
+                    />
                   );
                 })}
                 </div>
@@ -584,46 +451,67 @@ const QualityControl: React.FC = () => {
                     editing after release. The box clears when the publish succeeds
                     and keeps its text when it fails (views/marketingRelease.ts).
                     maxLength stops input at MARKETING_NOTE_MAX. */}
-                <div data-tour="mk-note" className="rounded-lg border border-gray-200 bg-white p-4">
-                  <div className="mb-1.5 flex items-baseline justify-between gap-2">
-                    <SectionLabel>
-                      Note to your Joke Maker <span className="text-gray-400">(sent with this batch)</span>
-                    </SectionLabel>
-                    <span
-                      className={`text-[11px] tabular-nums ${
-                        batchFeedback.length >= MARKETING_NOTE_MAX ? 'font-semibold text-amber-700' : 'text-gray-400'
-                      }`}
-                    >
-                      {batchFeedback.length}/{MARKETING_NOTE_MAX}
-                    </span>
-                  </div>
-                  <textarea
-                    value={batchFeedback}
-                    onChange={(e) => setBatchFeedback(e.target.value.slice(0, MARKETING_NOTE_MAX))}
-                    maxLength={MARKETING_NOTE_MAX}
-                    rows={3}
-                    aria-label="Note to your Joke Maker"
-                    placeholder="What should they change next? What did customers like?"
-                    className="w-full bg-white border border-gray-300 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#8bb8e8] resize-none placeholder-gray-400"
-                  />
-                </div>
-
-                <div className="flex items-center justify-end pt-1">
-                  <Button
-                    data-tour="mk-release"
-                    variant={!canRelease ? 'secondary' : discardingAll ? 'danger' : 'success'}
-                    onClick={release}
-                    disabled={!canRelease}
-                  >
-                    {discardingAll ? (
-                      <span className="flex items-center gap-1">
-                        Discard batch · {orderIds.length} joke{orderIds.length > 1 ? 's' : ''}{' '}
-                        <Trash2 size={15} />
+                <div
+                  data-tour="mk-note"
+                  className="mt-4 grid gap-3 pt-4"
+                  style={{ borderTop: '1px solid var(--rule)' }}
+                >
+                  <label className="block">
+                    <span className="mb-1.5 flex justify-between text-[12.5px]" style={{ color: 'var(--ink-3)' }}>
+                      <span>Note to your Joke Maker, sent with this batch</span>
+                      <span
+                        className="tabular-nums"
+                        style={{
+                          fontFamily: "'IBM Plex Mono', ui-monospace, monospace",
+                          color: batchFeedback.length >= MARKETING_NOTE_MAX ? 'var(--warn)' : undefined,
+                        }}
+                      >
+                        {`${batchFeedback.length}/${MARKETING_NOTE_MAX}`}
                       </span>
-                    ) : (
-                      <span className="flex items-center gap-1">Release to market <Send size={15} /></span>
-                    )}
-                  </Button>
+                    </span>
+                    <textarea
+                      value={batchFeedback}
+                      onChange={(e) => setBatchFeedback(e.target.value.slice(0, MARKETING_NOTE_MAX))}
+                      maxLength={MARKETING_NOTE_MAX}
+                      rows={3}
+                      aria-label="Note to your Joke Maker"
+                      placeholder="What should they change next? What did customers like?"
+                      className="w-full resize-y px-3 py-2 text-[14.5px] leading-normal outline-none focus:border-[color:var(--navy)]"
+                      style={{ border: '1px solid var(--rule)', borderRadius: 'var(--r-md)', background: 'var(--paper)', color: 'var(--ink)' }}
+                    />
+                  </label>
+
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-[13.5px]" style={{ color: 'var(--ink-2)' }}>
+                      Selling <b className="font-mono font-semibold">{submittingIds.length}</b>, discarding{' '}
+                      <b className="font-mono font-semibold">{orderIds.length - submittingIds.length}</b>,{' '}
+                      <span style={{ color: 'var(--ink-3)' }}>{`costs ${fmt$(tallyCost)}`}</span>
+                    </span>
+                    <button
+                      type="button"
+                      data-tour="mk-release"
+                      onClick={release}
+                      disabled={!canRelease}
+                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed"
+                      style={{
+                        borderRadius: 'var(--r-md)',
+                        ...(!canRelease
+                          ? { background: 'var(--paper-2)', color: 'var(--ink-3)' }
+                          : discardingAll
+                          ? { background: 'var(--warn-bg)', color: 'var(--warn)' }
+                          : { background: 'var(--gold)', color: 'var(--navy)' }),
+                      }}
+                    >
+                      {discardingAll ? (
+                        <>
+                          Discard batch · {orderIds.length} joke{orderIds.length > 1 ? 's' : ''}
+                          <Trash2 size={15} aria-hidden="true" />
+                        </>
+                      ) : (
+                        <>Release to market <span aria-hidden="true">→</span></>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -773,13 +661,11 @@ const QualityControl: React.FC = () => {
                 <blockquote className="border-l-[3px] border-[#8bb8e8] pl-3 py-0.5">
                   <p className="joke-font text-gray-900 text-[15px] leading-relaxed">{j.text}</p>
                 </blockquote>
-                <TopicPicker
-                  value={topics[id]}
-                  onPick={(topic) => setTopics(t => ({ ...t, [id]: topic }))}
-                />
-                <TitleField
-                  value={titles[id]}
-                  onChange={(v) => setTitles(t => ({ ...t, [id]: v }))}
+                <PickFields
+                  topic={topics[id]}
+                  title={titles[id]}
+                  onTopic={(topic) => setTopics(t => ({ ...t, [id]: topic }))}
+                  onTitle={(v) => setTitles(t => ({ ...t, [id]: v }))}
                 />
               </div>
             );

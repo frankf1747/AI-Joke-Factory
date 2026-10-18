@@ -31,12 +31,18 @@ export interface ReleaseOutcome {
   clearNote: boolean;
 }
 
+/** What a publish charges: the sold jokes at the listing fee, the rest at the discard fee, to the cent. */
+export function releaseCost(sold: number, batchSize: number, costOfPublishing: number, costOfDiscard: number): number {
+  const discarded = Math.max(0, batchSize - sold);
+  /* Round to cents so float noise (0.1 × 3 + 0.01 × 2) never reaches the toast or the tally. */
+  return Math.round((sold * costOfPublishing + discarded * costOfDiscard) * 100) / 100;
+}
+
 export function releaseOutcome(i: ReleaseOutcomeInput): ReleaseOutcome {
   if (!i.ok) return { toast: null, cost: 0, clearNote: false };
   /* The jokes not released are discarded, and both are charged at publish. */
   const discarded = Math.max(0, i.batchSize - i.releasedCount);
-  /* Round to cents so float noise (0.1 × 3 + 0.01 × 2) never reaches the toast or a caller. */
-  const cost = Math.round((i.releasedCount * i.costOfPublishing + discarded * i.costOfDiscard) * 100) / 100;
+  const cost = releaseCost(i.releasedCount, i.batchSize, i.costOfPublishing, i.costOfDiscard);
   const base = i.releasedCount === 0
     ? `Passed on this batch · ${i.batchSize} joke${i.batchSize > 1 ? 's' : ''} discarded · −${fmt$(cost)}`
     : `Released ${i.releasedCount} joke${i.releasedCount > 1 ? 's' : ''}${discarded > 0 ? ` · ${discarded} discarded` : ''} · −${fmt$(cost)}`;
