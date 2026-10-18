@@ -7,6 +7,7 @@
 import type { Batch } from '../types';
 import type { FeedbackRow } from '../views/feedback';
 import { summarizeFeedback } from './feedbackSummary';
+import { fmtDuration } from './format';
 import { fmtPerMinute } from './leanMode';
 
 export type NextStepTone = 'info' | 'warn';
@@ -85,14 +86,6 @@ export function jokeMakerNextStep(i: JokeMakerStepInput): NextStep {
   return info('Keep writing — every batch is another chance to sell.');
 }
 
-/** A desk wait: "45 s", "1 min", "1 min 12 s", then whole minutes from 10 min ("56 min"). */
-function fmtWait(secs: number): string {
-  if (secs < 60) return `${secs} s`;
-  const min = Math.floor(secs / 60);
-  const rest = secs % 60;
-  return min >= 10 || rest === 0 ? `${min} min` : `${min} min ${rest} s`;
-}
-
 export function marketingNextStep(i: MarketingStepInput): NextStep {
   if (i.classOver) return info(CLASS_OVER_TEXT);
   if (!i.roundActive) return info("Watch the desk — your Joke Maker's first batch is coming.");
@@ -100,7 +93,7 @@ export function marketingNextStep(i: MarketingStepInput): NextStep {
     const waited = Math.floor((i.now - i.deskBatchSentAt) / 1000);
     if (waited >= DESK_WAIT_S) {
       const storage = i.storageFeePerJokeMinute > 0 ? ` Storage costs ${fmtPerMinute(i.storageFeePerJokeMinute)}.` : '';
-      return warn(`Batch waiting ${fmtWait(waited)} — release what's good enough.${storage}`);
+      return warn(`Batch waiting ${fmtDuration(waited)} — release what's good enough.${storage}`);
     }
   }
   if (i.lastDecision) {
