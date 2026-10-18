@@ -78,7 +78,7 @@ describe('captions (spec §4, verbatim)', () => {
       ['Your next step.', "This line watches the game and tells you what to do next. Glance at it whenever you're unsure."],
       ['Follow your batches.', 'Each row is a batch. The dots show where every joke is: with Marketing, on the market, sold or wasted.'],
       ["Read Marketing's note.", 'Marketing tells you what customers liked and what to change. Read it before you write the next batch.'],
-      ['Your scoreboard.', 'Profit is sales minus fees, and it can go negative. Rank, Jokes Sold / Made and Created to Publish (how long a joke takes to reach the market) complete it. "More numbers" shows the rest.'],
+      ['Your scoreboard.', 'Team rank, by profit, is your place among all teams, and profit is sales minus fees. "Found a buyer" counts the jokes that have sold. "Fees and wait times" shows where the money went.'],
       ['How customers buy.', 'AI customers are picky: they judge every joke on 12 criteria and only buy the ones that fit what they like. Better-aimed jokes beat lots of random ones.'],
       ['Your goal.', 'Keep the line moving, learn from each batch, and improve the next one.'],
     ]);
@@ -102,8 +102,8 @@ describe('captions (spec §4, verbatim)', () => {
       ['Topic and title.', 'Give each joke a topic and a title. A good title helps it sell.'],
       ['Tell your Joke Maker.', 'Say what to change next. Your note is sent with this batch.'],
       ['Release.', 'Released jokes go on the market, where customers start buying.'],
-      ['Your scoreboard.', 'Profit, your rank, how many jokes have sold, and how many batches are waiting on your desk.'],
-      ['Fees add up.', 'Every batch pays shipping. A batch waiting on your desk pays storage (5¢ a joke each minute), and an unsold joke pays hosting (5¢ a joke each minute). Holding batches only costs money: release quickly.'],
+      ['Your scoreboard.', 'Your team rank, by profit, sits beside your profit and sales. "Found a buyer" shows how many of your released jokes have sold so far.'],
+      ['Fees add up.', '"Fees and wait times" shows where your sales went. Every batch pays shipping. A batch waiting on your desk pays storage (5¢ a joke each minute), and an unsold joke pays hosting (5¢ a joke each minute). Release quickly.'],
       ['Your next step.', 'This line watches the game and tells you what to do next, like releasing a batch that has waited too long.'],
       ['What customers said.', 'For your latest jokes: which criteria landed and which missed. It never says by how much.'],
       ['Keep it in view.', 'Expand opens the feedback in a floating window that stays on top while you work.'],
@@ -127,6 +127,22 @@ describe('captions (spec §4, verbatim)', () => {
     expect(stepsFor('JOKE_MAKER', { roundNumber: 2, fees: odd })[3].body).toBe(
       'You choose the size now: $0.50 for 1–4 jokes, $1.50 for 5, $4 for 6–10. Smaller batches come back with feedback sooner.',
     );
+  });
+
+  it('the scoreboard and fees captions describe the Scoreboard and "Fees and wait times", not the old tiles', () => {
+    const find = (steps: ReadonlyArray<{ id: string }>, id: string) => steps.find(x => x.id === id)!;
+    const jm = find(JOKE_MAKER_STEPS, 'jm-scoreboard') as unknown as { body: string };
+    const mkFees = find(MARKETING_STEPS, 'mk-fees') as unknown as { body: (r: TourRound) => string };
+    expect(jm.body).toContain('Team rank, by profit');
+    expect(jm.body).toContain('Fees and wait times');
+    for (const steps of [JOKE_MAKER_STEPS, MARKETING_STEPS]) {
+      for (const step of steps) {
+        const body = captionText(step, R1);
+        expect(body).not.toContain('More numbers');
+        expect(body).not.toContain('Jokes Sold / Made');
+      }
+    }
+    expect(mkFees.body(R1)).toContain('Fees and wait times');
   });
 
   it('captionText leaves a plain caption alone', () => {

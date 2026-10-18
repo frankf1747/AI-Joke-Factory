@@ -4,7 +4,7 @@
    through a demo GameContext (services/tour/demoGame.ts). A few things on those
    screens are the views' own local state instead: the Joke Maker's textbox, its
    certify box and which Value stream batches are open; Marketing's picks,
-   Topics, titles and note; whether "More numbers" is open; and the clock the
+   Topics, titles and note; whether "Fees and wait times" is open; and the clock the
    Next step line reads. Inside the demo stage the views read these from a
    DemoUi (context.tsx useDemoUi) in place of their own state, so the script can
    "type" jokes and tick boxes without touching the real game or the student's
@@ -25,9 +25,9 @@ export interface DemoUi {
   mkTitles: Record<number, string>;
   /** Marketing: the "Note to your Joke Maker" box. */
   mkNote: string;
-  /** Both: the "More numbers" panel under the key tiles is open. Never read
+  /** Both: the "Fees and wait times" disclosure under the Scoreboard is open. Never read
       from or written to the student's own remembered choice. */
-  moreOpen: boolean;
+  feesOpen: boolean;
   /** Both: the demo's "now" (ms epoch) for the Next step line, so its sentence
       follows the script's timeline instead of the wall clock. */
   clockMs: number;
@@ -41,6 +41,6 @@ export const EMPTY_DEMO_UI: DemoUi = {
   mkTopics: {},
   mkTitles: {},
   mkNote: '',
-  moreOpen: false,
+  feesOpen: false,
   clockMs: 0,
 };

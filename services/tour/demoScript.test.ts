@@ -116,7 +116,7 @@ describe('buildDemoState', () => {
     expect(EMPTY_DEMO_UI.jmOpenBatchIds).toEqual([]);
   });
 
-  it('keeps Profit, Jokes Sold / Made, the backlog and the three fees consistent with the game formulas at every moment', () => {
+  it('keeps Profit, jokes sold, the backlog and the three fees consistent with the game formulas at every moment', () => {
     for (const o of ALL) {
       const steps = stepsOf(o);
       for (let k = 0; k < steps.length; k++) {
@@ -193,11 +193,11 @@ describe('buildDemoState', () => {
     expect(after.game.teamSummary!.unprocessed_batches).toBe(0);
   });
 
-  it('Marketing: "Fees add up" opens More numbers and lands the next batch on the desk; the feedback card gets a new read', () => {
+  it('Marketing: "Fees add up" opens Fees and wait times and lands the next batch on the desk; the feedback card gets a new read', () => {
     const o = opts('QUALITY_CONTROL');
-    expect(at(o, 'mk-scoreboard').ui.moreOpen).toBe(false);
+    expect(at(o, 'mk-scoreboard').ui.feesOpen).toBe(false);
     const fees = at(o, 'mk-fees');
-    expect(fees.ui.moreOpen).toBe(true);
+    expect(fees.ui.feesOpen).toBe(true);
     expect(fees.game.qcQueue!.batch!.batch_id).toBe(NEXT_BATCH_ID);
     expect(fees.game.teamSummary!.unprocessed_batches).toBe(1);
     const lean = leanFeesOf(fees.game.teamSummary!.lean);
@@ -210,9 +210,9 @@ describe('buildDemoState', () => {
     expect(feedback.improve_dimensions.length).toBeGreaterThan(0);
   });
 
-  it('the Joke Maker tour never opens More numbers', () => {
+  it('the Joke Maker tour never opens Fees and wait times', () => {
     const o = opts('JOKE_MAKER');
-    for (let k = 0; k < stepsOf(o).length; k++) expect(endOf(o, k).ui.moreOpen).toBe(false);
+    for (let k = 0; k < stepsOf(o).length; k++) expect(endOf(o, k).ui.feesOpen).toBe(false);
   });
 });
 

@@ -378,8 +378,8 @@ export function topicsAndTitles(s: DemoState): DemoState {
 /** The note box holds Marketing's note (typed in by the stage). */
 export const writeNote = (s: DemoState) => withUi(s, { mkNote: DEMO_NOTE });
 
-/** "More numbers" opens, showing the Shipping, Storage and Hosting fee tiles. */
-export const openMore = (s: DemoState) => withUi(s, { moreOpen: true });
+/** "Fees and wait times" opens, showing the sales chart (shipping, storage, hosting) and the waits. */
+export const openFees = (s: DemoState) => withUi(s, { feesOpen: true });
 
 /** The next batch, #103, has been waiting on Marketing's desk for 52 s. */
 export const nextBatchArrives = (s: DemoState) => landOnDesk(s, NEXT_BATCH_ID, DEMO_TIMES.nextSent, DEMO_TIMES.nextSeen);

@@ -340,7 +340,7 @@ const QualityControl: React.FC = () => {
   const [selectedIdsState, setSelectedIds] = useState<Set<number>>(() => new Set());
   const [batchFeedbackState, setBatchFeedback] = useState('');
   /* Guided tour: inside the demo stage the script drives the picks, Topics,
-     titles, note, "More numbers" and the Next step line's clock, and the cards
+     titles, note, "Fees and wait times" and the Next step line's clock, and the cards
      stay in the order they arrived (services/tour/demoUi.ts). In the real game
      there is no DemoUi and the marketer's own state does. */
   const demoUi = useDemoUi();
@@ -819,13 +819,13 @@ const QualityControl: React.FC = () => {
                 config={config}
                 tourId="mk-more"
                 storageKey={moreTilesKey('quality_control')}
-                open={demoUi ? demoUi.moreOpen : undefined}
+                open={demoUi ? demoUi.feesOpen : undefined}
                 extras={[{ label: 'Content Backlog', value: queueSize }, { label: 'Content Waste', value: waste }]}
               />
             ) : (
               <StatTiles
                 storageKey={moreTilesKey('quality_control')}
-                open={demoUi ? demoUi.moreOpen : undefined}
+                open={demoUi ? demoUi.feesOpen : undefined}
                 tourMore="mk-more"
                 keyTiles={[]}
                 moreTiles={[

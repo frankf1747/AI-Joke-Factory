@@ -44,7 +44,7 @@ Suggested timeline for a 90-minute session (about 65 minutes of game time):
 | Step | Time | Instructor (Instructor screen) | Joke Makers | Marketing |
 |---|---|---|---|---|
 | Setup | 10 min | Presses **Reset Game** if a previous class played, forms teams in the lobby, picks the ideal joke profile. Explains the fees (section 3). | Log in, take their seat, read the brief. | Log in, take their seat, read "The 12 criteria customers judge". |
-| Round 1 | 15 min | Presses **Start** on the Round 1 tab. Watches the leaderboard, calls out cues (section 6). Presses **End Round** at about 15 minutes. | Write batches of exactly 5 and press **Send to Marketing**. See "Shipping: $2 per batch of 5". | Split each batch, choose jokes, add a Topic and a title, **Release to market**. Watch the Shipping, Storage and Hosting fees tiles. |
+| Round 1 | 15 min | Presses **Start** on the Round 1 tab. Watches the leaderboard, calls out cues (section 6). Presses **End Round** at about 15 minutes. | Write batches of exactly 5 and press **Send to Marketing**. See "Shipping: $2 per batch of 5". | Split each batch, choose jokes, add a Topic and a title, **Release to market**. Open "Fees and wait times" to watch the shipping, storage and hosting fees. |
 | Debrief 1 | 10 min | Shows the Round 1 leaderboard (Shipping, Storage, Hosting, Lead, Sale) and the lean charts. Asks where the money went. | Discuss. | Discuss; read the Customer feedback panel. |
 | Round 2 | 15 min | Selects the Round 2 tab, presses **Start**, ends at about 15 minutes. | Batches of 1 to 10 jokes. The line reads "Shipping: $1 for 1–4 jokes · $2 for 5 · $3 for 6–10". | Same desk; in Round 2 Marketing may also discard a whole batch. |
 | Debrief 2 | 15+ min | Opens the **Round 1 vs Round 2** table and works through the debrief prompts in section 6. | Discuss. | Discuss. |
@@ -79,7 +79,7 @@ sell; a released joke can sell and stops being charged once it does. Marketing g
 being the bottleneck.
 
 Nothing is stored: the fees are worked out from timestamps each time a screen refreshes, which is why
-the Storage and Hosting tiles tick up during the round, and every clock stops when the round ends.
+the storage and hosting fees in "Fees and wait times" tick up during the round, and every clock stops when the round ends.
 The inventory clock starts at release, so time spent waiting for AI classification counts as
 hosting.
 
@@ -166,18 +166,19 @@ offensive." and presses **Send to Marketing**. The brief reads "Generate 5 jokes
 shipping line quotes the round's fees: "Shipping: $2 per batch of 5" in Round 1, "Shipping: $1 for
 1–4 jokes · $2 for 5 · $3 for 6–10" in Round 2. There is no WIP limit: the Joke Maker can always send.
 
-Under the stat tiles, the **Next step** line gives one instruction, the first that applies:
+Under the Scoreboard, the **Next step** line gives one instruction, the first that applies:
 
-1. Before the round (and between rounds): "Get your AI tool ready — the round starts soon." Once
-   Round 2 has ended: "Round over — join the debrief."
-2. Marketing left a note on the latest processed batch, within 2 minutes of Marketing sending it:
-   "Marketing says: “…” — use it in your next batch." (the note, up to 80 characters)
-3. Round 2, the last batch had 6 or more jokes: "Big batches wait longer for feedback — try 2 or 3
+1. Before the round (and between rounds): "Get your AI tool ready. The round starts soon." Once
+   Round 2 has ended: "Round over. Join the debrief."
+2. Round 2, the last batch had 6 or more jokes: "Big batches wait longer for feedback. Try 2 or 3
    jokes next." (amber)
-4. Marketing's desk is empty: "Marketing's desk is empty — send your next batch of 5." (Round 1) or
-   "… — send a small batch now." (Round 2)
-5. No batch sent for 90 s: "No batch sent in 90 s — keep the line moving." (amber)
-6. Otherwise: "Keep writing — every batch is another chance to sell."
+3. Marketing's desk is empty: "Marketing's desk is empty. Send your next batch of 5." (Round 1) or
+   "Marketing's desk is empty. Send a small batch now." (Round 2)
+4. No batch sent for 90 s: "No batch sent in 90 s. Keep the line moving." (amber)
+5. Otherwise: "Keep writing. Every batch is another chance to sell."
+
+The line never quotes Marketing's note. A note shows only inside the opened batch in the Value
+stream, under "From Marketing".
 
 In **Value stream**, a batch Marketing left a note on shows a speech-bubble icon; expanding it shows
 the note under "From Marketing". The Joke Maker does not see the customer feedback panel.
@@ -189,27 +190,30 @@ The next waiting batch appears on the **Marketing Desk** automatically. Marketin
 title (in Round 2 it may discard the whole batch), writes an optional **Note to your Joke Maker**,
 and **releases**.
 
-Three fee tiles sit next to the usual ones, each with a one-line tooltip carrying the round's
-amounts:
+The Scoreboard shows the team's rank by profit, its profit, how many released jokes have found a
+buyer ("Found a buyer {n} of {m} on market") and the number of sales. A collapsed **Fees and wait
+times** disclosure under it holds two charts:
 
-| Tile | Tooltip |
+| Chart | What it shows |
 |---|---|
-| **Shipping fees** | "Charged per batch you send: $1 for 1–4 jokes, $2 for 5, $3 for 6–10." |
-| **Storage fees** | "Every minute a joke waits on Marketing's desk costs 5¢." |
-| **Hosting fees** | "Every minute a released joke sits unsold costs 5¢." |
+| **Where your sales went** | Shipping, storage, hosting, listing and discard fees, and what is left as profit. |
+| **How long a joke waits, on average** | The average time a joke spends with Marketing, then on the market waiting for a buyer. |
 
-**Publish → first sale** shows how long a sold joke waited for its first buyer.
+The round's amounts are $1 for 1–4 jokes, $2 for 5 and $3 for 6–10 in shipping, 5¢ a joke each
+minute while a joke waits on Marketing's desk (storage), and 5¢ a joke each minute while a released
+joke sits unsold (hosting).
 
-Under the tiles, the **Next step** line:
+Under the Scoreboard, the **Next step** line:
 
-1. Before the round (and between rounds): "Watch the desk — your Joke Maker's first batch is
-   coming." Once Round 2 has ended: "Round over — join the debrief."
-2. A batch has been on the desk 45 s or more: "Batch waiting {n} s — release what's good enough.
-   Storage costs 5¢ a joke each minute." (amber; the round's storage fee)
-3. The last decision discarded 60 % or more of a batch: "You discarded {d} of {n} last time —
-   customers can only buy what's on the shelf." (amber)
+1. Before the round (and between rounds): "Watch the desk. Your Joke Maker's first batch is
+   coming." Once Round 2 has ended: "Round over. Join the debrief."
+2. A batch has been on the desk 45 s or more: "Batch waiting {duration}. Release what's good
+   enough. Storage costs 5¢ a joke each minute." (amber; the duration reads like "52 s" or
+   "1 min 12 s", and the storage sentence uses the round's storage fee and is left out if it is 0)
+3. The last decision discarded 60 % or more of a batch: "You discarded {d} of {n} last time.
+   Customers can only buy what's on the shelf." (amber)
 4. The customer feedback has a Fix next item: "Tell your Joke Maker: fix {criterion} next."
-5. The desk is empty: "Desk is clear — nudge your Joke Maker to send the next batch."
+5. The desk is empty: "Desk is clear. Nudge your Joke Maker to send the next batch."
 6. Otherwise: "Release what's good enough, then tell your Joke Maker what to change."
 
 The **Customer feedback** panel shows which criteria landed and which missed, never by how much,
@@ -251,7 +255,7 @@ a few seconds of their arrival time.
 ### Cues to call out during a round
 
 - "Look at the Storage column: whose jokes are waiting longest on Marketing's desk?"
-- "Your Hosting tile is going up every minute. What is sitting on the shelf unsold?"
+- "Your hosting fee is going up every minute. What is sitting on the shelf unsold?"
 - "Customers are arriving now. If your shelf is empty, those sales are gone."
 - Round 2: "Smaller batches are allowed now. What does that do to your feedback?"
 - "Jokes standing still: whose pile is growing, and what is it waiting for?"

@@ -9,7 +9,7 @@
    components/CustomerFeedbackCard.tsx); null shows a centred card. */
 import { fmtCents, fmtFee, fmtPerMinute } from '../leanMode';
 import {
-  batchArrives, certify, customersReport, firstSale, nextBatchArrives, openMore, openSentBatch, pick,
+  batchArrives, certify, customersReport, firstSale, nextBatchArrives, openFees, openSentBatch, pick,
   releaseSentBatch, sendBatch, splitOnDesk, topicsAndTitles, typeDraft, writeNote,
   type DemoStep, type TourRound,
 } from './demoScript';
@@ -60,7 +60,7 @@ export const JOKE_MAKER_STEPS: readonly DemoStep[] = [
   {
     id: 'jm-scoreboard', target: 'jm-stats', durationMs: 9000,
     title: 'Your scoreboard.',
-    body: 'Profit is sales minus fees, and it can go negative. Rank, Jokes Sold / Made and Created to Publish (how long a joke takes to reach the market) complete it. "More numbers" shows the rest.',
+    body: 'Team rank, by profit, is your place among all teams, and profit is sales minus fees. "Found a buyer" counts the jokes that have sold. "Fees and wait times" shows where the money went.',
   },
   {
     id: 'jm-customers', target: null, durationMs: 9000,
@@ -112,14 +112,14 @@ export const MARKETING_STEPS: readonly DemoStep[] = [
   {
     id: 'mk-scoreboard', target: 'mk-stats',
     title: 'Your scoreboard.',
-    body: 'Profit, your rank, how many jokes have sold, and how many batches are waiting on your desk.',
+    body: 'Your team rank, by profit, sits beside your profit and sales. "Found a buyer" shows how many of your released jokes have sold so far.',
     onEnter: releaseSentBatch, beats: [{ atMs: 3000, apply: firstSale }],
   },
   {
     id: 'mk-fees', target: 'mk-more', durationMs: 9000,
     title: 'Fees add up.',
-    body: ({ fees }) => `Every batch pays shipping. A batch waiting on your desk pays storage (${fmtCents(fees.storageFeePerJokeMinute)} a joke each minute), and an unsold joke pays hosting (${fmtPerMinute(fees.hostingFeePerJokeMinute)}). Holding batches only costs money: release quickly.`,
-    onEnter: s => nextBatchArrives(openMore(s)),
+    body: ({ fees }) => `"Fees and wait times" shows where your sales went. Every batch pays shipping. A batch waiting on your desk pays storage (${fmtCents(fees.storageFeePerJokeMinute)} a joke each minute), and an unsold joke pays hosting (${fmtPerMinute(fees.hostingFeePerJokeMinute)}). Release quickly.`,
+    onEnter: s => nextBatchArrives(openFees(s)),
   },
   {
     id: 'mk-next', target: 'mk-next-step',

@@ -179,7 +179,7 @@ const JokeMaker: React.FC = () => {
   const [certifiedState, setCertified] = useState(false);
   const [openSetState, setOpenSet] = useState<Set<string>>(() => new Set());
   /* Guided tour: inside the demo stage the script drives the textbox, the
-     certify box, which batches are open, "More numbers" and the Next step
+     certify box, which batches are open, "Fees and wait times" and the Next step
      line's clock (services/tour/demoUi.ts). In the real game there is no
      DemoUi and the student's own state does. */
   const demoUi = useDemoUi();
@@ -384,13 +384,13 @@ const JokeMaker: React.FC = () => {
                 summary={teamSummary}
                 config={config}
                 storageKey={moreTilesKey('joke_maker')}
-                open={demoUi ? demoUi.moreOpen : undefined}
+                open={demoUi ? demoUi.feesOpen : undefined}
                 extras={[{ label: 'Batches', value: batchesCreated }, { label: 'Content Waste', value: waste }]}
               />
             ) : (
               <StatTiles
                 storageKey={moreTilesKey('joke_maker')}
-                open={demoUi ? demoUi.moreOpen : undefined}
+                open={demoUi ? demoUi.feesOpen : undefined}
                 keyTiles={[]}
                 moreTiles={[
                   <StatBox key="lead" label="Created to Publish" value={fmtSeconds(avgLeadSec)} tone="sky" />,
