@@ -103,7 +103,7 @@ describe('the demo game', () => {
   it('keeps the data it was given and adds every action', () => {
     const ctx = demoGameContext(data(Role.JOKE_MAKER));
     expect(ctx.teamNames).toEqual({ '99': 'Team Demo' });
-    expect(Object.keys(DEMO_ACTIONS)).toHaveLength(21);
+    expect(Object.keys(DEMO_ACTIONS)).toHaveLength(22);
     for (const key of Object.keys(DEMO_ACTIONS)) expect(typeof (ctx as any)[key]).toBe('function');
   });
 });

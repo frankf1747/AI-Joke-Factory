@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { normalizeInstructorLobby, swapTeamPairs } from './context';
+import { PairSwapError, normalizeInstructorLobby, patchTwoPairs, swapTeamPairs } from './context';
 import type { ApiInstructorLobbyResponse, UserId } from './types';
+import type { MoveBody, PairMove } from './services/teamSeats';
 
 /* GET /lobby returns ports.LobbySnapshot, which has no json tags: Go sends
    PascalCase keys, except the nested domain.Team (id/name/created_at). Empty
@@ -61,6 +62,10 @@ describe('normalizeInstructorLobby', () => {
   });
 });
 
+/** The error a call rejects with; fails the test if it resolves. */
+const failure = (p: Promise<unknown>): Promise<PairSwapError> =>
+  p.then(() => { throw new Error('expected a rejection'); }, (e: unknown) => e as PairSwapError);
+
 /* ⇄ on a team card: PATCH /users/:uid takes one pair at a time and the backend
    keeps no (team, role) uniqueness, so the swap is two PATCHes. The second
    response is the new lobby; if the second fails, the first is put back so the
@@ -96,7 +101,10 @@ describe('swapTeamPairs', () => {
       if (uid === 13) throw new Error('second failed');
       return undefined;
     });
-    await expect(swapTeamPairs(patch, members)).rejects.toThrow('second failed');
+    const err = await failure(swapTeamPairs(patch, members));
+    expect(err).toBeInstanceOf(PairSwapError);
+    expect(err.message).toBe('second failed');
+    expect(err.reverted).toBe(true);
     expect(patch.mock.calls).toEqual([
       [12, { status: 'ASSIGNED', role: 'MARKETING' }],
       [13, { status: 'ASSIGNED', role: 'JM' }],
@@ -104,9 +112,49 @@ describe('swapTeamPairs', () => {
     ]);
   });
 
+  it('says so when the revert fails too, so the screen does not claim the team kept its roles', async () => {
+    let calls = 0;
+    const patch = vi.fn(async () => {
+      calls += 1;
+      if (calls > 1) throw new Error(`call ${calls} failed`);
+      return undefined;
+    });
+    const err = await failure(swapTeamPairs(patch, members));
+    expect(err).toBeInstanceOf(PairSwapError);
+    expect(err.reverted).toBe(false);
+    expect(patch).toHaveBeenCalledTimes(3);
+  });
+
   it('sends nothing unless the team has exactly two pairs', async () => {
     const patch = vi.fn(async () => undefined);
     await swapTeamPairs(patch, [members[0]]);
     expect(patch).not.toHaveBeenCalled();
+  });
+});
+
+/* A drop onto an occupied slot: the dragged pair takes the slot, the occupant
+   takes the dragged pair's old seat. Same pattern as the role swap. */
+describe('patchTwoPairs', () => {
+  const first: PairMove & { undo: MoveBody } = {
+    userId: 20,
+    body: { status: 'ASSIGNED', role: 'MARKETING', team_id: 3 },
+    undo: { status: 'WAITING', team_id: null },
+  };
+  const second: PairMove = { userId: 13, body: { status: 'WAITING', team_id: null } };
+
+  it('moves the dragged pair, then the occupant, and returns the second response', async () => {
+    const patch = vi.fn(async (uid: number) => ({ from: uid }));
+    expect(await patchTwoPairs(patch, first, second)).toEqual({ from: 13 });
+    expect(patch.mock.calls).toEqual([[20, first.body], [13, second.body]]);
+  });
+
+  it('puts the dragged pair back when the occupant\'s move fails', async () => {
+    const patch = vi.fn(async (uid: number, body: unknown) => {
+      if (uid === 13) throw new Error('no');
+      return body;
+    });
+    const err = await failure(patchTwoPairs(patch, first, second));
+    expect(err.reverted).toBe(true);
+    expect(patch.mock.calls).toEqual([[20, first.body], [13, second.body], [20, first.undo]]);
   });
 });

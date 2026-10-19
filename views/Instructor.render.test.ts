@@ -294,6 +294,24 @@ describe('Instructor screen, the Teams tab', () => {
     expect(out).toContain('in this browser only');
   });
 
+  it('turns Auto-assign off while either round runs, and keeps it in the lobby and between rounds', () => {
+    const autoAssign = (out: string) => out.match(/<button([^>]*)>Auto-assign 3 teams<\/button>/)?.[1] ?? '';
+    for (const roundStatuses of [{ 1: 'ACTIVE', 2: 'CONFIGURED' }, { 1: 'ENDED', 2: 'ACTIVE' }] as const) {
+      const out = renderWithGame(teamsTab(), { user: instructor, instructorLobby: lobby, roundStatuses: { ...roundStatuses } });
+      expect(autoAssign(out)).toContain('disabled=""');
+      expect(out).toContain('Auto-assign is off while a round runs. Drag pairs to move them.');
+    }
+    for (const roundStatuses of [{ 1: 'CONFIGURED', 2: 'CONFIGURED' }, { 1: 'ENDED', 2: 'CONFIGURED' }] as const) {
+      const out = renderWithGame(teamsTab(), { user: instructor, instructorLobby: lobby, roundStatuses: { ...roundStatuses } });
+      expect(autoAssign(out)).not.toContain('disabled=""');
+      expect(out).not.toContain('Auto-assign is off');
+    }
+  });
+
+  it('gives each team name its own label', () => {
+    expect(render()).toContain('aria-label="Name of Team 3"');
+  });
+
   it('asks "This reshuffles every team." before Auto-assign reshuffles existing teams', () => {
     expect(render({ initialConfirm: { kind: 'reshuffle' } })).toContain('This reshuffles every team.');
     expect(render()).not.toContain('This reshuffles every team.');
@@ -317,8 +335,8 @@ describe('Instructor screen, the Teams tab', () => {
   };
   const boardProps = (over: Partial<TeamsBoardProps> = {}): TeamsBoardProps => ({
     teams: seatedTeams(lobby, {}), waiting: lobby.unassigned.map(u => ({ userId: u.user_id, name: u.display_name })),
-    waitingCount: 4, autoAssignTeams: 3, totalPairs: 6, busyTeams: [], dropKey: null,
-    onDropKey: vi.fn(), onRename: vi.fn(), onAutoAssign: vi.fn(), onConfirm: vi.fn(), onMove: vi.fn(), onSwap: vi.fn(),
+    waitingCount: 4, autoAssignTeams: 3, totalPairs: 6, roundRunning: false, busyTeams: [], dropKey: null,
+    onDropKey: vi.fn(), onRename: vi.fn(), onAutoAssign: vi.fn(), onConfirm: vi.fn(), onMove: vi.fn(), onExchange: vi.fn(), onSwap: vi.fn(),
     ...over,
   });
 
@@ -344,11 +362,32 @@ describe('Instructor screen, the Teams tab', () => {
     vi.stubGlobal('window', { location: { search: '' } });
   });
 
-  it('dropping a waiting pair into the Marketing slot PATCHes role MARKETING on that team', () => {
-    const p = boardProps();
+  it('dropping a waiting pair into the open Marketing slot PATCHes role MARKETING on that team', () => {
+    const jmOnly: InstructorLobby = { ...lobby, teams: [{ ...lobby.teams[0], members: [lobby.teams[0].members[0]] }] };
+    const p = boardProps({ teams: seatedTeams(jmOnly, {}) });
     const slot = walk(TeamsBoard(p), el => el.props['data-seat'] === 'MARKETING' && el.props['data-team'] === 3)[0];
     slot.props.onDrop({ preventDefault() {}, dataTransfer: { getData: () => '20' } });
     expect(p.onMove).toHaveBeenCalledWith(20, { status: 'ASSIGNED', role: 'MARKETING', team_id: 3 });
+  });
+
+  it('dropping a waiting pair onto an occupied slot trades it with the occupant', () => {
+    const p = boardProps();
+    const slot = walk(TeamsBoard(p), el => el.props['data-seat'] === 'JM' && el.props['data-team'] === 3)[0];
+    slot.props.onDrop({ preventDefault() {}, dataTransfer: { getData: () => '20' } });
+    expect(p.onMove).not.toHaveBeenCalled();
+    expect(p.onExchange).toHaveBeenCalledWith(
+      { userId: 20, body: { status: 'ASSIGNED', role: 'JM', team_id: 3 }, undo: { status: 'WAITING', team_id: null } },
+      { userId: 12, body: { status: 'WAITING', team_id: null } },
+    );
+  });
+
+  it('a drag leaving into a child of the slot keeps the highlight', () => {
+    const p = boardProps({ dropKey: '3:JM' });
+    const slot = walk(TeamsBoard(p), el => el.props['data-seat'] === 'JM' && el.props['data-team'] === 3)[0];
+    slot.props.onDragLeave({ currentTarget: { contains: () => true }, relatedTarget: {} });
+    expect(p.onDropKey).not.toHaveBeenCalled();
+    slot.props.onDragLeave({ currentTarget: { contains: () => false }, relatedTarget: null });
+    expect(p.onDropKey).toHaveBeenCalledWith(null);
   });
 
   it('⇄ swaps the team\'s two roles through onSwap', () => {

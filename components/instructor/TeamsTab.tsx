@@ -10,7 +10,7 @@ import { Button, Modal } from '../../components';
 import { pairNames } from '../../services/format';
 import {
   autoAssignCount, dropAction, seatedTeams,
-  type DropTarget, type MoveBody, type SeatPair, type SeatedTeam,
+  type DropTarget, type MoveBody, type PairMove, type SeatPair, type SeatedTeam,
 } from '../../services/teamSeats';
 
 export type TeamsConfirm = { kind: 'reshuffle' } | { kind: 'remove'; userId: number; name: string };
@@ -22,6 +22,8 @@ export interface TeamsBoardProps {
   autoAssignTeams: number;
   /** Waiting plus assigned pairs: everyone Auto-assign reshuffles. */
   totalPairs: number;
+  /** A round is ACTIVE: POST /assign would reshuffle the pairs mid-round, so Auto-assign is off. */
+  roundRunning: boolean;
   busyTeams: number[];
   /** The drop zone under the dragged pair, for its highlight. */
   dropKey: string | null;
@@ -30,6 +32,8 @@ export interface TeamsBoardProps {
   onAutoAssign: () => void;
   onConfirm: (c: TeamsConfirm) => void;
   onMove: (userId: number, body: MoveBody) => void;
+  /** A drop onto an occupied slot: the dragged pair first, then the occupant. */
+  onExchange: (first: PairMove & { undo: MoveBody }, second: PairMove) => void;
   onSwap: (teamId: number) => void;
 }
 
@@ -42,12 +46,16 @@ const CHIP_BUTTON =
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 export const TeamsBoard = ({
-  teams, waiting, waitingCount, autoAssignTeams, totalPairs, busyTeams, dropKey,
-  onDropKey, onRename, onAutoAssign, onConfirm, onMove, onSwap,
+  teams, waiting, waitingCount, autoAssignTeams, totalPairs, roundRunning, busyTeams, dropKey,
+  onDropKey, onRename, onAutoAssign, onConfirm, onMove, onExchange, onSwap,
 }: TeamsBoardProps): React.ReactElement => {
   const zone = (key: string, target: DropTarget) => ({
     onDragOver: (e: React.DragEvent) => { e.preventDefault(); if (dropKey !== key) onDropKey(key); },
-    onDragLeave: () => onDropKey(null),
+    // Moving onto a chip inside the zone fires dragleave on the zone: keep the highlight.
+    onDragLeave: (e: React.DragEvent) => {
+      if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+      onDropKey(null);
+    },
     onDrop: (e: React.DragEvent) => {
       e.preventDefault();
       onDropKey(null);
@@ -55,6 +63,7 @@ export const TeamsBoard = ({
       if (!userId) return;
       const action = dropAction(teams, userId, target);
       if (action?.kind === 'move') onMove(action.userId, action.body);
+      else if (action?.kind === 'exchange') onExchange(action.first, action.second);
       else if (action?.kind === 'swap') onSwap(action.teamId);
     },
   });
@@ -120,11 +129,13 @@ export const TeamsBoard = ({
 
   const hasTeams = teams.length > 0;
   const autoAssignLabel = autoAssignTeams >= 1 ? `Auto-assign ${plural(autoAssignTeams, 'team', 'teams')}` : 'Auto-assign';
-  const sub = totalPairs < 2
-    ? 'Pairs appear here as they join. Auto-assign needs at least two.'
-    : waitingCount === 0
-      ? `Everyone is on a team. Drag a pair here to take them off. Auto-assign reshuffles all ${totalPairs} pairs.`
-      : `Auto-assign seats all ${totalPairs} pairs into ${plural(autoAssignTeams, 'team', 'teams')}, one Joke Maker pair and one Marketing pair each.${totalPairs % 2 === 1 ? ' One pair stays in the lobby.' : ''}`;
+  const sub = roundRunning
+    ? 'Auto-assign is off while a round runs. Drag pairs to move them.'
+    : totalPairs < 2
+      ? 'Pairs appear here as they join. Auto-assign needs at least two.'
+      : waitingCount === 0
+        ? `Everyone is on a team. Drag a pair here to take them off. Auto-assign reshuffles all ${totalPairs} pairs.`
+        : `Auto-assign seats all ${totalPairs} pairs into ${plural(autoAssignTeams, 'team', 'teams')}, one Joke Maker pair and one Marketing pair each.${totalPairs % 2 === 1 ? ' One pair stays in the lobby.' : ''}`;
 
   return (
     <div>
@@ -146,7 +157,7 @@ export const TeamsBoard = ({
         </div>
         <button
           type="button"
-          disabled={autoAssignTeams < 1}
+          disabled={roundRunning || autoAssignTeams < 1}
           onClick={() => (hasTeams ? onConfirm({ kind: 'reshuffle' }) : onAutoAssign())}
           className={PRIMARY}
         >{autoAssignLabel}</button>
@@ -158,7 +169,7 @@ export const TeamsBoard = ({
             <div key={team.id} className="px-3.5 pb-3 pt-3.5" style={SHEET}>
               <input
                 type="text"
-                aria-label="Team name"
+                aria-label={`Name of ${team.name}`}
                 value={team.name}
                 onChange={e => onRename(String(team.id), e.target.value)}
                 className="-mx-1 -mt-0.5 mb-2 w-[calc(100%+8px)] rounded-[4px] border border-transparent bg-transparent px-1 py-0.5 text-[16px] font-semibold hover:border-[color:var(--rule)] focus:border-[color:var(--navy)] focus:bg-[color:var(--sheet)] focus:outline-none"
@@ -184,7 +195,9 @@ export const TeamsBoard = ({
 
 /** initialConfirm opens a confirm on first render (the render tests use it). */
 export const TeamsTab: React.FC<{ initialConfirm?: TeamsConfirm }> = ({ initialConfirm }) => {
-  const { instructorLobby, teamNames, updateTeamName, formTeams, swapTeamRoles, movePair, deleteUser } = useGame();
+  const {
+    instructorLobby, roundStatuses, teamNames, updateTeamName, formTeams, swapTeamRoles, movePair, exchangePairs, deleteUser,
+  } = useGame();
   const [confirm, setConfirm] = useState<TeamsConfirm | null>(initialConfirm ?? null);
   const [busyTeams, setBusyTeams] = useState<number[]>([]);
   const [dropKey, setDropKey] = useState<string | null>(null);
@@ -197,6 +210,7 @@ export const TeamsTab: React.FC<{ initialConfirm?: TeamsConfirm }> = ({ initialC
   const waitingCount = summary?.waiting ?? waiting.length;
   const autoAssignTeams = autoAssignCount(summary);
   const totalPairs = (summary?.waiting ?? 0) + (summary?.assigned ?? 0);
+  const roundRunning = roundStatuses[1] === 'ACTIVE' || roundStatuses[2] === 'ACTIVE';
 
   const swap = async (teamId: number) => {
     if (busyTeams.includes(teamId)) return;
@@ -213,9 +227,10 @@ export const TeamsTab: React.FC<{ initialConfirm?: TeamsConfirm }> = ({ initialC
     <>
       <TeamsBoard
         teams={teams} waiting={waiting} waitingCount={waitingCount} autoAssignTeams={autoAssignTeams}
-        totalPairs={totalPairs} busyTeams={busyTeams} dropKey={dropKey} onDropKey={setDropKey}
+        totalPairs={totalPairs} roundRunning={roundRunning} busyTeams={busyTeams} dropKey={dropKey} onDropKey={setDropKey}
         onRename={updateTeamName} onAutoAssign={() => { void formTeams(); }} onConfirm={setConfirm}
-        onMove={(userId, body) => { void movePair(userId, body); }} onSwap={teamId => { void swap(teamId); }}
+        onMove={(userId, body) => { void movePair(userId, body); }}
+        onExchange={(first, second) => { void exchangePairs(first, second); }} onSwap={teamId => { void swap(teamId); }}
       />
 
       <Modal isOpen={confirm?.kind === 'reshuffle'} onClose={close} title="Reshuffle the teams?">
@@ -225,7 +240,7 @@ export const TeamsTab: React.FC<{ initialConfirm?: TeamsConfirm }> = ({ initialC
           </p>
           <div className="mt-6 grid grid-cols-2 gap-3">
             <Button variant="outline" onClick={close} className="w-full">Keep the teams</Button>
-            <Button className="w-full font-bold" onClick={() => { close(); void formTeams(); }}>
+            <Button className="w-full font-bold" disabled={roundRunning} onClick={() => { close(); void formTeams(); }}>
               {`Auto-assign ${plural(autoAssignTeams, 'team', 'teams')}`}
             </Button>
           </div>

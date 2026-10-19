@@ -11,6 +11,10 @@ const lobby: InstructorLobby = {
       { user_id: 13, display_name: 'noor_ben', role: 'JM' },
     ] },
     { team: { id: 2, name: 'Team 2' }, members: [] },
+    { team: { id: 7, name: 'Team 7' }, members: [
+      { user_id: 30, display_name: 'zoe_arjun', role: 'JM' },
+      { user_id: 31, display_name: 'rosa_ken', role: 'MARKETING' },
+    ] },
   ],
   customers: [],
   unassigned: [{ user_id: 20, display_name: 'ivy_omar', status: 'WAITING' }],
@@ -18,9 +22,10 @@ const lobby: InstructorLobby = {
 
 describe('seatedTeams', () => {
   it('draws real teams only, seats each pair by role and prefers the local name', () => {
-    expect(seatedTeams(lobby, { '5': 'Owls' })).toEqual([
+    expect(seatedTeams(lobby, { '5': 'Owls' })[0]).toEqual(
       { id: 5, name: 'Owls', jm: [{ userId: 13, name: 'Noor and Ben' }], marketing: [{ userId: 12, name: 'Ama and Kenji' }] },
-    ]);
+    );
+    expect(seatedTeams(lobby, {}).map(t => t.id)).toEqual([5, 7]);
     expect(seatedTeams(null, {})).toEqual([]);
   });
 });
@@ -35,10 +40,6 @@ describe('autoAssignCount', () => {
 
 describe('dropAction', () => {
   const teams = seatedTeams(lobby, {});
-  it('seats a pair in the slot it lands on, with that slot\'s role', () => {
-    expect(dropAction(teams, 20, { kind: 'slot', teamId: 5, seat: 'JM' }))
-      .toEqual({ kind: 'move', userId: 20, body: { status: 'ASSIGNED', role: 'JM', team_id: 5 } });
-  });
   it('sends a seated pair back to the lobby, and ignores a lobby pair dropped on the lobby', () => {
     expect(dropAction(teams, 12, { kind: 'lobby' })).toEqual({ kind: 'move', userId: 12, body: { status: 'WAITING', team_id: null } });
     expect(dropAction(teams, 20, { kind: 'lobby' })).toBeNull();
@@ -46,5 +47,28 @@ describe('dropAction', () => {
   it('swaps the team\'s roles when a pair lands on its teammate\'s slot, and ignores its own slot', () => {
     expect(dropAction(teams, 12, { kind: 'slot', teamId: 5, seat: 'JM' })).toEqual({ kind: 'swap', teamId: 5 });
     expect(dropAction(teams, 12, { kind: 'slot', teamId: 5, seat: 'MARKETING' })).toBeNull();
+  });
+  it('a waiting pair dropped on an occupied slot takes it, and the occupant goes to the lobby', () => {
+    expect(dropAction(teams, 20, { kind: 'slot', teamId: 5, seat: 'JM' })).toEqual({
+      kind: 'exchange',
+      first: { userId: 20, body: { status: 'ASSIGNED', role: 'JM', team_id: 5 }, undo: { status: 'WAITING', team_id: null } },
+      second: { userId: 13, body: { status: 'WAITING', team_id: null } },
+    });
+  });
+  it('a seated pair dropped on another team\'s occupied slot trades seats with the occupant', () => {
+    expect(dropAction(teams, 12, { kind: 'slot', teamId: 7, seat: 'JM' })).toEqual({
+      kind: 'exchange',
+      first: {
+        userId: 12,
+        body: { status: 'ASSIGNED', role: 'JM', team_id: 7 },
+        undo: { status: 'ASSIGNED', role: 'MARKETING', team_id: 5 },
+      },
+      second: { userId: 30, body: { status: 'ASSIGNED', role: 'MARKETING', team_id: 5 } },
+    });
+  });
+  it('a pair dropped on an empty slot just moves, with that slot\'s role', () => {
+    const open = seatedTeams({ ...lobby, teams: [{ team: { id: 9, name: 'Team 9' }, members: [{ user_id: 40, display_name: 'a_b', role: 'JM' }] }] }, {});
+    expect(dropAction(open, 20, { kind: 'slot', teamId: 9, seat: 'MARKETING' }))
+      .toEqual({ kind: 'move', userId: 20, body: { status: 'ASSIGNED', role: 'MARKETING', team_id: 9 } });
   });
 });

@@ -23,7 +23,8 @@ import { teamApi } from './services/api';
 import type { RoundTimes } from './services/headerRound';
 import { instructorService } from './services/instructorService';
 import type { PatchUserRole } from './services/instructorService';
-import { autoAssignCount, seatOf, type MoveBody, type Seat } from './services/teamSeats';
+import { autoAssignCount, seatOf, type MoveBody, type PairMove, type Seat } from './services/teamSeats';
+import { browserNameStore, clearTeamNames, loadTeamNames, saveTeamNames, teamNamesKey } from './services/teamNames';
 import { jmService } from './services/jmService';
 import { queueSizeAfterRelease } from './services/desk';
 import { buildPublishBody, marketingService, publishFailureMessage, toMarketingNote } from './services/marketingService';
@@ -542,13 +543,42 @@ function looksLikeLobby(raw: unknown): boolean {
   return d != null && typeof d === 'object' && ['Teams', 'teams', 'Summary', 'summary'].some(k => k in d);
 }
 
+/** A two-PATCH change whose second PATCH failed. `reverted` says whether the first
+ *  PATCH was undone; when false the server may hold a half-done change. */
+export class PairSwapError extends Error {
+  constructor(readonly cause: unknown, readonly reverted: boolean) {
+    super(cause instanceof Error ? cause.message : String(cause));
+    this.name = 'PairSwapError';
+  }
+}
+
 /**
- * ⇄ on a team card. PATCH …/users/:uid seats one pair at a time and the backend keeps no
- * (team, role) uniqueness (instructor.go PatchUser), so the swap is two PATCHes. The
- * second response is the new lobby. When the second fails, a third PATCH puts the first
- * pair back so the team never keeps two pairs of one role; the error still rejects.
- * Does nothing unless the team has exactly two pairs.
+ * Two pairs change seats with two PATCHes (PATCH …/users/:uid seats one pair at a time, and
+ * the backend keeps no (team, role) uniqueness: instructor.go PatchUser). Returns the second
+ * response, which Go fills with the new lobby. When the second fails, `first.undo` is sent
+ * so no slot is left holding two pairs; the call rejects with a PairSwapError either way.
  */
+export async function patchTwoPairs<B, T>(
+  patch: (uid: UserId, body: B) => Promise<T>,
+  first: { userId: number; body: B; undo: B },
+  second: { userId: number; body: B },
+): Promise<T> {
+  await patch(first.userId as UserId, first.body);
+  try {
+    return await patch(second.userId as UserId, second.body);
+  } catch (e) {
+    let reverted = true;
+    try {
+      await patch(first.userId as UserId, first.undo);
+    } catch {
+      reverted = false;
+    }
+    throw new PairSwapError(e, reverted);
+  }
+}
+
+/** ⇄ on a team card: the two pairs' roles flipped, through patchTwoPairs. Does nothing
+ *  unless the team has exactly two pairs. */
 export async function swapTeamPairs<T>(
   patch: (uid: UserId, body: { status: 'ASSIGNED'; role: Seat }) => Promise<T>,
   members: ReadonlyArray<{ user_id: UserId; role: string | null }>,
@@ -558,17 +588,11 @@ export async function swapTeamPairs<T>(
   const aWas = seatOf(a.role);
   const aNext: Seat = aWas === 'JM' ? 'MARKETING' : 'JM';
   const bNext: Seat = aNext === 'JM' ? 'MARKETING' : 'JM';
-  await patch(a.user_id, { status: 'ASSIGNED', role: aNext });
-  try {
-    return await patch(b.user_id, { status: 'ASSIGNED', role: bNext });
-  } catch (e) {
-    try {
-      await patch(a.user_id, { status: 'ASSIGNED', role: aWas });
-    } catch {
-      // The next lobby poll shows whatever the server kept.
-    }
-    throw e;
-  }
+  return patchTwoPairs(
+    patch,
+    { userId: a.user_id, body: { status: 'ASSIGNED', role: aNext }, undo: { status: 'ASSIGNED', role: aWas } },
+    { userId: b.user_id, body: { status: 'ASSIGNED', role: bNext } },
+  );
 }
 
 export function normalizeInstructorLobby(raw: any, fallbackRoundId: RoundId | null): InstructorLobby {
@@ -678,6 +702,8 @@ export interface GameContextType {
   swapTeamRoles: (teamId: number) => Promise<void>;
   /** Instructor: seat a pair in a team's slot, or send it back to the lobby; adopts the lobby the PATCH returns. */
   movePair: (userId: number, body: MoveBody) => Promise<void>;
+  /** Instructor: a drop onto an occupied slot. The dragged pair takes it, the occupant takes its old seat (two PATCHes, the first undone if the second fails). */
+  exchangePairs: (first: PairMove & { undo: MoveBody }, second: PairMove) => Promise<void>;
 
   // Team Name Management
   teamNames: Record<string, string>;
@@ -880,6 +906,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // loadStoredRoundConfig only reads refs and state setters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isInstructorUser, viewedRoundId]);
+
+  // The instructor's team renames, kept in this browser (best-effort, never in a watch tab).
+  const instructorIdForNames = user?.role === ('INSTRUCTOR' as Role) ? user.user_id : null;
+  useEffect(() => {
+    if (instructorIdForNames == null || isWatchMode()) return;
+    setTeamNames({ ...INITIAL_TEAM_NAMES, ...loadTeamNames(browserNameStore(), teamNamesKey(instructorIdForNames)) });
+  }, [instructorIdForNames]);
 
   // Restore local caches across refresh (best-effort). Not in a watch tab:
   // these shared caches belong to the instructor or another user of this
@@ -1806,6 +1839,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const formTeams = async () => {
     if (!roundId) return;
     if (!user || user.role !== ('INSTRUCTOR' as Role)) return;
+    // POST /assign has no round-status guard and reshuffles every ASSIGNED pair, which
+    // would strand batches mid-round. The Teams tab disables it too; this is the backstop.
+    if (roundStatuses[1] === 'ACTIVE' || roundStatuses[2] === 'ACTIVE') return;
 
     // One account per seat: a "user" here is a student pair (App.tsx normalises two names
     // into one key), and each team is 1 JM + 1 Marketing. Human customers are gone, so
@@ -1822,11 +1858,18 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
+    let res: unknown;
     try {
-      await instructorService.autoAssign(roundId, { team_count: teamCount });
+      res = await instructorService.autoAssign(roundId, { team_count: teamCount });
       await updateConfig({ status: 'PLAYING' });
     } catch {
       alert('Failed to auto-assign teams. Please try again.');
+      return;
+    }
+    try {
+      await adoptLobby(res);
+    } catch {
+      // The next lobby poll shows the new teams.
     }
   };
 
@@ -1861,7 +1904,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateTeamName = (teamNum: string, name: string) => {
     const newNames = { ...teamNames, [teamNum]: name };
     setTeamNames(newNames);
-    // No team rename endpoint provided in schema; keep local-only to avoid UI changes.
+    // No team rename endpoint: the names are kept in this browser, per instructor.
+    if (user?.role === ('INSTRUCTOR' as Role) && !isWatchMode()) {
+      saveTeamNames(browserNameStore(), teamNamesKey(user.user_id), newNames);
+    }
   };
   
   const updateUser = async (userId: string, updates: Partial<User>) => {
@@ -1914,6 +1960,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setRoster(rosterFromLobby(next));
   };
 
+  /** After a failed change: show what the server kept, best-effort. */
+  const rereadLobby = async () => {
+    try {
+      await adoptLobby(undefined);
+    } catch {
+      // The next lobby poll catches up.
+    }
+  };
+
   const swapTeamRoles = async (teamId: number) => {
     if (!roundId || !user || user.role !== ('INSTRUCTOR' as Role)) return;
     const team = instructorLobby?.teams.find(t => Number(t.team.id) === teamId);
@@ -1921,14 +1976,36 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let res: unknown;
     try {
       res = await swapTeamPairs((uid, body) => instructorService.patchUser(roundId, uid, body), team.members);
-    } catch {
-      alert('Could not switch the roles. The team keeps its roles; try again.');
+    } catch (e) {
+      await rereadLobby();
+      alert(e instanceof PairSwapError && !e.reverted
+        ? "Could not switch the roles. Check this team's slots."
+        : 'Could not switch the roles. The team keeps its roles; try again.');
       return;
     }
     try {
       await adoptLobby(res);
     } catch {
       // The next lobby poll shows the swap.
+    }
+  };
+
+  const exchangePairs = async (first: PairMove & { undo: MoveBody }, second: PairMove) => {
+    if (!roundId || !user || user.role !== ('INSTRUCTOR' as Role)) return;
+    let res: unknown;
+    try {
+      res = await patchTwoPairs((uid, body: MoveBody) => instructorService.patchUser(roundId, uid, body), first, second);
+    } catch (e) {
+      await rereadLobby();
+      alert(e instanceof PairSwapError && !e.reverted
+        ? 'Could not move the pairs. Check both slots.'
+        : 'Could not move the pairs. Both keep their seats; try again.');
+      return;
+    }
+    try {
+      await adoptLobby(res);
+    } catch {
+      // The next lobby poll shows the move.
     }
   };
 
@@ -1956,7 +2033,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       await instructorService.deleteUser(roundId, uid as UserId);
-      // Optimistic removal; poll will re-sync.
+      // Optimistic removal, then the lobby as the server has it, so the board
+      // never offers a second Remove on the removed pair.
       setRoster(prev => prev.filter(u => Number(u.id) !== uid));
       setInstructorLobby(prev => {
         if (!prev) return prev;
@@ -1967,6 +2045,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           unassigned: prev.unassigned.filter(u => u.user_id !== (uid as UserId)),
         };
       });
+      void rereadLobby();
     } catch (e) {
       if (e instanceof ApiError) {
         if (e.status === 404) {
@@ -2354,6 +2433,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setQcQueue(null);
     setQcQueueSize(null);
     setTeamNames(INITIAL_TEAM_NAMES);
+    if (user?.role === ('INSTRUCTOR' as Role) && !isWatchMode()) clearTeamNames(browserNameStore(), teamNamesKey(user.user_id));
     submittedBatchJokesRef.current = {};
     qcRatedHistoryRef.current = {};
     localStorage.removeItem(LS_SUBMITTED_BATCH_JOKES);
@@ -2381,7 +2461,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <GameContext.Provider value={{
       user, login, instructorLogin, logout, roster,
       config, updateConfig, setRound, setGameActive, endRound, resetGame, toggleTeamPopup,
-      formTeams, resetToLobby, swapTeamRoles, movePair,
+      formTeams, resetToLobby, swapTeamRoles, movePair, exchangePairs,
       teamNames, updateTeamName, updateUser, deleteUser,
       batches, addBatch, submitRawBatch, splitBatch, unsplitBatch, publishBatch,
       sales,

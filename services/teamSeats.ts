@@ -24,8 +24,15 @@ export type MoveBody =
 
 export type DropTarget = { kind: 'slot'; teamId: number; seat: Seat } | { kind: 'lobby' };
 
-/** What a drop does: move one pair, swap a team's two roles, or nothing. */
-export type DropAction = { kind: 'move'; userId: number; body: MoveBody } | { kind: 'swap'; teamId: number } | null;
+export interface PairMove { userId: number; body: MoveBody }
+
+/** What a drop does: move one pair; trade seats with the slot's occupant (the dragged
+    pair first, `undo` puts it back); swap a team's two roles; or nothing. */
+export type DropAction =
+  | { kind: 'move'; userId: number; body: MoveBody }
+  | { kind: 'exchange'; first: PairMove & { undo: MoveBody }; second: PairMove }
+  | { kind: 'swap'; teamId: number }
+  | null;
 
 /** The legacy QC reads as Marketing; a member with no role sits in the Joke Maker slot. */
 export function seatOf(role: string | null | undefined): Seat {
@@ -55,7 +62,9 @@ export function autoAssignCount(summary: { waiting: number; assigned: number } |
 }
 
 /** Dropping into a slot sets that slot's role on that team; into the lobby sends the pair back to WAITING.
-    Dropping a pair onto its teammate's slot swaps the team's two roles instead. */
+    Dropping a pair onto its teammate's slot swaps the team's two roles instead. Dropping onto a slot
+    another pair holds trades seats: the occupant takes the dragged pair's old seat, or the lobby
+    when the dragged pair came from the lobby, so a slot never ends up with two pairs. */
 export function dropAction(teams: ReadonlyArray<SeatedTeam>, userId: number, target: DropTarget): DropAction {
   const home = teams.find(t => t.jm.some(p => p.userId === userId) || t.marketing.some(p => p.userId === userId));
   const homeSeat: Seat | null = home ? (home.jm.some(p => p.userId === userId) ? 'JM' : 'MARKETING') : null;
@@ -68,5 +77,19 @@ export function dropAction(teams: ReadonlyArray<SeatedTeam>, userId: number, tar
     const mine = homeSeat === 'JM' ? home.jm : home.marketing;
     if (other.length === 1 && mine.length === 1) return { kind: 'swap', teamId: home.id };
   }
-  return { kind: 'move', userId, body: { status: 'ASSIGNED', role: target.seat, team_id: target.teamId } };
+  const body: MoveBody = { status: 'ASSIGNED', role: target.seat, team_id: target.teamId };
+  const slotTeam = teams.find(t => t.id === target.teamId);
+  const occupants = (slotTeam ? (target.seat === 'JM' ? slotTeam.jm : slotTeam.marketing) : [])
+    .filter(p => p.userId !== userId);
+  if (occupants.length === 1) {
+    const oldSeat: MoveBody = home && homeSeat
+      ? { status: 'ASSIGNED', role: homeSeat, team_id: home.id }
+      : { status: 'WAITING', team_id: null };
+    return {
+      kind: 'exchange',
+      first: { userId, body, undo: oldSeat },
+      second: { userId: occupants[0].userId, body: oldSeat },
+    };
+  }
+  return { kind: 'move', userId, body };
 }

@@ -43,8 +43,8 @@ export const instructorService = {
    * The old call site also sent customer_count; the backend silently ignored it. Keeping
    * this type narrow is what stops that from coming back.
    */
-  autoAssign(round_id: RoundId, body: { team_count: number }): Promise<void> {
-    return apiRequest<void>(`/v1/instructor/rounds/${round_id}/assign`, { method: 'POST', body });
+  autoAssign(round_id: RoundId, body: { team_count: number }): Promise<unknown> {
+    return apiRequest<unknown>(`/v1/instructor/rounds/${round_id}/assign`, { method: 'POST', body });
   },
 
   patchUser(
