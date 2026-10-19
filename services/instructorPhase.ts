@@ -40,3 +40,23 @@ export function phaseAction(phase: InstructorPhase): PhaseAction {
 export function defaultViewRound(phase: InstructorPhase): 1 | 2 {
   return phase === 'r2-running' || phase === 'over' ? 2 : 1;
 }
+
+/** The phase, or null while neither status is known (after a reload, before the first poll lands). */
+export function knownPhase(statuses: PhaseStatuses): InstructorPhase | null {
+  return statuses[1] == null && statuses[2] == null ? null : instructorPhase(statuses);
+}
+
+/** The open tab and the phase it was last moved for. tab null: nothing committed yet. */
+export interface TabFollow<T extends string> { tab: T | null; phase: InstructorPhase | null }
+
+/**
+ * The open tab follows the phase (defaultTab). Nothing moves while the phase is
+ * unknown, so a reload mid-round never opens Teams for one poll. When the phase
+ * first becomes known, a tab the instructor already picked stays; after that,
+ * each phase change opens that phase's default tab.
+ */
+export function followPhase<T extends string>(s: TabFollow<T>, phase: InstructorPhase | null): TabFollow<T | InstructorTab> {
+  if (phase == null || phase === s.phase) return s;
+  if (s.phase == null && s.tab != null) return { tab: s.tab, phase };
+  return { tab: defaultTab(phase), phase };
+}

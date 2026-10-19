@@ -99,32 +99,17 @@ body {
   .jf-next-step[data-changed="true"] .jf-next-step-text { animation: none; }
 }
 
-@keyframes jf-rank-up-flash {
-  0% {
-    background-position: 0% 50%;
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.55);
-  }
-  35% {
-    background-position: 100% 50%;
-    box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.25);
-  }
-  100% {
-    background-position: 100% 50%;
-    box-shadow: 0 0 0 18px rgba(236, 72, 153, 0);
-  }
+/* Leaderboard: a team whose rank changed on this poll fades from the gold tint once.
+   The board's rank (#) is set in Instrument Sans, the rank ordinal face. */
+@keyframes jf-board-rankup {
+  0%, 20% { background-color: var(--gold-tint); }
+  100% { background-color: transparent; }
 }
-
-/* Applied to a <tr>. Keep it subtle but celebratory when a team moves up. */
-.jf-leaderboard-rankup {
-  background: linear-gradient(
-    90deg,
-    rgba(16, 185, 129, 0.18),
-    rgba(59, 130, 246, 0.16),
-    rgba(236, 72, 153, 0.14)
-  ) !important;
-  background-size: 200% 200% !important;
-  animation: jf-rank-up-flash 1400ms ease-out;
+.jf-board-rankup > td { animation: jf-board-rankup 1.6s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .jf-board-rankup > td { animation: none; }
 }
+.jf-board-rank { font-family: 'Instrument Sans', 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif; font-weight: 600; }
 
 /* Light outline for colored text (improves contrast on light backgrounds). */
 .jf-text-outline {

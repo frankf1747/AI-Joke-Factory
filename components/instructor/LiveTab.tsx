@@ -1,8 +1,10 @@
-/* The Instructor's Live tab (spec 6b): the leaderboard, the charts and the live
-   market. Moved from views/Instructor.tsx unchanged. The screen keeps the state,
-   the polling (useLeanCharts) and the render helpers, so switching tabs neither
-   stops nor repeats a fetch; the restyle comes later. */
-import React from 'react';
+/* The Instructor's Live tab (spec 6b): the class totals, the leaderboard, the
+   charts and the live market. The screen keeps the polling (context,
+   useLeanCharts), the stats rows, the sort and the rank moves, so switching tabs
+   neither stops nor repeats a fetch and a rank change seen on another tab still
+   tags its row. The Classic chart cards below are Task D6's to remove. */
+import React, { useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Maximize2, X } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -12,6 +14,10 @@ import { useGame } from '../../context';
 import { Card } from '../../components';
 import { LeanChartsPanel } from '../leanCharts/LeanChartsPanel';
 import type { LeanChartsState } from '../../services/useLeanCharts';
+import { classTotals, type LeaderboardRow } from '../../services/classTotals';
+import { boardRows, nextBoardSort, type BoardRanks, type BoardSort } from '../../services/liveBoard';
+import { ClassTotalsRow, LeaderboardTable, PresentBoard, QUIET_BUTTON, QUIET_BUTTON_STYLE } from './LiveBoard';
+import { LiveMarket } from './LiveMarket';
 
 export const CHART_KEYS = ['sales', 'sequence_quality', 'unrated_jokes'] as const;
 export type ChartKey = typeof CHART_KEYS[number];
@@ -26,10 +32,16 @@ export type ScatterPoint = {
 
 export interface LiveTabProps {
   viewRound: 1 | 2;
-  setViewRound: (round: 1 | 2) => void;
-  round2Started: boolean;
+  /** The stats rows of the round in view. */
+  leaderboard: LeaderboardRow[];
+  /** The round in view is Lean: fees, never sold and the two waits show. */
+  boardLean: boolean;
+  boardSort: BoardSort;
+  setBoardSort: Setter<BoardSort>;
+  boardRanks: BoardRanks;
+  /** The current round has started, so its market is open. */
+  marketOpen: boolean;
   setExpandedChart: (chart: string | null) => void;
-  renderLeaderboardTable: (opts: { maxHeightClass: string; isExpanded?: boolean }) => React.ReactNode;
   renderChart: (type: string, opts?: { isExpanded?: boolean }) => React.ReactNode;
   hiddenCharts: ChartKey[];
   restoreAllCharts: () => void;
@@ -37,7 +49,6 @@ export interface LiveTabProps {
   hideChart: (key: ChartKey) => void;
   showLeanCharts: boolean;
   leanChartsRound: 1 | 2;
-  leanRounds: { 1: boolean; 2: boolean };
   leanChartsR1: LeanChartsState;
   leanChartsR2: LeanChartsState;
   visibleTeamIds: string[];
@@ -66,16 +77,12 @@ export interface LiveTabProps {
   formatScatterValue: (val: number, isInteger: boolean) => string;
   renderScatterDot: (props: any) => React.ReactElement | null;
   renderScatterLabel: (props: any) => React.ReactElement | null;
-  marketSortKey: 'id' | 'sales'; setMarketSortKey: Setter<'id' | 'sales'>;
-  marketSortDir: 'asc' | 'desc'; setMarketSortDir: Setter<'asc' | 'desc'>;
-  marketPage: number; setMarketPage: Setter<number>;
-  expandedMarketJokeIds: Record<string, boolean>; setExpandedMarketJokeIds: Setter<Record<string, boolean>>;
 }
 
 export const LiveTab: React.FC<LiveTabProps> = ({
-  viewRound, setViewRound, round2Started, setExpandedChart, renderLeaderboardTable, renderChart,
+  viewRound, leaderboard, boardLean, boardSort, setBoardSort, boardRanks, marketOpen, setExpandedChart, renderChart,
   hiddenCharts, restoreAllCharts, isChartHidden, hideChart,
-  showLeanCharts, leanChartsRound, leanRounds, leanChartsR1, leanChartsR2, visibleTeamIds,
+  showLeanCharts, leanChartsRound, leanChartsR1, leanChartsR2, visibleTeamIds,
   salesTab, setSalesTab, salesTeamFilter, setSalesTeamFilter,
   sequenceTab, setSequenceTab, sequenceTeamFilter, setSequenceTeamFilter,
   unratedTab, setUnratedTab, unratedTeamFilter, setUnratedTeamFilter,
@@ -84,12 +91,44 @@ export const LiveTab: React.FC<LiveTabProps> = ({
   scatterYMetric, setScatterYMetric, scatterNumerator, setScatterNumerator, scatterDenominator, setScatterDenominator,
   scatterBaseMetrics, scatterMetrics, scatterData, metricLabel, yAxisLabel, isRatioYAxis, isXMetricInteger, isYMetricInteger,
   formatScatterValue, renderScatterDot, renderScatterLabel,
-  marketSortKey, setMarketSortKey, marketSortDir, setMarketSortDir, marketPage, setMarketPage,
-  expandedMarketJokeIds, setExpandedMarketJokeIds,
 }) => {
   const { teamNames, marketItems } = useGame();
+  const rows = useMemo(() => boardRows(leaderboard, teamNames), [leaderboard, teamNames]);
+  const totals = useMemo(() => classTotals(leaderboard, boardLean), [leaderboard, boardLean]);
+  const [presenting, setPresenting] = useState(false);
+  const presentRef = useRef<HTMLButtonElement>(null);
+  const closePresent = React.useCallback(() => {
+    setPresenting(false);
+    presentRef.current?.focus();
+  }, []);
   return (
     <>
+      <ClassTotalsRow totals={totals} />
+
+      <Card
+        title={`Leaderboard, Round ${viewRound}`}
+        subtitle="Ranked by profit. Click a column to sort."
+        action={
+          <button ref={presentRef} type="button" onClick={() => setPresenting(true)} className={QUIET_BUTTON} style={QUIET_BUTTON_STYLE}>
+            <Maximize2 size={16} aria-hidden="true" />
+            Present
+          </button>
+        }
+      >
+        <LeaderboardTable
+          rows={rows}
+          lean={boardLean}
+          sort={boardSort}
+          onSort={key => setBoardSort(s => nextBoardSort(s, key))}
+          ranks={boardRanks}
+        />
+      </Card>
+      {/* A portal: out of the tab's spacing and any stacking context, over the header too. */}
+      {presenting && createPortal(
+        <PresentBoard round={viewRound} rows={rows} lean={boardLean} sort={boardSort} onClose={closePresent} />,
+        document.body,
+      )}
+
       {/* Dashboard Charts */}
       {hiddenCharts.length > 0 && (
         <div className="flex justify-end">
@@ -104,46 +143,9 @@ export const LiveTab: React.FC<LiveTabProps> = ({
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-        {/* Leaderboard (full width) */}
-        <Card
-          className="xl:col-span-2"
-          title="Leaderboard"
-          action={
-            <div className="flex items-center gap-2">
-              <div className="flex items-center rounded-md border border-gray-200 bg-white p-0.5">
-                {[1, 2].map(r => (
-                  <button
-                    key={r}
-                    type="button"
-                    onClick={() => setViewRound(r as 1 | 2)}
-                    disabled={r === 2 && !round2Started}
-                    className={`px-2 py-1 rounded text-xs font-bold ${
-                      viewRound === r ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
-                    }`}
-                    title={r === 1 ? 'Round 1 leaderboard' : 'Round 2 leaderboard'}
-                  >
-                    {r === 1 ? 'R1' : 'R2'}
-                  </button>
-                ))}
-              </div>
-              <button
-                onClick={() => setExpandedChart('leaderboard')}
-                className="p-1 hover:bg-gray-100 rounded text-gray-500 hover:text-gray-700"
-                title="Expand leaderboard"
-              >
-                <Maximize2 size={18} />
-              </button>
-            </div>
-          }
-        >
-          {renderLeaderboardTable({ maxHeightClass: 'max-h-80' })}
-        </Card>
-
         {showLeanCharts ? (
           <LeanChartsPanel
             round={leanChartsRound}
-            onRoundChange={r => { if (r === 1 || round2Started) setViewRound(r); }}
-            leanRounds={leanRounds}
             r1={leanChartsR1}
             r2={leanChartsR2}
             teamNames={teamNames}
@@ -556,169 +558,9 @@ export const LiveTab: React.FC<LiveTabProps> = ({
         </>
         )}
 
-        {/* Live Market (Instructor view) */}
-        <Card title="Live Market" className="xl:col-span-2 mb-8">
-          <div className="overflow-x-auto max-h-[420px] overflow-y-auto pb-6">
-            <table className="min-w-full text-sm table-fixed">
-              <thead className="sticky top-0 bg-white shadow-sm z-10">
-                <tr className="bg-gray-50 border-b">
-                  <th className="px-3 py-2 text-left font-medium text-gray-500 w-[72%]">
-                    <button 
-                      type="button"
-                      onClick={() => {
-                        if (marketSortKey === 'id') {
-                          setMarketSortDir(d => (d === 'desc' ? 'asc' : 'desc'));
-                        } else {
-                          setMarketSortKey('id');
-                          setMarketSortDir('desc');
-                        }
-                      }}
-                      className="inline-flex items-center hover:text-gray-800"
-                    >
-                      Joke
-                      {marketSortKey === 'id' && (
-                        <span className="ml-1">{marketSortDir === 'desc' ? '▼' : '▲'}</span>
-                      )}
-                    </button>
-                  </th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-500 w-[14%]">Team</th>
-                  <th className="px-3 py-2 text-right font-medium text-gray-500 w-[14%]">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (marketSortKey === 'sales') {
-                          setMarketSortDir(d => (d === 'desc' ? 'asc' : 'desc'));
-                        } else {
-                          setMarketSortKey('sales');
-                          setMarketSortDir('desc');
-                        }
-                      }}
-                      className="inline-flex items-center justify-end w-full hover:text-gray-800"
-                      title="Sort by total sales (purchase count)"
-                    >
-                      <span>Total Sales</span>
-                      <span className="ml-1 w-3 text-center">
-                        {marketSortKey === 'sales' ? (marketSortDir === 'desc' ? '▼' : '▲') : ''}
-                      </span>
-                    </button>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {(() => {
-                  // The market payload is flat (team_id/team_name/sold_count inline).
-                  // It carries no team-level totals, so there is no "sold / published"
-                  // sub-line to render here.
-                  const rows = (marketItems ?? []).map(it => ({
-                    joke_id: Number(it.joke_id),
-                    joke_title: String(it.joke_title ?? '').trim(),
-                    joke_text: String(it.joke_text ?? ''),
-                    team_id: Number(it.team_id ?? 0),
-                    team_name: String(it.team_name ?? ''),
-                    sold_count: Number(it.sold_count ?? 0),
-                  }));
-
-                  rows.sort((a, b) => {
-                    const dir = marketSortDir === 'asc' ? 1 : -1;
-                    if (marketSortKey === 'sales') {
-                      // Secondary sort by ID desc if sales are equal
-                      if (a.sold_count === b.sold_count) {
-                          return b.joke_id - a.joke_id;
-                      }
-                      return dir * (a.sold_count - b.sold_count);
-                    }
-                    // Default sort by ID (Newest = desc)
-                    return dir * (a.joke_id - b.joke_id);
-                  });
-
-                  const pageSize = 20;
-                  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
-                  const currentPage = marketPage;
-                  const setCurrentPage = setMarketPage;
-                  const paged = rows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-
-                  if (rows.length === 0) {
-                    return (
-                      <tr>
-                        <td colSpan={3} className="px-3 py-6 text-center text-gray-400 italic">
-                          Market is empty.
-                        </td>
-                      </tr>
-                    );
-                  }
-                  return (
-                    <>
-                      {paged.map(r => {
-                    const id = String(r.joke_id);
-                    const isExpanded = Boolean(expandedMarketJokeIds[id]);
-                    const isLong = r.joke_text.trim().length > 180;
-                    return (
-                      <tr key={id} className="hover:bg-gray-50">
-                        <td className="px-3 py-2 text-gray-900">
-                          <div className="font-extrabold text-sm text-blue-900 mb-1">
-                            {r.joke_title || 'Untitled Joke'}
-                          </div>
-                          <div className={`whitespace-pre-wrap ${isExpanded ? '' : 'line-clamp-3'}`}>
-                            {r.joke_text}
-                          </div>
-                          {isLong && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setExpandedMarketJokeIds(prev => ({ ...prev, [id]: !Boolean(prev[id]) }))
-                              }
-                              className="mt-1 text-xs font-bold text-blue-600 underline hover:text-blue-700"
-                            >
-                              {isExpanded ? 'Show less' : 'Show more'}
-                            </button>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-gray-800 whitespace-nowrap truncate align-top">
-                          <div>
-                            {r.team_name ? r.team_name : `Team ${r.team_id || ''}`}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono text-gray-900 align-top">
-                          {r.sold_count}
-                        </td>
-                      </tr>
-                      );
-                      })}
-                      {totalPages > 1 && (
-                        <tr>
-                          <td colSpan={3} className="px-3 py-3">
-                            <div className="flex items-center justify-between text-xs text-gray-600">
-                              <button
-                                type="button"
-                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                disabled={currentPage === 1}
-                                className="px-2 py-1 rounded border border-gray-300 bg-white disabled:opacity-50"
-                              >
-                                Prev
-                              </button>
-                              <span className="font-semibold">
-                                Page {currentPage} / {totalPages}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                disabled={currentPage === totalPages}
-                                className="px-2 py-1 rounded border border-gray-300 bg-white disabled:opacity-50"
-                              >
-                                Next
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </>
-                  );
-                })()}
-              </tbody>
-            </table>
-          </div>
-        </Card>
       </div>
+
+      <LiveMarket items={marketItems ?? []} open={marketOpen} teamNames={teamNames} />
     </>
   );
 };

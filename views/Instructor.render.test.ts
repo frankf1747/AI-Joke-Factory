@@ -191,23 +191,6 @@ describe('ControlBar, the round control views and never retargets', () => {
   });
 });
 
-describe('Instructor screen, the Live Market', () => {
-  const item = (id: number, text = `Joke ${id}`) => ({
-    joke_id: id, joke_text: text, joke_title: `Title ${id}`, team_id: 1, team_name: 'Team 1', sold_count: 0,
-  });
-
-  it('pages 20 jokes at a time and offers Show more past 180 characters', () => {
-    const items = [item(1, 'x'.repeat(181)), ...Array.from({ length: 20 }, (_, i) => item(i + 2))];
-    const out = renderWithGame(Instructor, { user: instructor, marketItems: items });
-    expect(out).toContain('Page 1 / 2');
-    expect(out).toContain('Title 21');
-    expect(out).not.toContain('Title 1<');
-    const long = renderWithGame(Instructor, { user: instructor, marketItems: [item(1, 'x'.repeat(181))] });
-    expect(long).toContain('Show more');
-    expect(long).not.toContain('Page ');
-  });
-});
-
 describe('Instructor screen, the hidden ideal joke (Setup tab)', () => {
   const between = { ...TEST_CONFIG, isActive: false };
   it('shows the stored ideal in the picker (Topic Animals selected)', () => {
@@ -247,18 +230,24 @@ describe('Instructor screen, the tabs', () => {
     }
   });
 
+  it('commits no tab while both round statuses are still unknown (a reload before the first poll)', () => {
+    const out = renderWithGame(Instructor, { user: instructor, config: stopped, roundStatuses: { 1: null, 2: null } });
+    expect(selectedTab(out)).toBeUndefined();
+    expect(out).not.toContain('Team Management');
+  });
+
   it('shows only the open tab: the settings on Setup, the leaderboard on Live, the team cards on Teams', () => {
     const live = renderWithGame(Instructor, { user: instructor, roundStatuses: { 1: 'ACTIVE', 2: 'CONFIGURED' } });
-    expect(live).toContain('Live Market');
+    expect(live).toContain('Live market');
     expect(live).not.toContain('Storage fee per joke-minute:');
     expect(live).not.toContain('Team Management');
     const setup = renderWithGame(onTab('setup'), { user: instructor });
     expect(selectedTab(setup)).toBe('Setup');
     expect(setup).toContain('Storage fee per joke-minute:');
     expect(setup).toContain('Reset game');
-    expect(setup).not.toContain('Live Market');
+    expect(setup).not.toContain('Live market');
     const teams = renderWithGame(onTab('teams'), { user: instructor });
     expect(teams).toContain('Team Management');
-    expect(teams).not.toContain('Live Market');
+    expect(teams).not.toContain('Live market');
   });
 });

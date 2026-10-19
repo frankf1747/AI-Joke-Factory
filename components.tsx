@@ -254,7 +254,9 @@ export const RoleLayout: React.FC<{
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--paper)' }}>
       <header
-        className={`sticky ${isWatchMode() ? 'top-9' : 'top-0'} z-10 border-b`}
+        /* z-30: above anything sticky in the page, so dialogs opened from the header
+           ("How this works") are never drawn under page content. */
+        className={`sticky ${isWatchMode() ? 'top-9' : 'top-0'} z-30 border-b`}
         style={{ background: 'var(--sheet)', borderColor: 'var(--rule)' }}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">

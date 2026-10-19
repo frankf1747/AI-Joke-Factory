@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useGame } from '../context';
 import { Button, RoleLayout, Modal } from '../components';
-import { Clock } from 'lucide-react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line
@@ -14,11 +13,12 @@ import { LiveTab, CHART_KEYS, type ChartKey } from '../components/instructor/Liv
 import { TeamsTab } from '../components/instructor/TeamsTab';
 import { SetupTab } from '../components/instructor/SetupTab';
 import { DebriefTab } from '../components/instructor/DebriefTab';
-import { defaultTab, defaultViewRound, instructorPhase, type InstructorTab } from '../services/instructorPhase';
+import { defaultViewRound, followPhase, instructorPhase, knownPhase, type InstructorTab, type TabFollow } from '../services/instructorPhase';
 import { useLeanCharts } from '../services/useLeanCharts';
 import { leanChartsVisibility, leanRoundFlags, resolveLeanChartsRound } from '../services/leanCharts';
 import { changedFees, feeValuesOf, shippingOrderError, type FeeConfigValues } from '../components/FeeConfigFields';
-import { LEAN_LEADERBOARD_COLUMNS, feeRoundsText, fmtMoney, leanFeesOf, neverSold, productionTeamCount, type LeanSortKey } from '../services/leanMode';
+import { feeRoundsText, productionTeamCount } from '../services/leanMode';
+import { DEFAULT_BOARD_SORT, INITIAL_BOARD_RANKS, boardRows, nextBoardRanks, type BoardSort } from '../services/liveBoard';
 import { buildApplyUpdates } from '../services/roundConfig';
 
 // Expanded Palette for more teams
@@ -38,11 +38,6 @@ const SCREEN_TABS: ReadonlyArray<{ id: ScreenTab; label: string }> = [
   { id: 'setup', label: 'Setup' },
   { id: 'debrief', label: 'Debrief' },
 ];
-
-// Lean leaderboard columns, read from row.lean on LEAN rounds only.
-const LEAN_COLUMNS = LEAN_LEADERBOARD_COLUMNS;
-const isLeanSortKey = (k: string): k is LeanSortKey => LEAN_COLUMNS.some(c => c.key === k);
-const fmtSeconds = (s: number) => (s > 0 ? `${Math.round(s)}s` : '—');
 
 /** initialTab opens the screen on one tab (the render tests use it); otherwise the phase picks. */
 const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
@@ -99,21 +94,20 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
   // here calls setRound. It follows the phase (Round 2 once it has started) until
   // the instructor picks a round in the control bar.
   const phase = instructorPhase(roundStatuses);
-  const round2Started = roundStatuses[2] === 'ACTIVE' || roundStatuses[2] === 'ENDED';
   const [viewRound, setViewRound] = useState<1 | 2>(() => defaultViewRound(phase));
   useEffect(() => { setViewRound(defaultViewRound(phase)); }, [phase]);
   // The open tab follows the phase (Teams in the lobby, Live during and between rounds,
   // Debrief after Round 2). A tab the instructor picks stays until the phase changes.
-  const [tab, setTab] = useState<ScreenTab>(() => initialTab ?? defaultTab(phase));
-  const [tabPhase, setTabPhase] = useState(phase);
-  if (tabPhase !== phase) {
-    setTabPhase(phase);
-    setTab(defaultTab(phase));
-  }
-  // Lean charts: the round they show. It follows viewRound; resolveLeanChartsRound
-  // may move it off a round that has no Lean charts to show.
-  const [leanChartsRound, setLeanChartsRound] = useState<1 | 2>(viewRound);
-  useEffect(() => { setLeanChartsRound(viewRound); }, [viewRound]);
+  // Until the first status poll lands (a reload) the phase is unknown and no tab is
+  // committed, so the screen never opens Teams for one poll and then jumps to Live.
+  const tabPhase = knownPhase(roundStatuses);
+  const [tabFollow, setTabFollow] = useState<TabFollow<ScreenTab>>(
+    () => followPhase<ScreenTab>({ tab: initialTab ?? null, phase: null }, tabPhase),
+  );
+  const followed = followPhase(tabFollow, tabPhase);
+  if (followed !== tabFollow) setTabFollow(followed);
+  const tab = followed.tab;
+  const setTab = (t: ScreenTab) => setTabFollow(s => ({ ...s, tab: t }));
   const [scatterXMetric, setScatterXMetric] = useState<string>('total_sales');
   const [scatterYMode, setScatterYMode] = useState<'metric' | 'ratio'>('metric');
   const [scatterYMetric, setScatterYMetric] = useState<string>('profit');
@@ -124,18 +118,10 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
   // Session-only chart visibility (defaults back on new browser session)
   const [hiddenCharts, setHiddenCharts] = useState<ChartKey[]>([]);
   const [deletingUserIds, setDeletingUserIds] = useState<string[]>([]);
-  const [leaderboardSortKey, setLeaderboardSortKey] = useState<
-    'team' | 'batches_processed' | 'published_jokes' | 'discarded_jokes' | 'unsold_jokes' | 'total_jokes' | 'total_sales' | 'profit'
-    | LeanSortKey
-  >('profit');
-  const [leaderboardSortDir, setLeaderboardSortDir] = useState<'asc' | 'desc'>('desc');
-  const [rankUpTeamIds, setRankUpTeamIds] = useState<string[]>([]);
-  const prevLeaderboardPosRef = useRef<Record<string, number> | null>(null);
-  const rankUpTimersRef = useRef<Record<string, number>>({});
-  const [marketSortKey, setMarketSortKey] = useState<'id' | 'sales'>('id');
-  const [marketSortDir, setMarketSortDir] = useState<'asc' | 'desc'>('desc');
-  const [expandedMarketJokeIds, setExpandedMarketJokeIds] = useState<Record<string, boolean>>({});
-  const [marketPage, setMarketPage] = useState(1);
+  // The leaderboard's sort and each team's rank-move tag. Kept here so both survive
+  // a tab switch and a rank change during another tab still tags the row.
+  const [boardSort, setBoardSort] = useState<BoardSort>(DEFAULT_BOARD_SORT);
+  const [boardRanks, setBoardRanks] = useState(INITIAL_BOARD_RANKS);
   const [wasteChartMode, setWasteChartMode] = useState<'count' | 'rate'>('count');
   const [localSalesOverTime, setLocalSalesOverTime] = useState<
     Array<{ event_index: number; timestamp: string; team_id: number; team_name: string; total_sales: number }>
@@ -203,12 +189,6 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
   };
 
   const restoreAllCharts = () => setHiddenCharts([]);
-
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
 
 // Config edit rules:
 // - While a round is active: config is not editable.
@@ -302,12 +282,12 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
   // on screen for the debrief, even when the next round is Classic.
   const leanCurrentStatus = roundStatuses[config.round === 2 ? 2 : 1];
   const leanCurrentStarted = leanCurrentStatus != null && leanCurrentStatus !== 'CONFIGURED';
-  useEffect(() => {
-    const next = resolveLeanChartsRound(leanChartsRound, leanRounds, config.round === 2 ? 2 : 1, leanCurrentStarted);
-    if (next !== leanChartsRound) {
-      setLeanChartsRound(next);
-    }
-  }, [leanChartsRound, leanRounds, config.round, leanCurrentStarted]);
+  // The lean charts show the round in view, unless resolveLeanChartsRound moves them
+  // off a round with no Lean charts. Derived, so it can never disagree with viewRound.
+  const leanChartsRound = useMemo(
+    () => resolveLeanChartsRound(viewRound, leanRounds, config.round === 2 ? 2 : 1, leanCurrentStarted),
+    [viewRound, leanRounds, config.round, leanCurrentStarted],
+  );
   const showLeanCharts = leanChartsVisibility(
     leanChartsRound,
     leanRounds,
@@ -339,30 +319,19 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
     return mapLeaderboard(leaderboardStatsSelected?.leaderboard || []);
   }, [leaderboardStatsSelected?.leaderboard, teamNames]);
 
-  /* Lean columns follow the round the leaderboard tab shows: the backend
-     nests `lean` on each row for LEAN rounds only, so its presence is the
-     signal. Classic leaderboards render exactly the columns they always had. */
-  const leaderboardIsLean = useMemo(
-    () => (leaderboardStatsSelected?.leaderboard ?? []).some(r => r.lean != null),
-    [leaderboardStatsSelected?.leaderboard],
-  );
-  const leanByTeam = useMemo(() => {
-    const m: Record<string, Record<LeanSortKey | 'never_sold', number>> = {};
-    for (const r of leaderboardStatsSelected?.leaderboard ?? []) {
-      // Older backends send only setup_cost / carrying_cost: leanFeesOf falls back to them.
-      const fees = leanFeesOf(r.lean);
-      m[String(r.team.id)] = {
-        shipping_cost: fees.shipping,
-        storage_cost: fees.storage,
-        hosting_cost: fees.hosting,
-        lead_time_s: Number(r.lean?.avg_submit_to_publish_s ?? 0),
-        sale_time_s: Number(r.lean?.avg_publish_to_first_sale_s ?? 0),
-        // Lean rows: published-but-never-sold (see neverSold); classic unsold otherwise.
-        never_sold: neverSold(r.lean) ?? Number(r.unsold_jokes ?? 0),
-      };
-    }
-    return m;
-  }, [leaderboardStatsSelected?.leaderboard]);
+  /* The board's Lean columns and totals follow the round in view: the backend nests
+     `lean` on each row for LEAN rounds only (leanRoundFlags; before rows arrive,
+     the current round's config). */
+  const boardLean = leanRounds[viewRound];
+  const boardStatsRows = leaderboardStatsSelected?.leaderboard;
+  const boardRoundId = leaderboardStatsSelected?.round_id ?? null;
+  // One step per poll: a team whose rank changed gets a held tag and one gold fade.
+  useEffect(() => {
+    setBoardRanks(prev => nextBoardRanks(prev, boardRows(boardStatsRows ?? [], {}), boardRoundId));
+  }, [boardStatsRows, boardRoundId]);
+  // The market is the current round's; it opens when that round starts.
+  const marketStatus = roundStatuses[config.round === 2 ? 2 : 1];
+  const marketOpen = marketStatus === 'ACTIVE' || marketStatus === 'ENDED';
 
   const leaderboardBaseR1 = useMemo(() => {
     return mapLeaderboard(statsR1?.leaderboard || []);
@@ -621,71 +590,6 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
     lastSalesTotalsRef.current = curr;
   }, [config.round, statsR1?.leaderboard, statsR2?.leaderboard, instructorStats?.leaderboard, instructorStats?.cumulative_sales, teamNames]);
 
-  const leaderboardSorted = useMemo(() => {
-    return [...leaderboardBase].sort((a, b) => {
-    const dir = leaderboardSortDir === 'asc' ? 1 : -1;
-    if (leaderboardSortKey === 'team') {
-      return dir * a.team_name.localeCompare(b.team_name);
-    }
-    if (isLeanSortKey(leaderboardSortKey)) {
-      // A lean column picked on a Lean tab, then a switch to a Classic tab:
-      // rank by profit, as the Classic leaderboard always has.
-      if (!leaderboardIsLean) return -1 * (a.profit - b.profit);
-      const av = leanByTeam[String(a.team_id)]?.[leaderboardSortKey] ?? 0;
-      const bv = leanByTeam[String(b.team_id)]?.[leaderboardSortKey] ?? 0;
-      return dir * (av - bv);
-    }
-    if (leaderboardSortKey === 'unsold_jokes' && leaderboardIsLean) {
-      const av = leanByTeam[String(a.team_id)]?.never_sold ?? 0;
-      const bv = leanByTeam[String(b.team_id)]?.never_sold ?? 0;
-      return dir * (av - bv);
-    }
-    const av = a[leaderboardSortKey] ?? 0;
-    const bv = b[leaderboardSortKey] ?? 0;
-    return dir * (av - bv);
-  });
-  }, [leaderboardBase, leaderboardSortKey, leaderboardSortDir, leaderboardIsLean, leanByTeam]);
-
-  // The rank a row shows: the backend's when it sent one, else the row's position.
-  // Rank belongs to the team, not to the current sort.
-  const displayedRank = (row: { rank: number | null }, idx: number) => row.rank ?? idx + 1;
-
-  // Flash a colorful highlight when a team moves up in the displayed rank.
-  useEffect(() => {
-    const currPos: Record<string, number> = {};
-    leaderboardSorted.forEach((row, idx) => {
-      currPos[String(row.team_id)] = displayedRank(row, idx);
-    });
-
-    const prevPos = prevLeaderboardPosRef.current;
-    if (prevPos) {
-      const movedUpIds = Object.keys(currPos).filter(id => {
-        const prev = prevPos[id];
-        const curr = currPos[id];
-        return typeof prev === 'number' && curr < prev;
-      });
-
-      if (movedUpIds.length) {
-        setRankUpTeamIds(prev => {
-          const s = new Set(prev);
-          movedUpIds.forEach(id => s.add(id));
-          return Array.from(s);
-        });
-
-        movedUpIds.forEach(id => {
-          const existing = rankUpTimersRef.current[id];
-          if (existing) window.clearTimeout(existing);
-          rankUpTimersRef.current[id] = window.setTimeout(() => {
-            setRankUpTeamIds(prev => prev.filter(x => x !== id));
-            delete rankUpTimersRef.current[id];
-          }, 1400);
-        });
-      }
-    }
-
-    prevLeaderboardPosRef.current = currPos;
-  }, [leaderboardSorted]);
-
   const activeTeamIds = Array.from(new Set([
     ...leaderboardBase.map(t => String(t.team_id)),
     ...(statsR1?.leaderboard ?? []).map(r => String(r.team.id)),
@@ -916,209 +820,6 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
   const toggleUserRole = (userId: string, currentRole: Role) => {
       const newRole = currentRole === Role.JOKE_MAKER ? Role.QUALITY_CONTROL : Role.JOKE_MAKER;
       updateUser(userId, { role: newRole });
-  };
-
-  const renderLeaderboardTable = (opts: { maxHeightClass: string; isExpanded?: boolean }) => {
-    const isExpanded = Boolean(opts.isExpanded);
-    return (
-      <div className={`overflow-x-auto ${opts.maxHeightClass} overflow-y-auto`}>
-        <table className={`min-w-full ${isExpanded ? 'text-base' : 'text-sm'}`}>
-          <thead className="sticky top-0 bg-white shadow-sm z-10">
-            <tr className="bg-gray-50 border-b">
-              <th className="px-3 py-2 text-left font-medium text-gray-500">Rank</th>
-              <th className="px-3 py-2 text-left font-medium text-gray-500">
-                <button
-                  type="button"
-                  className="inline-flex items-center hover:text-gray-800"
-                  onClick={() => {
-                    setLeaderboardSortKey('team');
-                    setLeaderboardSortDir(prev => (leaderboardSortKey === 'team' ? (prev === 'asc' ? 'desc' : 'asc') : 'asc'));
-                  }}
-                  title="Sort by Team"
-                >
-                  <span>Team</span>
-                  <span className="ml-1 w-3 text-center">
-                    {leaderboardSortKey === 'team' ? (leaderboardSortDir === 'asc' ? '▲' : '▼') : ''}
-                  </span>
-                </button>
-              </th>
-              <th className="px-3 py-2 text-right font-medium text-gray-500">
-                <button
-                  type="button"
-                  className="inline-flex items-center hover:text-gray-800"
-                  onClick={() => {
-                    setLeaderboardSortKey('batches_processed');
-                    setLeaderboardSortDir(prev => (leaderboardSortKey === 'batches_processed' ? (prev === 'asc' ? 'desc' : 'asc') : 'desc'));
-                  }}
-                  title="Sort by Processed Batches"
-                >
-                  <span>Processed Batches</span>
-                  <span className="ml-1 w-3 text-center">
-                    {leaderboardSortKey === 'batches_processed' ? (leaderboardSortDir === 'asc' ? '▲' : '▼') : ''}
-                  </span>
-                </button>
-              </th>
-              <th className="px-3 py-2 text-right font-medium text-gray-500">
-                <button
-                  type="button"
-                  className="inline-flex items-center hover:text-gray-800"
-                  onClick={() => {
-                    setLeaderboardSortKey('published_jokes');
-                    setLeaderboardSortDir(prev => (leaderboardSortKey === 'published_jokes' ? (prev === 'asc' ? 'desc' : 'asc') : 'desc'));
-                  }}
-                  title="Sort by Published Jokes"
-                >
-                  <span>Published Jokes</span>
-                  <span className="ml-1 w-3 text-center">
-                    {leaderboardSortKey === 'published_jokes' ? (leaderboardSortDir === 'asc' ? '▲' : '▼') : ''}
-                  </span>
-                </button>
-              </th>
-              <th className="px-3 py-2 text-right font-medium text-gray-500">
-                <button
-                  type="button"
-                  className="inline-flex items-center hover:text-gray-800"
-                  onClick={() => {
-                  setLeaderboardSortKey('discarded_jokes');
-                  setLeaderboardSortDir(prev => (leaderboardSortKey === 'discarded_jokes' ? (prev === 'asc' ? 'desc' : 'asc') : 'desc'));
-                  }}
-                  title="Sort by Wasted Jokes"
-                >
-                  <span>Wasted Jokes</span>
-                  <span className="ml-1 w-3 text-center">
-                    {leaderboardSortKey === 'discarded_jokes' ? (leaderboardSortDir === 'asc' ? '▲' : '▼') : ''}
-                  </span>
-                </button>
-              </th>
-              <th className="px-3 py-2 text-right font-medium text-gray-500">
-                <button
-                  type="button"
-                  className="inline-flex items-center hover:text-gray-800"
-                  onClick={() => {
-                    setLeaderboardSortKey('unsold_jokes');
-                    setLeaderboardSortDir(prev => (leaderboardSortKey === 'unsold_jokes' ? (prev === 'asc' ? 'desc' : 'asc') : 'desc'));
-                  }}
-                  title={leaderboardIsLean ? 'Sort by Never Sold (published jokes with no sale)' : 'Sort by Unsold Jokes'}
-                >
-                  <span>{leaderboardIsLean ? 'Never Sold' : 'Unsold Jokes'}</span>
-                  <span className="ml-1 w-3 text-center">
-                    {leaderboardSortKey === 'unsold_jokes' ? (leaderboardSortDir === 'asc' ? '▲' : '▼') : ''}
-                  </span>
-                </button>
-              </th>
-              <th className="px-3 py-2 text-right font-medium text-gray-500">
-                <button
-                  type="button"
-                  className="inline-flex items-center hover:text-gray-800"
-                  onClick={() => {
-                    setLeaderboardSortKey('total_jokes');
-                    setLeaderboardSortDir(prev => (leaderboardSortKey === 'total_jokes' ? (prev === 'asc' ? 'desc' : 'asc') : 'desc'));
-                  }}
-                  title="Sort by Total Jokes"
-                >
-                  <span>Total Jokes</span>
-                  <span className="ml-1 w-3 text-center">
-                    {leaderboardSortKey === 'total_jokes' ? (leaderboardSortDir === 'asc' ? '▲' : '▼') : ''}
-                  </span>
-                </button>
-              </th>
-              <th className="px-3 py-2 text-right font-medium text-gray-500">
-                <button
-                  type="button"
-                  className="inline-flex items-center hover:text-gray-800"
-                  onClick={() => {
-                    setLeaderboardSortKey('total_sales');
-                    setLeaderboardSortDir(prev => (leaderboardSortKey === 'total_sales' ? (prev === 'asc' ? 'desc' : 'asc') : 'desc'));
-                  }}
-                  title="Sort by Total Sales"
-                >
-                  <span>Total Sales</span>
-                  <span className="ml-1 w-3 text-center">
-                    {leaderboardSortKey === 'total_sales' ? (leaderboardSortDir === 'asc' ? '▲' : '▼') : ''}
-                  </span>
-                </button>
-              </th>
-              <th className="px-3 py-2 text-right font-medium text-gray-500">
-                <button
-                  type="button"
-                  className="inline-flex items-center hover:text-gray-800"
-                  onClick={() => {
-                    setLeaderboardSortKey('profit');
-                    setLeaderboardSortDir(prev => (leaderboardSortKey === 'profit' ? (prev === 'asc' ? 'desc' : 'asc') : 'desc'));
-                  }}
-                  title="Sort by Profit"
-                >
-                  <span>Profit</span>
-                  <span className="ml-1 w-3 text-center">
-                    {leaderboardSortKey === 'profit' ? (leaderboardSortDir === 'asc' ? '▲' : '▼') : ''}
-                  </span>
-                </button>
-              </th>
-              {leaderboardIsLean && LEAN_COLUMNS.map(col => (
-                <th key={col.key} className="px-3 py-2 text-right font-medium text-gray-500">
-                  <button
-                    type="button"
-                    className="inline-flex items-center hover:text-gray-800"
-                    onClick={() => {
-                      setLeaderboardSortKey(col.key);
-                      // Costs and times: lower is better, so the first click sorts ascending.
-                      setLeaderboardSortDir(prev => (leaderboardSortKey === col.key ? (prev === 'asc' ? 'desc' : 'asc') : 'asc'));
-                    }}
-                    title={`Sort by ${col.title}`}
-                  >
-                    <span>{col.label}</span>
-                    <span className="ml-1 w-3 text-center">
-                      {leaderboardSortKey === col.key ? (leaderboardSortDir === 'asc' ? '▲' : '▼') : ''}
-                    </span>
-                  </button>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {leaderboardSorted.length === 0 && (
-              <tr>
-                <td colSpan={leaderboardIsLean ? 9 + LEAN_COLUMNS.length : 9} className="px-3 py-6 text-center text-gray-400 italic">
-                  No leaderboard data yet.
-                </td>
-              </tr>
-            )}
-            {leaderboardSorted.map((row, idx) => (
-              <tr
-                key={String(row.team_id)}
-                className={`hover:bg-gray-50 ${rankUpTeamIds.includes(String(row.team_id)) ? 'jf-leaderboard-rankup' : ''}`}
-              >
-                <td className="px-3 py-2 font-mono text-gray-700">{displayedRank(row, idx)}</td>
-                <td className="px-3 py-2 font-semibold text-gray-900">{row.team_name}</td>
-                <td className="px-3 py-2 text-right text-gray-800">{row.batches_processed}</td>
-                <td className="px-3 py-2 text-right text-gray-800">{row.published_jokes}</td>
-                <td className="px-3 py-2 text-right text-gray-800">{row.discarded_jokes}</td>
-                <td className="px-3 py-2 text-right text-gray-800">
-                  {leaderboardIsLean ? (leanByTeam[String(row.team_id)]?.never_sold ?? row.unsold_jokes) : row.unsold_jokes}
-                </td>
-                <td className="px-3 py-2 text-right text-gray-800">{row.total_jokes}</td>
-                <td className="px-3 py-2 text-right text-gray-800">{row.total_sales}</td>
-                <td className={`px-3 py-2 text-right font-bold ${Number(row.profit) < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
-                  {Number(row.profit).toFixed(2)}
-                </td>
-                {leaderboardIsLean && (() => {
-                  const lean = leanByTeam[String(row.team_id)];
-                  return (
-                    <>
-                      <td className="px-3 py-2 text-right text-gray-800 tabular-nums">{lean ? fmtMoney(lean.shipping_cost) : '—'}</td>
-                      <td className="px-3 py-2 text-right text-gray-800 tabular-nums">{lean ? fmtMoney(lean.storage_cost) : '—'}</td>
-                      <td className="px-3 py-2 text-right text-gray-800 tabular-nums">{lean ? fmtMoney(lean.hosting_cost) : '—'}</td>
-                      <td className="px-3 py-2 text-right text-gray-800 tabular-nums">{lean ? fmtSeconds(lean.lead_time_s) : '—'}</td>
-                      <td className="px-3 py-2 text-right text-gray-800 tabular-nums">{lean ? fmtSeconds(lean.sale_time_s) : '—'}</td>
-                    </>
-                  );
-                })()}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
   };
 
   /* An axis drawn over an absent series reads as a measured zero — "nobody sold
@@ -2125,13 +1826,8 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
 
                   // Reset leaderboard UI state (data is cleared in resetGame()).
                   setViewRound(1);
-                  setLeanChartsRound(1);
-                  setLeaderboardSortKey('profit');
-                  setLeaderboardSortDir('desc');
-                  setRankUpTeamIds([]);
-                  prevLeaderboardPosRef.current = null;
-                  (Object.values(rankUpTimersRef.current) as number[]).forEach(t => window.clearTimeout(t));
-                  rankUpTimersRef.current = {};
+                  setBoardSort(DEFAULT_BOARD_SORT);
+                  setBoardRanks(INITIAL_BOARD_RANKS);
 
                   // Reset local chart series derived from leaderboard changes.
                   setLocalSalesOverTime([]);
@@ -2181,45 +1877,16 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
             isOpen={!!expandedChart} 
             onClose={() => setExpandedChart(null)} 
             title={
-              expandedChart === 'leaderboard'
-                ? 'Leaderboard'
-                : expandedChart === 'sales'
-                  ? 'Cumulative Sales Over Time'
-                  : expandedChart === 'sequence_quality'
-                    ? 'Batch Sequence vs Quality'
-                    : expandedChart === 'unrated_jokes'
-                      ? 'Unrated Jokes Over Time'
-                      : 'Expanded'
+              expandedChart === 'sales'
+                ? 'Cumulative Sales Over Time'
+                : expandedChart === 'sequence_quality'
+                  ? 'Batch Sequence vs Quality'
+                  : expandedChart === 'unrated_jokes'
+                    ? 'Unrated Jokes Over Time'
+                    : 'Expanded'
             }
             maxWidth="max-w-[90vw]"
         >
-            {expandedChart === 'leaderboard' ? (
-              <div className="h-[75vh] w-full flex flex-col">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center rounded-md border border-gray-200 bg-white p-0.5">
-                      {[1, 2].map(r => (
-                        <button
-                          key={r}
-                          type="button"
-                          onClick={() => setViewRound(r as 1 | 2)}
-                          disabled={r === 2 && !round2Started}
-                          className={`px-3 py-1.5 rounded text-sm font-bold ${
-                            viewRound === r ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
-                          }`}
-                          title={r === 1 ? 'Round 1 leaderboard' : 'Round 2 leaderboard'}
-                        >
-                          {r === 1 ? 'Round 1' : 'Round 2'}
-                        </button>
-                      ))}
-                    </div>
-                  <div className="flex items-center space-x-2 bg-slate-100 px-4 py-2 rounded-lg text-slate-700 font-mono text-xl">
-                    <Clock size={20} />
-                    <span>{formatTime(config.elapsedTime)}</span>
-                  </div>
-                </div>
-                {renderLeaderboardTable({ maxHeightClass: 'max-h-[65vh]', isExpanded: true })}
-              </div>
-            ) : (
             <div className="h-[75vh] w-full flex flex-col">
               {(expandedChart === 'sales' || expandedChart === 'sequence_quality' || expandedChart === 'unrated_jokes') && (
                 <div className="mb-3 flex justify-end items-center gap-4 pr-6">
@@ -2278,7 +1945,6 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
                 {expandedChart && renderChart(expandedChart, { isExpanded: true })}
               </div>
             </div>
-            )}
         </Modal>
 
         <ControlBar
@@ -2326,13 +1992,14 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
         {/* Only the open tab is mounted. Every poll and all screen state live above
             (context, useLeanCharts, the state here), so switching tabs neither stops
             nor repeats a fetch; only LeanChartsPanel's own team picker starts over. */}
-        <div role="tabpanel" id="instructor-tabpanel" aria-labelledby={`instructor-tab-${tab}`} className="space-y-8">
+        <div role="tabpanel" id="instructor-tabpanel" aria-labelledby={tab ? `instructor-tab-${tab}` : undefined} className="space-y-8">
           {tab === 'live' && (
             <LiveTab
-              viewRound={viewRound} setViewRound={setViewRound} round2Started={round2Started}
-              setExpandedChart={setExpandedChart} renderLeaderboardTable={renderLeaderboardTable} renderChart={renderChart}
+              viewRound={viewRound} leaderboard={boardStatsRows ?? []} boardLean={boardLean}
+              boardSort={boardSort} setBoardSort={setBoardSort} boardRanks={boardRanks} marketOpen={marketOpen}
+              setExpandedChart={setExpandedChart} renderChart={renderChart}
               hiddenCharts={hiddenCharts} restoreAllCharts={restoreAllCharts} isChartHidden={isChartHidden} hideChart={hideChart}
-              showLeanCharts={showLeanCharts} leanChartsRound={leanChartsRound} leanRounds={leanRounds}
+              showLeanCharts={showLeanCharts} leanChartsRound={leanChartsRound}
               leanChartsR1={leanChartsR1} leanChartsR2={leanChartsR2} visibleTeamIds={visibleTeamIds}
               salesTab={salesTab} setSalesTab={setSalesTab} salesTeamFilter={salesTeamFilter} setSalesTeamFilter={setSalesTeamFilter}
               sequenceTab={sequenceTab} setSequenceTab={setSequenceTab}
@@ -2350,10 +2017,6 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
               metricLabel={metricLabel} yAxisLabel={yAxisLabel} isRatioYAxis={isRatioYAxis}
               isXMetricInteger={isXMetricInteger} isYMetricInteger={isYMetricInteger} formatScatterValue={formatScatterValue}
               renderScatterDot={renderScatterDot} renderScatterLabel={renderScatterLabel}
-              marketSortKey={marketSortKey} setMarketSortKey={setMarketSortKey}
-              marketSortDir={marketSortDir} setMarketSortDir={setMarketSortDir}
-              marketPage={marketPage} setMarketPage={setMarketPage}
-              expandedMarketJokeIds={expandedMarketJokeIds} setExpandedMarketJokeIds={setExpandedMarketJokeIds}
             />
           )}
           {tab === 'teams' && (

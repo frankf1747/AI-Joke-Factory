@@ -1,8 +1,8 @@
 /* The instructor's lean charts, rendered as children of the dashboard grid in
    views/Instructor.tsx in place of the five Classic chart cards when the round
-   shown is Lean. A full-width control bar holds the team picker and the R1/R2
-   control; the round control sets charts 1 and 2, and charts 3 and 4 always
-   overlay both rounds. A round that is not Lean cannot be picked. */
+   shown is Lean. A full-width bar holds the team picker. The round in view (the
+   control bar's round, resolved in views/Instructor.tsx) sets charts 1 and 2;
+   charts 3 and 4 always overlay both rounds. */
 import React, { useEffect, useMemo, useState } from 'react';
 import type { LeanChartsState } from '../../services/useLeanCharts';
 import { batchScatter, cyclesForInstructor, defaultIdleTeamId, teamLabel, teamOptions } from '../../services/leanCharts';
@@ -13,15 +13,13 @@ import { LearningCyclesChart } from './LearningCyclesChart';
 
 export interface LeanChartsPanelProps {
   round: 1 | 2;
-  onRoundChange: (round: 1 | 2) => void;
-  leanRounds: { 1: boolean; 2: boolean };
   r1: LeanChartsState;
   r2: LeanChartsState;
   /** The instructor's renames, keyed by team id (the leaderboard's map). */
   teamNames: Record<string, string>;
 }
 
-export const LeanChartsPanel: React.FC<LeanChartsPanelProps> = ({ round, onRoundChange, leanRounds, r1, r2, teamNames }) => {
+export const LeanChartsPanel: React.FC<LeanChartsPanelProps> = ({ round, r1, r2, teamNames }) => {
   const [teamFilter, setTeamFilter] = useState<number | null>(null);
   const selected = round === 1 ? r1 : r2;
   const options = useMemo(() => teamOptions(r1.data, r2.data, teamNames), [r1.data, r2.data, teamNames]);
@@ -51,7 +49,7 @@ export const LeanChartsPanel: React.FC<LeanChartsPanelProps> = ({ round, onRound
       <div className="xl:col-span-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
         <div>
           <div className="text-sm font-semibold text-gray-800">Lean charts</div>
-          <div className="text-xs text-gray-400">The round control sets the first two charts; the last two compare both rounds.</div>
+          <div className="text-xs text-gray-400">The round in view sets the first two charts; the last two compare both rounds.</div>
         </div>
         <div className="flex items-center gap-2">
           <select
@@ -65,23 +63,6 @@ export const LeanChartsPanel: React.FC<LeanChartsPanelProps> = ({ round, onRound
               <option key={o.id} value={String(o.id)}>{o.name}</option>
             ))}
           </select>
-          <div className="flex items-center rounded-md border border-gray-200 bg-white p-0.5">
-            {([1, 2] as const).map(r => (
-              <button
-                key={r}
-                type="button"
-                disabled={!leanRounds[r]}
-                aria-pressed={round === r}
-                title={leanRounds[r] ? `Round ${r}` : `Round ${r} is not a Lean round`}
-                className={`px-2 py-1 rounded text-xs font-bold disabled:cursor-not-allowed disabled:opacity-40 ${
-                  round === r ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
-                }`}
-                onClick={() => onRoundChange(r)}
-              >
-                {r === 1 ? 'R1' : 'R2'}
-              </button>
-            ))}
-          </div>
         </div>
       </div>
       <WasteBreakdownChart data={selected.data} teamNames={teamNames} unavailable={selected.unavailable} />

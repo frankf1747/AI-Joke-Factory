@@ -60,9 +60,14 @@ describe('design tokens and fonts', () => {
     expect(css).toMatch(/\.joke-font\s*\{[^}]*'Lora'/);
   });
 
-  it('defines the flip-card and rank-up blocks only once', () => {
+  it('defines the flip-card block only once', () => {
     expect(css.match(/^\.flip-card-inner \{/gm)).toHaveLength(1);
-    expect(css.match(/^\.jf-leaderboard-rankup \{/gm)).toHaveLength(1);
-    expect(css.match(/^@keyframes jf-rank-up-flash/gm)).toHaveLength(1);
+  });
+
+  it('fades a leaderboard row from the gold tint once, and the rainbow flash is gone', () => {
+    expect(css).toMatch(/@keyframes jf-board-rankup\s*\{[^}]*var\(--gold-tint\)/);
+    expect(css.match(/^@keyframes jf-board-rankup/gm)).toHaveLength(1);
+    expect(css).not.toContain('jf-leaderboard-rankup');
+    expect(css).not.toContain('jf-rank-up-flash');
   });
 });

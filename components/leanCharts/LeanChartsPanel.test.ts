@@ -5,11 +5,9 @@ import { LeanChartsPanel } from './LeanChartsPanel';
 import { EMPTY_LEAN_CHARTS_STATE } from '../../services/useLeanCharts';
 import { leanChartsFixture } from '../../services/leanCharts.testdata';
 
-const render = (round: 1 | 2, leanRounds: { 1: boolean; 2: boolean }) =>
+const render = (round: 1 | 2) =>
   renderToStaticMarkup(createElement(LeanChartsPanel, {
     round,
-    onRoundChange: () => {},
-    leanRounds,
     r1: EMPTY_LEAN_CHARTS_STATE,
     r2: { ...EMPTY_LEAN_CHARTS_STATE, data: leanChartsFixture({ round_id: 8 }) },
     teamNames: { '2': 'Zebras' },
@@ -17,7 +15,7 @@ const render = (round: 1 | 2, leanRounds: { 1: boolean; 2: boolean }) =>
 
 describe('LeanChartsPanel', () => {
   it('renders the control bar and the four cards in order', () => {
-    const out = render(2, { 1: true, 2: true });
+    const out = render(2);
     const titles = ['Lean charts', 'Where the money leaked', 'Jokes standing still', 'Smaller batches, faster feedback', 'More cycles, more learning'];
     const at = titles.map(t => out.indexOf(t));
     expect(at.every(i => i >= 0)).toBe(true);
@@ -26,16 +24,11 @@ describe('LeanChartsPanel', () => {
     expect(out).toContain('Zebras');
   });
   it('shows the most idle team by default in chart 2', () => {
-    expect(render(2, { 1: true, 2: true })).toContain('Showing Zebras — most idle jokes now');
+    expect(render(2)).toContain('Showing Zebras — most idle jokes now');
   });
-  it('disables the round button of a round that is not Lean', () => {
-    const out = render(2, { 1: false, 2: true });
-    expect(out).toMatch(/disabled=""[^>]*title="Round 1 is not a Lean round"/);
-    expect(out).not.toMatch(/disabled=""[^>]*title="Round 2"/);
-  });
-  it('marks the shown round button as pressed', () => {
-    const out = render(2, { 1: true, 2: true });
-    expect(out).toMatch(/aria-pressed="false"[^>]*title="Round 1"/);
-    expect(out).toMatch(/aria-pressed="true"[^>]*title="Round 2"/);
+  it('has no round buttons of its own: the control bar picks the round', () => {
+    const out = render(2);
+    expect(out).not.toContain('aria-pressed');
+    expect(out).not.toMatch(/>R[12]</);
   });
 });

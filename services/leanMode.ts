@@ -367,18 +367,6 @@ export function leanFeesOf(
   };
 }
 
-/** Sort keys of the leaderboard's Lean columns. */
-export type LeanSortKey = 'shipping_cost' | 'storage_cost' | 'hosting_cost' | 'lead_time_s' | 'sale_time_s';
-
-/** The leaderboard's Lean columns, in order (views/Instructor.tsx). */
-export const LEAN_LEADERBOARD_COLUMNS: ReadonlyArray<{ key: LeanSortKey; label: string; title: string }> = [
-  { key: 'shipping_cost', label: 'Shipping', title: 'Shipping fees: every batch sent, priced by its size' },
-  { key: 'storage_cost', label: 'Storage', title: "Storage fees: jokes waiting on Marketing's desk, per minute" },
-  { key: 'hosting_cost', label: 'Hosting', title: 'Hosting fees: released jokes unsold on the shelf, per minute' },
-  { key: 'lead_time_s', label: 'Lead', title: 'Average lead time: batch sent to joke released' },
-  { key: 'sale_time_s', label: 'Sale', title: 'Average time from release to first sale' },
-];
-
 /** One learning-curve point: a batch's sell-through (sold ÷ published). */
 export interface LearningCurvePoint { seq: number; rate: number }
 

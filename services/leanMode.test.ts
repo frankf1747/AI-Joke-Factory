@@ -1,7 +1,7 @@
 // services/leanMode.test.ts
 import { describe, expect, it } from 'vitest';
 import {
-  LEAN_LEADERBOARD_COLUMNS, MARKET_MODE_LOCKED_MESSAGE, WIP_LIMIT_MESSAGE,
+  MARKET_MODE_LOCKED_MESSAGE, WIP_LIMIT_MESSAGE,
   feeTooltips, fmtCents, fmtFee, fmtMoney, fmtPerMinute, isLeanRound, isMarketModeLocked, isWipLimitReached,
   leanConfigFromRound, leanConfigToBody, leanFeesOf, learningCurvePoints, neverSold, shippingFeeFor, shippingLine,
   CONFIG_NOT_SAVED_TEXT, configSaveErrorText, feeRoundsText, leanTargetRounds, saveRoundConfig,
@@ -105,10 +105,6 @@ describe('lean mode helpers', () => {
     expect(leanFeesOf({ setup_cost: 'x', carrying_cost: undefined })).toEqual({ shipping: 0, storage: 0, hosting: 0 });
     expect(leanFeesOf(null)).toEqual({ shipping: 0, storage: 0, hosting: 0 });
     expect(leanFeesOf(undefined)).toEqual({ shipping: 0, storage: 0, hosting: 0 });
-  });
-
-  it('names the leaderboard Lean columns after the fees', () => {
-    expect(LEAN_LEADERBOARD_COLUMNS.map(c => c.label)).toEqual(['Shipping', 'Storage', 'Hosting', 'Lead', 'Sale']);
   });
 
   it('counts never-sold jokes per batch, even when total sales exceed published', () => {
