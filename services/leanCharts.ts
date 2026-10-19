@@ -215,14 +215,12 @@ export function integerTicks(max: number): number[] {
 
 export function batchScatter(
   sources: { 1: LeanChartsResponse | null; 2: LeanChartsResponse | null },
-  teamFilter: number | null,
   teamNames: Record<string, string> = {},
 ): BatchScatter {
   type Raw = Omit<BatchScatterPoint, 'x' | 'y'>;
   const raw: Raw[] = [];
   for (const round of [1, 2] as const) {
     for (const t of sources[round]?.teams ?? []) {
-      if (teamFilter != null && t.team_id !== teamFilter) continue;
       for (const b of t.batches) {
         raw.push({
           key: `${round}-${t.team_id}-${b.seq}`,
@@ -366,33 +364,20 @@ function cyclesEmptyText(series: ReadonlyArray<CyclesSeries>, teams: ReadonlyArr
   return teams.some(t => t.batches.length > 0) ? NO_RELEASES_TEXT : NO_BATCHES_TEXT;
 }
 
-/** Instructor: the class line per round, or one picked team's batches per round. */
+/** Instructor: the class line per round. */
 export function cyclesForInstructor(
   r1: LeanChartsResponse | null,
   r2: LeanChartsResponse | null,
-  teamFilter: number | null,
-  teamNames: Record<string, string> = {},
 ): CyclesModel {
   const series: CyclesSeries[] = [];
   const teams: LeanChartsTeam[] = [];
   for (const [round, res] of [[1, r1], [2, r2]] as const) {
     if (!res) continue;
-    if (teamFilter == null) {
-      teams.push(...res.teams);
-      series.push({
-        key: `r${round}-class`, name: `Round ${round}`, color: roundColor(round), round,
-        dashed: false, markers: true, faded: false, points: classSellThrough(res.class_average, leanJudgeTiming(res)),
-      });
-    } else {
-      const team = res.teams.find(t => t.team_id === teamFilter) ?? null;
-      if (team) teams.push(team);
-      series.push({
-        key: `r${round}-team`,
-        name: `Round ${round} · ${team ? teamLabel(team.team_id, team.team_name, teamNames) : `Team ${teamFilter}`}`,
-        color: roundColor(round), round, dashed: false, markers: true, faded: false,
-        points: batchSellThrough(team, leanJudgeTiming(res)),
-      });
-    }
+    teams.push(...res.teams);
+    series.push({
+      key: `r${round}-class`, name: `Round ${round}`, color: roundColor(round), round,
+      dashed: false, markers: true, faded: false, points: classSellThrough(res.class_average, leanJudgeTiming(res)),
+    });
   }
   return { series, emptyText: cyclesEmptyText(series, teams) };
 }

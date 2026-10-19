@@ -21,15 +21,16 @@ export type { StatBoxTone } from './components/ui';
 export { BRAND, fmt$ } from './config/brand';
 
 export const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: string; children: React.ReactNode; maxWidth?: string; showCloseButton?: boolean }> = ({ isOpen, onClose, title, children, maxWidth = 'max-w-lg', showCloseButton = true }) => {
+  const titleId = React.useId();
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className={`bg-white rounded-xl shadow-2xl w-full ${maxWidth} overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]`}>
+      <div role="dialog" aria-modal="true" aria-labelledby={titleId} className={`bg-white rounded-xl shadow-2xl w-full ${maxWidth} overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]`}>
         <div className="flex justify-between items-center p-4 border-b border-gray-100 shrink-0">
-          <h3 className="text-xl font-bold text-gray-800">{title}</h3>
+          <h3 id={titleId} className="text-xl font-bold text-gray-800">{title}</h3>
           {showCloseButton && (
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-full transition-colors">
-              <X size={24} />
+            <button type="button" aria-label="Close" onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-full transition-colors">
+              <X size={24} aria-hidden="true" />
             </button>
           )}
         </div>

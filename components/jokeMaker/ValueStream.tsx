@@ -18,7 +18,7 @@ const NOTE_SHADOW = '0 1px 2px rgba(20,32,43,.05), 0 10px 24px -14px rgba(20,32,
 const LOOK: Record<JokeState, { square: React.CSSProperties; card: React.CSSProperties; detail: React.CSSProperties }> = {
   'selling': {
     square: { background: 'var(--selling)' },
-    card: { background: '#eaf2ec' },
+    card: { background: 'var(--selling-bg)' },
     detail: { color: 'var(--selling)' },
   },
   'lost-buyers': {
@@ -27,12 +27,12 @@ const LOOK: Record<JokeState, { square: React.CSSProperties; card: React.CSSProp
     detail: { color: 'var(--selling)', opacity: 0.75 },
   },
   'no-buyer': {
-    square: { background: '#d9a92b' },
-    card: { background: '#f9f1dc' },
+    square: { background: 'var(--waiting-dot)' },
+    card: { background: 'var(--waiting-bg)' },
     detail: { color: 'var(--waiting)' },
   },
   'not-released': {
-    square: { background: '#c9c3b7' },
+    square: { background: 'var(--held)' },
     card: { background: 'transparent', border: '1px dashed var(--rule-2)' },
     detail: { color: 'var(--ink-3)' },
   },
@@ -63,12 +63,12 @@ export const NoteCard: React.FC<{ note: string; ratedAt?: number; now: number }>
   <div
     data-tour="jm-marketing-note"
     className="relative rounded-xl px-4 py-3"
-    style={{ background: '#fff', boxShadow: NOTE_SHADOW }}
+    style={{ background: 'var(--surface)', boxShadow: NOTE_SHADOW }}
   >
     <span
       aria-hidden="true"
       className="absolute"
-      style={{ top: -5, left: 24, width: 10, height: 10, background: '#fff', transform: 'rotate(45deg)' }}
+      style={{ top: -5, left: 24, width: 10, height: 10, background: 'var(--surface)', transform: 'rotate(45deg)' }}
     />
     <div className="relative flex items-baseline justify-between gap-3">
       <span className="text-xs font-semibold" style={{ color: 'var(--navy)' }}>{MARKETING_NOTE_HEADING}</span>

@@ -32,6 +32,7 @@ const tokens: Record<string, string> = {
   '--chart-never-sold': '#7a4f9a',
   '--chart-discards': '#bdb7ab',
   '--chart-round-1': '#a7aaa8',
+  '--held': '#c9c3b7',
   '--r-3': '12px',
 };
 
@@ -44,6 +45,11 @@ describe('design tokens and fonts', () => {
 
   it.each(Object.entries(tokens))('defines %s as %s', (name, value) => {
     expect(css).toMatch(new RegExp(`${name}:\\s*${value}\\b`, 'i'));
+  });
+
+  it('keeps raw colours out of the Joke Maker value stream: it reads the tokens', () => {
+    const src = readFileSync('components/jokeMaker/ValueStream.tsx', 'utf8');
+    expect(src.match(/#[0-9a-f]{3,8}\b/gi) ?? []).toEqual([]);
   });
 
   it('points Round 2 at the navy token', () => {

@@ -5,7 +5,7 @@ import React, { useState } from 'react';
 import { useGame } from '../context';
 import { TUTORIAL_SEEN_PREFIX } from '../components';
 import { TOUR_SEEN_PREFIX } from '../services/tour/seen';
-import { RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { RefreshCw, ChevronDown } from 'lucide-react';
 
 const LS_DB = 'joke_factory_mock_db_v1';
 const LS_USER_ID = 'joke_factory_user_id';

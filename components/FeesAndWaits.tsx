@@ -17,7 +17,6 @@ import { readMoreOpen, writeMoreOpen } from './StatTiles';
 import type { ApiTeamSummaryResponse, GameConfig } from '../types';
 
 const MONO = "'IBM Plex Mono', ui-monospace, monospace";
-const LABEL = 'text-[11px] font-medium text-[color:var(--ink-3)]';
 
 const SEGMENT: Record<FeeSegmentKey, { name: string; color: string }> = {
   shipping: { name: 'Shipping', color: 'var(--chart-shipping)' },
@@ -66,7 +65,7 @@ const SalesChart: React.FC<{ summary: ApiTeamSummaryResponse; config: GameConfig
     marketPrice: config.marketPrice, totalSales: summary.total_sales,
     costOfPublishing: config.costOfPublishing, costOfDiscard: config.costOfDiscard,
     publishedJokes: summary.published_jokes, discardedJokes: summary.discarded_jokes ?? 0,
-    ...fees,
+    ...fees, profit: summary.profit,
   });
   const amountOf = (key: FeeSegmentKey) => bar.segments.find(s => s.key === key)?.amount ?? 0;
   const pct = (amount: number) => (bar.revenue > 0 ? Math.round((amount / bar.revenue) * 100) : 0);

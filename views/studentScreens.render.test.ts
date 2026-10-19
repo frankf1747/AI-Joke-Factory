@@ -302,6 +302,16 @@ describe('Marketing screen', () => {
     expect(out).not.toContain('Carrying cost');
   });
 
+  it('counts Content Backlog from queue/count, as the desk header does', () => {
+    vi.stubGlobal('localStorage', { getItem: () => '1' });
+    const out = renderWithGame(QualityControl, {
+      user: testUser(Role.QUALITY_CONTROL), config: { ...TEST_CONFIG, marketMode: 'CLASSIC' },
+      teamSummary: summary(), qcQueue: null, qcQueueSize: 3,
+    });
+    // A StatBox renders its value, then its label.
+    expect(out).toMatch(/>3<\/span><span[^>]*>Content Backlog</);
+  });
+
   it('reads an older backend\'s setup and carrying costs without NaN', () => {
     vi.stubGlobal('localStorage', { getItem: () => '1' });
     const out = marketing({ setup_cost: 4, carrying_cost: 2.5 });
@@ -416,7 +426,11 @@ describe('Desk clear', () => {
   });
 
   it('once the round has ended, says so instead and keeps the recap', () => {
-    const out = text(clear({ batches: [released()], roundStatuses: { 1: 'ENDED', 2: 'CONFIGURED' } }));
+    // Between rounds the context has already moved config.round on to 2.
+    const out = text(clear({
+      batches: [released()], config: { ...TEST_CONFIG, round: 2, isActive: false },
+      roundStatuses: { 1: 'ENDED', 2: 'CONFIGURED' },
+    }));
     expect(out).toContain('Round over. Nothing more to release.');
     expect(out).not.toContain('Desk is clear');
     expect(out).not.toContain("next batch shows up here");

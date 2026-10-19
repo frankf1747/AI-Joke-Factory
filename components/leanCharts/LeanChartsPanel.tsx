@@ -24,8 +24,8 @@ export interface LeanChartsPanelProps {
 
 export const LeanChartsPanel: React.FC<LeanChartsPanelProps> = ({ lean, round, r1, r2, teamNames }) => {
   const selected = round === 1 ? r1 : r2;
-  const scatter = useMemo(() => batchScatter({ 1: r1.data, 2: r2.data }, null, teamNames), [r1.data, r2.data, teamNames]);
-  const cycles = useMemo(() => cyclesForInstructor(r1.data, r2.data, null, teamNames), [r1.data, r2.data, teamNames]);
+  const scatter = useMemo(() => batchScatter({ 1: r1.data, 2: r2.data }, teamNames), [r1.data, r2.data, teamNames]);
+  const cycles = useMemo(() => cyclesForInstructor(r1.data, r2.data), [r1.data, r2.data]);
   if (!lean) return <ChartNotice text={CLASSIC_CHARTS_TEXT} />;
   const eitherUnavailable = r1.unavailable || r2.unavailable;
   return (

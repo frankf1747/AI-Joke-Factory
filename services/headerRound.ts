@@ -45,3 +45,12 @@ export function headerRound({ selectedRound, statuses, times, now }: Input): Hea
   }
   return { round, state: 'not-started', clockSecs: 0, clockLabel: 'not started' };
 }
+
+/**
+ * Nothing is running and a round has ended: the header's 'over' state. Between rounds
+ * the context already points config.round at Round 2, so this reads both statuses.
+ */
+export function isRoundOver(statuses: Record<HeaderRoundNumber, HeaderRoundStatus | null>): boolean {
+  if (statuses[1] === 'ACTIVE' || statuses[2] === 'ACTIVE') return false;
+  return statuses[1] === 'ENDED' || statuses[2] === 'ENDED';
+}

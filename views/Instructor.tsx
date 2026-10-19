@@ -15,6 +15,7 @@ import { feeValuesOf, shippingOrderError } from '../components/FeeConfigFields';
 import { feeRoundsText, productionTeamCount } from '../services/leanMode';
 import { DEFAULT_BOARD_SORT, INITIAL_BOARD_RANKS, boardRanksFor, boardRows, nextBoardRanks, type BoardSort } from '../services/liveBoard';
 import { buildApplyUpdates, setupValuesOf, type SetupValues } from '../services/roundConfig';
+import { memberedTeamIds, playingChartTeams, playingStats } from '../services/playingTeams';
 
 /** The four tabs under the control bar (spec 6b). Setup is never a phase's default. */
 export type ScreenTab = InstructorTab | 'setup';
@@ -36,6 +37,7 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
     , endRound
     , roundIds
     , roundStatuses
+    , instructorLobby
   } = useGame();
 
   // The Setup tab's edits in progress: the Classic numbers, the Lean fees and arrival window.
@@ -111,9 +113,12 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
 
   // --- Data Processing ---
 
-  const statsR1 = instructorStatsRound1 ?? null;
-  const statsR2 = instructorStatsRound2 ?? null;
-  const leaderboardStatsSelected = (viewRound === 1 ? statsR1 : statsR2) ?? instructorStats ?? null;
+  // Teams with no members and no activity come back as all-zero rows: leave them out.
+  const membered = useMemo(() => memberedTeamIds(instructorLobby), [instructorLobby]);
+  const statsR1 = useMemo(() => playingStats(instructorStatsRound1 ?? null, membered), [instructorStatsRound1, membered]);
+  const statsR2 = useMemo(() => playingStats(instructorStatsRound2 ?? null, membered), [instructorStatsRound2, membered]);
+  const statsCurrent = useMemo(() => playingStats(instructorStats ?? null, membered), [instructorStats, membered]);
+  const leaderboardStatsSelected = (viewRound === 1 ? statsR1 : statsR2) ?? statsCurrent ?? null;
 
   /* The lean charts show when the round in view is Lean (a Classic round shows a
      notice). The leaderboard's rule: its stats rows carry `lean`, or, before
@@ -121,21 +126,29 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
      are loaded (charts 3 and 4 overlay them): an ACTIVE round is polled every
      10 s, an ENDED one fetched once, a round not yet started not at all. */
   const leanRounds = useMemo(
-    () => leanRoundFlags(statsR1?.leaderboard, statsR2?.leaderboard, config.round === 2 ? 2 : 1, config.marketMode),
-    [statsR1?.leaderboard, statsR2?.leaderboard, config.round, config.marketMode],
+    () => leanRoundFlags(instructorStatsRound1?.leaderboard, instructorStatsRound2?.leaderboard, config.round === 2 ? 2 : 1, config.marketMode),
+    [instructorStatsRound1?.leaderboard, instructorStatsRound2?.leaderboard, config.round, config.marketMode],
   );
-  const leanChartsR1 = useLeanCharts({
+  const leanChartsR1Raw = useLeanCharts({
     roundId: roundIds[1],
     teamId: null,
     enabled: leanRounds[1] && roundStatuses[1] != null && roundStatuses[1] !== 'CONFIGURED',
     live: roundStatuses[1] === 'ACTIVE',
   });
-  const leanChartsR2 = useLeanCharts({
+  const leanChartsR2Raw = useLeanCharts({
     roundId: roundIds[2],
     teamId: null,
     enabled: leanRounds[2] && roundStatuses[2] != null && roundStatuses[2] !== 'CONFIGURED',
     live: roundStatuses[2] === 'ACTIVE',
   });
+  const leanChartsR1 = useMemo(
+    () => ({ ...leanChartsR1Raw, data: playingChartTeams(leanChartsR1Raw.data, membered) }),
+    [leanChartsR1Raw, membered],
+  );
+  const leanChartsR2 = useMemo(
+    () => ({ ...leanChartsR2Raw, data: playingChartTeams(leanChartsR2Raw.data, membered) }),
+    [leanChartsR2Raw, membered],
+  );
   // A 409 NOT_LEAN_ROUND (a mode change racing the start) in a Lean round hides
   // the panel, notice included, until a later poll answers again.
   // The control never strands the instructor: a pick that is no longer showable

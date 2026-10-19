@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { headerRound } from './headerRound';
+import { headerRound, isRoundOver } from './headerRound';
 
 const NOW = 1_000_000_000;
 const s = (seconds: number) => seconds * 1000;
@@ -66,5 +66,16 @@ describe('header round and clock', () => {
     const base = { selectedRound: 1 as const, statuses: { 1: 'ENDED' as const, 2: null } };
     expect(headerRound({ ...base, times: { 1: { startedAt: NOW - s(5), endedAt: null }, 2: none }, now: NOW }).clockSecs).toBe(0);
     expect(headerRound({ ...base, times: { 1: { startedAt: null, endedAt: NOW }, 2: none }, now: NOW }).clockSecs).toBe(0);
+  });
+});
+
+describe('round over', () => {
+  it('is over between rounds and after both, never while a round runs or before any', () => {
+    expect(isRoundOver({ 1: 'ENDED', 2: 'CONFIGURED' })).toBe(true);
+    expect(isRoundOver({ 1: 'ENDED', 2: 'ENDED' })).toBe(true);
+    expect(isRoundOver({ 1: 'ENDED', 2: 'ACTIVE' })).toBe(false);
+    expect(isRoundOver({ 1: 'ACTIVE', 2: 'CONFIGURED' })).toBe(false);
+    expect(isRoundOver({ 1: 'CONFIGURED', 2: 'CONFIGURED' })).toBe(false);
+    expect(isRoundOver({ 1: null, 2: null })).toBe(false);
   });
 });

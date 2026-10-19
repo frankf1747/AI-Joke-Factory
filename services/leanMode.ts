@@ -177,15 +177,6 @@ export function shippingLine(roundNumber: number, round1BatchSize: number, f: Sh
   return `Shipping: ${fmtFee(f.shippingFeeSmall)} for 1–4 jokes · ${fmtFee(f.shippingFeeStandard)} for 5 · ${fmtFee(f.shippingFeeLarge)} for 6–10`;
 }
 
-/** The one-line tooltips of Marketing's three fee tiles, with the round's amounts. */
-export function feeTooltips(f: LeanFeeConfig): { shipping: string; storage: string; hosting: string } {
-  return {
-    shipping: `Charged per batch you send: ${fmtFee(f.shippingFeeSmall)} for 1–4 jokes, ${fmtFee(f.shippingFeeStandard)} for 5, ${fmtFee(f.shippingFeeLarge)} for 6–10.`,
-    storage: `Every minute a joke waits on Marketing's desk costs ${fmtCents(f.storageFeePerJokeMinute)}.`,
-    hosting: `Every minute a released joke sits unsold costs ${fmtCents(f.hostingFeePerJokeMinute)}.`,
-  };
-}
-
 /** The backend reports a WIP refusal as 409 CONFLICT with this prefix in the message. */
 export const WIP_LIMIT_MESSAGE = 'WIP_LIMIT_REACHED';
 

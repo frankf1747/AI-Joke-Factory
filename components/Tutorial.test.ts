@@ -18,6 +18,8 @@ describe('Tutorial', () => {
     const copy = buildSteps().map(s => `${s.t} ${s.b}`).join(' ');
     for (const tab of ['Live', 'Teams', 'Setup', 'Debrief']) expect(copy).toContain(tab);
     for (const gone of ['τ', 'jitter', 'swap margin']) expect(copy).not.toContain(gone);
+    // The ideal joke sits beside the settings at wide widths, so no "below".
+    expect(copy).not.toContain('Below them');
   });
 
   it('keeps every step to the copy rules', () => {

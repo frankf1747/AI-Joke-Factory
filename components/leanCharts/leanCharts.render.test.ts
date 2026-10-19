@@ -67,7 +67,7 @@ describe('chart 2, Jokes standing still', () => {
 
 describe('chart 3, Smaller batches, faster feedback', () => {
   it('shows its title, subtitle, legend and the empty state', () => {
-    const out = html(createElement(BatchFeedbackChart, { scatter: batchScatter({ 1: null, 2: null }, null) }));
+    const out = html(createElement(BatchFeedbackChart, { scatter: batchScatter({ 1: null, 2: null }) }));
     expect(out).toContain('Smaller batches, faster feedback');
     expect(out).toContain('Batch size against minutes to its first sale. Hollow: no sale yet.');
     expect(out).toContain('Round 1');
@@ -75,20 +75,20 @@ describe('chart 3, Smaller batches, faster feedback', () => {
     expect(out).toContain('No batches sent yet');
   });
   it('draws a chart when there are batches', () => {
-    const out = html(createElement(BatchFeedbackChart, { scatter: batchScatter({ 1: res, 2: null }, null) }));
+    const out = html(createElement(BatchFeedbackChart, { scatter: batchScatter({ 1: res, 2: null }) }));
     expect(out).toContain('recharts-responsive-container');
   });
 });
 
 describe('chart 4, More cycles, more learning', () => {
   it('shows its title, subtitle and why it is empty', () => {
-    const out = html(createElement(LearningCyclesChart, { model: cyclesForInstructor(null, null, null) }));
+    const out = html(createElement(LearningCyclesChart, { model: cyclesForInstructor(null, null) }));
     expect(out).toContain('More cycles, more learning');
     expect(out).toContain('Share of released jokes that sold, across the class.');
     expect(out).toContain('No batches sent yet');
   });
   it('lists one line per round in the legend and explains the hollow dots', () => {
-    const out = html(createElement(LearningCyclesChart, { model: cyclesForInstructor(res, null, null) }));
+    const out = html(createElement(LearningCyclesChart, { model: cyclesForInstructor(res, null) }));
     expect(out).toContain('>Round 1</span>');
     expect(out).toContain('Hollow dots: sent too late to judge yet.');
     expect(out).toContain('recharts-responsive-container');

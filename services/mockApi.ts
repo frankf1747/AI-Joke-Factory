@@ -571,7 +571,7 @@ function route(
           const a = db.assignments[uid];
           return !a || a.role == null;
         })
-        .map(([uid, p]) => ({ user_id: p.user_id, display_name: p.display_name, status: p.status }));
+        .map(([, p]) => ({ user_id: p.user_id, display_name: p.display_name, status: p.status }));
 
       const waiting = unassigned.length;
       const assigned = Object.values(db.assignments).filter(a => a.role != null).length;

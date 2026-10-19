@@ -60,7 +60,7 @@ describe('wasteBars (chart 1)', () => {
 
 describe('batchScatter (chart 3)', () => {
   it('puts unsold batches in the band above the axis, hollow', () => {
-    const s = batchScatter({ 1: res, 2: null }, null);
+    const s = batchScatter({ 1: res, 2: null });
     expect(s.r1).toHaveLength(3);
     expect(s.r2).toHaveLength(0);
     expect(s.yMax).toBe(2); // 95 s = 1.58 min, rounded up
@@ -73,7 +73,7 @@ describe('batchScatter (chart 3)', () => {
     expect(s.bandFrom).toBeGreaterThan(s.yMax);
   });
   it('jitters points with the same batch size apart, and leaves a lone one centred', () => {
-    const s = batchScatter({ 1: res, 2: null }, null);
+    const s = batchScatter({ 1: res, 2: null });
     const fives = s.r1.filter(p => p.jokes === 5).sort((a, b) => a.x - b.x);
     expect(fives.map(p => p.teamId)).toEqual([1, 2]);
     expect(fives[0].x).toBeCloseTo(4.7);
@@ -82,15 +82,14 @@ describe('batchScatter (chart 3)', () => {
     expect(fives[0].y).toBeCloseTo(95 / 60);
     expect(s.xMax).toBe(5);
   });
-  it('narrows to one team and overlays Round 2', () => {
-    expect(batchScatter({ 1: res, 2: null }, 2, {}).r1).toHaveLength(1);
-    const both = batchScatter({ 1: res, 2: leanChartsFixture({ round_id: 8 }) }, null, { '1': 'Punchliners' });
+  it('overlays Round 2', () => {
+    const both = batchScatter({ 1: res, 2: leanChartsFixture({ round_id: 8 }) }, { '1': 'Punchliners' });
     expect(both.r2).toHaveLength(3);
     expect(both.r2.every(p => p.round === 2)).toBe(true);
     expect(both.r1.find(p => p.teamId === 1)!.team).toBe('Punchliners');
   });
   it('is empty without data', () => {
-    const s = batchScatter({ 1: null, 2: null }, null);
+    const s = batchScatter({ 1: null, 2: null });
     expect(s.r1.length + s.r2.length).toBe(0);
     expect(s.yMax).toBe(1);
   });
@@ -120,33 +119,25 @@ describe('sell-through (chart 4)', () => {
 
 describe('cyclesForInstructor', () => {
   it('shows the class line per round by default', () => {
-    const m = cyclesForInstructor(res, null, null);
+    const m = cyclesForInstructor(res, null);
     expect(m.series.map(s => s.key)).toEqual(['r1-class']);
     expect(m.series[0].name).toBe('Round 1');
     expect(m.series[0].color).toBe(LEAN_CHART_COLORS.round1);
     expect(m.series[0].dashed).toBe(false);
     expect(m.emptyText).toBeNull();
   });
-  it("shows a picked team's batches in both rounds", () => {
-    const m = cyclesForInstructor(res, leanChartsFixture({ round_id: 8 }), 2, { '2': 'Zebras' });
-    expect(m.series.map(s => s.key)).toEqual(['r1-team', 'r2-team']);
-    expect(m.series[1].name).toBe('Round 2 · Zebras');
-    expect(m.series[1].color).toBe(LEAN_CHART_COLORS.round2);
-    expect(m.series[1].round).toBe(2);
-    expect(m.series[0].points).toHaveLength(1);
-  });
   it('says why it is empty', () => {
     const noBatches: LeanChartsResponse = leanChartsFixture({
       teams: res.teams.map(t => ({ ...t, batches: [] })),
       class_average: { ...avg, sell_through: avg.sell_through.map(s => ({ ...s, value: null })) },
     });
-    expect(cyclesForInstructor(noBatches, null, null).emptyText).toBe(NO_BATCHES_TEXT);
+    expect(cyclesForInstructor(noBatches, null).emptyText).toBe(NO_BATCHES_TEXT);
     const unreleased: LeanChartsResponse = leanChartsFixture({
       teams: [{ ...res.teams[0], batches: [res.teams[0].batches[1]] }],
       class_average: { ...avg, sell_through: avg.sell_through.map(s => ({ ...s, value: null })) },
     });
-    expect(cyclesForInstructor(unreleased, null, null).emptyText).toBe(NO_RELEASES_TEXT);
-    expect(cyclesForInstructor(null, null, null).emptyText).toBe(NO_BATCHES_TEXT);
+    expect(cyclesForInstructor(unreleased, null).emptyText).toBe(NO_RELEASES_TEXT);
+    expect(cyclesForInstructor(null, null).emptyText).toBe(NO_BATCHES_TEXT);
   });
 });
 
@@ -249,8 +240,8 @@ describe('too recent to judge (chart 4)', () => {
   it('running round (clock_end = now) vs ended round', () => {
     const running = at('2026-10-06T10:03:00Z', { teams: [team(100)] });
     const ended = at('2026-10-06T10:10:00Z', { teams: [team(100)] });
-    expect(cyclesForInstructor(running, null, 1).series[0].points[0].pending).toBe(true);
-    expect(cyclesForInstructor(ended, null, 1).series[0].points[0].pending).toBe(false);
+    expect(batchSellThrough(running.teams[0], leanJudgeTiming(running))[0].pending).toBe(true);
+    expect(batchSellThrough(ended.teams[0], leanJudgeTiming(ended))[0].pending).toBe(false);
   });
   it('drops class samples whose bucket starts at or after the cut', () => {
     const full = { ...avg, sell_through: [0, 60, 120, 180].map(t => ({ t, value: 0.5 })) };
@@ -262,7 +253,7 @@ describe('too recent to judge (chart 4)', () => {
     expect(classSellThrough(full, { elapsed: 600, sample: 10 }).map(p => p.minute * 60)).toEqual([0, 60, 120]);
     expect(classSellThrough(full).every(p => p.pending === false)).toBe(true);
     const running = at('2026-10-06T10:03:00Z', { class_average: full });
-    expect(cyclesForInstructor(running, null, null).series[0].points).toHaveLength(1);
-    expect(cyclesForInstructor(at('2026-10-06T10:10:00Z', { class_average: full }), null, null).series[0].points).toHaveLength(4);
+    expect(cyclesForInstructor(running, null).series[0].points).toHaveLength(1);
+    expect(cyclesForInstructor(at('2026-10-06T10:10:00Z', { class_average: full }), null).series[0].points).toHaveLength(4);
   });
 });

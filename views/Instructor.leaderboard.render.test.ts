@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import Instructor, { type ScreenTab } from './Instructor';
 import { renderWithGame, testUser, TEST_CONFIG } from './testing/renderWithGame';
-import { Role, type ApiInstructorStatsResponse, type ApiMarketItem } from '../types';
+import { Role, type ApiInstructorStatsResponse, type ApiMarketItem, type InstructorLobby } from '../types';
 import type { LeanTeamStats } from '../types/api';
 import { LeaderboardTable, PresentBoard } from '../components/instructor/LiveBoard';
 import { LiveMarket } from '../components/instructor/LiveMarket';
@@ -49,6 +49,29 @@ describe('Instructor Live tab, the leaderboard', () => {
     // Sent to released and to first sale read m:ss.
     expect(out).toContain('0:42');
     expect(out).toContain('1:30');
+  });
+
+  it('leaves out a team with no members and no activity, from the board and the class totals', () => {
+    const empty: ApiInstructorStatsResponse['leaderboard'][number] = {
+      rank: 2, team: { id: 2, name: 'Team 2' }, points: 0, total_sales: 0, unsold_jokes: 0, discarded_jokes: 0,
+      batches_processed: 0, profit: 0, total_jokes: 0, published_jokes: 0,
+    };
+    const instructorLobby = {
+      round_id: null, summary: { waiting: 0, assigned: 2, dropped: 0, team_count: 2 },
+      teams: [
+        { team: { id: 1, name: 'Team 1' }, members: [{ user_id: 11, display_name: 'Ana', role: 'JM' }] },
+        { team: { id: 2, name: 'Team 2' }, members: [] },
+      ],
+      customers: [], unassigned: [],
+    } as unknown as InstructorLobby;
+    const out = renderWithGame(Instructor, {
+      user: instructor, config: { ...TEST_CONFIG, marketMode: 'CLASSIC' }, instructorLobby,
+      instructorStatsRound1: { round_id: 1, leaderboard: [classic(1, 1, 5), empty] },
+    });
+    expect(out).toContain('Team 1');
+    expect(out).not.toContain('Team 2');
+    // Worst profit is Team 1's $5.00, not the empty team's $0.00.
+    expect(out).not.toContain('$0.00');
   });
 
   it('drops never sold, fees and the two waits in a Classic round', () => {

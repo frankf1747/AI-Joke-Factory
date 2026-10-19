@@ -13,7 +13,6 @@ import type {
   JokeId,
   Role,
   RoundId,
-  Team,
   TeamId,
   User,
   UserId,
@@ -34,7 +33,7 @@ import { ApiError } from './services/apiClient';
 import { clearPersisted, getWatchIdentity, isWatchMode, mayClaimMarketingBatch } from './services/watchMode';
 import { setMockRoundNumber } from './services/mockApi';
 import { DEFAULT_IDEAL_PROFILE } from './config/dimensions';
-import { DEFAULT_CUSTOMER_BUDGET, customerBudgetFromRound, isRouteMissing, storedConfigPatch, storedConfigSettled } from './services/roundConfig';
+import { DEFAULT_CUSTOMER_BUDGET, customerBudgetFromRound, isRouteMissing, needsRound1Config, storedConfigPatch, storedConfigSettled } from './services/roundConfig';
 import { LEAN_DEFAULTS, MARKET_MODE_LOCKED_TEXT, WIP_LIMIT_TEXT, configSaveErrorText, isMarketModeLocked, isWipLimitReached, leanConfigFromRound, leanConfigToBody, leanTargetRounds, saveRoundConfig } from './services/leanMode';
 import { isCompleteProfile } from './components/IdealProfilePicker';
 import type { DemoUi } from './services/tour/demoUi';
@@ -346,7 +345,6 @@ export interface MarketingPollDeps {
     teamSummaryUnsupported: { current: boolean };
     teamFeedbackUnsupported: { current: boolean };
     submittedBatchJokes: { current: Record<string, string[]> };
-    qcRatedHistory: { current: Record<string, Batch> };
   };
   set: {
     queue(q: ApiQcQueueNextResponse | null): void;
@@ -367,7 +365,6 @@ export const MARKETING_POLL_IO: MarketingPollIo = {
 
 export async function pollMarketingWork(deps: MarketingPollDeps): Promise<{
   summaryTeamId: TeamId | null;
-  didHydrateBatchesFromApi: boolean;
 }> {
   const { io, role, roundId: effectiveRound, refs, set } = deps;
   const now = deps.now ?? Date.now;
@@ -436,14 +433,19 @@ export async function pollMarketingWork(deps: MarketingPollDeps): Promise<{
             setQueue(null);
             // Back off for 30 seconds to avoid spamming 404s if count is lying.
             refs.qcNextRetryAfter.current = now() + 30000;
+          } else if (e instanceof ApiError && e.status === 409) {
+            // The round is no longer active: nothing can be released.
+            setQueue(null);
           } else {
             throw e; // rethrow other errors to be caught by outer block
           }
         }
       }
     }
-  } catch {
-    setQueue(null);
+  } catch (e) {
+    // Only an answer about the queue itself clears the desk (404 or 409, as above).
+    // A network blip or a 5xx keeps the batch in hand until the next tick.
+    if (e instanceof ApiError && (e.status === 404 || e.status === 409)) setQueue(null);
   }
 
   // Team summary for QC (rank/points/avg quality). Prefer batch team_id; fallback to assignment team.
@@ -465,7 +467,6 @@ export async function pollMarketingWork(deps: MarketingPollDeps): Promise<{
   }
 
   // QC batch history: load team batches from API so refresh/logout can restore submitted/rated batch stats.
-  // Merge with locally persisted QC-rated history to preserve feedback/tags where the API omits them.
   const qcTeamId = deps.teamId;
 
   /* Marketing's feedback panel. Gated on the user actually being on a
@@ -474,7 +475,6 @@ export async function pollMarketingWork(deps: MarketingPollDeps): Promise<{
   const qcFeedback = await io.pollFeedback(role, effectiveRound, qcTeamId, refs.teamFeedbackUnsupported);
   if (qcFeedback !== undefined && !cancelled()) set.teamFeedback(qcFeedback);
 
-  let didHydrateBatchesFromApi = false;
   if (qcTeamId) {
     try {
       const listRaw = await io.listTeamBatches(effectiveRound, qcTeamId);
@@ -488,33 +488,15 @@ export async function pollMarketingWork(deps: MarketingPollDeps): Promise<{
           refs.submittedBatchJokes.current[`${effectiveRound}:${String(b.batch_id)}`],
         ),
       );
-      // Process qcExtra first, then mapped overwrites - so API data (is_published, sold_count) wins
-      const qcExtra = Object.values(refs.qcRatedHistory.current).filter((b: Batch) => b.team_id === qcTeamId);
-      const merged = [...qcExtra, ...mapped].reduce<Record<string, Batch>>((acc, b: Batch) => {
-        const existing = acc[String(b.batch_id)];
-        if (existing) {
-          // Merge: API data wins, but keep local feedback/tags if API doesn't have them
-          acc[String(b.batch_id)] = {
-            ...existing,
-            ...b,
-            feedback: b.feedback ?? existing.feedback,
-            tagSummary: b.tagSummary?.length ? b.tagSummary : existing.tagSummary,
-          };
-        } else {
-          acc[String(b.batch_id)] = b;
-        }
-        return acc;
-      }, {} as Record<string, Batch>);
       if (!cancelled()) {
-        set.batches(Object.values(merged).sort((a, b) => (a.batch_id - b.batch_id)));
-        didHydrateBatchesFromApi = true;
+        set.batches([...mapped].sort((a, b) => (a.batch_id - b.batch_id)));
       }
     } catch {
-      // ignore; fallback below
+      // ignore; the screen keeps the last list until the next tick
     }
   }
 
-  return { summaryTeamId, didHydrateBatchesFromApi };
+  return { summaryTeamId };
 }
 
 /* GET /lobby: Go sends ports.LobbySnapshot, PascalCase with no json tags (ApiInstructorLobbyResponse),
@@ -827,7 +809,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Local caches to preserve UI that expects joke text (API does not return it for batch history).
   const submittedBatchJokesRef = useRef<Record<string, string[]>>({});
-  const qcRatedHistoryRef = useRef<Record<string, Batch>>({});
 
   // Polling controls
   const pollAbortRef = useRef<AbortController | null>(null);
@@ -877,13 +858,22 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const editsBefore = configEditCounterRef.current;
     try {
       const res = await instructorService.getRoundConfig(targetRoundId);
+      const isFirstLoad = !storedConfigLoadedRef.current;
+      // After a reload between rounds the round in view is Round 2, which has no profile yet:
+      // it inherits Round 1's (R23), so read Round 1's too. A failure there keeps the defaults.
+      const round1Id = roundIds[1];
+      const viewedRound = targetRoundId === roundIds[2] ? 2 : 1;
+      const inheritFrom = round1Id && needsRound1Config(res.round, { isFirstLoad, viewedRound })
+        ? await instructorService.getRoundConfig(round1Id).then(r => r.round, () => null)
+        : null;
       const editedKeys = new Set<keyof GameConfig>();
       configEditSeqByKeyRef.current.forEach((seq, key) => { if (seq > editsBefore) editedKeys.add(key); });
       const roundStillViewed = viewedRoundIdRef.current === targetRoundId;
       const patch = storedConfigPatch(res.round, {
         roundStillViewed,
-        isFirstLoad: !storedConfigLoadedRef.current,
+        isFirstLoad,
         editedKeys,
+        inheritFrom,
       });
       storedConfigLoadedRef.current = storedConfigSettled(storedConfigLoadedRef.current, roundStillViewed);
       if (Object.keys(patch).length === 0) return false;
@@ -942,17 +932,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === 'object') {
           submittedBatchJokesRef.current = parsed as Record<string, string[]>;
-        }
-      }
-    } catch {
-      // ignore
-    }
-    try {
-      const raw = localStorage.getItem(LS_QC_RATED_HISTORY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === 'object') {
-          qcRatedHistoryRef.current = parsed as Record<string, Batch>;
         }
       }
     } catch {
@@ -1495,25 +1474,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   submittedBatchJokesRef.current[`${effectiveRound}:${String(b.batch_id)}`],
                 ),
               );
-              // Merge QC-rated history (if any) so JM can still see feedback in same session.
-              // Process qcExtra first, then mapped overwrites - so API data (is_published, sold_count) wins
-              const qcExtra = Object.values(qcRatedHistoryRef.current).filter((b: Batch) => b.team_id === me.assignment.team_id);
-              const merged = [...qcExtra, ...mapped].reduce<Record<string, Batch>>((acc, b: Batch) => {
-                const existing = acc[String(b.batch_id)];
-                if (existing) {
-                  // Merge: API data wins, but keep local feedback/tags if API doesn't have them
-                  acc[String(b.batch_id)] = {
-                    ...existing,
-                    ...b,
-                    feedback: b.feedback ?? existing.feedback,
-                    tagSummary: b.tagSummary?.length ? b.tagSummary : existing.tagSummary,
-                  };
-                } else {
-                  acc[String(b.batch_id)] = b;
-                }
-                return acc;
-              }, {} as Record<string, Batch>);
-              setBatches(Object.values(merged).sort((a, b) => (a.batch_id - b.batch_id)));
+              setBatches([...mapped].sort((a, b) => (a.batch_id - b.batch_id)));
             }
           } catch (e) {
             // If backend doesn't implement team summary, stop calling it.
@@ -1558,10 +1519,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const canFetchQcWork = isActive || normalizedStatus === 'ENDED';
           if (!canFetchQcWork) {
             if (!cancelled) { setQcQueue(null); setQcQueueSize(null); }
-            // Still allow popup roster + local rated history.
+            // Still allow the popup roster. The batch list keeps the last API-hydrated
+            // one (as the Joke Maker's does), so the recap and Found a buyer survive.
             if (!cancelled) {
-              const hist = Object.values(qcRatedHistoryRef.current);
-              setBatches(hist);
               if (popupActive) {
                 const popupTeamId = (me.assignment.team_id ?? null) as TeamId | null;
                 const teammates = Array.isArray(me.teammates) ? me.teammates : [];
@@ -1583,7 +1543,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return;
           }
           // QC queue (live work), team summary, feedback and batch history: one Marketing tick.
-          const { summaryTeamId, didHydrateBatchesFromApi } = await pollMarketingWork({
+          const { summaryTeamId } = await pollMarketingWork({
             io: MARKETING_POLL_IO,
             role,
             roundId: effectiveRound as RoundId,
@@ -1599,7 +1559,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               teamSummaryUnsupported: teamSummaryUnsupportedRef,
               teamFeedbackUnsupported: teamFeedbackUnsupportedRef,
               submittedBatchJokes: submittedBatchJokesRef,
-              qcRatedHistory: qcRatedHistoryRef,
             },
             set: {
               queue: setQcQueue,
@@ -1629,12 +1588,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           } else {
             setRoster([nextUser]);
-          }
-
-          // Fallback: if API list isn't available, keep local rated history visible in QC UI.
-          if (!cancelled && !didHydrateBatchesFromApi) {
-            const hist = Object.values(qcRatedHistoryRef.current);
-            setBatches(hist);
           }
         }
       } catch (e) {
@@ -1787,7 +1740,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Clear local caches (avoid leaking state across users).
     submittedBatchJokesRef.current = {};
-    qcRatedHistoryRef.current = {};
     clearPersisted([LS_SUBMITTED_BATCH_JOKES, LS_QC_RATED_HISTORY]);
   };
 
@@ -2202,15 +2154,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
      per-joke decision instead of scoring jokes and letting the server infer which
      ones ship.
 
-     The old body also mirrored the batch into `qcRatedHistoryRef` + localStorage
+     The old body also mirrored the batch into a local rated history + localStorage
      and pushed it through setBatches. That is deliberately NOT carried over:
        - `batches` is re-hydrated from jmService.listTeamBatches on the 2.5s poll,
          and that API data already wins over the local copy in every merge, so the
          published batch reappears on its own with real is_published / sold_count.
        - The local copy's only unique fields were `feedback` and `tagSummary`,
          which no longer exist on either side of the wire.
-     Stale entries written by earlier builds are still merged on hydration and
-     still cleared by resetGame, so nothing breaks for an existing session. */
+     That history is no longer read; its localStorage key (LS_QC_RATED_HISTORY) is
+     still cleared on logout and reset so stale entries from earlier builds go away. */
   const publishBatch = async (
     batchId: string,
     publishedIds: number[],
@@ -2454,7 +2406,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSavedTeamNames({});
     if (user?.role === ('INSTRUCTOR' as Role) && !isWatchMode()) clearTeamNames(browserNameStore(), teamNamesKey(user.user_id));
     submittedBatchJokesRef.current = {};
-    qcRatedHistoryRef.current = {};
     localStorage.removeItem(LS_SUBMITTED_BATCH_JOKES);
     localStorage.removeItem(LS_QC_RATED_HISTORY);
     
@@ -2465,7 +2416,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const me = await sessionService.me();
         if (me.round_id) {
            setRoundId(me.round_id);
-           const lobbyRaw = await instructorService.lobby(me.round_id);
+           await instructorService.lobby(me.round_id);
            // ... (polling will handle the rest, but this kickstarts the sync)
         }
       } catch {

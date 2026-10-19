@@ -4,7 +4,7 @@ import { Button, Card, StatBox, RoleLayout, Modal, fmt$ } from '../components';
 import { Send, Zap, Trash2 } from 'lucide-react';
 import { computeAvgCreatedToPublishSeconds } from '../services/economics';
 import {
-  INITIAL_NUDGE_STATE, nudgeReducer, isNudgeOpen,
+  INITIAL_NUDGE_STATE, nudgeReducer,
   type NudgeEvent,
 } from '../services/marketingNudge';
 /* The feedback mapper lives in views/feedback.ts; the card, with its Pop out
@@ -25,6 +25,7 @@ import { JokePick, PickFields, pickReady } from '../components/marketing/JokePic
 import { DeskClear } from '../components/marketing/DeskClear';
 import { latestRelease, moreWaiting, moreWaitingLabel } from '../services/desk';
 import { marketingInputFrom, marketingNextStep } from '../services/nextStep';
+import { isRoundOver } from '../services/headerRound';
 
 /* ---- Helpers ---- */
 const fmtSeconds = (s: number | null) => {
@@ -35,11 +36,6 @@ const fmtSeconds = (s: number | null) => {
   return `${m}m ${r}s`;
 };
 const MONO = "'IBM Plex Mono', ui-monospace, monospace";
-const ordinal = (n: number) => {
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
-};
 
 /* ============================ Marketing screen ============================ */
 const QualityControl: React.FC = () => {
@@ -168,7 +164,6 @@ const QualityControl: React.FC = () => {
   // which force-shipped the top card. Nothing ships unless it's chosen now.
   // Filtering over orderIds (not selectedIds) keeps the list in card order.
   const submittingIds = orderIds.filter(id => selectedIds.has(id));
-  const isSubmitting = (id: number) => submittingIds.includes(id);
 
   /* Round 2 batches can be a single joke, so Marketing must be able to reject the
      lot — the batch is discarded and charged as waste. Round 1 still demands at
@@ -242,7 +237,7 @@ const QualityControl: React.FC = () => {
      the reliable "round over" signal (queue/next answers 409 then). */
   const teamBatches = useMemo(() => batches.filter(b => b.team === user?.team), [batches, user?.team]);
   const lastRelease = useMemo(() => latestRelease(teamBatches), [teamBatches]);
-  const roundOver = roundStatuses?.[config.round === 2 ? 2 : 1] === 'ENDED';
+  const roundOver = isRoundOver(roundStatuses ?? { 1: null, 2: null });
   const rawText = qcQueue?.batch?.raw_text;
   const needsSplit = !!(rawText && rawText.trim()) && incomingJokes.length === 0;
 
@@ -297,7 +292,8 @@ const QualityControl: React.FC = () => {
 
   /* Stats. Profit replaces avg-score — Marketing bears the cost, so it can go
      negative. Waste = jokes the team discarded (created but never published). */
-  const queueSize = qcQueue?.queue_size ?? incomingJokes.length;
+  // queue/count, the number the desk header reads (the desk batch included).
+  const queueSize = qcQueueSize ?? 0;
   const jokesCreated = teamSummary?.jokes_created ?? 0;
   const jokesPublished = teamSummary?.jokes_published ?? 0;
   const waste = Math.max(0, jokesCreated - jokesPublished);
@@ -547,7 +543,7 @@ const QualityControl: React.FC = () => {
                 moreTiles={[
                   /* queue_size counts this team's SUBMITTED batches in the round,
                      including the one locked on the desk. It counts batches, not jokes.
-                     (The mock API still counts every team's.) Task C3 moves it to the desk header. */
+                     (The mock API still counts every team's.) */
                   <StatBox key="backlog" label="Content Backlog" value={queueSize} tone="blue" />,
                   <StatBox key="lead" label="Created to Publish" value={fmtSeconds(avgLeadSec)} tone="sky" />,
                   <StatBox key="waste" label="Content Waste" value={waste} tone="rose" />,
@@ -574,18 +570,18 @@ const QualityControl: React.FC = () => {
               and passing on the batch is one of the two answers we're asking for. */}
           {mayPublishNothing ? (
             <>
-              You&apos;ve been deliberating a while. Publish what&apos;s worth selling — or
+              You&apos;ve been deliberating a while. Publish what&apos;s worth selling, or
               pass on this batch if none of it is.
             </>
           ) : nudge1AutoPicked ? (
             <>
               You&apos;ve been deliberating a while. We&apos;ve selected your top joke to get
-              you started — change it if you disagree.
+              you started. Change it if you disagree.
             </>
           ) : (
             <>
               You&apos;ve been deliberating a while. You&apos;ve picked{' '}
-              <b>{submittingIds.length} joke{submittingIds.length > 1 ? 's' : ''}</b> — give{' '}
+              <b>{submittingIds.length} joke{submittingIds.length > 1 ? 's' : ''}</b>. Give{' '}
               {submittingIds.length > 1 ? 'them' : 'it'} a Topic and a title, then release to market.
             </>
           )}
@@ -618,11 +614,11 @@ const QualityControl: React.FC = () => {
             the dialog states both options instead and lets them pick one. */}
         {discardingAll && (
           <p className="text-sm text-gray-700 leading-relaxed">
-            Nothing is selected. You can pass on this batch — the{' '}
+            Nothing is selected. You can pass on this batch: the{' '}
             {orderIds.length > 1
               ? `${orderIds.length} jokes stay unpublished and count as waste`
               : 'joke stays unpublished and counts as waste'}{' '}
-            (<b>{fmt$(discardAllCost)}</b>) — or keep looking for something worth selling.
+            (<b>{fmt$(discardAllCost)}</b>). Or keep looking for something worth selling.
           </p>
         )}
         <div className="space-y-4">
@@ -631,7 +627,7 @@ const QualityControl: React.FC = () => {
             if (!j) return null;
             return (
               <div key={id} className="rounded-lg border border-gray-200 p-3 space-y-3">
-                <blockquote className="border-l-[3px] border-[#8bb8e8] pl-3 py-0.5">
+                <blockquote className="py-0.5">
                   <p className="joke-font text-gray-900 text-[15px] leading-relaxed">{j.text}</p>
                 </blockquote>
                 <PickFields

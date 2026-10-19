@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   MARKET_MODE_LOCKED_MESSAGE, WIP_LIMIT_MESSAGE,
-  feeTooltips, fmtCents, fmtFee, fmtMoney, fmtPerMinute, isLeanRound, isMarketModeLocked, isWipLimitReached,
+  fmtCents, fmtFee, fmtMoney, fmtPerMinute, isLeanRound, isMarketModeLocked, isWipLimitReached,
   leanConfigFromRound, leanConfigToBody, leanFeesOf, learningCurvePoints, neverSold, shippingFeeFor, shippingLine,
   CONFIG_NOT_SAVED_TEXT, configSaveErrorText, feeRoundsText, leanTargetRounds, saveRoundConfig,
   LEAN_DEFAULTS, customersHint, productionTeamCount,
@@ -40,16 +40,6 @@ describe('lean mode helpers', () => {
     expect(shippingLine(2, 5, fees)).toBe('Shipping: $1 for 1–4 jokes · $2 for 5 · $3 for 6–10');
     expect(shippingLine(1, 5, { shippingFeeSmall: 0.5, shippingFeeStandard: 1.5, shippingFeeLarge: 2 }))
       .toBe('Shipping: $1.50 per batch of 5');
-  });
-
-  it('writes the fee tooltips from the round\'s fees', () => {
-    expect(feeTooltips({ ...fees, storageFeePerJokeMinute: 0.05, hostingFeePerJokeMinute: 0.05 })).toEqual({
-      shipping: 'Charged per batch you send: $1 for 1–4 jokes, $2 for 5, $3 for 6–10.',
-      storage: "Every minute a joke waits on Marketing's desk costs 5¢.",
-      hosting: 'Every minute a released joke sits unsold costs 5¢.',
-    });
-    expect(feeTooltips({ ...fees, storageFeePerJokeMinute: 0.2, hostingFeePerJokeMinute: 0.025 }).storage)
-      .toBe("Every minute a joke waits on Marketing's desk costs 20¢.");
   });
 
   it('prices a batch by its size, an unsplit batch as the standard 5', () => {

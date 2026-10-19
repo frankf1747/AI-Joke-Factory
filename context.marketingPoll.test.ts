@@ -49,7 +49,6 @@ function setup(opts: { queueNext?: () => Promise<unknown>; count?: () => Promise
       teamSummaryUnsupported: { current: false },
       teamFeedbackUnsupported: { current: false },
       submittedBatchJokes: { current: {} },
-      qcRatedHistory: { current: {} },
     },
     set: {
       queue: q => { state.queue = q; },
@@ -179,5 +178,62 @@ describe('pollMarketingWork', () => {
     t.advance(1_000);
     await pollMarketingWork(t.deps());
     expect(t.io.queueNext).toHaveBeenCalledTimes(2);
+  });
+
+  it('sets the batch list to the API batches only, with no legacy local history merged in', async () => {
+    const t = setup();
+    t.io.listTeamBatches = vi.fn(async () => ({ data: { batches: [{ batch_id: 41, team_id: 3, status: 'SUBMITTED', jokes: [] }] } }));
+    const d = t.deps();
+    await pollMarketingWork(d);
+    const lists = (d.set.batches as ReturnType<typeof vi.fn>).mock.calls;
+    expect(lists).toHaveLength(1);
+    expect(lists[0][0].map((b: { batch_id: number }) => b.batch_id)).toEqual([41]);
+  });
+
+  it('keeps the batch on the desk when queue/count fails for a transient reason', async () => {
+    let fail = false;
+    const t = setup({
+      queueNext: async () => ({ data: HELD }),
+      count: async () => { if (fail) throw new ApiError({ status: 503, code: 'UNAVAILABLE', message: 'down' }); return { data: { queue_size: 2 } }; },
+    });
+    await pollMarketingWork(t.deps());
+    expect(t.state.queue?.batch?.batch_id).toBe(41);
+    fail = true;
+    await pollMarketingWork(t.deps());
+    expect(t.state.queue?.batch?.batch_id).toBe(41);
+    const network = setup({ queueNext: async () => ({ data: HELD }), count: async () => { if (fail) throw new TypeError('Failed to fetch'); return { data: { queue_size: 2 } }; } });
+    fail = false;
+    await pollMarketingWork(network.deps());
+    fail = true;
+    await pollMarketingWork(network.deps());
+    expect(network.state.queue?.batch?.batch_id).toBe(41);
+  });
+
+  it('keeps the batch on the desk when a due queue/next re-ask fails with a 5xx', async () => {
+    let fail = false;
+    const t = setup({ queueNext: async () => { if (fail) throw new ApiError({ status: 500, code: 'INTERNAL', message: 'boom' }); return { data: HELD }; } });
+    await pollMarketingWork(t.deps());
+    fail = true;
+    t.advance(10_000);
+    await pollMarketingWork(t.deps());
+    expect(t.io.queueNext).toHaveBeenCalledTimes(2);
+    expect(t.state.queue?.batch?.batch_id).toBe(41);
+  });
+
+  it('clears the desk when the round is no longer active (409) or the queue is empty', async () => {
+    let mode: 'held' | '409' = 'held';
+    const t = setup({ queueNext: async () => { if (mode === '409') throw new ApiError({ status: 409, code: 'CONFLICT', message: 'round not active' }); return { data: HELD }; } });
+    await pollMarketingWork(t.deps());
+    mode = '409';
+    t.advance(10_000);
+    await pollMarketingWork(t.deps());
+    expect(t.state.queue).toBeNull();
+
+    let size = 2;
+    const e = setup({ queueNext: async () => ({ data: HELD }), count: async () => ({ data: { queue_size: size } }) });
+    await pollMarketingWork(e.deps());
+    size = 0;
+    await pollMarketingWork(e.deps());
+    expect(e.state.queue).toBeNull();
   });
 });

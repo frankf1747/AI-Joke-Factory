@@ -60,6 +60,23 @@ export interface StoredConfigContext {
   isFirstLoad: boolean;
   /** Config keys the instructor edited while the fetch was in flight; they win. */
   editedKeys: ReadonlySet<keyof GameConfig>;
+  /** Round 1's stored round, read on first load when the viewed Round 2 has no profile (needsRound1Config). */
+  inheritFrom?: Partial<ApiInstructorRound> | null;
+}
+
+const hasStoredProfile = (round: Partial<ApiInstructorRound> | null | undefined): boolean =>
+  Object.keys(round?.ideal_profile ?? {}).length > 0;
+
+/**
+ * Whether a first-load read of Round 2 also needs Round 1's stored round: after a reload
+ * between rounds the viewed round is Round 2, which has no ideal_profile until it starts, and
+ * Round 2 inherits Round 1's ideal joke and prices (R23) rather than the defaults.
+ */
+export function needsRound1Config(
+  round: Partial<ApiInstructorRound> | null | undefined,
+  ctx: { isFirstLoad: boolean; viewedRound: 1 | 2 },
+): boolean {
+  return ctx.isFirstLoad && ctx.viewedRound === 2 && !hasStoredProfile(round);
 }
 
 /**
@@ -67,8 +84,9 @@ export interface StoredConfigContext {
  *  - A result for a round that is no longer in view changes nothing.
  *  - A round with a stored ideal_profile gives its profile and numbers.
  *  - A round without one is "never configured" (the GET cannot tell it from defaults): on first
- *    load it gives the default profile and its numbers; on a round change it changes nothing, so
- *    Round 2 keeps Round 1's ideal joke and prices on screen, as it did before this read-back.
+ *    load it gives Round 1's profile and numbers when `inheritFrom` has them, else the default
+ *    profile and its own numbers; on a round change it changes nothing, so Round 2 keeps
+ *    Round 1's ideal joke and prices on screen, as it did before this read-back.
  *  - Keys the instructor edited while the fetch was in flight are left out.
  */
 export function storedConfigPatch(
@@ -76,9 +94,10 @@ export function storedConfigPatch(
   ctx: StoredConfigContext,
 ): StoredConfigFields {
   if (!ctx.roundStillViewed) return {};
-  const hasStoredProfile = Object.keys(round?.ideal_profile ?? {}).length > 0;
-  if (!hasStoredProfile && !ctx.isFirstLoad) return {};
-  const patch: Record<string, unknown> = { ...configFromInstructorRound(round) };
+  const stored = hasStoredProfile(round);
+  if (!stored && !ctx.isFirstLoad) return {};
+  const source = !stored && hasStoredProfile(ctx.inheritFrom) ? ctx.inheritFrom : round;
+  const patch: Record<string, unknown> = { ...configFromInstructorRound(source) };
   for (const key of ctx.editedKeys) delete patch[key];
   return patch as StoredConfigFields;
 }

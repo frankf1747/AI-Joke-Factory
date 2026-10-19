@@ -3,8 +3,9 @@
  * backend's lean profit terms (spec 7.4):
  *   profit = market_price x total_sales - cost_of_publishing x published_jokes
  *            - cost_of_discard x discarded_jokes - shipping - storage - hosting
- * so the segments always sum to revenue. In a loss there is no profit segment
- * and the bar is scaled to the total costs instead.
+ * The profit segment and the loss come from the summary's own profit, so they match
+ * the Scoreboard to the cent; the fees are cent-rounded for the widths and legend.
+ * In a loss there is no profit segment and the bar is scaled to the total costs instead.
  */
 export type FeeSegmentKey = 'shipping' | 'storage' | 'hosting' | 'listing' | 'profit';
 
@@ -18,6 +19,8 @@ export interface FeeBarInput {
   shipping: number;
   storage: number;
   hosting: number;
+  /** The summary's profit (summary.profit), the same number the Scoreboard shows. */
+  profit: number;
 }
 
 export interface FeeBar {
@@ -39,7 +42,7 @@ export function feeBar(a: FeeBarInput): FeeBar {
   const hosting = cents(a.hosting);
   const listing = cents(a.costOfPublishing * a.publishedJokes + a.costOfDiscard * a.discardedJokes);
   const costs = cents(shipping + storage + hosting + listing);
-  const profit = cents(revenue - costs);
+  const profit = cents(a.profit);
   const segments: FeeBar['segments'] = [
     { key: 'shipping', amount: shipping },
     { key: 'storage', amount: storage },

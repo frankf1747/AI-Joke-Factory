@@ -201,7 +201,7 @@ export class InstructorPage {
   }
   /** With teams already seated, Auto-assign asks first ("Reshuffle the teams?"). */
   get reshuffleConfirm(): Locator {
-    return this.page.getByRole('dialog').getByRole('button', { name: /^Auto-assign/ });
+    return this.page.getByRole('dialog', { name: 'Reshuffle the teams?' }).getByRole('button', { name: /^Auto-assign/ });
   }
   /** Gold, and enabled only while the round is CONFIGURED. There is no pause or resume. */
   startRound(n: 1 | 2): Locator {

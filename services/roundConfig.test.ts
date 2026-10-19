@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_CUSTOMER_BUDGET, arrivalSecondsFromMinutes, buildApplyUpdates, setupLockText, customerBudgetFromRound, configFromInstructorRound, storedConfigPatch, storedConfigSettled, isRouteMissing } from './roundConfig';
+import { DEFAULT_CUSTOMER_BUDGET, arrivalSecondsFromMinutes, buildApplyUpdates, setupLockText, customerBudgetFromRound, configFromInstructorRound, storedConfigPatch, storedConfigSettled, isRouteMissing, needsRound1Config } from './roundConfig';
 import { DEFAULT_IDEAL_PROFILE } from '../config/dimensions';
 import { feeValuesOf } from '../components/FeeConfigFields';
 import { TEST_CONFIG } from '../views/testing/renderWithGame';
@@ -147,6 +147,29 @@ describe('storedConfigPatch (when a GET /config result may touch the screen)', (
     expect(patch).not.toHaveProperty('idealProfile');
     expect(patch).not.toHaveProperty('marketPrice');
     expect(patch).toMatchObject({ customerBudget: 5, costOfPublishing: 0.3 });
+  });
+
+  it('after a reload between rounds, Round 2 with no stored profile inherits Round 1\'s profile and prices', () => {
+    const round1 = { ...withProfile, id: 1, round_number: 1, status: 'ENDED' };
+    const patch = storedConfigPatch(noProfile, { ...ctx, isFirstLoad: true, inheritFrom: round1 });
+    expect(patch.idealProfile?.TOPIC).toBe('Animals');
+    expect(patch).toMatchObject({ customerBudget: 5, marketPrice: 2, costOfPublishing: 0.3 });
+  });
+
+  it('Round 2\'s own stored profile wins over Round 1\'s, and a Round 1 without one falls back to the defaults', () => {
+    const round1 = { ...withProfile, id: 1, round_number: 1, ideal_profile: { ...DEFAULT_IDEAL_PROFILE, TOPIC: 'Food' } };
+    expect(storedConfigPatch(withProfile, { ...ctx, isFirstLoad: true, inheritFrom: round1 }).idealProfile?.TOPIC).toBe('Animals');
+    const bare = storedConfigPatch(noProfile, { ...ctx, isFirstLoad: true, inheritFrom: { ...noProfile, id: 1, market_price: 4 } });
+    expect(bare.idealProfile).toEqual(DEFAULT_IDEAL_PROFILE);
+    expect(bare.marketPrice).toBe(1);
+  });
+
+  it('asks for Round 1\'s config only on first load, for Round 2, when Round 2 has no stored profile', () => {
+    expect(needsRound1Config(noProfile, { isFirstLoad: true, viewedRound: 2 })).toBe(true);
+    expect(needsRound1Config({ ...noProfile, ideal_profile: {} }, { isFirstLoad: true, viewedRound: 2 })).toBe(true);
+    expect(needsRound1Config(withProfile, { isFirstLoad: true, viewedRound: 2 })).toBe(false);
+    expect(needsRound1Config(noProfile, { isFirstLoad: false, viewedRound: 2 })).toBe(false);
+    expect(needsRound1Config(noProfile, { isFirstLoad: true, viewedRound: 1 })).toBe(false);
   });
 });
 

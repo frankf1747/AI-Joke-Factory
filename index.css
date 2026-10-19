@@ -46,6 +46,7 @@
   --waiting: #8a6400;      /* released, no buyer yet */
   --waiting-dot: #d9a92b;
   --waiting-bg: #f9f1dc;
+  --held:    #c9c3b7;      /* not released (the Joke Maker's value stream) */
   --warn:    #9a3b1c;      /* warn tone, missed, loss */
   --warn-bg: #f6e3da;
   --chart-shipping:   #c4553a;
@@ -110,15 +111,6 @@ body {
   .jf-board-rankup > td { animation: none; }
 }
 .jf-board-rank { font-family: 'Instrument Sans', 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif; font-weight: 600; }
-
-/* Light outline for colored text (improves contrast on light backgrounds). */
-.jf-text-outline {
-  text-shadow:
-    -1px -1px 0 rgba(255, 255, 255, 0.95),
-    1px -1px 0 rgba(255, 255, 255, 0.95),
-    -1px 1px 0 rgba(255, 255, 255, 0.95),
-    1px 1px 0 rgba(255, 255, 255, 0.95);
-}
 
 /* Flip card helper for metric hover (legacy — kept for any remaining usage) */
 .flip-card {

@@ -114,7 +114,7 @@ export function buildSteps(): Step[] {
   return [
     {
       t: 'Set up the class',
-      b: `Open the Setup tab. Set how many minutes customers arrive over, the market and the costs, then press Apply. Below them, pick the hidden ideal joke: one level on each of the ${IDEAL_DIMENSIONS.length} criteria that have a target. It saves as you go. Reset game sits at the bottom of the tab.`,
+      b: `Open the Setup tab. Set how many minutes customers arrive over, the market and the costs, then press Apply. Then pick the hidden ideal joke: one level on each of the ${IDEAL_DIMENSIONS.length} criteria that have a target. It saves as you go. Reset game sits at the bottom of the tab.`,
       v: () => <ProfileMini />,
     },
     {
