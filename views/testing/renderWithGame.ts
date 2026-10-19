@@ -28,7 +28,7 @@ export function testUser(role: Role, teamId: number | null = 1): User {
 export function fakeGame(over: Partial<GameContextType> = {}): GameContextType {
   const done = async () => {};
   return {
-    user: null, roster: [], login: done, instructorLogin: done, logout: () => {},
+    user: null, roster: [], login: done, instructorLogin: async () => 'failed', logout: () => {},
     config: TEST_CONFIG, updateConfig: async () => ({ saved: true, feeRounds: [] }), setRound: () => {}, setGameActive: done, endRound: done,
     toggleTeamPopup: done, resetGame: async () => true, formTeams: done, resetToLobby: () => {},
     swapTeamRoles: done, movePair: done, exchangePairs: done,

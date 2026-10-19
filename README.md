@@ -117,7 +117,7 @@ npm run dev
 ```
 
 3) Join:
-- **Students**: use **Student Pair Login** (any names)
+- **Students**: use **Student pair** (any two first names)
 - **Instructor**: use one of these names:
   - `Charles2026`
   - `Fernanda2026`

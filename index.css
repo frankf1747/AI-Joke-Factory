@@ -148,3 +148,32 @@ body {
 .flip-card-horizontal .flip-card-back {
   transform: rotateX(180deg);
 }
+
+/* ---- Login and waiting room ---- */
+.jf-input {
+  width: 100%; height: 42px; padding: 0 12px;
+  background: var(--sheet); color: var(--ink);
+  border: 1px solid var(--rule-2); border-radius: var(--r-md); outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.jf-input::placeholder { color: var(--ink-4); }
+.jf-input:focus { border-color: var(--navy); box-shadow: 0 0 0 3px var(--navy-tint); }
+
+.jf-btn-primary {
+  width: 100%; height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  border: 0; border-radius: var(--r-md); background: var(--gold); color: var(--navy);
+  font-weight: 600; font-size: 15px; box-shadow: inset 0 -1px 0 rgba(0, 59, 92, .18);
+  cursor: pointer; transition: background .15s;
+}
+.jf-btn-primary:hover { background: var(--gold-2); }
+.jf-btn-primary:disabled { background: var(--paper-2); color: var(--ink-3); box-shadow: none; cursor: not-allowed; }
+
+/* The waiting room's current step: a dot that breathes, still when motion is reduced. */
+@keyframes jf-wait-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .35; transform: scale(.75); }
+}
+.jf-wait-pulse { animation: jf-wait-pulse 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .jf-wait-pulse { animation: none; }
+}

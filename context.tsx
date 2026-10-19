@@ -660,11 +660,15 @@ export interface ConfigSaveResult {
   feeRounds: number[];
 }
 
+export type InstructorLoginResult = 'ok' | 'wrong-password' | 'failed';
+
 export interface GameContextType {
   user: User | null;
   roster: User[]; // Instructor: lobby; JM/QC: teammates
   login: (name: string, role: Role) => Promise<void>;
-  instructorLogin: (displayName: string, password: string) => Promise<void>;
+  /** Resolves 'wrong-password' on a 401 (the login screen says so inline, no alert),
+   *  'failed' on any other error (alerted), 'ok' once signed in. */
+  instructorLogin: (displayName: string, password: string) => Promise<InstructorLoginResult>;
   logout: () => void;
   
   config: GameConfig;
@@ -1671,9 +1675,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const instructorLogin = async (displayName: string, password: string) => {
+  const instructorLogin = async (displayName: string, password: string): Promise<InstructorLoginResult> => {
     const display_name = displayName.trim();
-    if (!display_name || !password.trim()) return;
+    if (!display_name || !password.trim()) return 'failed';
     try {
       const resp = await instructorService.login({ display_name, password });
       localStorage.setItem(LS_USER_ID, String(resp.user.user_id));
@@ -1687,18 +1691,17 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       );
       setUser(next);
       setRoundId(resp.round_id);
+      return 'ok';
     } catch (e) {
       if (e instanceof ApiError) {
-        if (e.status === 401) {
-          alert('Incorrect password or instructor access not configured.');
-          return;
-        }
+        if (e.status === 401) return 'wrong-password';
         if (e.status === 400) {
           alert('Invalid login payload.');
-          return;
+          return 'failed';
         }
       }
       alert('Failed to login as instructor.');
+      return 'failed';
     }
   };
 

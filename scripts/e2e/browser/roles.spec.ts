@@ -75,7 +75,7 @@ export const POLL_BUDGET_MS = Number(process.env.E2E_POLL_BUDGET_MS ?? 45_000);
 export const LLM_BUDGET_MS = Number(process.env.E2E_LLM_BUDGET_MS ?? 180_000);
 
 /**
- * Mirrors LoginScreen.normalizeTeamName in App.tsx — the display name the
+ * Mirrors normalizeTeamName in views/Login.tsx — the display name the
  * backend stores for a student pair, and therefore the string the instructor's
  * roster chips render.
  */
@@ -108,39 +108,37 @@ export const MK_CHIP_NAME = pairNames(MK_DISPLAY_NAME);
 /* ─────────────────────────────── page objects ───────────────────────────── */
 
 /**
- * The shared login screen (App.tsx `LoginScreen`).
+ * The shared login screen (views/Login.tsx).
  *
- * SELECTOR NOTE: the "Team Members" / "Display Name" / "Admin Password" labels
- * are bare <label> elements with no htmlFor and no wrapped input, so
- * `getByLabel` does NOT resolve them. The inputs' only accessible name comes
- * from their placeholder, which is what these locators use.
+ * Every field has a <label htmlFor>, so the locators use getByLabel. The
+ * Student pair / Instructor switch is a pair of aria-pressed buttons.
  */
 export class LoginScreen {
   constructor(readonly page: Page) {}
 
   get studentTab(): Locator {
-    return this.page.getByRole('button', { name: 'Student Pair Login' });
+    return this.page.getByRole('button', { name: 'Student pair', exact: true });
   }
   get instructorTab(): Locator {
-    return this.page.getByRole('button', { name: 'Instructor Login' });
+    return this.page.getByRole('button', { name: 'Instructor', exact: true });
   }
   get member1(): Locator {
-    return this.page.getByPlaceholder('Member 1 (e.g. Joe)');
+    return this.page.getByLabel('Your first name');
   }
   get member2(): Locator {
-    return this.page.getByPlaceholder('Member 2 (e.g. John)');
+    return this.page.getByLabel("Partner's first name");
   }
   get joinLobby(): Locator {
-    return this.page.getByRole('button', { name: 'Join Lobby' });
+    return this.page.getByRole('button', { name: 'Join the class' });
   }
   get instructorName(): Locator {
-    return this.page.getByPlaceholder('Instructor Name');
+    return this.page.getByLabel('Your name', { exact: true });
   }
   get adminPassword(): Locator {
-    return this.page.getByPlaceholder('Password');
+    return this.page.getByLabel('Admin password');
   }
   get loginAsInstructor(): Locator {
-    return this.page.getByRole('button', { name: 'Login as Instructor' });
+    return this.page.getByRole('button', { name: 'Sign in', exact: true });
   }
 
   async goto(): Promise<void> {
@@ -169,7 +167,7 @@ export class WaitingRoom {
   constructor(readonly page: Page) {}
 
   get heading(): Locator {
-    return this.page.getByRole('heading', { name: 'Waiting Room' });
+    return this.page.getByRole('heading', { name: /^You're in, / });
   }
 
   async expectVisible(): Promise<void> {

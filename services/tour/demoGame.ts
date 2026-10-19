@@ -25,7 +25,7 @@ const refused = async (): Promise<boolean> => false;
 /** Every action, as a no-op. The ones that report success report failure. */
 export const DEMO_ACTIONS: Pick<GameContextType, DemoActionKey> = {
   login: done,
-  instructorLogin: done,
+  instructorLogin: async () => 'failed',
   logout: () => undefined,
   updateConfig: async () => ({ saved: false, feeRounds: [] }),
   setRound: () => undefined,

@@ -164,7 +164,7 @@ function trimUrl(u: string): string {
 }
 
 /**
- * Mirrors LoginScreen.normalizeTeamName in App.tsx, and therefore
+ * Mirrors normalizeTeamName in views/Login.tsx, and therefore
  * roles.spec.ts's copy of it.
  *
  * Duplicated rather than imported, and the duplication is the lesser evil:
