@@ -65,6 +65,23 @@ describe('Login screen', () => {
     expect(out).not.toContain('That password didn&#x27;t work');
   });
 
+  it('ties every label to its input by a unique, matching id', () => {
+    for (const out of [student(), instructor()]) {
+      const fors = [...out.matchAll(/<label[^>]*for="([^"]+)"[^>]*>/g)].map(m => m[1]);
+      expect(fors.length).toBeGreaterThan(0);
+      for (const id of fors) {
+        expect(out.split(`id="${id}"`).length - 1).toBe(1);
+        expect(input(out, id)).not.toBe('');
+      }
+      const ids = [...out.matchAll(/<input[^>]*id="([^"]+)"/g)].map(m => m[1]);
+      expect(ids.sort()).toEqual([...fors].sort());
+    }
+    expect(student()).toMatch(/<label[^>]*for="jf-member-1"[^>]*>Your first name<\/label>/);
+    expect(student()).toMatch(/<label[^>]*for="jf-member-2"[^>]*>Partner&#x27;s first name<\/label>/);
+    expect(instructor()).toMatch(/<label[^>]*for="jf-instructor-name"[^>]*>Your name<\/label>/);
+    expect(instructor()).toMatch(/<label[^>]*for="jf-instructor-password"[^>]*>Admin password<\/label>/);
+  });
+
   it('uses no old labels, em dashes or exclamation marks', () => {
     for (const out of [student(), instructor()]) {
       for (const old of ['Student Pair Login', 'Instructor Login', 'Join Lobby', 'Login as Instructor']) {
@@ -80,9 +97,10 @@ describe('Waiting room', () => {
   const seat = (role: Role, over: Partial<User> = {}): User => ({
     ...testUser(role, null), display_name: 'joe_john', name: 'joe_john', ...over,
   });
-  const render = (user: User) => renderWithGame(WaitingRoom, {
-    user, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' },
-  });
+  type Statuses = { 1: 'CONFIGURED' | 'ACTIVE' | 'ENDED' | null; 2: 'CONFIGURED' | 'ACTIVE' | 'ENDED' | null };
+  const render = (user: User, roundStatuses: Statuses = { 1: 'CONFIGURED', 2: 'CONFIGURED' }) =>
+    renderWithGame(WaitingRoom, { user, roundStatuses });
+  const text = (out: string) => out.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
 
   it('greets the pair by their formatted names, in the heading and the header', () => {
     const out = render(seat(Role.UNASSIGNED));
@@ -129,5 +147,23 @@ describe('Waiting room', () => {
     const out = render(seat(Role.JOKE_MAKER));
     expect(out).toContain('Seated as Joke Maker');
     expect(out).toContain('You&#x27;re the Joke Maker.');
+  });
+
+  it('between rounds, the next step is Round 2 and the andon says Round 1 is over', () => {
+    const out = text(render(seat(Role.UNASSIGNED), { 1: 'ENDED', 2: 'CONFIGURED' }));
+    expect(out).toContain('Round 2 starts');
+    expect(out).not.toContain('Round 1 starts');
+    expect(out).toContain('Round over Round 1');
+  });
+
+  it('while a round runs, the step says so and that they join once seated', () => {
+    const r1 = text(render(seat(Role.UNASSIGNED), { 1: 'ACTIVE', 2: 'CONFIGURED' }));
+    expect(r1).toContain('Round 1 is running');
+    expect(r1).toContain('You join as soon as you&#x27;re seated.');
+    expect(r1).not.toContain('A 1-minute tour');
+    expect(r1).toContain('Running Round 1');
+    const r2 = text(render(seat(Role.UNASSIGNED), { 1: 'ENDED', 2: 'ACTIVE' }));
+    expect(r2).toContain('Round 2 is running');
+    expect(r2).not.toContain('Round 2 starts');
   });
 });

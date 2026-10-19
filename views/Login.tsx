@@ -39,14 +39,22 @@ const StudentForm: React.FC = () => {
   const { login } = useGame();
   const [member1, setMember1] = useState('');
   const [member2, setMember2] = useState('');
+  const [busy, setBusy] = useState(false);
   const ready = member1.trim() !== '' && member2.trim() !== '';
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (busy) return;
     const normalized = normalizeTeamName(member1, member2);
     if (!normalized) return;
-    // Students join as UNASSIGNED pairs; the instructor seats them.
-    await login(normalized, Role.UNASSIGNED);
+    setBusy(true);
+    try {
+      // Students join as UNASSIGNED pairs; the instructor seats them.
+      await login(normalized, Role.UNASSIGNED);
+    } finally {
+      // On success the router has already swapped this screen out; this only matters after a failure.
+      setBusy(false);
+    }
   };
 
   return (
@@ -71,7 +79,7 @@ const StudentForm: React.FC = () => {
       <p className="mb-5 text-[13px] leading-normal text-[color:var(--ink-3)]">
         You two share one seat, as either the Joke Maker or Marketing. <b className="font-semibold text-[color:var(--ink-2)]">Lost connection?</b> Sign in again with the same two names.
       </p>
-      <button type="submit" className="jf-btn-primary" disabled={!ready}>
+      <button type="submit" className="jf-btn-primary" disabled={!ready || busy}>
         Join the class <ArrowRight size={16} aria-hidden="true" />
       </button>
     </form>
@@ -84,12 +92,19 @@ const InstructorForm: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [wrongPassword, setWrongPassword] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (busy) return;
     setWrongPassword(false);
-    const result = await instructorLogin(displayName, password);
-    if (result === 'wrong-password') setWrongPassword(true);
+    setBusy(true);
+    try {
+      const result = await instructorLogin(displayName, password);
+      if (result === 'wrong-password') setWrongPassword(true);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -107,7 +122,11 @@ const InstructorForm: React.FC = () => {
           <input
             id="jf-instructor-password" type={showPassword ? 'text' : 'password'} required
             className="jf-input" style={{ paddingRight: 64 }} autoComplete="current-password"
-            value={password} onChange={e => setPassword(e.target.value)}
+            value={password}
+            onChange={e => {
+              setPassword(e.target.value);
+              setWrongPassword(false);
+            }}
           />
           <button
             type="button"
@@ -119,7 +138,7 @@ const InstructorForm: React.FC = () => {
           </button>
         </div>
       </div>
-      <button type="submit" className="jf-btn-primary mt-2">Sign in</button>
+      <button type="submit" className="jf-btn-primary mt-2" disabled={busy}>Sign in</button>
       {wrongPassword && (
         <p role="alert" className="mt-3 text-[13px] text-[color:var(--warn)]">{WRONG_PASSWORD_TEXT}</p>
       )}

@@ -38,6 +38,16 @@ const ROLES: { key: SeatRole; summary: string; steps: string[] }[] = [
   },
 ];
 
+type Statuses = Record<1 | 2, 'CONFIGURED' | 'ACTIVE' | 'ENDED' | null>;
+
+/** The round this pair will join: a running round, else Round 2 once Round 1 has ended, else Round 1. */
+export function nextRoundStep(statuses: Statuses): { title: string; sub: string } {
+  const running = statuses[1] === 'ACTIVE' ? 1 : statuses[2] === 'ACTIVE' ? 2 : null;
+  if (running) return { title: `Round ${running} is running`, sub: "You join as soon as you're seated." };
+  const n = statuses[1] === 'ENDED' ? 2 : 1;
+  return { title: `Round ${n} starts`, sub: 'A 1-minute tour shows you your screen first.' };
+}
+
 const SHEET: React.CSSProperties = { background: 'var(--sheet)', borderColor: 'var(--rule)' };
 
 const Header: React.FC<{ names: string }> = ({ names }) => {
@@ -88,7 +98,8 @@ const Header: React.FC<{ names: string }> = ({ names }) => {
 
 /** Where a signed-in pair waits until the instructor gives it a team and a role. */
 const WaitingRoom: React.FC = () => {
-  const { user } = useGame();
+  const { user, roundStatuses } = useGame();
+  const nextStep = nextRoundStep(roundStatuses);
   const names = pairNames(user?.display_name ?? '');
   const seated = seatRole(user?.role);
   const seatName = seated ? SEAT_NAME[seated] : null;
@@ -123,8 +134,8 @@ const WaitingRoom: React.FC = () => {
           <Step
             first={false}
             mark={<span className="grid h-[22px] w-[22px] place-items-center rounded-full font-mono text-xs font-semibold text-[color:var(--ink-4)]" style={{ boxShadow: 'inset 0 0 0 1.5px var(--rule-2)' }}>3</span>}
-            title="Round 1 starts"
-            sub="A 1-minute tour shows you your screen first."
+            title={nextStep.title}
+            sub={nextStep.sub}
             next
           />
         </ol>

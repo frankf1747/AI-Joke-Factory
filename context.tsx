@@ -18,6 +18,7 @@ import type {
   UserId,
 } from './types';
 import type { TeamFeedbackResponse } from './types/api';
+import type { ApiActiveRoundResponse } from './types';
 import { teamApi } from './services/api';
 import type { RoundTimes } from './services/headerRound';
 import { instructorService } from './services/instructorService';
@@ -177,6 +178,24 @@ const EMPTY_ROUND_TIMES: RoundTimes = {
 
 function sameRoundTimes(a: RoundTimes, b: RoundTimes): boolean {
   return ([1, 2] as const).every(n => a[n].startedAt === b[n].startedAt && a[n].endedAt === b[n].endedAt);
+}
+
+/** Both rounds' rows, statuses and times from GET /rounds/active (bare or wrapped in `data`). */
+export function roundStateFromActive(active: ApiActiveRoundResponse): {
+  rounds: any[];
+  statuses: Record<1 | 2, RoundStatus | null>;
+  times: RoundTimes;
+} {
+  const payload: any = active as any;
+  const raw = payload?.data?.rounds ?? payload?.rounds;
+  const rounds: any[] = Array.isArray(raw) ? raw : [];
+  const r1 = rounds.find(r => Number(r?.round_number) === 1) ?? null;
+  const r2 = rounds.find(r => Number(r?.round_number) === 2) ?? null;
+  return {
+    rounds,
+    statuses: { 1: normalizeRoundStatus(r1?.status), 2: normalizeRoundStatus(r2?.status) },
+    times: roundTimesFrom(r1, r2),
+  };
 }
 
 export function mapBatchFromTeamList(
@@ -1286,8 +1305,18 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return same ? prev : merged;
         });
 
-        // If user is still unassigned, skip rounds/active call to avoid noise in waiting room.
+        // An unassigned pair only needs the rounds' statuses and times, for the waiting room's
+        // andon and next step; everything else round-related is skipped.
         if (role === ('UNASSIGNED' as Role)) {
+          try {
+            const { statuses: sts, times } = roundStateFromActive(await sessionService.activeRound());
+            if (cancelled) return;
+            setRoundStatuses(prev => (prev[1] === sts[1] && prev[2] === sts[2] ? prev : sts));
+            setRoundTimes(prev => (sameRoundTimes(prev, times) ? prev : times));
+          } catch {
+            // keep the last known statuses; the next poll tries again
+          }
+          if (cancelled) return;
           setConfig(prev => ({
             ...prev,
             status: 'LOBBY',
@@ -1301,18 +1330,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const active = await sessionService.activeRound();
         if (cancelled) return;
 
-        const activePayload: any = active as any;
-        const rounds = Array.isArray(activePayload?.data?.rounds ?? active.rounds)
-          ? (activePayload?.data?.rounds ?? active.rounds)
-          : [];
+        // Both rounds' statuses, so a student screen can tell "between rounds" from "class over".
+        const { rounds, statuses: sts, times } = roundStateFromActive(active);
         const pickStatus = (r: any) => normalizeRoundStatus(r?.status);
         const r1 = rounds.find(r => Number(r?.round_number) === 1) ?? null;
         const r2 = rounds.find(r => Number(r?.round_number) === 2) ?? null;
-        const round1Status = pickStatus(r1);
-        // Both rounds' statuses, so a student screen can tell "between rounds" from "class over".
-        const sts = { 1: round1Status, 2: pickStatus(r2) };
+        const round1Status = sts[1];
         setRoundStatuses(prev => (prev[1] === sts[1] && prev[2] === sts[2] ? prev : sts));
-        const times = roundTimesFrom(r1, r2);
         setRoundTimes(prev => (sameRoundTimes(prev, times) ? prev : times));
 
         const activeRound = rounds.find(r => pickStatus(r) === 'ACTIVE') ?? null;
