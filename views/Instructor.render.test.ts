@@ -234,6 +234,7 @@ describe('Instructor screen, the tabs', () => {
     const out = renderWithGame(Instructor, { user: instructor, config: stopped, roundStatuses: { 1: null, 2: null } });
     expect(selectedTab(out)).toBeUndefined();
     expect(out).not.toContain('Team Management');
+    expect(out).toContain('Waiting for the round status.');
   });
 
   it('shows only the open tab: the settings on Setup, the leaderboard on Live, the team cards on Teams', () => {

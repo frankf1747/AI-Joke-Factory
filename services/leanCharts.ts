@@ -6,25 +6,27 @@
  */
 import type { LeanChartsClassAverage, LeanChartsResponse, LeanChartsTeam } from '../types/api';
 
-/** Same meaning, same colour, everywhere (design_handoff_joke_factory_ui/colors_and_type.css.txt). */
+/** Same meaning, same colour, everywhere: the chart tokens in index.css (spec 3). */
 export const LEAN_CHART_COLORS = {
-  setup: '#2563eb',        // --production: shipping (each batch the Joke Maker sends)
-  waiting: '#7c3aed',      // --marketing: storage (waiting on Marketing's desk)
-  shelf: '#d97706',        // --market: hosting (unsold on the shelf)
-  neverSold: '#e11d48',    // --waste: published, never sold
-  discarded: '#94a3b8',    // --fg4: discarded
-  round1: '#3B82F6',       // Round 1, as on the Wasted Jokes chart
-  round2: '#F97316',       // Round 2, as on the Wasted Jokes chart
-  classAverage: '#64748b', // --fg3, always drawn dashed
+  shipping: 'var(--chart-shipping)',     // each batch the Joke Maker sends
+  storage: 'var(--chart-storage)',       // waiting on Marketing
+  hosting: 'var(--chart-hosting)',       // unsold on the market
+  neverSold: 'var(--chart-never-sold)',  // listing fees on jokes that never sold
+  discarded: 'var(--chart-discards)',
+  round1: 'var(--chart-round-1)',
+  round2: 'var(--chart-round-2)',
+  classAverage: 'var(--ink-3)',          // always drawn dashed
 } as const;
 
 export const LEAN_CHARTS_POLL_MS = 10_000;
 export const LEAN_CHARTS_FAILURE_LIMIT = 3;
 /** The backend refuses lean charts of a CLASSIC round: 409 CONFLICT with this in the message. */
 export const NOT_LEAN_ROUND_MESSAGE = 'NOT_LEAN_ROUND';
-export const LEAN_CHARTS_UNAVAILABLE_TEXT = 'Chart data unavailable — retrying';
+export const LEAN_CHARTS_UNAVAILABLE_TEXT = 'Chart data unavailable, retrying.';
 export const NO_BATCHES_TEXT = 'No batches sent yet';
 export const NO_RELEASES_TEXT = 'No jokes released yet';
+/** The charts area in a Classic round. */
+export const CLASSIC_CHARTS_TEXT = 'Lean charts appear in Lean rounds.';
 
 /** True for the backend's 409 refusal of lean charts for a CLASSIC round. */
 export function isNotLeanRound(e: unknown): boolean {
@@ -120,21 +122,6 @@ export function leanChartsVisibility(
   return flags[round] && !notLean[round];
 }
 
-/** The instructor's team picker: every team in either round, by id. */
-export function teamOptions(
-  r1: LeanChartsResponse | null,
-  r2: LeanChartsResponse | null,
-  teamNames: Record<string, string> = {},
-): Array<{ id: number; name: string }> {
-  const byId = new Map<number, string>();
-  for (const res of [r1, r2]) {
-    for (const t of res?.teams ?? []) {
-      if (!byId.has(t.team_id)) byId.set(t.team_id, teamLabel(t.team_id, t.team_name, teamNames));
-    }
-  }
-  return [...byId.entries()].sort((a, b) => a[0] - b[0]).map(([id, name]) => ({ id, name }));
-}
-
 /* ---- Chart 1: Where the money leaked -------------------------------------- */
 
 export interface WasteBarRow {
@@ -154,10 +141,10 @@ export type WasteSegmentKey = 'setup' | 'waiting' | 'shelf' | 'neverSold' | 'dis
     waste keys (setup = shipping, waiting = storage, shelf = hosting); the
     labels are the fee names students see. */
 export const WASTE_SEGMENTS: ReadonlyArray<{ key: WasteSegmentKey; label: string; color: string }> = [
-  { key: 'setup', label: 'Shipping', color: LEAN_CHART_COLORS.setup },
-  { key: 'waiting', label: "Storage (waiting on Marketing's desk)", color: LEAN_CHART_COLORS.waiting },
-  { key: 'shelf', label: 'Hosting (unsold on the shelf)', color: LEAN_CHART_COLORS.shelf },
-  { key: 'neverSold', label: 'Listing fees on never-sold jokes', color: LEAN_CHART_COLORS.neverSold },
+  { key: 'setup', label: 'Shipping', color: LEAN_CHART_COLORS.shipping },
+  { key: 'waiting', label: 'Storage, waiting on Marketing', color: LEAN_CHART_COLORS.storage },
+  { key: 'shelf', label: 'Hosting, unsold on the market', color: LEAN_CHART_COLORS.hosting },
+  { key: 'neverSold', label: 'Listing fees, never sold', color: LEAN_CHART_COLORS.neverSold },
   { key: 'discarded', label: 'Discards', color: LEAN_CHART_COLORS.discarded },
 ];
 
@@ -181,50 +168,7 @@ export function hasWaste(rows: ReadonlyArray<WasteBarRow>): boolean {
   return rows.some(r => r.total > 0);
 }
 
-/* ---- Chart 2: Jokes standing still ---------------------------------------- */
-
-export interface IdleRow {
-  minute: number;
-  waiting: number;
-  shelf: number;
-  /** Class-average idle jokes (waiting + shelf), drawn dashed. */
-  classAverage: number;
-}
-
-export function idleRows(team: LeanChartsTeam | null, avg: LeanChartsClassAverage | null): IdleRow[] {
-  const samples = avg?.idle ?? team?.idle ?? [];
-  return samples.map((s, k) => {
-    const mine = team?.idle[k];
-    const a = avg?.idle[k];
-    return {
-      minute: s.t / 60,
-      waiting: mine?.waiting ?? 0,
-      shelf: mine?.shelf ?? 0,
-      classAverage: a ? a.waiting + a.shelf : 0,
-    };
-  });
-}
-
-export function hasIdle(rows: ReadonlyArray<IdleRow>): boolean {
-  return rows.some(r => r.waiting + r.shelf + r.classAverage > 0);
-}
-
-/** The instructor's default team for chart 2: most idle jokes at the latest sample (ties: lowest id). */
-export function defaultIdleTeamId(res: LeanChartsResponse | null): number | null {
-  let best: { id: number; idle: number } | null = null;
-  for (const t of res?.teams ?? []) {
-    const last = t.idle[t.idle.length - 1];
-    const idle = last ? last.waiting + last.shelf : 0;
-    if (!best || idle > best.idle || (idle === best.idle && t.team_id < best.id)) best = { id: t.team_id, idle };
-  }
-  return best?.id ?? null;
-}
-
-/** The limit counts batches and the chart counts jokes, so the limit is stated, not drawn. */
-export function idleSubtitle(wipLimit: number): string {
-  const base = 'Jokes waiting for Marketing or unsold on the shelf. A growing pile is waste.';
-  return wipLimit > 0 ? `${base} WIP limit: ${wipLimit} batch${wipLimit === 1 ? '' : 'es'}` : base;
-}
+/* ---- Chart 2: Jokes standing still: services/idleRows.ts ------------------ */
 
 /* ---- Chart 3: Smaller batches, faster feedback ---------------------------- */
 
@@ -328,8 +272,7 @@ export interface CyclesPoint {
   pending: boolean;
 }
 
-export const TOO_RECENT_TEXT = 'Too recent to judge — still selling';
-export const TOO_RECENT_LEGEND = 'Too recent to judge (hollow)';
+export const TOO_RECENT_TEXT = 'Too recent to judge, still selling';
 export const TOO_RECENT_CAPTION = 'Hollow dots: sent too late to judge yet.';
 
 /** Seconds elapsed (started_at → clock_end) and the sample step, from a response. */
@@ -431,7 +374,7 @@ export function cyclesForInstructor(
     if (teamFilter == null) {
       teams.push(...res.teams);
       series.push({
-        key: `r${round}-class`, name: `Round ${round} · class`, color: roundColor(round), round,
+        key: `r${round}-class`, name: `Round ${round}`, color: roundColor(round), round,
         dashed: false, markers: true, faded: false, points: classSellThrough(res.class_average, leanJudgeTiming(res)),
       });
     } else {

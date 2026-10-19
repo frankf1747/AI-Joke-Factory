@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createElement, type ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { WasteBreakdownChart } from './WasteBreakdownChart';
-import { IdleJokesChart } from './IdleJokesChart';
+import { IdleRows } from './IdleRows';
 import { BatchFeedbackChart } from './BatchFeedbackChart';
 import { LearningCyclesChart } from './LearningCyclesChart';
 import { batchScatter, cyclesForInstructor } from '../../services/leanCharts';
@@ -11,59 +11,60 @@ import { leanChartsFixture } from '../../services/leanCharts.testdata';
 const html = (el: ReactElement) => renderToStaticMarkup(el);
 const res = leanChartsFixture();
 
-describe('chart 1 — Where the money leaked', () => {
+describe('chart 1, Where the money leaked', () => {
   it('shows its title, subtitle, legend and the empty state', () => {
     const out = html(createElement(WasteBreakdownChart, { data: null, teamNames: {} }));
     expect(out).toContain('Where the money leaked');
-    expect(out).toContain('Cost of waste per team, by kind. Shorter bars = leaner.');
+    expect(out).toContain('Fees per team, most first. Shorter is leaner.');
     for (const label of [
-      'Shipping', 'Storage (waiting on Marketing&#x27;s desk)', 'Hosting (unsold on the shelf)',
-      'Listing fees on never-sold jokes', 'Discards',
+      'Shipping', 'Storage, waiting on Marketing', 'Hosting, unsold on the market', 'Listing fees, never sold', 'Discards',
     ]) {
       expect(out).toContain(label);
     }
-    for (const old of ['>Setup<', 'Waiting at Marketing', 'Unsold on shelf', 'Published, never sold']) {
-      expect(out).not.toContain(old);
-    }
     expect(out).toContain('No batches sent yet');
   });
-  it('draws a chart when there is waste', () => {
+  it('draws one bar per team, most fees first, in the chart tokens', () => {
     const out = html(createElement(WasteBreakdownChart, { data: res, teamNames: {} }));
-    expect(out).toContain('recharts-responsive-container');
     expect(out).not.toContain('No batches sent yet');
+    expect(out.indexOf('title="Team 2: Shipping $8.00"')).toBeLessThan(out.indexOf('title="Team 1: Shipping $4.00"'));
+    expect(out).toContain('background:var(--chart-shipping)');
+    expect(out).toContain('$13.00');
   });
   it('says when the data is unavailable', () => {
     const out = html(createElement(WasteBreakdownChart, { data: res, teamNames: {}, unavailable: true }));
-    expect(out).toContain('Chart data unavailable — retrying');
+    expect(out).toContain('Chart data unavailable, retrying.');
   });
 });
 
-describe('chart 2 — Jokes standing still', () => {
-  it('states the WIP limit in the subtitle and the empty state before any batch', () => {
-    const out = html(createElement(IdleJokesChart, { team: null, classAverage: null, wipLimit: 2 }));
+describe('chart 2, Jokes standing still', () => {
+  it('shows its title, subtitle, legend and the empty state before any sample', () => {
+    const out = html(createElement(IdleRows, { data: null, teamNames: {} }));
     expect(out).toContain('Jokes standing still');
-    expect(out).toContain('Jokes waiting for Marketing or unsold on the shelf. A growing pile is waste. WIP limit: 2 batches');
-    expect(out).toContain('Class average');
+    expect(out).toContain('Every team, biggest pile first. Click a team for its full chart.');
+    for (const label of ['Waiting on Marketing', 'Unsold on the market', 'Class average']) expect(out).toContain(label);
     expect(out).toContain('No batches sent yet');
   });
-  it('names the team it shows', () => {
-    const out = html(createElement(IdleJokesChart, {
-      team: res.teams[1], classAverage: res.class_average, wipLimit: 0, teamLabel: 'Team 2 — most idle jokes now',
-    }));
-    expect(out).toContain('Showing Team 2 — most idle jokes now');
-    expect(out).not.toContain('WIP limit');
-    expect(out).toContain('recharts-responsive-container');
+  it('ranks the teams, marks a count above the class average and states each peak on hover', () => {
+    const out = html(createElement(IdleRows, { data: res, teamNames: { '2': 'Zebras' } }));
+    const names = [...out.matchAll(/font-semibold" style="color:var\(--ink\)" title="([^"]+)"/g)].map(m => m[1]);
+    expect(names).toEqual(['Zebras', 'Team 1', 'Team 3']);
+    expect(out).toMatch(/color:var\(--warn\)">6</);
+    expect(out).toContain('<title>Zebras: peak 6 jokes at 2 min</title>');
+    expect(out).toContain('<title>Team 3: nothing standing still yet</title>');
+    // Light stacked areas, no dark stroke; the class average dashed.
+    expect(out).toContain('fill="var(--chart-storage)" opacity="0.45"');
+    expect(out).toContain('stroke-dasharray="3 2"');
+    expect(out).not.toContain('<select');
   });
 });
 
-describe('chart 3 — Smaller batches, faster feedback', () => {
+describe('chart 3, Smaller batches, faster feedback', () => {
   it('shows its title, subtitle, legend and the empty state', () => {
     const out = html(createElement(BatchFeedbackChart, { scatter: batchScatter({ 1: null, 2: null }, null) }));
     expect(out).toContain('Smaller batches, faster feedback');
-    expect(out).toContain('Each dot is a batch. Lower = the market answered sooner.');
+    expect(out).toContain('Batch size against minutes to its first sale. Hollow: no sale yet.');
     expect(out).toContain('Round 1');
     expect(out).toContain('Round 2');
-    expect(out).toContain('No sale yet (hollow)');
     expect(out).toContain('No batches sent yet');
   });
   it('draws a chart when there are batches', () => {
@@ -72,21 +73,17 @@ describe('chart 3 — Smaller batches, faster feedback', () => {
   });
 });
 
-describe('chart 4 — More cycles, more learning', () => {
+describe('chart 4, More cycles, more learning', () => {
   it('shows its title, subtitle and why it is empty', () => {
     const out = html(createElement(LearningCyclesChart, { model: cyclesForInstructor(null, null, null) }));
     expect(out).toContain('More cycles, more learning');
-    expect(out).toContain('Each dot is a batch: how much of it sold. More dots = more chances to adjust.');
+    expect(out).toContain('Share of released jokes that sold, across the class.');
     expect(out).toContain('No batches sent yet');
   });
-  it('lists its series in the legend', () => {
+  it('lists one line per round in the legend and explains the hollow dots', () => {
     const out = html(createElement(LearningCyclesChart, { model: cyclesForInstructor(res, null, null) }));
-    expect(out).toContain('Round 1 · class');
-    expect(out).toContain('recharts-responsive-container');
-  });
-  it('explains the hollow "too recent to judge" dots', () => {
-    const out = html(createElement(LearningCyclesChart, { model: cyclesForInstructor(res, null, null) }));
-    expect(out).toContain('Too recent to judge (hollow)');
+    expect(out).toContain('>Round 1</span>');
     expect(out).toContain('Hollow dots: sent too late to judge yet.');
+    expect(out).toContain('recharts-responsive-container');
   });
 });

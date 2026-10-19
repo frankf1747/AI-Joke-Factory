@@ -39,7 +39,7 @@ export const ClassTotalsRow: React.FC<{ totals: ClassTotals }> = ({ totals: t })
           <Kpi
             label="Released, never sold"
             value={String(t.neverSold)}
-            sub={t.released > 0 ? `${Math.round((t.neverSold! / t.released) * 100)}% of released jokes` : undefined}
+            sub={t.neverSoldShare != null ? `${Math.round(t.neverSoldShare * 100)}% of released jokes` : undefined}
           />
           <Kpi label="Fees paid" value={fmtMoney(t.fees!)} sub="shipping, storage and hosting" />
         </>
@@ -89,7 +89,7 @@ export interface LeaderboardTableProps {
 export const LeaderboardTable: React.FC<LeaderboardTableProps> = ({ rows, lean, sort, onSort, ranks, big = false }) => {
   const columns = boardColumns(lean);
   const sorted = sortBoard(rows, sort);
-  const maxFees = Math.max(...rows.map(r => r.feesTotal), 0.01);
+  const maxFees = Math.max(...rows.map(r => r.feesTotal ?? 0), 0.01);
   const pad = big ? 'px-4 py-3.5' : 'px-3 py-2.5';
   const border = { borderBottom: '1px solid var(--rule)' };
   return (
@@ -150,10 +150,14 @@ export const LeaderboardTable: React.FC<LeaderboardTableProps> = ({ rows, lean, 
                 <td className={`${pad} text-right`} style={td}>{r.discarded}</td>
                 {lean && (
                   <>
-                    <td className={`${pad} text-right`} style={td}>{r.neverSold}</td>
+                    <td className={`${pad} text-right`} style={td}>{r.neverSold ?? '–'}</td>
                     <td className={`${pad} whitespace-nowrap text-right`} style={td}>
-                      <FeeBar row={r} max={maxFees} />
-                      <span className="font-mono">{fmtMoney(r.feesTotal)}</span>
+                      {r.feesTotal != null ? (
+                        <>
+                          <FeeBar row={r} max={maxFees} />
+                          <span className="font-mono">{fmtMoney(r.feesTotal)}</span>
+                        </>
+                      ) : '–'}
                     </td>
                     <td className={`${pad} text-right font-mono`} style={td}>{r.sentToReleased != null ? fmtMinSec(r.sentToReleased) : '–'}</td>
                     <td className={`${pad} text-right font-mono`} style={td}>{r.toFirstSale != null ? fmtMinSec(r.toFirstSale) : '–'}</td>

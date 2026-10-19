@@ -1,8 +1,9 @@
-/* Chart 3 — "Smaller batches, faster feedback" (instructor only). One point per
+/* Chart 3, "Smaller batches, faster feedback" (instructor only). One dot per
    batch: jokes in the batch across (jittered so equal sizes do not stack),
-   minutes from sending to its first sale up. Round 1 circles, Round 2
-   triangles. Batches with no sale yet are hollow, in a "no sale yet" band
-   above the top of the axis, so they are visible and never read as fast. */
+   minutes from sending to its first sale up. Round 1 grey, Round 2 navy.
+   Batches with no sale yet are hollow, in a "no sale yet" band above the top
+   of the axis, so they are visible and never read as fast. Until Round 2 has
+   batches, a note says why Round 1's dots all sit at 5 jokes. */
 import React from 'react';
 import { CartesianGrid, ReferenceArea, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from 'recharts';
 import { Card } from '../ui';
@@ -18,6 +19,8 @@ export interface BatchFeedbackChartProps {
   className?: string;
 }
 
+export const ROUND_1_BATCH_NOTE = 'Round 1 batches are all 5 jokes. Round 2 lets teams pick 1 to 10.';
+
 const renderPoint = (props: any) => {
   const p = props?.payload as BatchScatterPoint | undefined;
   if (!p) return <g />;
@@ -25,7 +28,7 @@ const renderPoint = (props: any) => {
     <Marker
       cx={props.cx}
       cy={props.cy}
-      shape={p.round === 2 ? 'triangle' : 'circle'}
+      shape="circle"
       color={p.round === 2 ? LEAN_CHART_COLORS.round2 : LEAN_CHART_COLORS.round1}
       hollow={p.noSale}
     />
@@ -41,36 +44,37 @@ export const BatchFeedbackChart: React.FC<BatchFeedbackChartProps> = ({ scatter,
   const empty = scatter.r1.length + scatter.r2.length === 0;
   const xTicks = Array.from({ length: scatter.xMax }, (_, i) => i + 1);
   return (
-    <Card title="Smaller batches, faster feedback" subtitle="Each dot is a batch. Lower = the market answered sooner." className={className}>
+    <Card
+      title="Smaller batches, faster feedback"
+      subtitle="Batch size against minutes to its first sale. Hollow: no sale yet."
+      className={className}
+    >
       {unavailable && <ChartNotice text={LEAN_CHARTS_UNAVAILABLE_TEXT} tone="warn" />}
-      <ChartLegend
-        items={[
-          { label: 'Round 1', color: LEAN_CHART_COLORS.round1, kind: 'circle' },
-          { label: 'Round 2', color: LEAN_CHART_COLORS.round2, kind: 'triangle' },
-          { label: 'No sale yet (hollow)', color: LEAN_CHART_COLORS.classAverage, kind: 'circle', hollow: true },
-        ]}
-      />
+      {scatter.r2.length === 0 && (
+        <p className="mb-1 text-[12.5px]" style={{ color: 'var(--ink-2)' }}>{ROUND_1_BATCH_NOTE}</p>
+      )}
       {empty ? (
         <ChartNotice text={NO_BATCHES_TEXT} />
       ) : (
         <div className="w-full" style={{ height: chartHeight(false) }}>
           <ResponsiveContainer>
             <ScatterChart margin={{ top: 8, right: 16, left: 0, bottom: 12 }}>
-              <CartesianGrid strokeDasharray="3 3" />
+              <CartesianGrid stroke="var(--rule)" vertical={false} />
               <XAxis
                 type="number" dataKey="x" domain={[0.5, scatter.xMax + 0.5]} ticks={xTicks} allowDecimals={false}
-                tick={{ fontSize: 11 }}
-                label={{ value: 'Jokes in the batch', position: 'insideBottom', offset: -6, style: { fontSize: 11 } }}
+                tick={{ fontSize: 11.5, fill: 'var(--ink-3)' }}
+                label={{ value: 'jokes in the batch', position: 'insideBottom', offset: -6, style: { fontSize: 11.5, fill: 'var(--ink-3)' } }}
               />
               <YAxis
-                type="number" dataKey="y" domain={[0, scatter.bandTo]} ticks={scatter.yTicks} width={40} tick={{ fontSize: 11 }}
-                label={{ value: 'Minutes to first sale', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fontSize: 11 } }}
+                type="number" dataKey="y" domain={[0, scatter.bandTo]} ticks={scatter.yTicks} width={40}
+                tick={{ fontSize: 11.5, fill: 'var(--ink-3)' }}
+                label={{ value: 'minutes to first sale', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fontSize: 11.5, fill: 'var(--ink-3)' } }}
               />
               {/* recharts 3.6 types do not accept `fill` on ReferenceArea, so the band is a custom shape. */}
               <ReferenceArea
                 y1={scatter.bandFrom}
                 y2={scatter.bandTo}
-                shape={(props: any) => <rect x={props.x} y={props.y} width={props.width} height={props.height} fill="#f1f5f9" />}
+                shape={(props: any) => <rect x={props.x} y={props.y} width={props.width} height={props.height} fill="var(--paper)" />}
                 label={{ value: 'no sale yet', position: 'insideTopRight', style: { fontSize: 11, fill: LEAN_CHART_COLORS.classAverage } }}
               />
               <Tooltip
@@ -96,6 +100,12 @@ export const BatchFeedbackChart: React.FC<BatchFeedbackChartProps> = ({ scatter,
           </ResponsiveContainer>
         </div>
       )}
+      <ChartLegend
+        items={[
+          { label: 'Round 1', color: LEAN_CHART_COLORS.round1, kind: 'circle' },
+          { label: 'Round 2', color: LEAN_CHART_COLORS.round2, kind: 'circle' },
+        ]}
+      />
     </Card>
   );
 };

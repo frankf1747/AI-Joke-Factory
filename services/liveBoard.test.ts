@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LeaderboardRow } from './classTotals';
 import {
-  DEFAULT_BOARD_SORT, INITIAL_BOARD_RANKS, bestSellers, boardColumns, boardRows, buyersText,
+  DEFAULT_BOARD_SORT, INITIAL_BOARD_RANKS, bestSellers, boardColumns, boardRanksFor, boardRows, buyersText,
   nextBoardRanks, nextBoardSort, sortBoard,
 } from './liveBoard';
 
@@ -29,6 +29,12 @@ describe('boardRows', () => {
     })], { '3': 'Zebras' });
     expect(r).toMatchObject({ teamId: '3', team: 'Zebras', rank: 2, neverSold: 3, feesTotal: 2.75, sentToReleased: 72, toFirstSale: null });
     expect(r.fees).toEqual({ shipping: 2, storage: 0.5, hosting: 0.25 });
+  });
+
+  it('keeps never sold and fees empty for a row the backend sent without lean', () => {
+    const [r] = boardRows([row(1, 1, 5)], {});
+    expect(r.neverSold).toBeNull();
+    expect(r.feesTotal).toBeNull();
   });
 
   it('falls back to the row position when the backend sends no rank', () => {
@@ -87,6 +93,15 @@ describe('nextBoardRanks', () => {
     expect(s.teams['1'].move).toEqual({ kind: 'up', by: 1 });
     s = nextBoardRanks(s, at({ 1: 1 }), 2);
     expect(s.teams['1'].move).toBeNull();
+  });
+});
+
+describe('boardRanksFor', () => {
+  it('passes the rank tags only while they belong to the round on the board', () => {
+    const ranks = nextBoardRanks(INITIAL_BOARD_RANKS, [{ teamId: '1', rank: 1 }], 7);
+    expect(boardRanksFor(ranks, 7)).toBe(ranks);
+    expect(boardRanksFor(ranks, 8)).toBeUndefined();
+    expect(boardRanksFor(ranks, null)).toBeUndefined();
   });
 });
 

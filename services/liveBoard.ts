@@ -13,10 +13,10 @@ export interface BoardRow {
   sales: number;
   released: number;
   discarded: number;
-  /** Lean rounds only (0 in a Classic round, where the column is not shown). */
-  neverSold: number;
+  /** Lean figures; null when the backend sent the row without `lean` (shown as "–"). */
+  neverSold: number | null;
   fees: LeanFees;
-  feesTotal: number;
+  feesTotal: number | null;
   /** Average seconds; null before the team has one. */
   sentToReleased: number | null;
   toFirstSale: number | null;
@@ -38,9 +38,9 @@ export function boardRows(rows: LeaderboardRow[], teamNames: Record<string, stri
       sales: num(r.total_sales),
       released: num(r.published_jokes),
       discarded: num(r.discarded_jokes),
-      neverSold: neverSold(r.lean) ?? 0,
+      neverSold: neverSold(r.lean),
       fees,
-      feesTotal: fees.shipping + fees.storage + fees.hosting,
+      feesTotal: r.lean ? fees.shipping + fees.storage + fees.hosting : null,
       sentToReleased: seconds(r.lean?.avg_submit_to_publish_s),
       toFirstSale: seconds(r.lean?.avg_publish_to_first_sale_s),
     };
@@ -120,6 +120,12 @@ export interface TeamRank {
 export interface BoardRanks { round: number | null; teams: Record<string, TeamRank> }
 
 export const INITIAL_BOARD_RANKS: BoardRanks = { round: null, teams: {} };
+
+/** The tags for the board, only while they belong to the round it shows: for one
+    render after a round switch they are still the old round's. */
+export function boardRanksFor(ranks: BoardRanks, round: number | null): BoardRanks | undefined {
+  return round != null && ranks.round === round ? ranks : undefined;
+}
 
 /** One poll's step. A lower rank number is better. */
 export function nextBoardRanks(

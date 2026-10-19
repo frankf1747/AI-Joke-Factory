@@ -57,6 +57,20 @@ describe('Instructor Live tab, the leaderboard', () => {
       instructorStatsRound1: { round_id: 1, leaderboard: [classic(1, 1, 5)] },
     });
     expect(headers(out)).toEqual(LEAN_HEADERS.slice(0, 6));
+    // The Classic chart cards are gone: the charts area is one notice.
+    expect(out).toContain('Lean charts appear in Lean rounds.');
+    for (const gone of ['Cumulative Sales', 'Batch Sequence', 'Wasted Jokes', 'Scatter Plots', 'Unrated Jokes']) {
+      expect(out).not.toContain(gone);
+    }
+  });
+
+  it('shows a dash, not 0 and $0.00, for a team the backend sent without lean figures', () => {
+    const out = renderToStaticMarkup(createElement(LeaderboardTable, {
+      rows: boardRows([classic(1, 1, 5)], {}), lean: true, sort: DEFAULT_BOARD_SORT,
+    }));
+    expect(out).not.toContain('$0.00');
+    const body = out.slice(out.indexOf('<tbody'));
+    expect(body.match(/>–</g)).toHaveLength(4);
   });
 
   it('reads an older backend\'s setup and carrying costs without showing NaN', () => {
@@ -117,7 +131,8 @@ describe('Instructor Live tab, class totals', () => {
     for (const text of ['Sales, all teams', 'Profit, all teams', 'Released, never sold', 'Fees paid']) expect(out).toContain(text);
     expect(out).toContain('16 jokes released');
     expect(out).toContain('best $4.00, worst −$1.50');
-    expect(out).toContain('38% of released jokes');
+    // 6 of the 8 jokes the batches released never sold (published_jokes says 16).
+    expect(out).toContain('75% of released jokes');
     expect(out).toContain('shipping, storage and hosting');
   });
 

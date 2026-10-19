@@ -1,16 +1,13 @@
-/* Chart 1 — "Where the money leaked" (instructor only). One horizontal bar per
-   team, most waste first, split into the five kinds of waste in dollars, with
-   the total at the end of each bar. Shipping + Storage + Hosting equals the
-   leaderboard's Shipping + Storage + Hosting for that team. */
+/* Chart 1, "Where the money leaked" (instructor only). One bar per team, most
+   fees first, split into the five kinds of waste in dollars, with the total at
+   the end of each bar. Shipping + Storage + Hosting equals the leaderboard's
+   fees for that team. Plain rounded segments, like the fee bars elsewhere. */
 import React from 'react';
-import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Card } from '../ui';
 import type { LeanChartsResponse } from '../../types/api';
 import { fmtMoney } from '../../services/leanMode';
-import {
-  LEAN_CHARTS_UNAVAILABLE_TEXT, NO_BATCHES_TEXT, WASTE_SEGMENTS, hasWaste, wasteBars, type WasteBarRow,
-} from '../../services/leanCharts';
-import { ChartLegend, ChartNotice, ChartTooltipBox } from './chartParts';
+import { LEAN_CHARTS_UNAVAILABLE_TEXT, NO_BATCHES_TEXT, WASTE_SEGMENTS, hasWaste, wasteBars } from '../../services/leanCharts';
+import { ChartLegend, ChartNotice } from './chartParts';
 
 export interface WasteBreakdownChartProps {
   data: LeanChartsResponse | null;
@@ -23,47 +20,35 @@ export const WasteBreakdownChart: React.FC<WasteBreakdownChartProps> = ({
   data, teamNames, unavailable = false, className = '',
 }) => {
   const rows = wasteBars(data, teamNames);
-  const height = Math.max(180, rows.length * 34 + 48);
+  const max = Math.max(0.01, ...rows.map(r => r.total));
   return (
-    <Card title="Where the money leaked" subtitle="Cost of waste per team, by kind. Shorter bars = leaner." className={className}>
+    <Card title="Where the money leaked" subtitle="Fees per team, most first. Shorter is leaner." className={className}>
       {unavailable && <ChartNotice text={LEAN_CHARTS_UNAVAILABLE_TEXT} tone="warn" />}
-      <ChartLegend items={WASTE_SEGMENTS.map(s => ({ label: s.label, color: s.color, kind: 'square' as const }))} />
       {!hasWaste(rows) ? (
         <ChartNotice text={NO_BATCHES_TEXT} />
       ) : (
-        <div className="w-full" style={{ height }}>
-          <ResponsiveContainer>
-            <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 64, left: 8, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-              <XAxis type="number" tickFormatter={(v) => fmtMoney(Number(v))} tick={{ fontSize: 11 }} />
-              <YAxis type="category" dataKey="team" width={104} tick={{ fontSize: 12 }} />
-              <Tooltip
-                cursor={{ fill: 'rgba(148, 163, 184, 0.12)' }}
-                content={(props: any) => {
-                  const row = props?.active ? (props?.payload?.[0]?.payload as WasteBarRow | undefined) : undefined;
-                  if (!row) return null;
-                  return (
-                    <ChartTooltipBox
-                      title={row.team}
-                      rows={[
-                        ...WASTE_SEGMENTS.map(s => ({ label: s.label, value: fmtMoney(row[s.key]), color: s.color })),
-                        { label: 'Total', value: fmtMoney(row.total) },
-                      ]}
+        <div className="space-y-[9px]">
+          {rows.map(r => (
+            <div key={r.teamId} className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-2.5">
+              <span className="truncate text-right text-[12.5px]" style={{ color: 'var(--ink-3)' }} title={r.team}>{r.team}</span>
+              <span className="flex items-center gap-1.5">
+                <span className="flex h-4 gap-0.5" style={{ width: `calc((100% - 64px) * ${r.total / max})` }}>
+                  {WASTE_SEGMENTS.filter(s => r[s.key] > 0).map(s => (
+                    <i
+                      key={s.key}
+                      className="block h-full min-w-[4px] rounded-[2px] first:rounded-l-[4px] last:rounded-r-[4px]"
+                      style={{ flexGrow: r[s.key], flexBasis: 0, background: s.color }}
+                      title={`${r.team}: ${s.label} ${fmtMoney(r[s.key])}`}
                     />
-                  );
-                }}
-              />
-              {WASTE_SEGMENTS.map((s, i) => (
-                <Bar key={s.key} dataKey={s.key} name={s.label} stackId="waste" fill={s.color} isAnimationActive={false}>
-                  {i === WASTE_SEGMENTS.length - 1 && (
-                    <LabelList dataKey="total" position="right" formatter={(v) => fmtMoney(Number(v))} fill="#334155" fontSize={12} />
-                  )}
-                </Bar>
-              ))}
-            </BarChart>
-          </ResponsiveContainer>
+                  ))}
+                </span>
+                <span className="font-mono text-[12.5px] tabular-nums" style={{ color: 'var(--ink-2)' }}>{fmtMoney(r.total)}</span>
+              </span>
+            </div>
+          ))}
         </div>
       )}
+      <ChartLegend items={WASTE_SEGMENTS.map(s => ({ label: s.label, color: s.color, kind: 'square' as const }))} />
     </Card>
   );
 };

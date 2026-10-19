@@ -19,7 +19,7 @@ describe('classTotals', () => {
       row(2, { total_sales: 3, profit: -1.25, published_jokes: 6, lean: lean({ shipping_cost: 4, storage_cost: 0.25, hosting_cost: 0.75 }, [{ published: 6, sold: 1 }]) }),
     ];
     expect(classTotals(rows, true)).toEqual({
-      sales: 15, profit: 3.25, best: 4.5, worst: -1.25, released: 15, neverSold: 7, fees: 13,
+      sales: 15, profit: 3.25, best: 4.5, worst: -1.25, released: 15, neverSold: 7, neverSoldShare: 7 / 15, fees: 13,
     });
   });
 
@@ -27,6 +27,7 @@ describe('classTotals', () => {
     const t = classTotals([row(1, { profit: 2 }), row(2, { profit: 5 })], false);
     expect(t.neverSold).toBeNull();
     expect(t.fees).toBeNull();
+    expect(t.neverSoldShare).toBeNull();
     expect(t.sales).toBe(20);
     expect(t.profit).toBe(7);
     expect(t.best).toBe(5);
@@ -34,6 +35,14 @@ describe('classTotals', () => {
   });
 
   it('has no best or worst before any team is on the board', () => {
-    expect(classTotals([], true)).toEqual({ sales: 0, profit: 0, best: null, worst: null, released: 0, neverSold: 0, fees: 0 });
+    expect(classTotals([], true)).toEqual({ sales: 0, profit: 0, best: null, worst: null, released: 0, neverSold: 0, neverSoldShare: null, fees: 0 });
+  });
+
+  it('takes the never-sold share over the jokes the batches released, whatever published_jokes says', () => {
+    // published_jokes (16) and the batch series (8 released) disagree: the share stays within the series.
+    const rows = [1, 2].map(id => row(id, { published_jokes: 8, lean: lean({ shipping_cost: 0, storage_cost: 0, hosting_cost: 0 }, [{ published: 4, sold: 1 }]) }));
+    const t = classTotals(rows, true);
+    expect(t.released).toBe(16);
+    expect(t.neverSoldShare).toBe(6 / 8);
   });
 });

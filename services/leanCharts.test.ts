@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   LEAN_CHART_COLORS, NO_BATCHES_TEXT, NO_RELEASES_TEXT,
   batchScatter, batchSellThrough, classSellThrough, cyclesForInstructor,
-  defaultIdleTeamId, hasIdle, hasWaste, idleRows, idleSubtitle, integerTicks, isNotLeanRound,
+  hasWaste, integerTicks, isNotLeanRound,
   isTooRecentToJudge, leanChartsVisibility, leanJudgeTiming, leanRoundFlags, minuteTicks,
-  resolveLeanChartsRound, teamOptions, wasteBars,
+  resolveLeanChartsRound, wasteBars,
 } from './leanCharts';
 import { leanChartsFixture } from './leanCharts.testdata';
 import type { LeanChartsResponse } from '../types/api';
@@ -13,10 +13,11 @@ const res = leanChartsFixture();
 const avg = res.class_average;
 
 describe('colours', () => {
-  it('match the spec table exactly', () => {
+  it('use the chart tokens from index.css', () => {
     expect(LEAN_CHART_COLORS).toEqual({
-      setup: '#2563eb', waiting: '#7c3aed', shelf: '#d97706', neverSold: '#e11d48', discarded: '#94a3b8',
-      round1: '#3B82F6', round2: '#F97316', classAverage: '#64748b',
+      shipping: 'var(--chart-shipping)', storage: 'var(--chart-storage)', hosting: 'var(--chart-hosting)',
+      neverSold: 'var(--chart-never-sold)', discarded: 'var(--chart-discards)',
+      round1: 'var(--chart-round-1)', round2: 'var(--chart-round-2)', classAverage: 'var(--ink-3)',
     });
   });
 });
@@ -43,16 +44,6 @@ describe('leanRoundFlags', () => {
   });
 });
 
-describe('teamOptions', () => {
-  it('unions both rounds by id, applies renames, sorts by id', () => {
-    const r2 = leanChartsFixture({ teams: [...res.teams, { ...res.teams[2], team_id: 4, team_name: 'Team 4' }] });
-    expect(teamOptions(res, r2, { '2': 'Zebras' })).toEqual([
-      { id: 1, name: 'Team 1' }, { id: 2, name: 'Zebras' }, { id: 3, name: 'Team 3' }, { id: 4, name: 'Team 4' },
-    ]);
-    expect(teamOptions(null, null)).toEqual([]);
-  });
-});
-
 describe('wasteBars (chart 1)', () => {
   it('sorts by total waste, most first, and keeps teams with no waste', () => {
     const rows = wasteBars(res, { '1': 'Punchliners' });
@@ -64,51 +55,6 @@ describe('wasteBars (chart 1)', () => {
   it('is empty without data, and an all-zero class has no waste to draw', () => {
     expect(wasteBars(null)).toEqual([]);
     expect(hasWaste(wasteBars(leanChartsFixture({ teams: [res.teams[2]] })))).toBe(false);
-  });
-});
-
-describe('idleRows (chart 2)', () => {
-  it('pairs the team with the class-average total, per minute', () => {
-    const rows = idleRows(res.teams[0], avg);
-    expect(rows.map(r => r.minute)).toEqual([0, 1, 2, 3]);
-    expect(rows[1]).toEqual({ minute: 1, waiting: 5, shelf: 0, classAverage: 5 / 3 });
-    expect(rows[2].classAverage).toBeCloseTo(3);
-    expect(hasIdle(rows)).toBe(true);
-  });
-  it('draws the class average alone when no team is picked', () => {
-    const rows = idleRows(null, avg);
-    expect(rows[1].waiting).toBe(0);
-    expect(rows[1].classAverage).toBeCloseTo(5 / 3);
-  });
-  it('has nothing to draw before the round starts', () => {
-    expect(hasIdle(idleRows(null, { ...avg, idle: [] }))).toBe(false);
-  });
-});
-
-describe('defaultIdleTeamId', () => {
-  it('picks the team with the most idle jokes at the latest sample', () => {
-    expect(defaultIdleTeamId(res)).toBe(2); // team 1: 0 + 2, team 2: 5 + 1
-  });
-  it('breaks ties by the lowest team id', () => {
-    const tied = leanChartsFixture();
-    tied.teams[0].idle[3] = { t: 180, waiting: 6, shelf: 0 };
-    expect(defaultIdleTeamId(tied)).toBe(1);
-  });
-  it('handles no teams and no samples', () => {
-    expect(defaultIdleTeamId(null)).toBeNull();
-    expect(defaultIdleTeamId(leanChartsFixture({ teams: [] }))).toBeNull();
-    const notStarted = leanChartsFixture();
-    notStarted.teams.forEach(t => { t.idle = []; });
-    expect(defaultIdleTeamId(notStarted)).toBe(1);
-  });
-});
-
-describe('idleSubtitle', () => {
-  const base = 'Jokes waiting for Marketing or unsold on the shelf. A growing pile is waste.';
-  it('states the WIP limit only when there is one', () => {
-    expect(idleSubtitle(0)).toBe(base);
-    expect(idleSubtitle(2)).toBe(`${base} WIP limit: 2 batches`);
-    expect(idleSubtitle(1)).toBe(`${base} WIP limit: 1 batch`);
   });
 });
 
@@ -176,6 +122,7 @@ describe('cyclesForInstructor', () => {
   it('shows the class line per round by default', () => {
     const m = cyclesForInstructor(res, null, null);
     expect(m.series.map(s => s.key)).toEqual(['r1-class']);
+    expect(m.series[0].name).toBe('Round 1');
     expect(m.series[0].color).toBe(LEAN_CHART_COLORS.round1);
     expect(m.series[0].dashed).toBe(false);
     expect(m.emptyText).toBeNull();

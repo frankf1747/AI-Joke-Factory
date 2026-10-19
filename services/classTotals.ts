@@ -16,6 +16,10 @@ export interface ClassTotals {
   released: number;
   /** Released jokes that never sold (neverSold per row); null in a Classic round. */
   neverSold: number | null;
+  /** neverSold over the jokes the same batch series released (at most 1); null in a
+      Classic round or before any batch released a joke. published_jokes comes from
+      another count and can disagree with the series, so it is not the denominator. */
+  neverSoldShare: number | null;
   /** Shipping + storage + hosting; null in a Classic round. */
   fees: number | null;
 }
@@ -23,7 +27,7 @@ export interface ClassTotals {
 const num = (v: unknown): number => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
 export function classTotals(rows: LeaderboardRow[], lean: boolean): ClassTotals {
-  let sales = 0, profit = 0, released = 0, never = 0, fees = 0;
+  let sales = 0, profit = 0, released = 0, never = 0, seriesReleased = 0, fees = 0;
   let best: number | null = null, worst: number | null = null;
   for (const r of rows) {
     const p = num(r.profit);
@@ -33,8 +37,10 @@ export function classTotals(rows: LeaderboardRow[], lean: boolean): ClassTotals 
     best = best == null ? p : Math.max(best, p);
     worst = worst == null ? p : Math.min(worst, p);
     never += neverSold(r.lean) ?? 0;
+    for (const b of r.lean?.batch_series ?? []) seriesReleased += Math.max(0, num(b.published));
     const f = leanFeesOf(r.lean);
     fees += f.shipping + f.storage + f.hosting;
   }
-  return { sales, profit, best, worst, released, neverSold: lean ? never : null, fees: lean ? fees : null };
+  const neverSoldShare = lean && seriesReleased > 0 ? Math.min(1, never / seriesReleased) : null;
+  return { sales, profit, best, worst, released, neverSold: lean ? never : null, neverSoldShare, fees: lean ? fees : null };
 }
