@@ -1,10 +1,11 @@
 /**
- * Pure helpers for the instructor's CONFIG row: what the Customer Budget box
- * shows, and the settings Apply sends.
+ * Pure helpers for the instructor's Setup tab: what the Customer budget box
+ * shows, the settings Apply sends and the lock banner.
  */
-import { changedFees, type FeeConfigValues } from '../components/FeeConfigFields';
+import { changedFees, feeValuesOf, type FeeConfigValues } from '../components/FeeConfigFields';
 import type { ApiInstructorRound, GameConfig } from '../types';
 import { DEFAULT_IDEAL_PROFILE, IDEAL_DIMENSIONS } from '../config/dimensions';
+import type { PhaseStatuses } from './instructorPhase';
 
 /** The backend's default customer budget (domain defaults), used before any round has been read. */
 export const DEFAULT_CUSTOMER_BUDGET = 3;
@@ -100,15 +101,33 @@ export function isRouteMissing(e: { status: number; code?: string }): boolean {
   return e.status === 405 || (e.status === 404 && e.code !== 'NOT_FOUND');
 }
 
-export interface ApplyInputs {
-  local: {
-    budget: number; marketPrice: number; costOfPublishing: number;
-    nudge1: number; nudge2: number; fees: FeeConfigValues;
+/** The arrival window is entered in minutes; the backend takes whole seconds (a fraction is a 400). */
+export function arrivalSecondsFromMinutes(min: number): number {
+  return Math.round(min * 60);
+}
+
+/** The Setup tab's edits in progress: the Classic numbers and the shared Lean settings. */
+export interface SetupValues {
+  budget: number;
+  marketPrice: number;
+  costOfPublishing: number;
+  fees: FeeConfigValues;
+}
+
+export function setupValuesOf(config: GameConfig): SetupValues {
+  return {
+    budget: config.customerBudget,
+    marketPrice: config.marketPrice,
+    costOfPublishing: config.costOfPublishing,
+    fees: feeValuesOf(config),
   };
+}
+
+export interface ApplyInputs {
+  local: SetupValues;
   config: GameConfig;
   canEditBudget: boolean;
   canEditPricing: boolean;
-  canEditNudges: boolean;
   canEditLean: boolean;
 }
 
@@ -116,7 +135,7 @@ export interface ApplyInputs {
  * The updateConfig patch Apply sends: only fields the instructor changed and
  * the screen allows. Never the budget or a customer count that was not edited
  * (the server does not lock customer_count after the start, so a stale send
- * would overwrite the real count).
+ * would overwrite the real count). Its keys are also the Setup tab's change count.
  */
 export function buildApplyUpdates(i: ApplyInputs): Partial<GameConfig> {
   const { local, config } = i;
@@ -124,10 +143,20 @@ export function buildApplyUpdates(i: ApplyInputs): Partial<GameConfig> {
   if (i.canEditBudget && local.budget !== config.customerBudget) updates.customerBudget = local.budget;
   if (i.canEditPricing && local.marketPrice !== config.marketPrice) updates.marketPrice = local.marketPrice;
   if (i.canEditPricing && local.costOfPublishing !== config.costOfPublishing) updates.costOfPublishing = local.costOfPublishing;
-  // Clamped: a 0s nudge would fire the instant Marketing lands on the view.
-  if (i.canEditNudges && local.nudge1 !== config.marketingNudge1Seconds) updates.marketingNudge1Seconds = Math.max(5, local.nudge1);
-  if (i.canEditNudges && local.nudge2 !== config.marketingNudge2Seconds) updates.marketingNudge2Seconds = Math.max(5, local.nudge2);
   // The fees, the arrival window and customers per team (shared Lean settings).
   if (i.canEditLean) Object.assign(updates, changedFees(local.fees, config));
   return updates;
+}
+
+/**
+ * The Setup tab's lock banner, or null when nothing is locked (the lobby) or the
+ * statuses are not known yet. While a round runs every setting and the ideal joke
+ * are locked; between rounds Round 1's settings are; after both, all of them.
+ */
+export function setupLockText(statuses: PhaseStatuses): string | null {
+  const running = statuses[2] === 'ACTIVE' ? 2 : statuses[1] === 'ACTIVE' ? 1 : null;
+  if (running) return `Round ${running} is running. Settings are locked until it ends; the ideal joke is locked too.`;
+  if (statuses[1] === 'ENDED' && statuses[2] === 'ENDED') return 'Both rounds are over. Settings are read-only.';
+  if (statuses[1] === 'ENDED') return 'Round 1 is over and its settings are locked. Changes now apply to Round 2.';
+  return null;
 }

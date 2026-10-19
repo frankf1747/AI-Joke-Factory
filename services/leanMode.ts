@@ -115,9 +115,9 @@ export function productionTeamCount(roster: ReadonlyArray<{ team: string; role: 
 /** The hint under "Customers per team": the count it gives for the teams in the lobby. */
 export function customersHint(perTeam: number, teamCount: number): string | null {
   if (!Number.isFinite(perTeam)) return null;
-  if (perTeam === 0) return 'Fixed customer count (no per-team scaling)';
+  if (perTeam === 0) return 'Fixed customer count, not scaled by teams';
   if (!(teamCount > 0)) return null;
-  return `≈ ${perTeam * teamCount} customers for ${teamCount} ${teamCount === 1 ? 'team' : 'teams'}`;
+  return `about ${perTeam * teamCount} customers for ${teamCount} ${teamCount === 1 ? 'team' : 'teams'}`;
 }
 
 /**

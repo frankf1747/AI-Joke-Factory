@@ -11,10 +11,10 @@ import { DebriefTab } from '../components/instructor/DebriefTab';
 import { defaultViewRound, followPhase, instructorPhase, knownPhase, type InstructorTab, type TabFollow } from '../services/instructorPhase';
 import { useLeanCharts } from '../services/useLeanCharts';
 import { leanChartsPanel, leanRoundFlags, resolveLeanChartsRound } from '../services/leanCharts';
-import { changedFees, feeValuesOf, shippingOrderError, type FeeConfigValues } from '../components/FeeConfigFields';
+import { feeValuesOf, shippingOrderError } from '../components/FeeConfigFields';
 import { feeRoundsText, productionTeamCount } from '../services/leanMode';
 import { DEFAULT_BOARD_SORT, INITIAL_BOARD_RANKS, boardRanksFor, boardRows, nextBoardRanks, type BoardSort } from '../services/liveBoard';
-import { buildApplyUpdates } from '../services/roundConfig';
+import { buildApplyUpdates, setupValuesOf, type SetupValues } from '../services/roundConfig';
 
 /** The four tabs under the control bar (spec 6b). Setup is never a phase's default. */
 export type ScreenTab = InstructorTab | 'setup';
@@ -38,14 +38,8 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
     , roundStatuses
   } = useGame();
 
-  const [localBudget, setLocalBudget] = useState(config.customerBudget);
-  const [localMarketPrice, setLocalMarketPrice] = useState(config.marketPrice);
-  const [localCostOfPublishing, setLocalCostOfPublishing] = useState(config.costOfPublishing);
-  // Marketing's decision clock — how long they may deliberate before each nudge.
-  const [localNudge1, setLocalNudge1] = useState(config.marketingNudge1Seconds);
-  const [localNudge2, setLocalNudge2] = useState(config.marketingNudge2Seconds);
-  // The Lean fees and arrival window — edit the current round, like the fields above.
-  const [localFees, setLocalFees] = useState<FeeConfigValues>(() => feeValuesOf(config));
+  // The Setup tab's edits in progress: the Classic numbers, the Lean fees and arrival window.
+  const [setupLocal, setSetupLocal] = useState<SetupValues>(() => setupValuesOf(config));
   /** After Apply: which rounds the fees were written to, e.g. "Fees applied to Rounds 1 and 2". */
   const [feeNotice, setFeeNotice] = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -79,49 +73,37 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
   const [boardRanks, setBoardRanks] = useState(INITIAL_BOARD_RANKS);
 
   // Keep local inputs aligned with server-driven config changes (polling/reset).
-  useEffect(() => setLocalBudget(config.customerBudget), [config.customerBudget]);
-  useEffect(() => setLocalMarketPrice(config.marketPrice), [config.marketPrice]);
-  useEffect(() => setLocalCostOfPublishing(config.costOfPublishing), [config.costOfPublishing]);
-  useEffect(() => setLocalNudge1(config.marketingNudge1Seconds), [config.marketingNudge1Seconds]);
-  useEffect(() => setLocalNudge2(config.marketingNudge2Seconds), [config.marketingNudge2Seconds]);
+  useEffect(() => setSetupLocal(l => ({ ...l, budget: config.customerBudget })), [config.customerBudget]);
+  useEffect(() => setSetupLocal(l => ({ ...l, marketPrice: config.marketPrice })), [config.marketPrice]);
+  useEffect(() => setSetupLocal(l => ({ ...l, costOfPublishing: config.costOfPublishing })), [config.costOfPublishing]);
   useEffect(
-    () => setLocalFees(feeValuesOf(config)),
+    () => setSetupLocal(l => ({ ...l, fees: feeValuesOf(config) })),
     [config.arrivalWindowSeconds, config.shippingFeeSmall, config.shippingFeeStandard, config.shippingFeeLarge,
       config.storageFeePerJokeMinute, config.hostingFeePerJokeMinute, config.customersPerTeam],
   );
 
-// Config edit rules:
-// - While a round is active: config is not editable.
-// - Batch sizes are not editable: Round 1 is exactly 5, Round 2 up to 10 (Reset Game sets them).
-  const canEditBudget = !config.isActive && (config.round === 1 || config.round === 2);
-  const canEditPricing = !config.isActive && (config.round === 1 || config.round === 2);
+  // Config edit rules:
+  // - While a round is active, or once both rounds have ended: config is not editable.
+  // - Batch sizes are not editable: Round 1 is exactly 5, Round 2 up to 10 (Reset Game sets them).
+  const classOver = roundStatuses[1] === 'ENDED' && roundStatuses[2] === 'ENDED';
+  const canEditBudget = !config.isActive && !classOver && (config.round === 1 || config.round === 2);
+  const canEditPricing = canEditBudget;
   // Lean settings lock once the selected round has started (ACTIVE or ENDED); the server
   // refuses them with 409 MARKET_MODE_LOCKED. Classic fields keep canEditPricing/canEditBudget.
   // An unknown status (null) is not treated as locked: the server stays the authority.
   const selectedRoundStatus = roundStatuses[config.round === 2 ? 2 : 1];
   const leanLocked = selectedRoundStatus != null && selectedRoundStatus !== 'CONFIGURED';
   const canEditLean = canEditPricing && !leanLocked;
-  const LEAN_LOCK_HINT = 'Lean settings lock once the round starts';
-  // Pacing, not round-specific — editable between rounds whatever the round number.
-  const canEditNudges = !config.isActive;
 
-  const hasPendingConfigChanges =
-    (canEditBudget && localBudget !== config.customerBudget) ||
-    (canEditPricing && (localMarketPrice !== config.marketPrice || localCostOfPublishing !== config.costOfPublishing)) ||
-    (canEditNudges && (localNudge1 !== config.marketingNudge1Seconds || localNudge2 !== config.marketingNudge2Seconds)) ||
-    (canEditLean && Object.keys(changedFees(localFees, config)).length > 0);
+  // What Apply would send; its keys are the Setup tab's changed fields and change count.
+  const pendingUpdates = buildApplyUpdates({ local: setupLocal, config, canEditBudget, canEditPricing, canEditLean });
   // The server refuses shipping fees that fall with batch size; FeeConfigFields says so inline.
-  const feeOrderBlocked = canEditLean && shippingOrderError(localFees) != null;
-  const canApply = hasPendingConfigChanges && !feeOrderBlocked;
+  const feeOrderBlocked = canEditLean && shippingOrderError(setupLocal.fees) != null;
 
   const handleUpdateSettings = async () => {
     setFeeNotice(null);
     if (feeOrderBlocked) return;
-    const updates = buildApplyUpdates({
-      local: { budget: localBudget, marketPrice: localMarketPrice, costOfPublishing: localCostOfPublishing,
-        nudge1: localNudge1, nudge2: localNudge2, fees: localFees },
-      config, canEditBudget, canEditPricing, canEditNudges, canEditLean,
-    });
+    const updates = pendingUpdates;
     if (Object.keys(updates).length === 0) return;
     const result = await updateConfig(updates);
     if (result.feeRounds.length > 0) setFeeNotice(feeRoundsText(result.feeRounds));
@@ -321,14 +303,10 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
           )}
           {tab === 'setup' && (
             <SetupTab
-              localNudge1={localNudge1} setLocalNudge1={setLocalNudge1} localNudge2={localNudge2} setLocalNudge2={setLocalNudge2}
-              localBudget={localBudget} setLocalBudget={setLocalBudget}
-              localMarketPrice={localMarketPrice} setLocalMarketPrice={setLocalMarketPrice}
-              localCostOfPublishing={localCostOfPublishing} setLocalCostOfPublishing={setLocalCostOfPublishing}
-              localFees={localFees} setLocalFees={setLocalFees}
-              canEditNudges={canEditNudges} canEditBudget={canEditBudget} canEditPricing={canEditPricing} canEditLean={canEditLean}
-              LEAN_LOCK_HINT={LEAN_LOCK_HINT} canApply={canApply} hasPendingConfigChanges={hasPendingConfigChanges}
-              feeNotice={feeNotice} handleUpdateSettings={handleUpdateSettings} setShowResetConfirm={setShowResetConfirm}
+              local={setupLocal} setLocal={next => { setFeeNotice(null); setSetupLocal(next); }}
+              canEditBudget={canEditBudget} canEditPricing={canEditPricing} canEditLean={canEditLean}
+              pending={pendingUpdates} applyBlocked={feeOrderBlocked} feeNotice={feeNotice}
+              onApply={() => { void handleUpdateSettings(); }} onReset={() => setShowResetConfirm(true)}
             />
           )}
           {tab === 'debrief' && <DebriefTab statsR1={statsR1} statsR2={statsR2} />}

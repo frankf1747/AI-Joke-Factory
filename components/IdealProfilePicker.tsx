@@ -38,53 +38,64 @@ export function isCompleteProfile(profile: Partial<Record<string, string>>): boo
 interface Props {
   value: IdealProfile;
   onChange: (next: IdealProfile) => void;
-  /** Locked once the round is ACTIVE — the backend freezes the profile at start. */
+  /** Locked while a round is ACTIVE; "Use defaults" is hidden then too. */
   disabled?: boolean;
 }
 
+/** One row per dimension: its label and a select whose option values and labels are the
+    backend's exact strings (config/dimensions.backend-parity.test.ts guards them). */
 export function IdealProfilePicker({ value, onChange, disabled = false }: Props) {
   const complete = isCompleteProfile(value);
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
+    <div>
+      <div className="flex items-baseline justify-between gap-3 px-[18px] pb-1.5 pt-4">
         <div>
-          <h3 className="font-semibold text-slate-800">Hidden ideal joke</h3>
-          <p className="text-xs text-slate-500">
-            All {IDEAL_DIMENSIONS.length} dimensions are required. Students never see this.
+          <h2 className="text-[17px] font-semibold" style={{ color: 'var(--ink)' }}>Hidden ideal joke</h2>
+          <p className="mt-0.5 text-[13px]" style={{ color: 'var(--ink-3)' }}>
+            What the AI customers want. Students never see this.
           </p>
         </div>
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => onChange({ ...DEFAULT_IDEAL_PROFILE })}
-          className="text-xs px-3 py-1.5 rounded-md border border-slate-300 hover:bg-slate-50 disabled:opacity-50"
-        >
-          Use defaults
-        </button>
+        {!disabled && (
+          <button
+            type="button"
+            onClick={() => onChange({ ...DEFAULT_IDEAL_PROFILE })}
+            className="shrink-0 border-0 bg-transparent text-[13.5px] font-medium"
+            style={{ color: 'var(--navy)' }}
+          >
+            Use defaults
+          </button>
+        )}
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {IDEAL_DIMENSIONS.map(dim => (
-          <label key={dim.id} className="text-xs">
-            <span className="block text-slate-600 mb-1">{dim.label}</span>
+      <div className="px-[18px] pb-3.5 pt-1">
+        {IDEAL_DIMENSIONS.map((dim, i) => (
+          <div
+            key={dim.id}
+            className="grid grid-cols-[130px_minmax(0,1fr)] items-center gap-2.5 py-[5px]"
+            style={i > 0 ? { borderTop: '1px solid var(--rule)' } : undefined}
+          >
+            <label htmlFor={`ideal-${dim.id}`} className="text-[14px]" style={{ color: 'var(--ink-2)' }}>{dim.label}</label>
             <select
+              id={`ideal-${dim.id}`}
               value={value[dim.id as IdealDimension] ?? ''}
               disabled={disabled}
               onChange={e => onChange({ ...value, [dim.id]: e.target.value })}
-              className="w-full border border-slate-300 rounded-md px-2 py-1.5 disabled:opacity-50"
+              className="min-w-0 rounded-[4px] border bg-[color:var(--paper)] px-2 py-1.5 text-[14px] font-medium focus:border-[color:var(--navy)] focus:bg-[color:var(--sheet)] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ borderColor: 'var(--rule)', color: 'var(--ink)' }}
             >
-              <option value="">— choose —</option>
+              <option value="">Choose</option>
               {selectableCategories(dim).map(c => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>
-          </label>
+          </div>
         ))}
       </div>
-      {!complete && (
-        <p className="text-xs text-amber-700">
-          Every dimension must be set before the round can start.
-        </p>
-      )}
+      <div className="rounded-b-[var(--r-3)] border-t px-[18px] py-3.5 text-[12.5px]" style={{ borderColor: 'var(--rule)', background: 'var(--paper)' }}>
+        {!complete && (
+          <p className="mb-1" style={{ color: 'var(--warn)' }}>Every dimension must be set before the round can start.</p>
+        )}
+        <p style={{ color: 'var(--ink-3)' }}>Saved as you make each change.</p>
+      </div>
     </div>
   );
 }

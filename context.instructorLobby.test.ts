@@ -23,7 +23,7 @@ describe('normalizeInstructorLobby', () => {
     expect(out.round_id).toBe(4);
     expect(out.summary).toEqual({ waiting: 1, assigned: 2, dropped: 0, team_count: 1 });
     expect(out.teams).toEqual([{
-      team: { id: 3, name: 'Team 3' },
+      team: { id: 3, name: 'Team 3', created_at: '2026-01-12T10:10:00Z' },
       members: [
         { user_id: 12, display_name: 'Alice', role: 'JM' },
         { user_id: 13, display_name: 'Bo', role: 'MARKETING' },

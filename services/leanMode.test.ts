@@ -278,9 +278,9 @@ describe('customers per team', () => {
     expect(productionTeamCount([r('1', 'JOKE_MAKER'), r('1', 'QUALITY_CONTROL'), r('2', 'QUALITY_CONTROL'),
       r('N/A', 'UNASSIGNED'), r('3', 'UNASSIGNED'), r('N/A', 'INSTRUCTOR')])).toBe(2);
     expect(productionTeamCount([])).toBe(0);
-    expect(customersHint(18, 20)).toBe('≈ 360 customers for 20 teams');
-    expect(customersHint(18, 1)).toBe('≈ 18 customers for 1 team');
-    expect(customersHint(0, 20)).toBe('Fixed customer count (no per-team scaling)');
+    expect(customersHint(18, 20)).toBe('about 360 customers for 20 teams');
+    expect(customersHint(18, 1)).toBe('about 18 customers for 1 team');
+    expect(customersHint(0, 20)).toBe('Fixed customer count, not scaled by teams');
     expect(customersHint(18, 0)).toBeNull();
     expect(customersHint(Number.NaN, 5)).toBeNull();
   });

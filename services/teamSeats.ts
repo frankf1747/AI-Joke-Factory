@@ -3,6 +3,7 @@
    Auto-assign count, and what a drop sends to PATCH …/users/:uid. */
 import type { InstructorLobby } from '../types';
 import { pairNames } from './format';
+import type { PhaseStatuses } from './instructorPhase';
 
 /** A seat on the wire: PATCH accepts JM or MARKETING (never QC). */
 export type Seat = 'JM' | 'MARKETING';
@@ -59,6 +60,17 @@ export function seatedTeams(lobby: InstructorLobby | null, teamNames: Record<str
 export function autoAssignCount(summary: { waiting: number; assigned: number } | null | undefined): number {
   if (!summary) return 0;
   return Math.floor((Math.max(0, summary.waiting) + Math.max(0, summary.assigned)) / 2);
+}
+
+/**
+ * Why Auto-assign is off, or null when it may run. POST /assign reshuffles every pair, so it is
+ * off while either round runs ('running'), and until the first status poll lands after a refresh
+ * ('unknown', both statuses null), since a round may be running.
+ */
+export function autoAssignBlock(statuses: PhaseStatuses): 'running' | 'unknown' | null {
+  if (statuses[1] === 'ACTIVE' || statuses[2] === 'ACTIVE') return 'running';
+  if (statuses[1] == null && statuses[2] == null) return 'unknown';
+  return null;
 }
 
 /** Dropping into a slot sets that slot's role on that team; into the lobby sends the pair back to WAITING.

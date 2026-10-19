@@ -5,7 +5,10 @@ import { ControlBar, type ControlBarProps } from '../components/instructor/Contr
 import { TEST_CONFIG, renderWithGame, testUser } from './testing/renderWithGame';
 import { Role } from '../types';
 import { leanConfigFromRound } from '../services/leanMode';
-import { DEFAULT_IDEAL_PROFILE } from '../config/dimensions';
+import { DEFAULT_IDEAL_PROFILE, IDEAL_DIMENSIONS } from '../config/dimensions';
+import { selectableCategories } from '../components/IdealProfilePicker';
+import { SetupTab } from '../components/instructor/SetupTab';
+import { buildApplyUpdates, setupValuesOf, type SetupValues } from '../services/roundConfig';
 import { TeamsBoard, TeamsTab, type TeamsBoardProps } from '../components/instructor/TeamsTab';
 import { seatedTeams } from '../services/teamSeats';
 import type { InstructorLobby } from '../types';
@@ -17,57 +20,125 @@ const instructor = testUser(Role.INSTRUCTOR, null);
 /** The Instructor screen opened on one tab (renderToStaticMarkup cannot click a tab). */
 const onTab = (initialTab: ScreenTab) => () => createElement(Instructor, { initialTab });
 
-describe('Instructor screen, one Lean rule set (Setup tab)', () => {
-  it('shows the fee settings and the batch-size rule, and no market mode, preset or WIP limit', () => {
-    const out = renderWithGame(onTab('setup'), { user: instructor });
-    expect(out).toContain('Shipping fee (1–4 / 5 / 6–10 jokes):');
-    expect(out).toContain('Storage fee per joke-minute:');
-    expect(out).toContain('Hosting fee per joke-minute:');
-    expect(out).toContain('R1 batch: 5 (exactly)');
-    expect(out).toContain('R2 batch: up to 10');
-    for (const gone of ['Market mode', 'Lean class preset', 'WIP limit', 'Setup cost', 'Carrying cost', 'R1 Batch Size']) {
+/** The markup's text with React's escaped apostrophe put back. */
+const text = (out: string) => out.replace(/&#x27;/g, "'");
+
+describe('Instructor screen, the Setup tab', () => {
+  const between = { ...TEST_CONFIG, isActive: false };
+  const lobbyStatuses = { 1: 'CONFIGURED', 2: 'CONFIGURED' } as const;
+  const setup = (over: Parameters<typeof renderWithGame>[1] = {}) =>
+    renderWithGame(onTab('setup'), { user: instructor, config: between, roundStatuses: { ...lobbyStatuses }, ...over });
+
+  it('groups the settings into Round timing, Market, Costs and Batches, with no nudge settings', () => {
+    const out = setup();
+    for (const group of ['Round timing', 'Market', 'Costs', 'Batches']) expect(out).toContain(`>${group}</h3>`);
+    expect(out).not.toMatch(/nudge/i);
+    expect(out).toMatch(/Round 1: exactly <b[^>]*>5<\/b> jokes/);
+    expect(out).toMatch(/Round 2: up to <b[^>]*>10<\/b> jokes/);
+    for (const gone of ['Market mode', 'Lean class preset', 'WIP limit', 'Setup cost', 'Carrying cost', 'R1 Batch Size', 'Config:']) {
       expect(out).not.toContain(gone);
     }
   });
 
+  it('enters the arrival window in minutes and says rounds do not end on their own', () => {
+    const out = text(setup());
+    expect(out).toContain('Customers arrive over');
+    expect(out).toMatch(/id="cfg-arrival-window"[^>]*value="15"/);
+    expect(out).toContain("Rounds don't end on their own.");
+  });
+
+  it('shows the market and the costs with their stored values', () => {
+    const roster = [1, 2, 3].flatMap(t => [testUser(Role.JOKE_MAKER, t), testUser(Role.QUALITY_CONTROL, t)])
+      .map((u, i) => ({ ...u, id: String(i + 10), user_id: i + 10 }));
+    const out = setup({ roster, config: { ...between, customerBudget: 3, marketPrice: 1, costOfPublishing: 0.1 } });
+    expect(out).toContain('Customers per team');
+    expect(out).toContain('about 54 customers for 3 teams');
+    expect(out).toMatch(/id="cfg-budget"[^>]*value="3"/);
+    expect(out).toMatch(/id="cfg-market-price"[^>]*value="1"/);
+    expect(out).toMatch(/id="cfg-publishing"[^>]*value="0.1"/);
+    expect(out).toContain('Price per sale');
+    expect(out).toContain('Publishing');
+    expect(out).toContain('per joke-minute');
+  });
+
+  it('shows the stored customers per team (12 from the round)', () => {
+    const stored = { ...between, ...leanConfigFromRound({ market_mode: 'LEAN', customers_per_team: 12 }) };
+    expect(setup({ config: stored })).toMatch(/id="cfg-customers-per-team"[^>]*value="12"/);
+  });
+
   it('lets the instructor edit the fees between rounds, and greys them out once the selected round has started', () => {
-    const between = { ...TEST_CONFIG, isActive: false };
-    const open = renderWithGame(onTab('setup'), { user: instructor, config: between, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' } });
-    expect(open).not.toMatch(/id="cfg-storage-fee"[^>]*disabled=""/);
-    const locked = renderWithGame(onTab('setup'), { user: instructor, config: between, roundStatuses: { 1: 'ENDED', 2: 'CONFIGURED' } });
+    expect(setup()).not.toMatch(/id="cfg-storage-fee"[^>]*disabled=""/);
+    const locked = setup({ roundStatuses: { 1: 'ENDED', 2: 'CONFIGURED' } });
     expect(locked).toMatch(/id="cfg-storage-fee"[^>]*disabled=""/);
+    expect(locked).toMatch(/id="cfg-customers-per-team"[^>]*disabled=""/);
     expect(locked).toContain('title="Lean settings lock once the round starts"');
   });
 
-  it('shows customers per team with the team-count hint, and greys it out once the selected round has started', () => {
-    const between = { ...TEST_CONFIG, isActive: false };
-    const roster = [1, 2, 3].flatMap(t => [testUser(Role.JOKE_MAKER, t), testUser(Role.QUALITY_CONTROL, t)])
-      .map((u, i) => ({ ...u, id: String(i + 10), user_id: i + 10 }));
-    const open = renderWithGame(onTab('setup'), { user: instructor, config: between, roster, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' } });
-    expect(open).toContain('Customers per team:');
-    expect(open).toContain('≈ 54 customers for 3 teams');
-    expect(open).not.toMatch(/id="cfg-customers-per-team"[^>]*disabled=""/);
-    const locked = renderWithGame(onTab('setup'), { user: instructor, config: between, roundStatuses: { 1: 'ENDED', 2: 'CONFIGURED' } });
-    expect(locked).toMatch(/id="cfg-customers-per-team"[^>]*disabled=""/);
-  });
-
-  it('shows the stored customers per team (12 from the round) in CONFIG', () => {
-    const stored = { ...TEST_CONFIG, isActive: false, ...leanConfigFromRound({ market_mode: 'LEAN', customers_per_team: 12 }) };
-    const out = renderWithGame(onTab('setup'), { user: instructor, config: stored, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' } });
-    expect(out).toMatch(/id="cfg-customers-per-team"[^>]*value="12"/);
-  });
-
-  it('shows the stored customer budget in the CONFIG row', () => {
-    const out = renderWithGame(onTab('setup'), { user: instructor, config: { ...TEST_CONFIG, isActive: false, customerBudget: 3 }, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' } });
-    expect(out).toMatch(/Cust\. Budget:<\/label><input[^>]*value="3"/);
-  });
-
   it('says inline why shipping fees that fall with batch size cannot be applied', () => {
-    const between = { ...TEST_CONFIG, isActive: false, shippingFeeSmall: 4 };
-    const out = renderWithGame(onTab('setup'), { user: instructor, config: between, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' } });
-    expect(out).toContain('Shipping fees must rise with batch size: 1–4 jokes ≤ 5 jokes ≤ 6–10 jokes.');
-    const ok = renderWithGame(onTab('setup'), { user: instructor, config: { ...TEST_CONFIG, isActive: false }, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' } });
-    expect(ok).not.toContain('Shipping fees must rise');
+    expect(setup({ config: { ...between, shippingFeeSmall: 4 } })).toContain('Shipping fees must rise with batch size: 1–4 jokes ≤ 5 jokes ≤ 6–10 jokes.');
+    expect(setup()).not.toContain('Shipping fees must rise');
+  });
+
+  it('with nothing changed: "No changes." and Apply is disabled', () => {
+    const out = setup();
+    expect(out).toContain('No changes.');
+    expect(out).toMatch(/<button[^>]*disabled=""[^>]*>Apply<\/button>/);
+  });
+
+  /* The screen holds the edits (renderToStaticMarkup cannot type), so the tab is rendered
+     with one edited value and the patch Apply would send for it. */
+  const tabWith = (local: SetupValues, applyBlocked = false) => () => createElement(SetupTab, {
+    local, setLocal: () => {}, canEditBudget: true, canEditPricing: true, canEditLean: true,
+    pending: buildApplyUpdates({ local, config: between, canEditBudget: true, canEditPricing: true, canEditLean: true }),
+    applyBlocked, feeNotice: null, onApply: () => {}, onReset: () => {},
+  });
+
+  it('changing one field shows "1 unsaved change.", outlines that field and enables Apply', () => {
+    const out = renderWithGame(tabWith({ ...setupValuesOf(between), budget: 5 }), { user: instructor, config: between, roundStatuses: { ...lobbyStatuses } });
+    expect(out).toContain('1 unsaved change.');
+    expect(out).toMatch(/<button(?![^>]*disabled="")[^>]*>Apply 1 change<\/button>/);
+    expect(out.match(/data-changed="true"/g)?.length).toBe(1);
+    expect(out).toMatch(/data-changed="true"[^>]*>(?:(?!<\/div>).)*id="cfg-budget"/);
+  });
+
+  it('counts every change: three edits read "Apply 3 changes"', () => {
+    const v = setupValuesOf(between);
+    const out = renderWithGame(
+      tabWith({ ...v, marketPrice: 2, fees: { ...v.fees, arrivalWindowSeconds: 600, shippingFeeLarge: 4 } }),
+      { user: instructor, config: between, roundStatuses: { ...lobbyStatuses } },
+    );
+    expect(out).toContain('3 unsaved changes.');
+    expect(out).toContain('>Apply 3 changes</button>');
+  });
+
+  it('keeps Apply disabled while the shipping fees fall, even with changes', () => {
+    const v = setupValuesOf(between);
+    const out = renderWithGame(tabWith({ ...v, fees: { ...v.fees, shippingFeeSmall: 5 } }, true), { user: instructor, config: between, roundStatuses: { ...lobbyStatuses } });
+    expect(out).toMatch(/<button[^>]*disabled=""[^>]*>Apply 1 change<\/button>/);
+  });
+
+  it('while a round is ACTIVE: the lock banner shows and the ideal joke has no "Use defaults"', () => {
+    const out = renderWithGame(onTab('setup'), { user: instructor, config: TEST_CONFIG, roundStatuses: { 1: 'ACTIVE', 2: 'CONFIGURED' } });
+    expect(out).toContain('Round 1 is running. Settings are locked until it ends; the ideal joke is locked too.');
+    expect(out).not.toContain('Use defaults');
+    expect(out).toMatch(/id="cfg-budget"[^>]*disabled=""/);
+    const lobby = setup();
+    expect(lobby).toContain('Use defaults');
+    expect(lobby).not.toContain('Settings are locked');
+  });
+
+  it('once both rounds have ended: settings are read-only', () => {
+    const out = setup({ roundStatuses: { 1: 'ENDED', 2: 'ENDED' }, config: { ...between, round: 2 } });
+    expect(out).toContain('Both rounds are over. Settings are read-only.');
+    for (const id of ['cfg-budget', 'cfg-market-price', 'cfg-publishing', 'cfg-storage-fee']) {
+      expect(out).toMatch(new RegExp(`id="${id}"[^>]*disabled=""`));
+    }
+  });
+
+  it('keeps Reset game at the bottom', () => {
+    const out = setup();
+    expect(out).toContain('Reset game');
+    expect(out.indexOf('Reset game')).toBeGreaterThan(out.indexOf('Hidden ideal joke'));
   });
 });
 
@@ -204,6 +275,15 @@ describe('Instructor screen, the hidden ideal joke (Setup tab)', () => {
     expect(out).toMatch(/<option value="Animals" selected="">Animals<\/option>/);
     expect(out).not.toMatch(/<option value="Work" selected="">/);
   });
+
+  it('offers the backend strings as option values and labels, dimension by dimension', () => {
+    const out = renderWithGame(onTab('setup'), { user: instructor, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' }, config: between });
+    const options = [...out.matchAll(/<option value="([^"]*)"[^>]*>([^<]*)<\/option>/g)].filter(m => m[1] !== '');
+    const expected = IDEAL_DIMENSIONS.flatMap(d => selectableCategories(d));
+    expect(options.map(m => m[1])).toEqual(expected);
+    expect(options.map(m => m[2].replace(/&amp;/g, '&'))).toEqual(expected);
+    expect(text(out)).toContain('Saved as you make each change.');
+  });
 });
 
 /* Four tabs under the control bar; the one open by default follows the phase
@@ -243,11 +323,11 @@ describe('Instructor screen, the tabs', () => {
   it('shows only the open tab: the settings on Setup, the leaderboard on Live, the team cards on Teams', () => {
     const live = renderWithGame(Instructor, { user: instructor, roundStatuses: { 1: 'ACTIVE', 2: 'CONFIGURED' } });
     expect(live).toContain('Live market');
-    expect(live).not.toContain('Storage fee per joke-minute:');
+    expect(live).not.toContain('Customers arrive over');
     expect(live).not.toContain('Auto-assign');
     const setup = renderWithGame(onTab('setup'), { user: instructor });
     expect(selectedTab(setup)).toBe('Setup');
-    expect(setup).toContain('Storage fee per joke-minute:');
+    expect(setup).toContain('Customers arrive over');
     expect(setup).toContain('Reset game');
     expect(setup).not.toContain('Live market');
     const teams = renderWithGame(onTab('teams'), { user: instructor });
@@ -308,8 +388,17 @@ describe('Instructor screen, the Teams tab', () => {
     }
   });
 
-  it('gives each team name its own label', () => {
-    expect(render()).toContain('aria-label="Name of Team 3"');
+  it('labels each team name by the team id, not the editable name', () => {
+    const out = renderWithGame(teamsTab(), { user: instructor, instructorLobby: lobby, teamNames: { '3': 'Owls' } });
+    expect(out).toContain('aria-label="Name of team 3"');
+    expect(out).toContain('value="Owls"');
+    expect(out).not.toContain('aria-label="Name of Owls"');
+  });
+
+  it('keeps Auto-assign off until the first status poll lands (both statuses unknown after a refresh)', () => {
+    const out = renderWithGame(teamsTab(), { user: instructor, instructorLobby: lobby, roundStatuses: { 1: null, 2: null } });
+    expect(out).toMatch(/<button[^>]*disabled=""[^>]*>Auto-assign 3 teams<\/button>/);
+    expect(out).toContain('Checking the round status.');
   });
 
   it('asks "This reshuffles every team." before Auto-assign reshuffles existing teams', () => {
@@ -335,7 +424,7 @@ describe('Instructor screen, the Teams tab', () => {
   };
   const boardProps = (over: Partial<TeamsBoardProps> = {}): TeamsBoardProps => ({
     teams: seatedTeams(lobby, {}), waiting: lobby.unassigned.map(u => ({ userId: u.user_id, name: u.display_name })),
-    waitingCount: 4, autoAssignTeams: 3, totalPairs: 6, roundRunning: false, busyTeams: [], dropKey: null,
+    waitingCount: 4, autoAssignTeams: 3, totalPairs: 6, autoAssignOff: null, busyTeams: [], dropKey: null,
     onDropKey: vi.fn(), onRename: vi.fn(), onAutoAssign: vi.fn(), onConfirm: vi.fn(), onMove: vi.fn(), onExchange: vi.fn(), onSwap: vi.fn(),
     ...over,
   });

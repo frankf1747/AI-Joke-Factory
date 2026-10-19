@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoAssignCount, dropAction, seatedTeams } from './teamSeats';
+import { autoAssignBlock, autoAssignCount, dropAction, seatedTeams } from './teamSeats';
 import type { InstructorLobby } from '../types';
 
 const lobby: InstructorLobby = {
@@ -35,6 +35,20 @@ describe('autoAssignCount', () => {
     expect(autoAssignCount({ waiting: 4, assigned: 2 })).toBe(3);
     expect(autoAssignCount({ waiting: 1, assigned: 2 })).toBe(1);
     expect(autoAssignCount(null)).toBe(0);
+  });
+});
+
+describe('autoAssignBlock (why Auto-assign is off, or null when it may run)', () => {
+  it('is off while either round runs', () => {
+    expect(autoAssignBlock({ 1: 'ACTIVE', 2: 'CONFIGURED' })).toBe('running');
+    expect(autoAssignBlock({ 1: 'ENDED', 2: 'ACTIVE' })).toBe('running');
+  });
+  it('is off until the first status poll lands (both statuses unknown after a refresh)', () => {
+    expect(autoAssignBlock({ 1: null, 2: null })).toBe('unknown');
+  });
+  it('may run in the lobby and between rounds', () => {
+    expect(autoAssignBlock({ 1: 'CONFIGURED', 2: 'CONFIGURED' })).toBeNull();
+    expect(autoAssignBlock({ 1: 'ENDED', 2: 'CONFIGURED' })).toBeNull();
   });
 });
 

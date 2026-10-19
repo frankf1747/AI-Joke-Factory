@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   ApiInstructorStatsResponse,
   ApiMarketItem,
@@ -23,8 +23,8 @@ import { teamApi } from './services/api';
 import type { RoundTimes } from './services/headerRound';
 import { instructorService } from './services/instructorService';
 import type { PatchUserRole } from './services/instructorService';
-import { autoAssignCount, seatOf, type MoveBody, type PairMove, type Seat } from './services/teamSeats';
-import { browserNameStore, clearTeamNames, loadTeamNames, saveTeamNames, teamNamesKey } from './services/teamNames';
+import { autoAssignBlock, autoAssignCount, seatOf, type MoveBody, type PairMove, type Seat } from './services/teamSeats';
+import { browserNameStore, clearTeamNames, liveTeamNames, loadTeamNames, nameLabels, saveTeamNames, teamNamesKey, type SavedTeamNames } from './services/teamNames';
 import { jmService } from './services/jmService';
 import { queueSizeAfterRelease } from './services/desk';
 import { buildPublishBody, marketingService, publishFailureMessage, toMarketingNote } from './services/marketingService';
@@ -613,8 +613,12 @@ export function normalizeInstructorLobby(raw: any, fallbackRoundId: RoundId | nu
       const team = t.Team ?? t.team ?? {};
       const teamId = team.ID ?? team.Id ?? team.id ?? t.TeamID ?? t.team_id;
       const teamName = team.Name ?? team.name ?? `Team ${teamId ?? ''}`;
+      const createdAt = team.CreatedAt ?? team.created_at;
       return {
-        team: { id: Number(teamId) as TeamId, name: String(teamName) },
+        team: {
+          id: Number(teamId) as TeamId, name: String(teamName),
+          ...(typeof createdAt === 'string' && createdAt !== '' ? { created_at: createdAt } : {}),
+        },
         members: members.map(m => ({
           user_id: Number(m.UserID ?? m.user_id) as UserId,
           display_name: String(m.DisplayName ?? m.display_name ?? ''),
@@ -787,7 +791,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [roundStatuses, setRoundStatuses] = useState<{ 1: RoundStatus | null; 2: RoundStatus | null }>({ 1: null, 2: null });
   const [roundTimes, setRoundTimes] = useState<RoundTimes>(EMPTY_ROUND_TIMES);
   const [roster, setRoster] = useState<User[]>([]);
-  const [teamNames, setTeamNames] = useState<Record<string, string>>(INITIAL_TEAM_NAMES);
+  // The instructor's renames with their team's created_at; teamNames (below) is what screens show.
+  const [savedTeamNames, setSavedTeamNames] = useState<SavedTeamNames>({});
 
   const [batches, setBatches] = useState<Batch[]>([]);
   const [sales] = useState<Record<string, number>>({}); // legacy; kept for compatibility but no longer authoritative
@@ -911,8 +916,20 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const instructorIdForNames = user?.role === ('INSTRUCTOR' as Role) ? user.user_id : null;
   useEffect(() => {
     if (instructorIdForNames == null || isWatchMode()) return;
-    setTeamNames({ ...INITIAL_TEAM_NAMES, ...loadTeamNames(browserNameStore(), teamNamesKey(instructorIdForNames)) });
+    setSavedTeamNames(loadTeamNames(browserNameStore(), teamNamesKey(instructorIdForNames)));
   }, [instructorIdForNames]);
+  // A name saved for a team that a reset elsewhere has since recreated is dropped, here and in
+  // the store, once the lobby lists that team (services/teamNames.ts).
+  const lobbyTeams = useMemo(() => instructorLobby?.teams.map(t => t.team) ?? null, [instructorLobby]);
+  const liveSavedNames = useMemo(() => liveTeamNames(savedTeamNames, lobbyTeams), [savedTeamNames, lobbyTeams]);
+  useEffect(() => {
+    if (liveSavedNames === savedTeamNames) return;
+    setSavedTeamNames(liveSavedNames);
+    if (instructorIdForNames != null && !isWatchMode()) {
+      saveTeamNames(browserNameStore(), teamNamesKey(instructorIdForNames), liveSavedNames);
+    }
+  }, [liveSavedNames, savedTeamNames, instructorIdForNames]);
+  const teamNames = useMemo(() => ({ ...INITIAL_TEAM_NAMES, ...nameLabels(liveSavedNames) }), [liveSavedNames]);
 
   // Restore local caches across refresh (best-effort). Not in a watch tab:
   // these shared caches belong to the instructor or another user of this
@@ -1841,7 +1858,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user || user.role !== ('INSTRUCTOR' as Role)) return;
     // POST /assign has no round-status guard and reshuffles every ASSIGNED pair, which
     // would strand batches mid-round. The Teams tab disables it too; this is the backstop.
-    if (roundStatuses[1] === 'ACTIVE' || roundStatuses[2] === 'ACTIVE') return;
+    // Unknown statuses (a refresh before the first poll) count as maybe running.
+    if (autoAssignBlock(roundStatuses) != null) return;
 
     // One account per seat: a "user" here is a student pair (App.tsx normalises two names
     // into one key), and each team is 1 JM + 1 Marketing. Human customers are gone, so
@@ -1902,8 +1920,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // ------------------------------------
 
   const updateTeamName = (teamNum: string, name: string) => {
-    const newNames = { ...teamNames, [teamNum]: name };
-    setTeamNames(newNames);
+    const createdAt = instructorLobby?.teams.find(t => String(t.team.id) === teamNum)?.team.created_at;
+    const newNames: SavedTeamNames = { ...liveSavedNames, [teamNum]: createdAt ? { name, createdAt } : { name } };
+    setSavedTeamNames(newNames);
     // No team rename endpoint: the names are kept in this browser, per instructor.
     if (user?.role === ('INSTRUCTOR' as Role) && !isWatchMode()) {
       saveTeamNames(browserNameStore(), teamNamesKey(user.user_id), newNames);
@@ -2432,7 +2451,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setRoundTimes(EMPTY_ROUND_TIMES);
     setQcQueue(null);
     setQcQueueSize(null);
-    setTeamNames(INITIAL_TEAM_NAMES);
+    setSavedTeamNames({});
     if (user?.role === ('INSTRUCTOR' as Role) && !isWatchMode()) clearTeamNames(browserNameStore(), teamNamesKey(user.user_id));
     submittedBatchJokesRef.current = {};
     qcRatedHistoryRef.current = {};

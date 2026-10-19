@@ -407,7 +407,8 @@ export interface InstructorLobby {
     dropped: number;
     team_count: number;
   };
-  teams: Array<{ team: { id: TeamId; name: string }; members: Array<{ user_id: UserId; display_name: string; role: ApiRole | null }> }>;
+  /** created_at changes when a reset recreates the teams (ids restart at 1); services/teamNames.ts uses it. */
+  teams: Array<{ team: { id: TeamId; name: string; created_at?: string }; members: Array<{ user_id: UserId; display_name: string; role: ApiRole | null }> }>;
   customers: Array<{ user_id: UserId; display_name: string; role: ApiRole }>;
   unassigned: Array<{ user_id: UserId; display_name: string; status: ParticipantStatus }>;
 }

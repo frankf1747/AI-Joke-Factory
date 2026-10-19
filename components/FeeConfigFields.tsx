@@ -1,12 +1,13 @@
-/* The Lean part of the instructor's CONFIG row: the batch-size rule (read
-   only: Reset Game sets it, Round 1 exactly 5 and Round 2 up to 10), the
-   arrival window and the five fees. One rule set for both rounds, so there is
-   no market mode, preset or WIP limit to choose. Apply writes them to every
-   round still being configured (both rounds before the class starts); a round
-   that has started is locked. */
+/* The Lean settings on the instructor's Setup tab: the arrival window (Round
+   timing), customers per team (Market) and the five fees (Costs). One rule set
+   for both rounds, so there is no market mode, preset or WIP limit to choose.
+   Apply writes them to every round still being configured (both rounds before
+   the class starts); a round that has started is locked. */
 import React from 'react';
 import type { GameConfig } from '../types';
 import { customersHint } from '../services/leanMode';
+import { arrivalSecondsFromMinutes } from '../services/roundConfig';
+import { SetupField, SetupInput } from './instructor/SetupField';
 
 export interface FeeConfigValues {
   arrivalWindowSeconds: number;
@@ -66,71 +67,87 @@ export function shippingOrderError(v: Pick<FeeConfigValues, 'shippingFeeSmall' |
   return tiers.every((x, i) => i === 0 || tiers[i - 1] <= x) ? null : SHIPPING_ORDER_TEXT;
 }
 
-const inputClass = (disabled: boolean) =>
-  `w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`;
+/** The arrival window as the minutes box shows it: 900 s reads 15, 90 s reads 1.5. */
+const minutesOf = (seconds: number) => Number((seconds / 60).toFixed(2));
 
-const FeeInput: React.FC<{
-  id: string; label: string; value: number; step: string; min: string; disabled: boolean; onChange: (v: number) => void;
-}> = ({ id, label, value, step, min, disabled, onChange }) => (
-  <input
-    id={id}
-    aria-label={label}
-    type="number"
-    step={step}
-    min={min}
-    value={value}
-    onChange={e => onChange(Number(e.target.value))}
-    disabled={disabled}
-    className={inputClass(disabled)}
-  />
-);
+const SHIPPING_TIERS = [
+  { key: 'shippingFeeSmall', id: 'cfg-shipping-small', size: '1–4 jokes' },
+  { key: 'shippingFeeStandard', id: 'cfg-shipping-standard', size: '5 jokes' },
+  { key: 'shippingFeeLarge', id: 'cfg-shipping-large', size: '6–10 jokes' },
+] as const;
 
 export const FeeConfigFields: React.FC<{
+  /** Which group of the Setup tab these fields sit in. */
+  part: 'timing' | 'market' | 'costs';
   values: FeeConfigValues;
   onChange: (next: FeeConfigValues) => void;
   /** True once the selected round has started (or while one runs). */
   disabled: boolean;
   /** Tooltip while locked. */
   lockHint: string;
-  round1BatchSize: number;
-  round2BatchLimit: number;
   /** Teams with a Joke Maker or Marketing in the lobby, for the customers hint. */
   teamCount?: number;
-}> = ({ values, onChange, disabled, lockHint, round1BatchSize, round2BatchLimit, teamCount }) => {
+  /** The settings Apply would send, each outlined in amber. */
+  changed?: ReadonlySet<keyof FeeConfigValues>;
+}> = ({ part, values, onChange, disabled, lockHint, teamCount, changed }) => {
   const set = (k: keyof FeeConfigValues) => (v: number) => onChange({ ...values, [k]: v });
-  const tip = (text: string) => (disabled ? lockHint : text);
+  const common = (k: keyof FeeConfigValues) => ({
+    disabled, changed: changed?.has(k) ?? false, title: disabled ? lockHint : undefined,
+  });
+
+  if (part === 'timing') {
+    return (
+      <SetupField label="Customers arrive over" htmlFor="cfg-arrival-window" hint="From the moment you press Start. After this, no new customers come.">
+        <SetupInput
+          id="cfg-arrival-window" label="Arrival window in minutes" value={minutesOf(values.arrivalWindowSeconds)}
+          step="1" min="0" suffix="min" {...common('arrivalWindowSeconds')}
+          onChange={min => onChange({ ...values, arrivalWindowSeconds: arrivalSecondsFromMinutes(min) })}
+        />
+      </SetupField>
+    );
+  }
+
+  if (part === 'market') {
+    const hint = customersHint(values.customersPerTeam, teamCount ?? 0);
+    return (
+      <SetupField label="Customers per team" htmlFor="cfg-customers-per-team" hint={hint ?? undefined}>
+        <SetupInput
+          id="cfg-customers-per-team" label="Customers per team" value={values.customersPerTeam}
+          step="1" min="0" suffix="each" {...common('customersPerTeam')} onChange={set('customersPerTeam')}
+        />
+      </SetupField>
+    );
+  }
+
   const orderError = disabled ? null : shippingOrderError(values);
-  const hint = customersHint(values.customersPerTeam, teamCount ?? 0);
   return (
     <>
-      <div className="flex items-center space-x-3 text-sm text-gray-600" title="Set by Reset Game. Round 1 batches must have exactly this many jokes; Round 2 batches may have fewer.">
-        <span className="whitespace-nowrap">R1 batch: {round1BatchSize} (exactly)</span>
-        <span className="whitespace-nowrap">R2 batch: up to {round2BatchLimit}</span>
-      </div>
-      <div className="flex items-center space-x-3" title={tip('Seconds over which customers arrive')}>
-        <label htmlFor="cfg-arrival-window" className="text-sm text-gray-600 whitespace-nowrap">Arrival window (s):</label>
-        <FeeInput id="cfg-arrival-window" label="Arrival window in seconds" value={values.arrivalWindowSeconds} step="1" min="1" disabled={disabled} onChange={set('arrivalWindowSeconds')} />
-      </div>
-      <div className="flex items-center space-x-2" title={tip('Charged for every batch the Joke Maker sends, by its size. A batch not yet split ships as 5 jokes.')}>
-        <span className="text-sm text-gray-600 whitespace-nowrap">Shipping fee (1–4 / 5 / 6–10 jokes):</span>
-        <FeeInput id="cfg-shipping-small" label="Shipping fee for 1–4 jokes" value={values.shippingFeeSmall} step="0.5" min="0" disabled={disabled} onChange={set('shippingFeeSmall')} />
-        <FeeInput id="cfg-shipping-standard" label="Shipping fee for 5 jokes" value={values.shippingFeeStandard} step="0.5" min="0" disabled={disabled} onChange={set('shippingFeeStandard')} />
-        <FeeInput id="cfg-shipping-large" label="Shipping fee for 6–10 jokes" value={values.shippingFeeLarge} step="0.5" min="0" disabled={disabled} onChange={set('shippingFeeLarge')} />
-      </div>
-      {orderError && <p role="alert" className="text-sm text-red-700">{orderError}</p>}
-      <div className="flex items-center space-x-3" title={tip("Charged per joke per minute while a batch waits on Marketing's desk, from send until released or discarded")}>
-        <label htmlFor="cfg-storage-fee" className="text-sm text-gray-600 whitespace-nowrap">Storage fee per joke-minute:</label>
-        <FeeInput id="cfg-storage-fee" label="Storage fee per joke-minute" value={values.storageFeePerJokeMinute} step="0.01" min="0" disabled={disabled} onChange={set('storageFeePerJokeMinute')} />
-      </div>
-      <div className="flex items-center space-x-3" title={tip('Charged per joke per minute while a released joke sits unsold, until its first sale or the end of the round')}>
-        <label htmlFor="cfg-hosting-fee" className="text-sm text-gray-600 whitespace-nowrap">Hosting fee per joke-minute:</label>
-        <FeeInput id="cfg-hosting-fee" label="Hosting fee per joke-minute" value={values.hostingFeePerJokeMinute} step="0.01" min="0" disabled={disabled} onChange={set('hostingFeePerJokeMinute')} />
-      </div>
-      <div className="flex items-center space-x-3" title={tip('AI customers per team. At start the round has this many times the number of teams (0 keeps a fixed count). About 18 per team keeps roughly 60% of teams profitable.')}>
-        <label htmlFor="cfg-customers-per-team" className="text-sm text-gray-600 whitespace-nowrap">Customers per team:</label>
-        <FeeInput id="cfg-customers-per-team" label="Customers per team" value={values.customersPerTeam} step="1" min="0" disabled={disabled} onChange={set('customersPerTeam')} />
-        {hint && <span className="text-xs text-gray-500 whitespace-nowrap">{hint}</span>}
-      </div>
+      <SetupField label="Shipping per batch, by size" wide hint={orderError ? undefined : 'Must rise with batch size.'}>
+        <div className="grid grid-cols-3 gap-2">
+          {SHIPPING_TIERS.map(t => (
+            <div key={t.key}>
+              <small className="mb-[3px] block text-[12px]" style={{ color: 'var(--ink-3)' }}>{t.size}</small>
+              <SetupInput
+                id={t.id} label={`Shipping fee for ${t.size}`} value={values[t.key]}
+                step="0.5" min="0" prefix="$" {...common(t.key)} onChange={set(t.key)}
+              />
+            </div>
+          ))}
+        </div>
+        {orderError && <p role="alert" className="mt-[3px] text-[12px]" style={{ color: 'var(--warn)' }}>{orderError}</p>}
+      </SetupField>
+      <SetupField label="Storage, waiting on Marketing" htmlFor="cfg-storage-fee">
+        <SetupInput
+          id="cfg-storage-fee" label="Storage fee per joke-minute" value={values.storageFeePerJokeMinute}
+          step="0.01" min="0" prefix="$" suffix="per joke-minute" {...common('storageFeePerJokeMinute')} onChange={set('storageFeePerJokeMinute')}
+        />
+      </SetupField>
+      <SetupField label="Hosting, unsold on the market" htmlFor="cfg-hosting-fee">
+        <SetupInput
+          id="cfg-hosting-fee" label="Hosting fee per joke-minute" value={values.hostingFeePerJokeMinute}
+          step="0.01" min="0" prefix="$" suffix="per joke-minute" {...common('hostingFeePerJokeMinute')} onChange={set('hostingFeePerJokeMinute')}
+        />
+      </SetupField>
     </>
   );
 };

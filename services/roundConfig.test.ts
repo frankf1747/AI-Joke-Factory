@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_CUSTOMER_BUDGET, buildApplyUpdates, customerBudgetFromRound, configFromInstructorRound, storedConfigPatch, storedConfigSettled, isRouteMissing } from './roundConfig';
+import { DEFAULT_CUSTOMER_BUDGET, arrivalSecondsFromMinutes, buildApplyUpdates, setupLockText, customerBudgetFromRound, configFromInstructorRound, storedConfigPatch, storedConfigSettled, isRouteMissing } from './roundConfig';
 import { DEFAULT_IDEAL_PROFILE } from '../config/dimensions';
 import { feeValuesOf } from '../components/FeeConfigFields';
 import { TEST_CONFIG } from '../views/testing/renderWithGame';
@@ -26,10 +26,10 @@ describe('customerBudgetFromRound (the CONFIG "Cust. Budget" box)', () => {
 
 describe('buildApplyUpdates (what Apply sends)', () => {
   const config = { ...TEST_CONFIG, isActive: false, customersPerTeam: 18 };
-  const all = { canEditBudget: true, canEditPricing: true, canEditNudges: true, canEditLean: true };
+  const all = { canEditBudget: true, canEditPricing: true, canEditLean: true };
   const local = (over: Partial<Parameters<typeof buildApplyUpdates>[0]['local']> = {}) => ({
     budget: config.customerBudget, marketPrice: config.marketPrice, costOfPublishing: config.costOfPublishing,
-    nudge1: config.marketingNudge1Seconds, nudge2: config.marketingNudge2Seconds, fees: feeValuesOf(config), ...over,
+    fees: feeValuesOf(config), ...over,
   });
 
   it('sends nothing, in particular no budget and no customer count, when the instructor edited nothing', () => {
@@ -45,11 +45,47 @@ describe('buildApplyUpdates (what Apply sends)', () => {
     expect(u).not.toHaveProperty('customerCount');
   });
 
-  it('leaves out fields the screen has locked, and clamps the nudges to 5 s', () => {
+  it('leaves out fields the screen has locked', () => {
     expect(buildApplyUpdates({ local: local({ budget: 9 }), config, ...all, canEditBudget: false })).toEqual({});
-    expect(buildApplyUpdates({ local: local({ nudge1: 1 }), config, ...all })).toEqual({ marketingNudge1Seconds: 5 });
     const fees = { ...feeValuesOf(config), customersPerTeam: 20 };
     expect(buildApplyUpdates({ local: local({ fees }), config, ...all, canEditLean: false })).toEqual({});
+  });
+
+  it('never sends the nudge settings, which are no longer on the screen', () => {
+    const u = buildApplyUpdates({ local: local({ budget: 5, marketPrice: 2 }), config: { ...config, marketingNudge1Seconds: 1 }, ...all });
+    expect(u).toEqual({ customerBudget: 5, marketPrice: 2 });
+    expect(Object.keys(u).some(k => k.toLowerCase().includes('nudge'))).toBe(false);
+  });
+
+  it('sends the arrival window entered in minutes as whole seconds', () => {
+    const fees = { ...feeValuesOf(config), arrivalWindowSeconds: arrivalSecondsFromMinutes(12) };
+    expect(buildApplyUpdates({ local: local({ fees }), config, ...all })).toEqual({ arrivalWindowSeconds: 720 });
+  });
+});
+
+describe('arrivalSecondsFromMinutes (the arrival window is entered in minutes)', () => {
+  it('turns minutes into whole seconds, as the backend requires an integer', () => {
+    expect(arrivalSecondsFromMinutes(15)).toBe(900);
+    expect(arrivalSecondsFromMinutes(1.5)).toBe(90);
+    expect(arrivalSecondsFromMinutes(0.0167)).toBe(1);
+    expect(Number.isInteger(arrivalSecondsFromMinutes(0.0167))).toBe(true);
+  });
+});
+
+describe('setupLockText (the Setup tab lock banner)', () => {
+  it('says nothing in the lobby or before the first status poll', () => {
+    expect(setupLockText({ 1: 'CONFIGURED', 2: 'CONFIGURED' })).toBeNull();
+    expect(setupLockText({ 1: null, 2: null })).toBeNull();
+  });
+
+  it('names the running round, and that the ideal joke is locked too', () => {
+    expect(setupLockText({ 1: 'ACTIVE', 2: 'CONFIGURED' })).toBe('Round 1 is running. Settings are locked until it ends; the ideal joke is locked too.');
+    expect(setupLockText({ 1: 'ENDED', 2: 'ACTIVE' })).toBe('Round 2 is running. Settings are locked until it ends; the ideal joke is locked too.');
+  });
+
+  it('between rounds says Round 1 is locked and changes go to Round 2; after both, that settings are read-only', () => {
+    expect(setupLockText({ 1: 'ENDED', 2: 'CONFIGURED' })).toBe('Round 1 is over and its settings are locked. Changes now apply to Round 2.');
+    expect(setupLockText({ 1: 'ENDED', 2: 'ENDED' })).toBe('Both rounds are over. Settings are read-only.');
   });
 });
 
