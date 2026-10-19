@@ -51,8 +51,9 @@ export const instructorService = {
     round_id: RoundId,
     user_id: UserId,
     body: { status?: 'WAITING' | 'ASSIGNED'; role?: PatchUserRole; team_id?: TeamId | null },
-  ): Promise<void> {
-    return apiRequest<void>(`/v1/instructor/rounds/${round_id}/users/${user_id}`, { method: 'PATCH', body });
+  ): Promise<unknown> {
+    // Go answers with the full lobby (ports.LobbySnapshot, PascalCase); the mock answers 204.
+    return apiRequest<unknown>(`/v1/instructor/rounds/${round_id}/users/${user_id}`, { method: 'PATCH', body });
   },
 
   deleteUser(round_id: RoundId, user_id: UserId): Promise<ApiInstructorDeleteUserResponse> {

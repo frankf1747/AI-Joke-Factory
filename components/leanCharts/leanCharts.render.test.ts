@@ -56,6 +56,13 @@ describe('chart 2, Jokes standing still', () => {
     expect(out).toContain('stroke-dasharray="3 2"');
     expect(out).not.toContain('<select');
   });
+  it('keeps rows about 26 px tall (twenty teams fit) and links each row to its region', () => {
+    const out = html(createElement(IdleRows, { data: res, teamNames: {} }));
+    expect(out).toMatch(/<svg viewBox="0 0 150 20"[^>]*height="20"/);
+    const controls = [...out.matchAll(/aria-controls="([^"]+)"/g)].map(m => m[1]);
+    expect(controls).toHaveLength(3);
+    for (const id of controls) expect(out).toContain(`id="${id}"`);
+  });
 });
 
 describe('chart 3, Smaller batches, faster feedback', () => {

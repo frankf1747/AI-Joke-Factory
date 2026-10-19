@@ -625,41 +625,6 @@ function route(
         .map(t => ({ team: t, ...computeTeamStats(db, t.id) }))
         .sort((a, b) => b.points - a.points);
 
-      const teamNameById = new Map<TeamId, string>(db.teams.map(t => [t.id, t.name]));
-
-      const ratedBatches = Object.values(db.batches).filter(b => b.round_id === round_id && b.status === 'RATED');
-      const allBatches = Object.values(db.batches).filter(b => b.round_id === round_id);
-
-      // Cumulative sales events: one event per purchase (count-based in mock mode).
-      const purchases = Object.values(db.purchases)
-        .filter(p => p.round_id === round_id && !p.returned_at)
-        .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
-
-      const runningSales: Record<string, number> = {};
-      const cumulative_sales: ApiInstructorStatsResponse['cumulative_sales'] = purchases.map((p, idx) => {
-        const key = String(p.team_id);
-        runningSales[key] = (runningSales[key] ?? 0) + 1;
-        return {
-          event_index: idx + 1,
-          timestamp: p.created_at,
-          team_id: p.team_id,
-          team_name: teamNameById.get(p.team_id) || `Team ${p.team_id}`,
-          total_sales: runningSales[key],
-        };
-      });
-
-      const learning_curve: ApiInstructorStatsResponse['learning_curve'] = db.teams.flatMap(t => {
-        const teamRated = ratedBatches
-          .filter(b => b.team_id === t.id)
-          .sort((a, b) => Date.parse(a.submitted_at) - Date.parse(b.submitted_at));
-        return teamRated.map((b, i) => ({
-          team_id: t.id,
-          team_name: t.name,
-          batch_order: i + 1,
-          avg_score: b.avg_score ?? 0,
-        }));
-      });
-
       const resp: ApiInstructorStatsResponse = {
         round_id,
         leaderboard: teamsStats.map((t, idx) => ({
@@ -683,8 +648,6 @@ function route(
             },
           ),
         })),
-        cumulative_sales,
-        learning_curve,
       };
       return ok(resp, 200);
     }

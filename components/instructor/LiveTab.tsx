@@ -10,6 +10,7 @@ import { useGame } from '../../context';
 import { Card } from '../../components';
 import { LeanChartsPanel } from '../leanCharts/LeanChartsPanel';
 import type { LeanChartsState } from '../../services/useLeanCharts';
+import type { LeanChartsPanelState } from '../../services/leanCharts';
 import { classTotals, type LeaderboardRow } from '../../services/classTotals';
 import { boardRows, nextBoardSort, type BoardRanks, type BoardSort } from '../../services/liveBoard';
 import { ClassTotalsRow, LeaderboardTable, PresentBoard, QUIET_BUTTON, QUIET_BUTTON_STYLE } from './LiveBoard';
@@ -29,7 +30,8 @@ export interface LiveTabProps {
   boardRanks?: BoardRanks;
   /** The current round has started, so its market is open. */
   marketOpen: boolean;
-  showLeanCharts: boolean;
+  /** The charts, the Classic notice, or nothing (a transient 409 in a Lean round). */
+  leanPanel: LeanChartsPanelState;
   leanChartsRound: 1 | 2;
   leanChartsR1: LeanChartsState;
   leanChartsR2: LeanChartsState;
@@ -37,7 +39,7 @@ export interface LiveTabProps {
 
 export const LiveTab: React.FC<LiveTabProps> = ({
   viewRound, leaderboard, boardLean, boardSort, setBoardSort, boardRanks, marketOpen,
-  showLeanCharts, leanChartsRound, leanChartsR1, leanChartsR2,
+  leanPanel, leanChartsRound, leanChartsR1, leanChartsR2,
 }) => {
   const { teamNames, marketItems } = useGame();
   const rows = useMemo(() => boardRows(leaderboard, teamNames), [leaderboard, teamNames]);
@@ -76,13 +78,15 @@ export const LiveTab: React.FC<LiveTabProps> = ({
         document.body,
       )}
 
-      <LeanChartsPanel
-        lean={showLeanCharts}
-        round={leanChartsRound}
-        r1={leanChartsR1}
-        r2={leanChartsR2}
-        teamNames={teamNames}
-      />
+      {leanPanel !== 'none' && (
+        <LeanChartsPanel
+          lean={leanPanel === 'charts'}
+          round={leanChartsRound}
+          r1={leanChartsR1}
+          r2={leanChartsR2}
+          teamNames={teamNames}
+        />
+      )}
 
       <LiveMarket items={marketItems ?? []} open={marketOpen} teamNames={teamNames} />
     </>

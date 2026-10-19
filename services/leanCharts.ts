@@ -113,13 +113,19 @@ export function resolveLeanChartsRound(
   return flags[selected] ? selected : currentRound;
 }
 
-/** Whether the instructor's lean panel renders, and whether each round is fetched. */
-export function leanChartsVisibility(
+/** What the instructor's lean-charts area shows for the round in view: the charts;
+ *  the Classic notice for a real Classic round; or nothing while a round whose stats
+ *  or config say Lean answers a transient 409 NOT_LEAN_ROUND (a mode change racing
+ *  the start), until a later poll answers again. */
+export type LeanChartsPanelState = 'charts' | 'classic' | 'none';
+
+export function leanChartsPanel(
   round: 1 | 2,
   flags: { 1: boolean; 2: boolean },
   notLean: { 1: boolean; 2: boolean },
-): boolean {
-  return flags[round] && !notLean[round];
+): LeanChartsPanelState {
+  if (!flags[round]) return 'classic';
+  return notLean[round] ? 'none' : 'charts';
 }
 
 /* ---- Chart 1: Where the money leaked -------------------------------------- */

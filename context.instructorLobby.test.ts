@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { normalizeInstructorLobby } from './context';
-import type { ApiInstructorLobbyResponse } from './types';
+import { describe, it, expect, vi } from 'vitest';
+import { normalizeInstructorLobby, swapTeamPairs } from './context';
+import type { ApiInstructorLobbyResponse, UserId } from './types';
 
 /* GET /lobby returns ports.LobbySnapshot, which has no json tags: Go sends
    PascalCase keys, except the nested domain.Team (id/name/created_at). Empty
@@ -58,5 +58,55 @@ describe('normalizeInstructorLobby', () => {
       expect(out.customers).toEqual([]);
       expect(out.unassigned).toEqual([]);
     }
+  });
+});
+
+/* ⇄ on a team card: PATCH /users/:uid takes one pair at a time and the backend
+   keeps no (team, role) uniqueness, so the swap is two PATCHes. The second
+   response is the new lobby; if the second fails, the first is put back so the
+   team never keeps two pairs of one role. */
+describe('swapTeamPairs', () => {
+  const members = [
+    { user_id: 12 as UserId, display_name: 'ama_kenji', role: 'JM' as const },
+    { user_id: 13 as UserId, display_name: 'noor_ben', role: 'MARKETING' as const },
+  ];
+
+  it('sends two PATCHes with the roles flipped, never QC, and returns the second response', async () => {
+    const patch = vi.fn(async (uid: UserId) => ({ from: uid }));
+    const out = await swapTeamPairs(patch, members);
+    expect(patch.mock.calls).toEqual([
+      [12, { status: 'ASSIGNED', role: 'MARKETING' }],
+      [13, { status: 'ASSIGNED', role: 'JM' }],
+    ]);
+    expect(JSON.stringify(patch.mock.calls)).not.toContain('QC');
+    expect(out).toEqual({ from: 13 });
+  });
+
+  it('reads the legacy QC as Marketing and still sends MARKETING or JM only', async () => {
+    const patch = vi.fn(async () => undefined);
+    await swapTeamPairs(patch, [{ ...members[0], role: 'QC' }, { ...members[1], role: 'JM' }]);
+    expect(patch.mock.calls).toEqual([
+      [12, { status: 'ASSIGNED', role: 'JM' }],
+      [13, { status: 'ASSIGNED', role: 'MARKETING' }],
+    ]);
+  });
+
+  it('restores the first pair with a third PATCH when the second fails, and still rejects', async () => {
+    const patch = vi.fn(async (uid: UserId) => {
+      if (uid === 13) throw new Error('second failed');
+      return undefined;
+    });
+    await expect(swapTeamPairs(patch, members)).rejects.toThrow('second failed');
+    expect(patch.mock.calls).toEqual([
+      [12, { status: 'ASSIGNED', role: 'MARKETING' }],
+      [13, { status: 'ASSIGNED', role: 'JM' }],
+      [12, { status: 'ASSIGNED', role: 'JM' }],
+    ]);
+  });
+
+  it('sends nothing unless the team has exactly two pairs', async () => {
+    const patch = vi.fn(async () => undefined);
+    await swapTeamPairs(patch, [members[0]]);
+    expect(patch).not.toHaveBeenCalled();
   });
 });

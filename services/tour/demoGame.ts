@@ -12,7 +12,7 @@ import type { GameContextType } from '../../context';
 type DemoActionKey =
   | 'login' | 'instructorLogin' | 'logout'
   | 'updateConfig' | 'setRound' | 'setGameActive' | 'endRound' | 'toggleTeamPopup' | 'resetGame'
-  | 'formTeams' | 'resetToLobby'
+  | 'formTeams' | 'resetToLobby' | 'swapTeamRoles' | 'movePair'
   | 'updateTeamName' | 'updateUser' | 'deleteUser'
   | 'addBatch' | 'submitRawBatch' | 'splitBatch' | 'unsplitBatch' | 'publishBatch';
 
@@ -35,6 +35,8 @@ export const DEMO_ACTIONS: Pick<GameContextType, DemoActionKey> = {
   resetGame: refused,
   formTeams: done,
   resetToLobby: () => undefined,
+  swapTeamRoles: done,
+  movePair: done,
   updateTeamName: () => undefined,
   updateUser: done,
   deleteUser: done,

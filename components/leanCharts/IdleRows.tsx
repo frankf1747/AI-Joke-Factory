@@ -5,7 +5,7 @@
    two counts as a light stacked area, with the class average dashed. Clicking
    a row opens that team's full chart under it. Rows come from
    services/idleRows.ts. */
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { Card } from '../ui';
 import type { LeanChartsResponse } from '../../types/api';
 import { LEAN_CHART_COLORS, LEAN_CHARTS_UNAVAILABLE_TEXT, NO_BATCHES_TEXT, fmtMinuteTick, minuteTicks } from '../../services/leanCharts';
@@ -53,7 +53,8 @@ const TrendFills: React.FC<{ paths: ReturnType<typeof trendPaths> }> = ({ paths 
 );
 
 const SPARK_W = 150;
-const SPARK_H = 26;
+// About 26 px a row (the spark plus 3 px above and below), so twenty teams fit.
+const SPARK_H = 20;
 
 const Spark: React.FC<{ row: IdleTeamRow; maxT: number; maxY: number }> = ({ row, maxT, maxY }) => {
   const x = (t: number) => 1 + (t / maxT) * (SPARK_W - 2);
@@ -101,6 +102,7 @@ const Detail: React.FC<{ row: IdleTeamRow; maxT: number }> = ({ row, maxT }) => 
 
 export const IdleRows: React.FC<IdleRowsProps> = ({ data, teamNames, unavailable = false, className = '' }) => {
   const [open, setOpen] = useState<number | null>(null);
+  const regionId = useId();
   const rows = idleRows(data, teamNames);
   const avgNow = idleAverageNow(rows);
   const maxNow = Math.max(1, avgNow, ...rows.map(r => r.total));
@@ -124,11 +126,13 @@ export const IdleRows: React.FC<IdleRowsProps> = ({ data, teamNames, unavailable
           </div>
           {rows.map(r => {
             const isOpen = open === r.teamId;
+            const detailId = `${regionId}-team-${r.teamId}`;
             return (
               <React.Fragment key={r.teamId}>
                 <button
                   type="button"
                   aria-expanded={isOpen}
+                  aria-controls={detailId}
                   onClick={() => setOpen(isOpen ? null : r.teamId)}
                   className={`${cols} w-full rounded-[6px] px-2 py-[3px] text-left hover:bg-[color:var(--paper)]`}
                   style={isOpen ? { background: 'var(--paper)' } : undefined}
@@ -163,11 +167,16 @@ export const IdleRows: React.FC<IdleRowsProps> = ({ data, teamNames, unavailable
                   </span>
                   <Spark row={r} maxT={maxT} maxY={maxY} />
                 </button>
-                {isOpen && (
-                  <div className="mb-1 pb-2.5 pt-1" style={{ borderBottom: '1px solid var(--rule)' }}>
-                    <Detail row={r} maxT={maxT} />
-                  </div>
-                )}
+                <div
+                  id={detailId}
+                  role="region"
+                  aria-label={`${r.teamName}, full chart`}
+                  hidden={!isOpen}
+                  className="mb-1 pb-2.5 pt-1"
+                  style={{ borderBottom: '1px solid var(--rule)' }}
+                >
+                  {isOpen && <Detail row={r} maxT={maxT} />}
+                </div>
               </React.Fragment>
             );
           })}

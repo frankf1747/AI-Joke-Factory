@@ -1,4 +1,4 @@
-import { createElement } from 'react';
+import { createElement, type ComponentProps } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import Instructor, { type ScreenTab } from './Instructor';
 import { ControlBar, type ControlBarProps } from '../components/instructor/ControlBar';
@@ -6,6 +6,9 @@ import { TEST_CONFIG, renderWithGame, testUser } from './testing/renderWithGame'
 import { Role } from '../types';
 import { leanConfigFromRound } from '../services/leanMode';
 import { DEFAULT_IDEAL_PROFILE } from '../config/dimensions';
+import { TeamsBoard, TeamsTab, type TeamsBoardProps } from '../components/instructor/TeamsTab';
+import { seatedTeams } from '../services/teamSeats';
+import type { InstructorLobby } from '../types';
 
 // Instructor reads window.location.search while rendering (the bot panel switch).
 vi.stubGlobal('window', { location: { search: '' } });
@@ -233,7 +236,7 @@ describe('Instructor screen, the tabs', () => {
   it('commits no tab while both round statuses are still unknown (a reload before the first poll)', () => {
     const out = renderWithGame(Instructor, { user: instructor, config: stopped, roundStatuses: { 1: null, 2: null } });
     expect(selectedTab(out)).toBeUndefined();
-    expect(out).not.toContain('Team Management');
+    expect(out).not.toContain('Auto-assign');
     expect(out).toContain('Waiting for the round status.');
   });
 
@@ -241,14 +244,117 @@ describe('Instructor screen, the tabs', () => {
     const live = renderWithGame(Instructor, { user: instructor, roundStatuses: { 1: 'ACTIVE', 2: 'CONFIGURED' } });
     expect(live).toContain('Live market');
     expect(live).not.toContain('Storage fee per joke-minute:');
-    expect(live).not.toContain('Team Management');
+    expect(live).not.toContain('Auto-assign');
     const setup = renderWithGame(onTab('setup'), { user: instructor });
     expect(selectedTab(setup)).toBe('Setup');
     expect(setup).toContain('Storage fee per joke-minute:');
     expect(setup).toContain('Reset game');
     expect(setup).not.toContain('Live market');
     const teams = renderWithGame(onTab('teams'), { user: instructor });
-    expect(teams).toContain('Team Management');
+    expect(teams).toContain('Auto-assign');
     expect(teams).not.toContain('Live market');
+  });
+});
+
+/* The Teams tab (spec 6b, 7.4): the lobby strip, one card per real team with a
+   Joke Maker slot and a Marketing slot, the safe swap and an honest Auto-assign. */
+describe('Instructor screen, the Teams tab', () => {
+  const lobby: InstructorLobby = {
+    round_id: 1,
+    summary: { waiting: 4, assigned: 2, dropped: 0, team_count: 2 },
+    teams: [
+      { team: { id: 3, name: 'Team 3' }, members: [
+        { user_id: 12, display_name: 'ama_kenji', role: 'JM' },
+        { user_id: 13, display_name: 'noor_ben', role: 'MARKETING' },
+      ] },
+      { team: { id: 4, name: 'Team 4' }, members: [] },
+    ],
+    customers: [],
+    unassigned: [20, 21, 22, 23].map(id => ({ user_id: id, display_name: `kim${id}_lee${id}`, status: 'WAITING' as const })),
+  };
+  const teamsTab = (over: Partial<ComponentProps<typeof TeamsTab>> = {}) => () => createElement(TeamsTab, over);
+  const render = (over: Partial<ComponentProps<typeof TeamsTab>> = {}, l: InstructorLobby = lobby) =>
+    renderWithGame(teamsTab(over), { user: instructor, instructorLobby: l });
+
+  it('shows the lobby strip: the waiting count and Auto-assign for everyone, floor((4 + 2) / 2) = 3 teams', () => {
+    const out = render();
+    expect(out).toContain('Lobby: 4 pairs waiting');
+    expect(out).toContain('Auto-assign 3 teams');
+    expect(out).toContain('Kim20 and Lee20');
+  });
+
+  it('draws only real teams, with a Joke Maker and a Marketing slot, and no team id', () => {
+    const out = render();
+    expect(out).toContain('value="Team 3"');
+    expect(out).not.toContain('Team 4');
+    expect(out).not.toContain('ID:');
+    expect(out).toContain('Joke Maker');
+    expect(out).toContain('Marketing');
+    expect(out).toContain('Ama and Kenji');
+    expect(out).toContain('in this browser only');
+  });
+
+  it('asks "This reshuffles every team." before Auto-assign reshuffles existing teams', () => {
+    expect(render({ initialConfirm: { kind: 'reshuffle' } })).toContain('This reshuffles every team.');
+    expect(render()).not.toContain('This reshuffles every team.');
+  });
+
+  it('confirms a removal in the modal', () => {
+    const out = render({ initialConfirm: { kind: 'remove', userId: 13, name: 'Noor and Ben' } });
+    expect(out).toContain('Remove Noor and Ben?');
+  });
+
+  /* The board is hook-free, so the test calls it and walks its element tree to
+     press buttons and drop pairs (renderToStaticMarkup cannot). */
+  type El = { type: unknown; props: Record<string, any> };
+  const walk = (n: any, pick: (el: El) => boolean, acc: El[] = []): El[] => {
+    if (Array.isArray(n)) n.forEach(c => walk(c, pick, acc));
+    else if (n && typeof n === 'object' && 'props' in n) {
+      if (pick(n)) acc.push(n);
+      walk(n.props.children, pick, acc);
+    }
+    return acc;
+  };
+  const boardProps = (over: Partial<TeamsBoardProps> = {}): TeamsBoardProps => ({
+    teams: seatedTeams(lobby, {}), waiting: lobby.unassigned.map(u => ({ userId: u.user_id, name: u.display_name })),
+    waitingCount: 4, autoAssignTeams: 3, totalPairs: 6, busyTeams: [], dropKey: null,
+    onDropKey: vi.fn(), onRename: vi.fn(), onAutoAssign: vi.fn(), onConfirm: vi.fn(), onMove: vi.fn(), onSwap: vi.fn(),
+    ...over,
+  });
+
+  it('Auto-assign with teams on the board asks first and does not assign', () => {
+    const p = boardProps();
+    const btn = walk(TeamsBoard(p), el => el.type === 'button' && String(el.props.children).startsWith('Auto-assign'))[0];
+    btn.props.onClick();
+    expect(p.onConfirm).toHaveBeenCalledWith({ kind: 'reshuffle' });
+    expect(p.onAutoAssign).not.toHaveBeenCalled();
+    const fresh = boardProps({ teams: [] });
+    walk(TeamsBoard(fresh), el => el.type === 'button' && String(el.props.children).startsWith('Auto-assign'))[0].props.onClick();
+    expect(fresh.onAutoAssign).toHaveBeenCalledTimes(1);
+  });
+
+  it('× asks the modal to confirm, never window.confirm', () => {
+    const confirm = vi.fn(() => true);
+    vi.stubGlobal('window', { location: { search: '' }, confirm });
+    const p = boardProps();
+    const x = walk(TeamsBoard(p), el => el.type === 'button' && el.props['aria-label'] === 'Remove Ama and Kenji')[0];
+    x.props.onClick({ preventDefault() {}, stopPropagation() {} });
+    expect(p.onConfirm).toHaveBeenCalledWith({ kind: 'remove', userId: 12, name: 'Ama and Kenji' });
+    expect(confirm).not.toHaveBeenCalled();
+    vi.stubGlobal('window', { location: { search: '' } });
+  });
+
+  it('dropping a waiting pair into the Marketing slot PATCHes role MARKETING on that team', () => {
+    const p = boardProps();
+    const slot = walk(TeamsBoard(p), el => el.props['data-seat'] === 'MARKETING' && el.props['data-team'] === 3)[0];
+    slot.props.onDrop({ preventDefault() {}, dataTransfer: { getData: () => '20' } });
+    expect(p.onMove).toHaveBeenCalledWith(20, { status: 'ASSIGNED', role: 'MARKETING', team_id: 3 });
+  });
+
+  it('⇄ swaps the team\'s two roles through onSwap', () => {
+    const p = boardProps();
+    const sw = walk(TeamsBoard(p), el => el.type === 'button' && el.props['aria-label'] === 'Switch roles in Team 3')[0];
+    sw.props.onClick({ preventDefault() {}, stopPropagation() {} });
+    expect(p.onSwap).toHaveBeenCalledWith(3);
   });
 });

@@ -3,7 +3,7 @@ import {
   LEAN_CHART_COLORS, NO_BATCHES_TEXT, NO_RELEASES_TEXT,
   batchScatter, batchSellThrough, classSellThrough, cyclesForInstructor,
   hasWaste, integerTicks, isNotLeanRound,
-  isTooRecentToJudge, leanChartsVisibility, leanJudgeTiming, leanRoundFlags, minuteTicks,
+  isTooRecentToJudge, leanChartsPanel, leanJudgeTiming, leanRoundFlags, minuteTicks,
   resolveLeanChartsRound, wasteBars,
 } from './leanCharts';
 import { leanChartsFixture } from './leanCharts.testdata';
@@ -150,7 +150,7 @@ describe('cyclesForInstructor', () => {
   });
 });
 
-describe('resolveLeanChartsRound / leanChartsVisibility', () => {
+describe('resolveLeanChartsRound / leanChartsPanel', () => {
   const both = { 1: true, 2: true };
   it('after a reset into a Lean R1, a stale R2 pick falls back to the live round', () => {
     expect(resolveLeanChartsRound(2, { 1: true, 2: false }, 1, false)).toBe(1);
@@ -168,21 +168,24 @@ describe('resolveLeanChartsRound / leanChartsVisibility', () => {
     expect(resolveLeanChartsRound(1, flags, 2, false)).toBe(1);
     // The dashboard follows the live round (pick 2) when R2 is configured: R1 still shows.
     expect(resolveLeanChartsRound(2, flags, 2, false)).toBe(1);
-    expect(leanChartsVisibility(1, flags, { 1: false, 2: false })).toBe(true);
+    expect(leanChartsPanel(1, flags, { 1: false, 2: false })).toBe('charts');
   });
   it('a Lean R1 followed by a Classic live R2 shows the live round (Classic cards)', () => {
     const r = resolveLeanChartsRound(1, { 1: true, 2: false }, 2, true);
     expect(r).toBe(2);
-    expect(leanChartsVisibility(r, { 1: true, 2: false }, { 1: false, 2: false })).toBe(false);
+    expect(leanChartsPanel(r, { 1: true, 2: false }, { 1: false, 2: false })).toBe('classic');
   });
-  it('a Classic-only game shows no panel', () => {
+  it('a Classic-only game shows the Classic notice', () => {
     const flags = { 1: false, 2: false };
     const r = resolveLeanChartsRound(1, flags, 1, false);
-    expect(leanChartsVisibility(r, flags, { 1: false, 2: false })).toBe(false);
+    expect(leanChartsPanel(r, flags, { 1: false, 2: false })).toBe('classic');
   });
-  it('notLean hides the panel for that round only', () => {
-    expect(leanChartsVisibility(2, both, { 1: false, 2: true })).toBe(false);
-    expect(leanChartsVisibility(1, both, { 1: false, 2: true })).toBe(true);
+  it('a transient 409 NOT_LEAN_ROUND in a Lean round shows nothing, not the Classic notice, for that round only', () => {
+    expect(leanChartsPanel(2, both, { 1: false, 2: true })).toBe('none');
+    expect(leanChartsPanel(1, both, { 1: false, 2: true })).toBe('charts');
+  });
+  it('a Classic round answering 409 still shows the Classic notice', () => {
+    expect(leanChartsPanel(1, { 1: false, 2: false }, { 1: true, 2: false })).toBe('classic');
   });
 });
 

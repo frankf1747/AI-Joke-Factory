@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useGame } from '../context';
 import { Button, RoleLayout, Modal } from '../components';
-import { Role } from '../types';
 import { BotPanel, botPanelRequested } from '../components/BotPanel';
 import { isWatchMode } from '../services/watchMode';
 import { ControlBar } from '../components/instructor/ControlBar';
@@ -11,7 +10,7 @@ import { SetupTab } from '../components/instructor/SetupTab';
 import { DebriefTab } from '../components/instructor/DebriefTab';
 import { defaultViewRound, followPhase, instructorPhase, knownPhase, type InstructorTab, type TabFollow } from '../services/instructorPhase';
 import { useLeanCharts } from '../services/useLeanCharts';
-import { leanChartsVisibility, leanRoundFlags, resolveLeanChartsRound } from '../services/leanCharts';
+import { leanChartsPanel, leanRoundFlags, resolveLeanChartsRound } from '../services/leanCharts';
 import { changedFees, feeValuesOf, shippingOrderError, type FeeConfigValues } from '../components/FeeConfigFields';
 import { feeRoundsText, productionTeamCount } from '../services/leanMode';
 import { DEFAULT_BOARD_SORT, INITIAL_BOARD_RANKS, boardRanksFor, boardRows, nextBoardRanks, type BoardSort } from '../services/liveBoard';
@@ -30,13 +29,11 @@ const SCREEN_TABS: ReadonlyArray<{ id: ScreenTab; label: string }> = [
 const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
   const { 
     config, updateConfig, setGameActive, resetGame, toggleTeamPopup,
-    roster, teamNames, updateTeamName, updateUser,
-    formTeams, resetToLobby
+    roster
     , instructorStats
     , instructorStatsRound1
     , instructorStatsRound2
     , endRound
-    , deleteUser
     , roundIds
     , roundStatuses
   } = useGame();
@@ -76,7 +73,6 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
   if (followed !== tabFollow) setTabFollow(followed);
   const tab = followed.tab;
   const setTab = (t: ScreenTab) => setTabFollow(s => ({ ...s, tab: t }));
-  const [deletingUserIds, setDeletingUserIds] = useState<string[]>([]);
   // The leaderboard's sort and each team's rank-move tag. Kept here so both survive
   // a tab switch and a rank change during another tab still tags the row.
   const [boardSort, setBoardSort] = useState<BoardSort>(DEFAULT_BOARD_SORT);
@@ -93,17 +89,6 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
     [config.arrivalWindowSeconds, config.shippingFeeSmall, config.shippingFeeStandard, config.shippingFeeLarge,
       config.storageFeePerJokeMinute, config.hostingFeePerJokeMinute, config.customersPerTeam],
   );
-
-  const handleDeleteUser = async (userId: string, displayName?: string) => {
-    const label = displayName ? `${displayName} (${userId})` : `user ${userId}`;
-    if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return;
-    setDeletingUserIds(prev => (prev.includes(userId) ? prev : [...prev, userId]));
-    try {
-      await deleteUser(userId);
-    } finally {
-      setDeletingUserIds(prev => prev.filter(id => id !== userId));
-    }
-  };
 
 // Config edit rules:
 // - While a round is active: config is not editable.
@@ -142,17 +127,6 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
     if (result.feeRounds.length > 0) setFeeNotice(feeRoundsText(result.feeRounds));
   };
 
-  // --- Lobby Logic ---
-  // Every non-instructor account is assignable: human customers are gone, so none are held
-  // back. Each team seats 1 Joke Maker + 1 Marketing, hence the pairing.
-  const connectedPairs = roster.filter(u => u.role !== Role.INSTRUCTOR).length;
-  const assignableCount = connectedPairs;
-
-  const handleFormTeams = () => {
-      formTeams();
-  };
-
-
   // --- Data Processing ---
 
   const statsR1 = instructorStatsRound1 ?? null;
@@ -180,8 +154,8 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
     enabled: leanRounds[2] && roundStatuses[2] != null && roundStatuses[2] !== 'CONFIGURED',
     live: roundStatuses[2] === 'ACTIVE',
   });
-  // A 409 NOT_LEAN_ROUND (a mode change racing the start) hides the panel
-  // until a later poll answers again.
+  // A 409 NOT_LEAN_ROUND (a mode change racing the start) in a Lean round hides
+  // the panel, notice included, until a later poll answers again.
   // The control never strands the instructor: a pick that is no longer showable
   // (new game, round not Lean, live round Classic) is dropped for the live round.
   // Between rounds (the live round configured, not started) a Lean round stays
@@ -194,7 +168,7 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
     () => resolveLeanChartsRound(viewRound, leanRounds, config.round === 2 ? 2 : 1, leanCurrentStarted),
     [viewRound, leanRounds, config.round, leanCurrentStarted],
   );
-  const showLeanCharts = leanChartsVisibility(
+  const leanPanel = leanChartsPanel(
     leanChartsRound,
     leanRounds,
     { 1: leanChartsR1.notLean, 2: leanChartsR2.notLean },
@@ -213,56 +187,6 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
   // The market is the current round's; it opens when that round starts.
   const marketStatus = roundStatuses[config.round === 2 ? 2 : 1];
   const marketOpen = marketStatus === 'ACTIVE' || marketStatus === 'ENDED';
-
-  const activeTeamIds = Array.from(new Set([
-    ...(leaderboardStatsSelected?.leaderboard ?? []).map(r => String(r.team.id)),
-    ...(statsR1?.leaderboard ?? []).map(r => String(r.team.id)),
-    ...(statsR2?.leaderboard ?? []).map(r => String(r.team.id)),
-    ...Object.keys(teamNames).filter(id => roster.some(u => u.team === id)),
-  ])).sort((a, b) => Number(a) - Number(b));
-
-  // Demo constraint: cap the displayed teams to 20.
-  const visibleTeamIds = activeTeamIds.slice(0, 20);
-
-  const rosterByTeam: Record<string, typeof roster> = {};
-  roster.forEach(u => {
-    if (u.role === Role.INSTRUCTOR || u.role === Role.CUSTOMER || u.role === Role.UNASSIGNED) return;
-    if (!rosterByTeam[u.team]) rosterByTeam[u.team] = [];
-    rosterByTeam[u.team].push(u);
-  });
-  
-  // Drag and Drop Logic
-  const handleDragStart = (e: React.DragEvent, userId: string) => {
-    e.dataTransfer.setData('userId', userId);
-  };
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
-  // No CUSTOMER target: customers are simulated now, and context.updateUser already refuses
-  // a CUSTOMER role as a guaranteed 400 from the backend.
-  const handleDrop = (e: React.DragEvent, targetType: 'TEAM' | 'LOBBY', targetId?: string) => {
-    e.preventDefault();
-    const userId = e.dataTransfer.getData('userId');
-    if (!userId) return;
-
-    const user = roster.find(u => u.id === userId);
-    if (!user) return;
-
-    if (targetType === 'LOBBY') {
-        updateUser(userId, { role: Role.UNASSIGNED, team: 'N/A' });
-    } else if (targetType === 'TEAM' && targetId) {
-        const currentRole = (user.role === Role.JOKE_MAKER || user.role === Role.QUALITY_CONTROL) 
-                          ? user.role 
-                          : Role.JOKE_MAKER;
-        updateUser(userId, { team: targetId, role: currentRole });
-    }
-  };
-
-  const toggleUserRole = (userId: string, currentRole: Role) => {
-      const newRole = currentRole === Role.JOKE_MAKER ? Role.QUALITY_CONTROL : Role.JOKE_MAKER;
-      updateUser(userId, { role: newRole });
-  };
-
 
   return (
     <RoleLayout>
@@ -388,17 +312,12 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
             <LiveTab
               viewRound={viewRound} leaderboard={boardStatsRows ?? []} boardLean={boardLean}
               boardSort={boardSort} setBoardSort={setBoardSort} boardRanks={boardRanksFor(boardRanks, boardRoundId)}
-              marketOpen={marketOpen} showLeanCharts={showLeanCharts} leanChartsRound={leanChartsRound}
+              marketOpen={marketOpen} leanPanel={leanPanel} leanChartsRound={leanChartsRound}
               leanChartsR1={leanChartsR1} leanChartsR2={leanChartsR2}
             />
           )}
           {tab === 'teams' && (
-            <TeamsTab
-              connectedPairs={connectedPairs} assignableCount={assignableCount} handleFormTeams={handleFormTeams}
-              visibleTeamIds={visibleTeamIds} rosterByTeam={rosterByTeam} deletingUserIds={deletingUserIds}
-              handleDeleteUser={handleDeleteUser} handleDragStart={handleDragStart} handleDragOver={handleDragOver}
-              handleDrop={handleDrop} toggleUserRole={toggleUserRole}
-            />
+            <TeamsTab />
           )}
           {tab === 'setup' && (
             <SetupTab

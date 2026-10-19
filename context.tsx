@@ -23,6 +23,7 @@ import { teamApi } from './services/api';
 import type { RoundTimes } from './services/headerRound';
 import { instructorService } from './services/instructorService';
 import type { PatchUserRole } from './services/instructorService';
+import { autoAssignCount, seatOf, type MoveBody, type Seat } from './services/teamSeats';
 import { jmService } from './services/jmService';
 import { queueSizeAfterRelease } from './services/desk';
 import { buildPublishBody, marketingService, publishFailureMessage, toMarketingNote } from './services/marketingService';
@@ -518,6 +519,58 @@ export async function pollMarketingWork(deps: MarketingPollDeps): Promise<{
 /* GET /lobby: Go sends ports.LobbySnapshot, PascalCase with no json tags (ApiInstructorLobbyResponse),
    with null for empty Teams/Unassigned; the mock sends the older snake_case shape, customers included.
    Read both into one InstructorLobby. */
+/** The instructor's roster for the Teams tab: every team member, the mock's customers, the lobby. */
+function rosterFromLobby(lobby: InstructorLobby): User[] {
+  const users: User[] = [];
+  lobby.teams.forEach(t => {
+    t.members.forEach(m => {
+      users.push(makeUser({ user_id: m.user_id, display_name: m.display_name }, toRole(m.role), t.team.id));
+    });
+  });
+  lobby.customers.forEach(c => {
+    users.push(makeUser({ user_id: c.user_id, display_name: c.display_name }, 'CUSTOMER' as Role, null));
+  });
+  lobby.unassigned.forEach(u => {
+    users.push(makeUser({ user_id: u.user_id, display_name: u.display_name }, 'UNASSIGNED' as Role, null));
+  });
+  return users;
+}
+
+/** Go's PATCH …/users/:uid answers with the full lobby; the mock answers 204. */
+function looksLikeLobby(raw: unknown): boolean {
+  const d = (raw as any)?.data ?? raw;
+  return d != null && typeof d === 'object' && ['Teams', 'teams', 'Summary', 'summary'].some(k => k in d);
+}
+
+/**
+ * ⇄ on a team card. PATCH …/users/:uid seats one pair at a time and the backend keeps no
+ * (team, role) uniqueness (instructor.go PatchUser), so the swap is two PATCHes. The
+ * second response is the new lobby. When the second fails, a third PATCH puts the first
+ * pair back so the team never keeps two pairs of one role; the error still rejects.
+ * Does nothing unless the team has exactly two pairs.
+ */
+export async function swapTeamPairs<T>(
+  patch: (uid: UserId, body: { status: 'ASSIGNED'; role: Seat }) => Promise<T>,
+  members: ReadonlyArray<{ user_id: UserId; role: string | null }>,
+): Promise<T | undefined> {
+  if (members.length !== 2) return undefined;
+  const [a, b] = members;
+  const aWas = seatOf(a.role);
+  const aNext: Seat = aWas === 'JM' ? 'MARKETING' : 'JM';
+  const bNext: Seat = aNext === 'JM' ? 'MARKETING' : 'JM';
+  await patch(a.user_id, { status: 'ASSIGNED', role: aNext });
+  try {
+    return await patch(b.user_id, { status: 'ASSIGNED', role: bNext });
+  } catch (e) {
+    try {
+      await patch(a.user_id, { status: 'ASSIGNED', role: aWas });
+    } catch {
+      // The next lobby poll shows whatever the server kept.
+    }
+    throw e;
+  }
+}
+
 export function normalizeInstructorLobby(raw: any, fallbackRoundId: RoundId | null): InstructorLobby {
   const data = raw?.data ?? raw ?? {};
   const teamsArr: any[] = Array.isArray(data?.Teams ?? data?.teams) ? (data.Teams ?? data.teams) : [];
@@ -585,87 +638,9 @@ export function normalizeInstructorStats(raw: any): ApiInstructorStatsResponse {
     ...(item.lean != null ? { lean: item.lean } : {}),
   }));
 
-  /* rejection_by_team is NOT on the wire — ports.TeamStats has no rejection
-     series. It is derived here from the leaderboard, whose discarded_jokes and
-     total_jokes are exactly its two inputs, so the "Wasted Jokes" bars render
-     real numbers instead of an array the backend never sends. */
-  const rejection_by_team = normLeaderboard.map((t: ApiInstructorStatsResponse['leaderboard'][number]) => ({
-    team_id: t.team.id,
-    team_name: t.team.name,
-    unaccepted_jokes: t.discarded_jokes,
-    rejection_rate: t.total_jokes > 0 ? t.discarded_jokes / t.total_jokes : 0,
-  }));
-
-  // Stats API shape varies by backend implementation. Support both naming schemes:
-  // - sales_over_time -> cumulative_sales
-  // - batch_sequence_quality -> learning_curve
-  const cumulative_sales = Array.isArray(data.cumulative_sales ?? data.CumulativeSales)
-    ? (data.cumulative_sales ?? data.CumulativeSales)
-    : Array.isArray(data.sales_over_time ?? data.SalesOverTime)
-      ? (data.sales_over_time ?? data.SalesOverTime)
-      : [];
-  const unrated_jokes_over_time = Array.isArray(data.unrated_jokes_over_time ?? data.UnratedJokesOverTime)
-    ? (data.unrated_jokes_over_time ?? data.UnratedJokesOverTime)
-    : [];
-  const learning_curve = Array.isArray(data.learning_curve ?? data.LearningCurve)
-    ? (data.learning_curve ?? data.LearningCurve)
-    : Array.isArray(data.batch_sequence_quality ?? data.BatchSequenceQuality)
-      ? (data.batch_sequence_quality ?? data.BatchSequenceQuality)
-      : [];
-  const mapKeys = (arr: any[], keyMap: Record<string, string>) =>
-    arr.map((item: any) => {
-      const out: any = {};
-      Object.entries(item).forEach(([k, v]) => {
-        const nk = keyMap[k] ?? keyMap[k.toLowerCase()] ?? k;
-        out[nk] = v;
-      });
-      return out;
-    });
-
   return {
     round_id: Number(data.round_id ?? data.RoundId ?? data.roundId ?? 0) as RoundId,
     leaderboard: normLeaderboard,
-    cumulative_sales: mapKeys(cumulative_sales, {
-      event_index: 'event_index',
-      EventIndex: 'event_index',
-      team_event_index: 'team_event_index',
-      TeamEventIndex: 'team_event_index',
-      team_id: 'team_id',
-      TeamId: 'team_id',
-      team_name: 'team_name',
-      TeamName: 'team_name',
-      total_sales: 'total_sales',
-      TotalSales: 'total_sales',
-      cumulative_points: 'total_sales', // backend uses cumulative_points for sales series
-      CumulativePoints: 'total_sales',
-      timestamp: 'timestamp',
-      Timestamp: 'timestamp',
-    }),
-    unrated_jokes_over_time: mapKeys(unrated_jokes_over_time, {
-      team_event_index: 'team_event_index',
-      TeamEventIndex: 'team_event_index',
-      event_index: 'team_event_index',
-      EventIndex: 'team_event_index',
-      team_id: 'team_id',
-      TeamId: 'team_id',
-      team_name: 'team_name',
-      TeamName: 'team_name',
-      queue_count: 'queue_count',
-      QueueCount: 'queue_count',
-      timestamp: 'timestamp',
-      Timestamp: 'timestamp',
-    }),
-    learning_curve: mapKeys(learning_curve, {
-      team_id: 'team_id',
-      TeamId: 'team_id',
-      team_name: 'team_name',
-      TeamName: 'team_name',
-      batch_order: 'batch_order',
-      BatchOrder: 'batch_order',
-      avg_score: 'avg_score',
-      AvgScore: 'avg_score',
-    }),
-    rejection_by_team,
   };
 }
 
@@ -699,6 +674,10 @@ export interface GameContextType {
   // Lobby / Team Formation
   formTeams: () => Promise<void>;
   resetToLobby: () => void;
+  /** Instructor: switch a team's Joke Maker and Marketing pairs (two PATCHes, the first undone if the second fails). */
+  swapTeamRoles: (teamId: number) => Promise<void>;
+  /** Instructor: seat a pair in a team's slot, or send it back to the lobby; adopts the lobby the PATCH returns. */
+  movePair: (userId: number, body: MoveBody) => Promise<void>;
 
   // Team Name Management
   teamNames: Record<string, string>;
@@ -1225,19 +1204,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               });
 
               // Build roster for instructor drag/drop (teams + customers + unassigned)
-              const rosterUsers: User[] = [];
-              lobbyNormalized.teams.forEach(t => {
-                t.members.forEach(m => {
-                  rosterUsers.push(makeUser({ user_id: m.user_id, display_name: m.display_name }, toRole(m.role), t.team.id));
-                });
-              });
-              lobbyNormalized.customers.forEach(c => {
-                rosterUsers.push(makeUser({ user_id: c.user_id, display_name: c.display_name }, 'CUSTOMER' as Role, null));
-              });
-              lobbyNormalized.unassigned.forEach(u => {
-                rosterUsers.push(makeUser({ user_id: u.user_id, display_name: u.display_name }, 'UNASSIGNED' as Role, null));
-              });
-              setRoster(rosterUsers);
+              setRoster(rosterFromLobby(lobbyNormalized));
             }
           } catch (e) {
             // If the backend wiped the instructor during reset, stop polling and force re-login.
@@ -1421,19 +1388,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               if (stats) setInstructorStats(normalizeInstructorStats((stats as any)?.data ?? stats ?? null));
 
               // Build roster for instructor drag/drop (teams + customers + unassigned)
-              const rosterUsers: User[] = [];
-              lobbyNormalized.teams.forEach(t => {
-                t.members.forEach(m => {
-                  rosterUsers.push(makeUser({ user_id: m.user_id, display_name: m.display_name }, toRole(m.role), t.team.id));
-                });
-              });
-              lobbyNormalized.customers.forEach(c => {
-                rosterUsers.push(makeUser({ user_id: c.user_id, display_name: c.display_name }, 'CUSTOMER' as Role, null));
-              });
-              lobbyNormalized.unassigned.forEach(u => {
-                rosterUsers.push(makeUser({ user_id: u.user_id, display_name: u.display_name }, 'UNASSIGNED' as Role, null));
-              });
-              setRoster(rosterUsers);
+              setRoster(rosterFromLobby(lobbyNormalized));
             }
           } catch {
             // ignore; instructor endpoints will surface errors on action
@@ -1857,8 +1812,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // there is nothing to set aside — the backend ignores customer_count entirely
     // (dto.AssignRequest is {team_count} only) and pushes any surplus account back to
     // WAITING (usecase/instructor.go:175-186).
-    const assignable = roster.filter(u => u.role !== ('INSTRUCTOR' as Role)).length;
-    const teamCount = Math.floor(assignable / 2);
+    // POST /assign reshuffles waiting and assigned pairs alike (instructor.go ~269-287), so
+    // the count comes from the lobby's summary; the roster is the fallback before it lands.
+    const teamCount = instructorLobby
+      ? autoAssignCount(instructorLobby.summary)
+      : Math.floor(roster.filter(u => u.role !== ('INSTRUCTOR' as Role)).length / 2);
     if (teamCount <= 0) {
       alert('At least 2 participants are needed to form a team.');
       return;
@@ -1945,6 +1903,48 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     } catch {
       alert('Failed to update user assignment.');
+    }
+  };
+
+  /** Takes the lobby a PATCH returned; when it returned none (the mock's 204), reads the lobby. */
+  const adoptLobby = async (raw: unknown) => {
+    if (!roundId) return;
+    const next = normalizeInstructorLobby(looksLikeLobby(raw) ? raw : await instructorService.lobby(roundId), roundId);
+    setInstructorLobby(next);
+    setRoster(rosterFromLobby(next));
+  };
+
+  const swapTeamRoles = async (teamId: number) => {
+    if (!roundId || !user || user.role !== ('INSTRUCTOR' as Role)) return;
+    const team = instructorLobby?.teams.find(t => Number(t.team.id) === teamId);
+    if (!team || team.members.length !== 2) return;
+    let res: unknown;
+    try {
+      res = await swapTeamPairs((uid, body) => instructorService.patchUser(roundId, uid, body), team.members);
+    } catch {
+      alert('Could not switch the roles. The team keeps its roles; try again.');
+      return;
+    }
+    try {
+      await adoptLobby(res);
+    } catch {
+      // The next lobby poll shows the swap.
+    }
+  };
+
+  const movePair = async (userId: number, body: MoveBody) => {
+    if (!roundId || !user || user.role !== ('INSTRUCTOR' as Role)) return;
+    let res: unknown;
+    try {
+      res = await instructorService.patchUser(roundId, userId as UserId, body);
+    } catch {
+      alert('Failed to update user assignment.');
+      return;
+    }
+    try {
+      await adoptLobby(res);
+    } catch {
+      // The next lobby poll shows the move.
     }
   };
 
@@ -2381,7 +2381,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <GameContext.Provider value={{
       user, login, instructorLogin, logout, roster,
       config, updateConfig, setRound, setGameActive, endRound, resetGame, toggleTeamPopup,
-      formTeams, resetToLobby,
+      formTeams, resetToLobby, swapTeamRoles, movePair,
       teamNames, updateTeamName, updateUser, deleteUser,
       batches, addBatch, submitRawBatch, splitBatch, unsplitBatch, publishBatch,
       sales,
