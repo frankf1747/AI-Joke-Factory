@@ -1,23 +1,23 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useGame } from '../context';
-import { Button, Card, RoleLayout, Modal } from '../components';
-import { RefreshCw, Settings, Clock, GripVertical, Users, CheckCircle, Maximize2, X, Trash2 } from 'lucide-react';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  LineChart, Line, Legend, ScatterChart, Scatter, LabelList
+import { Button, RoleLayout, Modal } from '../components';
+import { Clock } from 'lucide-react';
+import {
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  LineChart, Line
 } from 'recharts';
 import { Role } from '../types';
-import { IdealProfilePicker } from '../components/IdealProfilePicker';
 import { BotPanel, botPanelRequested } from '../components/BotPanel';
 import { isWatchMode } from '../services/watchMode';
-import type { IdealDimension } from '../config/dimensions';
-import { LeanDebrief } from '../components/LeanDebrief';
 import { ControlBar } from '../components/instructor/ControlBar';
-import { defaultViewRound, instructorPhase } from '../services/instructorPhase';
-import { LeanChartsPanel } from '../components/leanCharts/LeanChartsPanel';
+import { LiveTab, CHART_KEYS, type ChartKey } from '../components/instructor/LiveTab';
+import { TeamsTab } from '../components/instructor/TeamsTab';
+import { SetupTab } from '../components/instructor/SetupTab';
+import { DebriefTab } from '../components/instructor/DebriefTab';
+import { defaultTab, defaultViewRound, instructorPhase, type InstructorTab } from '../services/instructorPhase';
 import { useLeanCharts } from '../services/useLeanCharts';
 import { leanChartsVisibility, leanRoundFlags, resolveLeanChartsRound } from '../services/leanCharts';
-import { FeeConfigFields, changedFees, feeValuesOf, shippingOrderError, type FeeConfigValues } from '../components/FeeConfigFields';
+import { changedFees, feeValuesOf, shippingOrderError, type FeeConfigValues } from '../components/FeeConfigFields';
 import { LEAN_LEADERBOARD_COLUMNS, feeRoundsText, fmtMoney, leanFeesOf, neverSold, productionTeamCount, type LeanSortKey } from '../services/leanMode';
 import { buildApplyUpdates } from '../services/roundConfig';
 
@@ -29,15 +29,23 @@ const PALETTE = [
 ];
 
 const INSTRUCTOR_HIDDEN_CHARTS_SESSION_KEY = 'joke_factory_instructor_hidden_charts_v1';
-const CHART_KEYS = ['sales', 'sequence_quality', 'unrated_jokes'] as const;
-type ChartKey = typeof CHART_KEYS[number];
+
+/** The four tabs under the control bar (spec 6b). Setup is never a phase's default. */
+export type ScreenTab = InstructorTab | 'setup';
+const SCREEN_TABS: ReadonlyArray<{ id: ScreenTab; label: string }> = [
+  { id: 'live', label: 'Live' },
+  { id: 'teams', label: 'Teams' },
+  { id: 'setup', label: 'Setup' },
+  { id: 'debrief', label: 'Debrief' },
+];
 
 // Lean leaderboard columns, read from row.lean on LEAN rounds only.
 const LEAN_COLUMNS = LEAN_LEADERBOARD_COLUMNS;
 const isLeanSortKey = (k: string): k is LeanSortKey => LEAN_COLUMNS.some(c => c.key === k);
 const fmtSeconds = (s: number) => (s > 0 ? `${Math.round(s)}s` : '—');
 
-const Instructor: React.FC = () => {
+/** initialTab opens the screen on one tab (the render tests use it); otherwise the phase picks. */
+const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
   const { 
     config, updateConfig, setGameActive, resetGame, toggleTeamPopup,
     roster, teamNames, updateTeamName, updateUser,
@@ -63,8 +71,10 @@ const Instructor: React.FC = () => {
   /** After Apply: which rounds the fees were written to, e.g. "Fees applied to Rounds 1 and 2". */
   const [feeNotice, setFeeNotice] = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  // The round the End Round confirm is open for, or null when it is closed.
-  const [endConfirmRound, setEndConfirmRound] = useState<1 | 2 | null>(null);
+  // The End Round confirm. Its round outlives the close, so the title and the button
+  // never read "End Round  now?" while the modal goes away.
+  const [endConfirmOpen, setEndConfirmOpen] = useState(false);
+  const [endConfirmRound, setEndConfirmRound] = useState<1 | 2>(1);
 
   // Expanded Chart State
   const [expandedChart, setExpandedChart] = useState<string | null>(null);
@@ -92,6 +102,14 @@ const Instructor: React.FC = () => {
   const round2Started = roundStatuses[2] === 'ACTIVE' || roundStatuses[2] === 'ENDED';
   const [viewRound, setViewRound] = useState<1 | 2>(() => defaultViewRound(phase));
   useEffect(() => { setViewRound(defaultViewRound(phase)); }, [phase]);
+  // The open tab follows the phase (Teams in the lobby, Live during and between rounds,
+  // Debrief after Round 2). A tab the instructor picks stays until the phase changes.
+  const [tab, setTab] = useState<ScreenTab>(() => initialTab ?? defaultTab(phase));
+  const [tabPhase, setTabPhase] = useState(phase);
+  if (tabPhase !== phase) {
+    setTabPhase(phase);
+    setTab(defaultTab(phase));
+  }
   // Lean charts: the round they show. It follows viewRound; resolveLeanChartsRound
   // may move it off a round that has no Lean charts to show.
   const [leanChartsRound, setLeanChartsRound] = useState<1 | 2>(viewRound);
@@ -2130,9 +2148,9 @@ const Instructor: React.FC = () => {
 
         {/* End Round confirm, for both rounds */}
         <Modal
-          isOpen={endConfirmRound !== null}
-          onClose={() => setEndConfirmRound(null)}
-          title={`End Round ${endConfirmRound ?? ''} now?`}
+          isOpen={endConfirmOpen}
+          onClose={() => setEndConfirmOpen(false)}
+          title={`End Round ${endConfirmRound} now?`}
         >
           <div className="space-y-4">
             <p className="text-sm" style={{ color: 'var(--ink-2)' }}>
@@ -2141,18 +2159,18 @@ const Instructor: React.FC = () => {
                 : 'Students stop sending and releasing jokes, and both rounds are over.'}
             </p>
             <div className="grid grid-cols-2 gap-3 mt-6">
-              <Button variant="outline" onClick={() => setEndConfirmRound(null)} className="w-full">
+              <Button variant="outline" onClick={() => setEndConfirmOpen(false)} className="w-full">
                 Keep playing
               </Button>
               <Button
                 variant="danger"
                 className="w-full font-bold"
                 onClick={() => {
-                  setEndConfirmRound(null);
+                  setEndConfirmOpen(false);
                   endRound();
                 }}
               >
-                {`End Round ${endConfirmRound ?? ''}`}
+                {`End Round ${endConfirmRound}`}
               </Button>
             </div>
           </div>
@@ -2279,924 +2297,86 @@ const Instructor: React.FC = () => {
             }
             await setGameActive(true);
           }}
-          onEnd={() => setEndConfirmRound(config.round === 2 ? 2 : 1)}
-          onOpenDebrief={() => document.getElementById('instructor-debrief')?.scrollIntoView({ behavior: 'smooth' })}
+          onEnd={() => {
+            setEndConfirmRound(config.round === 2 ? 2 : 1);
+            setEndConfirmOpen(true);
+          }}
+          onOpenDebrief={() => setTab('debrief')}
         />
 
-        {/* Lobby Management Panel */}
-        {config.status === 'LOBBY' && (
-            <Card>
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                    <div>
-                        <h2 className="text-xl font-bold text-gray-800 flex items-center">
-                            <Users className="mr-2" /> Lobby Management
-                        </h2>
-                        <p className="text-sm text-gray-600 mt-1">Wait for all participants to join before forming teams.</p>
-                        <div className="flex gap-4 mt-4">
-                            <div className="bg-white px-4 py-3 rounded-lg border shadow-sm text-center min-w-[140px]">
-                                <span className="block text-4xl font-extrabold text-blue-600">{connectedPairs}</span>
-                                <span className="text-xs uppercase font-bold text-gray-500 tracking-wider">Total Pairs</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex flex-col gap-3 w-full md:w-auto bg-white p-4 rounded shadow-sm border border-gray-200 min-w-[300px]">
-                        <span className="text-sm font-semibold text-gray-700">
-                            {Math.floor(assignableCount / 2)} team{Math.floor(assignableCount / 2) === 1 ? '' : 's'} from {assignableCount} participant{assignableCount === 1 ? '' : 's'}
-                        </span>
-                        {assignableCount % 2 === 1 && (
-                          <p className="text-xs text-amber-700">
-                            {assignableCount} participants — one will be left unassigned. Each team seats 1 Joke
-                            Maker and 1 Marketing.
-                          </p>
-                        )}
-                        <Button
-                            onClick={handleFormTeams}
-                            disabled={assignableCount < 2}
-                            className="w-full flex justify-center items-center gap-2"
-                        >
-                            <CheckCircle size={16} /> Auto-Assign
-                        </Button>
-                    </div>
-                </div>
-            </Card>
-        )}
-
-        {/* Settings */}
-        <Card>
-          <div className="flex flex-col space-y-4">
-            {/* Row 3: Configurations (single line, wrap on narrow screens) */}
-            <div className="flex flex-wrap items-center gap-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
-              <div className="flex items-center space-x-3">
-                <Settings size={16} className="text-gray-400" />
-                <span className="text-sm font-bold text-gray-700 uppercase">Config:</span>
-              </div>
-              <div className="flex items-center space-x-3" title="Seconds Marketing may deliberate before the first publish reminder">
-                <label className="text-sm text-gray-600 whitespace-nowrap">Nudge 1 (s):</label>
-                <input
-                  type="number"
-                  min={5}
-                  value={localNudge1}
-                  onChange={e => setLocalNudge1(Number(e.target.value))}
-                  disabled={!canEditNudges}
-                  className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditNudges ? 'opacity-50 cursor-not-allowed' : ''}`}
-                />
-              </div>
-              <div className="flex items-center space-x-3" title="Seconds after that reminder is dismissed before the final one">
-                <label className="text-sm text-gray-600 whitespace-nowrap">Nudge 2 (s):</label>
-                <input
-                  type="number"
-                  min={5}
-                  value={localNudge2}
-                  onChange={e => setLocalNudge2(Number(e.target.value))}
-                  disabled={!canEditNudges}
-                  className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditNudges ? 'opacity-50 cursor-not-allowed' : ''}`}
-                />
-              </div>
-              <div className="flex items-center space-x-3">
-                <label className="text-sm text-gray-600 whitespace-nowrap">Cust. Budget:</label>
-                <input
-                  type="number"
-                  value={localBudget}
-                  onChange={e => setLocalBudget(Number(e.target.value))}
-                  disabled={!canEditBudget}
-                  className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditBudget ? 'opacity-50 cursor-not-allowed' : ''}`}
-                />
-              </div>
-              <div className="flex items-center space-x-3">
-                <label className="text-sm text-gray-600 whitespace-nowrap">Market Price (p):</label>
-                <input
-                  type="number"
-                  step="0.10"
-                  min="0"
-                  value={localMarketPrice}
-                  onChange={e => setLocalMarketPrice(Number(e.target.value))}
-                  disabled={!canEditPricing}
-                  className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditPricing ? 'opacity-50 cursor-not-allowed' : ''}`}
-                />
-              </div>
-              <div className="flex items-center space-x-3">
-                <label className="text-sm text-gray-600 whitespace-nowrap">Cost of Publishing (c):</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={localCostOfPublishing}
-                  onChange={e => setLocalCostOfPublishing(Number(e.target.value))}
-                  disabled={!canEditPricing}
-                  className={`w-20 p-1 border border-gray-300 rounded !text-center appearance-none [-moz-appearance:textfield] bg-white text-black ${!canEditPricing ? 'opacity-50 cursor-not-allowed' : ''}`}
-                />
-              </div>
-              <FeeConfigFields
-                values={localFees}
-                onChange={setLocalFees}
-                disabled={!canEditLean}
-                lockHint={LEAN_LOCK_HINT}
-                round1BatchSize={config.round1BatchSize}
-                round2BatchLimit={config.round2BatchLimit}
-                teamCount={productionTeamCount(roster)}
-              />
-              <Button
-                type="button"
-                onClick={handleUpdateSettings}
-                variant="secondary"
-                disabled={!canApply}
-                className={
-                  `px-4 py-1 text-xs font-semibold transition-colors ` +
-                  (canApply
-                    ? 'bg-amber-100 text-amber-900 hover:bg-amber-200 ring-2 ring-amber-200'
-                    : 'opacity-60')
-                }
-              >
-                Apply
-              </Button>
-              {feeNotice && !hasPendingConfigChanges && (
-                <span role="status" className="text-xs text-emerald-700 whitespace-nowrap">{feeNotice}</span>
-              )}
-            </div>
-
-            {/* Row 4: the hidden ideal joke. The backend will not start a round without a
-                complete profile, so this has to be reachable before Start. */}
-            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-              <IdealProfilePicker
-                value={config.idealProfile as Record<IdealDimension, string>}
-                onChange={next => updateConfig({ idealProfile: next })}
-                disabled={config.isActive}
-              />
-            </div>
-
-            <div className="flex justify-end">
-              <Button onClick={() => setShowResetConfirm(true)} variant="outline" className="inline-flex items-center gap-2 text-sm">
-                <RefreshCw size={14} aria-hidden="true" /> Reset game
-              </Button>
-            </div>
-          </div>
-        </Card>
-
-        {/* Dashboard Charts */}
-        {hiddenCharts.length > 0 && (
-          <div className="flex justify-end">
+        <div role="tablist" aria-label="Instructor views" className="flex gap-6 border-b" style={{ borderColor: 'var(--rule)' }}>
+          {SCREEN_TABS.map(t => (
             <button
-              onClick={restoreAllCharts}
-              className="text-xs font-bold text-blue-600 underline hover:text-blue-700"
-              title="Restore all charts for this session"
-            >
-              Show all charts
-            </button>
-          </div>
-        )}
+              key={t.id}
+              type="button"
+              role="tab"
+              id={`instructor-tab-${t.id}`}
+              aria-selected={tab === t.id}
+              aria-controls="instructor-tabpanel"
+              onClick={() => setTab(t.id)}
+              className="-mb-px px-0.5 pb-2.5 pt-1 text-[14.5px] font-medium transition-colors"
+              style={{
+                color: tab === t.id ? 'var(--navy)' : 'var(--ink-3)',
+                borderBottom: `2px solid ${tab === t.id ? 'var(--navy)' : 'transparent'}`,
+              }}
+            >{t.label}</button>
+          ))}
+        </div>
 
-
-        {/* Dashboard grid */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-          {/* Team Management (full width) */}
-          <Card className="xl:col-span-2" title="Team Management (Drag to Move, Click to Switch Role)">
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {/* Two columns of production teams (JM/Marketing) */}
-                  {[0, 1].map((colIdx) => {
-                    const colTeamIds = visibleTeamIds.filter((_, idx) => idx % 2 === colIdx);
-                    return (
-                      <div key={colIdx} className="space-y-3">
-                        {colTeamIds.map((teamId) => (
-                          <div
-                            key={teamId}
-                            onDragOver={handleDragOver}
-                            onDrop={(e) => handleDrop(e, 'TEAM', teamId)}
-                            className="rounded-lg border border-gray-200 bg-white p-3 hover:bg-blue-50/30 transition-colors"
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0 flex-1">
-                                <input
-                                  type="text"
-                                  value={teamNames[teamId]}
-                                  onChange={(e) => updateTeamName(teamId, e.target.value)}
-                                  className="font-bold text-gray-800 bg-transparent border-b border-dashed border-gray-300 focus:border-blue-500 outline-none w-full"
-                                />
-                                <span className="text-xs text-gray-400 block mt-1">ID: {teamId}</span>
-                              </div>
-                              {/* JM/QC Team label removed for cleaner UI */}
-                            </div>
-
-                            <div className="mt-3 flex flex-wrap gap-2">
-                              {(rosterByTeam[teamId]?.length ?? 0) > 0 ? (
-                                rosterByTeam[teamId]!.map((u) => (
-                                  <div
-                                    key={u.id}
-                                    draggable
-                                    onDragStart={(e) => handleDragStart(e, u.id)}
-                                    onClick={() => toggleUserRole(u.id, u.role)}
-                                    title="Drag to move, Click to toggle Role"
-                                    className={`cursor-pointer inline-flex items-center px-2 py-1 rounded text-xs border hover:shadow-md transition-all active:scale-95 select-none ${
-                                      u.role === Role.JOKE_MAKER
-                                        ? 'bg-blue-50 text-blue-700 border-blue-100'
-                                        : 'bg-purple-50 text-purple-700 border-purple-100'
-                                    }`}
-                                  >
-                                    <GripVertical size={10} className="mr-1 opacity-50" />
-                                    <span className="font-bold">{u.name}</span>
-                                    <span className="ml-1 opacity-70">({u.role === Role.JOKE_MAKER ? 'JM' : 'Marketing'})</span>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        handleDeleteUser(u.id, u.name);
-                                      }}
-                                      onMouseDown={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                      }}
-                                      disabled={deletingUserIds.includes(u.id)}
-                                      className="ml-2 p-1 rounded hover:bg-white/60 text-gray-500 hover:text-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                                      title="Delete user"
-                                    >
-                                      <Trash2 size={14} />
-                                    </button>
-                                  </div>
-                                ))
-                              ) : (
-                                <span className="text-gray-400 text-xs italic">No members. Drag users here.</span>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })}
-
-              </div>
-
-              {/* Lobby / Unassigned (full width) */}
-              <div
-                className="rounded-lg border border-gray-200 bg-gray-100/50 p-3"
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, 'LOBBY')}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="font-bold text-gray-600">Unassigned (Lobby)</div>
-                  <div className="text-xs font-bold text-gray-500">{roster.filter(u => u.role === Role.UNASSIGNED).length}</div>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {roster.filter(u => u.role === Role.UNASSIGNED).map(u => (
-                    <div
-                      key={u.id}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, u.id)}
-                      className="cursor-move inline-flex items-center px-2 py-1 rounded text-xs bg-gray-200 text-gray-800 border border-gray-300 hover:shadow-md"
-                    >
-                      <GripVertical size={10} className="mr-1 opacity-50" />
-                      {u.name}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleDeleteUser(u.id, u.name);
-                        }}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                        }}
-                        disabled={deletingUserIds.includes(u.id)}
-                        className="ml-2 p-1 rounded hover:bg-white/60 text-gray-600 hover:text-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Delete user"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  ))}
-                  {roster.filter(u => u.role === Role.UNASSIGNED).length === 0 && (
-                    <span className="text-gray-400 text-xs italic">All users assigned</span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          {/* Leaderboard (full width) */}
-          <Card
-            className="xl:col-span-2"
-            title="Leaderboard"
-            action={
-              <div className="flex items-center gap-2">
-                <div className="flex items-center rounded-md border border-gray-200 bg-white p-0.5">
-                  {[1, 2].map(r => (
-                    <button
-                      key={r}
-                      type="button"
-                      onClick={() => setViewRound(r as 1 | 2)}
-                      disabled={r === 2 && !round2Started}
-                      className={`px-2 py-1 rounded text-xs font-bold ${
-                        viewRound === r ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
-                      }`}
-                      title={r === 1 ? 'Round 1 leaderboard' : 'Round 2 leaderboard'}
-                    >
-                      {r === 1 ? 'R1' : 'R2'}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  onClick={() => setExpandedChart('leaderboard')}
-                  className="p-1 hover:bg-gray-100 rounded text-gray-500 hover:text-gray-700"
-                  title="Expand leaderboard"
-                >
-                  <Maximize2 size={18} />
-                </button>
-              </div>
-            }
-          >
-            {renderLeaderboardTable({ maxHeightClass: 'max-h-80' })}
-          </Card>
-
-          {statsR2 && [statsR1, statsR2].some(st => (st?.leaderboard ?? []).some(r => r.lean != null)) && (
-            <div id="instructor-debrief" className="xl:col-span-2 scroll-mt-4">
-            <Card title="Round 1 vs Round 2" subtitle="Same rules and fees in both rounds, per team">
-              <LeanDebrief r1={statsR1} r2={statsR2} teamNames={teamNames} />
-            </Card>
-            </div>
-          )}
-          
-          {showLeanCharts ? (
-            <LeanChartsPanel
-              round={leanChartsRound}
-              onRoundChange={r => { if (r === 1 || round2Started) setViewRound(r); }}
-              leanRounds={leanRounds}
-              r1={leanChartsR1}
-              r2={leanChartsR2}
-              teamNames={teamNames}
+        {/* Only the open tab is mounted. Every poll and all screen state live above
+            (context, useLeanCharts, the state here), so switching tabs neither stops
+            nor repeats a fetch; only LeanChartsPanel's own team picker starts over. */}
+        <div role="tabpanel" id="instructor-tabpanel" aria-labelledby={`instructor-tab-${tab}`} className="space-y-8">
+          {tab === 'live' && (
+            <LiveTab
+              viewRound={viewRound} setViewRound={setViewRound} round2Started={round2Started}
+              setExpandedChart={setExpandedChart} renderLeaderboardTable={renderLeaderboardTable} renderChart={renderChart}
+              hiddenCharts={hiddenCharts} restoreAllCharts={restoreAllCharts} isChartHidden={isChartHidden} hideChart={hideChart}
+              showLeanCharts={showLeanCharts} leanChartsRound={leanChartsRound} leanRounds={leanRounds}
+              leanChartsR1={leanChartsR1} leanChartsR2={leanChartsR2} visibleTeamIds={visibleTeamIds}
+              salesTab={salesTab} setSalesTab={setSalesTab} salesTeamFilter={salesTeamFilter} setSalesTeamFilter={setSalesTeamFilter}
+              sequenceTab={sequenceTab} setSequenceTab={setSequenceTab}
+              sequenceTeamFilter={sequenceTeamFilter} setSequenceTeamFilter={setSequenceTeamFilter}
+              unratedTab={unratedTab} setUnratedTab={setUnratedTab}
+              unratedTeamFilter={unratedTeamFilter} setUnratedTeamFilter={setUnratedTeamFilter}
+              wasteChartMode={wasteChartMode} setWasteChartMode={setWasteChartMode} wasteChartData={wasteChartData}
+              scatterRoundMode={scatterRoundMode} setScatterRoundMode={setScatterRoundMode}
+              scatterXMetric={scatterXMetric} setScatterXMetric={setScatterXMetric}
+              scatterYMode={scatterYMode} setScatterYMode={setScatterYMode}
+              scatterYMetric={scatterYMetric} setScatterYMetric={setScatterYMetric}
+              scatterNumerator={scatterNumerator} setScatterNumerator={setScatterNumerator}
+              scatterDenominator={scatterDenominator} setScatterDenominator={setScatterDenominator}
+              scatterBaseMetrics={scatterBaseMetrics} scatterMetrics={scatterMetrics} scatterData={scatterData}
+              metricLabel={metricLabel} yAxisLabel={yAxisLabel} isRatioYAxis={isRatioYAxis}
+              isXMetricInteger={isXMetricInteger} isYMetricInteger={isYMetricInteger} formatScatterValue={formatScatterValue}
+              renderScatterDot={renderScatterDot} renderScatterLabel={renderScatterLabel}
+              marketSortKey={marketSortKey} setMarketSortKey={setMarketSortKey}
+              marketSortDir={marketSortDir} setMarketSortDir={setMarketSortDir}
+              marketPage={marketPage} setMarketPage={setMarketPage}
+              expandedMarketJokeIds={expandedMarketJokeIds} setExpandedMarketJokeIds={setExpandedMarketJokeIds}
             />
-          ) : (
-          <>
-          {!isChartHidden('sales') && (
-            <Card
-              title="Cumulative Sales Over Time"
-              action={
-                <div className="flex items-center gap-2">
-                  <select
-                    value={salesTeamFilter}
-                    onChange={(e) => setSalesTeamFilter(e.target.value)}
-                    className="rounded border border-gray-200 bg-white px-2 py-1 text-xs font-bold text-gray-700 hover:border-gray-300 focus:outline-none"
-                    title="Filter by Team"
-                  >
-                    <option value="ALL">All Teams</option>
-                    {visibleTeamIds.map(tid => (
-                      <option key={tid} value={tid}>{teamNames[tid] || `Team ${tid}`}</option>
-                    ))}
-                  </select>
-                  <div className="flex items-center rounded-md border border-gray-200 bg-white p-0.5">
-                    {(['R1', 'R2', 'BOTH'] as const).map(k => (
-                      <button
-                        key={k}
-                        type="button"
-                        onClick={() => setSalesTab(k)}
-                        className={`px-2 py-1 rounded text-xs font-bold ${
-                          salesTab === k ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
-                        }`}
-                        title={k === 'BOTH' ? 'Compare both rounds' : (k === 'R1' ? 'Round 1' : 'Round 2')}
-                      >
-                        {k === 'R1' ? 'R1' : k === 'R2' ? 'R2' : 'Both'}
-                      </button>
-                    ))}
-                  </div>
-                  <button
-                    onClick={() => setExpandedChart('sales')}
-                    className="p-1 hover:bg-gray-100 rounded text-gray-500 hover:text-gray-700"
-                    title="Expand chart"
-                  >
-                    <Maximize2 size={18} />
-                  </button>
-                  <button
-                    onClick={() => hideChart('sales')}
-                    className="p-1 hover:bg-gray-100 rounded text-gray-500 hover:text-red-600"
-                    title="Hide chart (this session only)"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-              }
-            >
-              <div className="h-72 w-full">
-                {renderChart('sales')}
-              </div>
-            </Card>
           )}
-
-          {/* 3) Batch Sequence vs Quality */}
-          {!isChartHidden('sequence_quality') && (
-            <Card
-              title="Batch Sequence vs Quality"
-              action={
-                <div className="flex items-center gap-2">
-                  <select
-                    value={sequenceTeamFilter}
-                    onChange={(e) => setSequenceTeamFilter(e.target.value)}
-                    className="rounded border border-gray-200 bg-white px-2 py-1 text-xs font-bold text-gray-700 hover:border-gray-300 focus:outline-none"
-                    title="Filter by Team"
-                  >
-                    <option value="ALL">All Teams</option>
-                    {visibleTeamIds.map(tid => (
-                      <option key={tid} value={tid}>{teamNames[tid] || `Team ${tid}`}</option>
-                    ))}
-                  </select>
-                  <div className="flex items-center rounded-md border border-gray-200 bg-white p-0.5">
-                    {(['R1', 'R2', 'BOTH'] as const).map(k => (
-                      <button
-                        key={k}
-                        type="button"
-                        onClick={() => setSequenceTab(k)}
-                        className={`px-2 py-1 rounded text-xs font-bold ${
-                          sequenceTab === k ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
-                        }`}
-                        title={k === 'BOTH' ? 'Compare both rounds' : (k === 'R1' ? 'Round 1' : 'Round 2')}
-                      >
-                        {k === 'R1' ? 'R1' : k === 'R2' ? 'R2' : 'Both'}
-                      </button>
-                    ))}
-                  </div>
-                  <button
-                    onClick={() => setExpandedChart('sequence_quality')}
-                    className="p-1 hover:bg-gray-100 rounded text-gray-500 hover:text-gray-700"
-                    title="Expand chart"
-                  >
-                    <Maximize2 size={18} />
-                  </button>
-                  <button
-                    onClick={() => hideChart('sequence_quality')}
-                    className="p-1 hover:bg-gray-100 rounded text-gray-500 hover:text-red-600"
-                    title="Hide chart (this session only)"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-              }
-            >
-              <div className="h-72 w-full">
-                {renderChart('sequence_quality')}
-              </div>
-            </Card>
+          {tab === 'teams' && (
+            <TeamsTab
+              connectedPairs={connectedPairs} assignableCount={assignableCount} handleFormTeams={handleFormTeams}
+              visibleTeamIds={visibleTeamIds} rosterByTeam={rosterByTeam} deletingUserIds={deletingUserIds}
+              handleDeleteUser={handleDeleteUser} handleDragStart={handleDragStart} handleDragOver={handleDragOver}
+              handleDrop={handleDrop} toggleUserRole={toggleUserRole}
+            />
           )}
-
-          {/* Wasted Jokes / Rejection Rate (full width) - R1/R2 side by side */}
-          <Card
-            title="Wasted Jokes"
-            action={
-              <div className="flex items-center rounded-md border border-gray-200 bg-white p-0.5">
-                <button
-                  className={`px-2 py-1 rounded text-xs font-bold ${
-                    wasteChartMode === 'count' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                  onClick={() => setWasteChartMode('count')}
-                >
-                  Count
-                </button>
-                <button
-                  className={`px-2 py-1 rounded text-xs font-bold ${
-                    wasteChartMode === 'rate' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                  onClick={() => setWasteChartMode('rate')}
-                >
-                  Rejection Rate
-                </button>
-              </div>
-            }
-            className="xl:col-span-2"
-          >
-            <div className="h-80">
-              <ResponsiveContainer>
-                <BarChart
-                  data={wasteChartData.map(item => ({
-                    team: item.team_name,
-                    R1: wasteChartMode === 'count' ? item.r1_wasted : item.r1_rate,
-                    R2: wasteChartMode === 'count' ? item.r2_wasted : item.r2_rate,
-                  }))}
-                  margin={{ top: 10, right: 20, left: wasteChartMode === 'rate' ? 50 : 30, bottom: 30 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="team" angle={-15} textAnchor="end" height={50} />
-                  <YAxis
-                    label={{
-                      value: wasteChartMode === 'rate' ? 'Rejection Rate' : 'Wasted Jokes',
-                      angle: -90,
-                      position: 'insideLeft',
-                      style: { textAnchor: 'middle' },
-                      dx: wasteChartMode === 'rate' ? -15 : -5,
-                    }}
-                    tickFormatter={(v) => wasteChartMode === 'rate' ? `${Math.round(v * 100)}%` : v}
-                    width={wasteChartMode === 'rate' ? 45 : 35}
-                    domain={(() => {
-                      const maxVal = Math.max(
-                        ...wasteChartData.map(d => wasteChartMode === 'count' ? Math.max(d.r1_wasted, d.r2_wasted) : Math.max(d.r1_rate, d.r2_rate)),
-                        0
-                      );
-                      if (maxVal <= 0) return wasteChartMode === 'rate' ? [0, 0.25] : [0, 25];
-                      const targetMax = maxVal * 1.25;
-                      const step = wasteChartMode === 'rate' ? 0.05 : 5;
-                      const roundedMax = Math.ceil(targetMax / step) * step;
-                      return [0, roundedMax];
-                    })()}
-                    ticks={(() => {
-                      const maxVal = Math.max(
-                        ...wasteChartData.map(d => wasteChartMode === 'count' ? Math.max(d.r1_wasted, d.r2_wasted) : Math.max(d.r1_rate, d.r2_rate)),
-                        0
-                      );
-                      const max = (() => {
-                        if (maxVal <= 0) return wasteChartMode === 'rate' ? 0.25 : 25;
-                        const targetMax = maxVal * 1.25;
-                        const step = wasteChartMode === 'rate' ? 0.05 : 5;
-                        return Math.ceil(targetMax / step) * step;
-                      })();
-                      const step = wasteChartMode === 'rate' ? 0.05 : 5;
-                      const ticks: number[] = [];
-                      for (let t = 0; t <= max; t += step) ticks.push(t);
-                      return ticks;
-                    })()}
-                  />
-                  <Tooltip formatter={(v: any) => wasteChartMode === 'rate' ? `${(Number(v) * 100).toFixed(1)}%` : v} />
-                  <Legend />
-                  <Bar dataKey="R1" name="Round 1" fill="#3B82F6" />
-                  <Bar dataKey="R2" name="Round 2" fill="#F97316" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </Card>
-
-          {/* Scatter Plots */}
-          <Card title="Scatter Plots" className="xl:col-span-2">
-            <div className="flex flex-wrap items-center gap-4 mb-4">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-slate-600 uppercase">Round</span>
-                <div className="flex items-center rounded-md border border-gray-200 bg-white p-0.5">
-                  {(['R1', 'R2', 'BOTH'] as const).map(k => (
-                    <button
-                      key={k}
-                      type="button"
-                      onClick={() => setScatterRoundMode(k)}
-                      className={`px-2 py-1 rounded text-xs font-bold ${
-                        scatterRoundMode === k ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
-                      }`}
-                      title={k === 'BOTH' ? 'Compare both rounds' : (k === 'R1' ? 'Round 1' : 'Round 2')}
-                    >
-                      {k === 'R1' ? 'R1' : k === 'R2' ? 'R2' : 'Both'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-slate-600 uppercase">X-Axis</span>
-                <select
-                  className="border border-slate-200 rounded px-2 py-1 text-sm bg-white"
-                  value={scatterXMetric}
-                  onChange={(e) => setScatterXMetric(e.target.value)}
-                >
-                  {scatterBaseMetrics.map(m => (
-                    <option key={m.key} value={m.key}>{m.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-slate-600 uppercase">Y-Axis</span>
-                <div className="inline-flex items-center gap-2">
-                  <select
-                    className="border border-slate-200 rounded px-2 py-1 text-sm bg-white"
-                    value={scatterYMode}
-                    onChange={(e) => setScatterYMode(e.target.value as 'metric' | 'ratio')}
-                  >
-                    <option value="metric">Metric</option>
-                    <option value="ratio">Ratio</option>
-                  </select>
-                  {scatterYMode === 'metric' ? (
-                    <select
-                      className="border border-slate-200 rounded px-2 py-1 text-sm bg-white"
-                      value={scatterYMetric}
-                      onChange={(e) => setScatterYMetric(e.target.value)}
-                    >
-                      {scatterMetrics.map(m => (
-                        <option key={m.key} value={m.key}>{m.label}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <>
-                      <select
-                        className="border border-slate-200 rounded px-2 py-1 text-sm bg-white"
-                        value={scatterNumerator}
-                        onChange={(e) => setScatterNumerator(e.target.value)}
-                      >
-                        {scatterMetrics.map(m => (
-                          <option key={m.key} value={m.key}>{m.label}</option>
-                        ))}
-                      </select>
-                      <span className="text-sm text-slate-500">/</span>
-                      <select
-                        className="border border-slate-200 rounded px-2 py-1 text-sm bg-white"
-                        value={scatterDenominator}
-                        onChange={(e) => setScatterDenominator(e.target.value)}
-                      >
-                        {scatterMetrics.map(m => (
-                          <option key={m.key} value={m.key}>{m.label}</option>
-                        ))}
-                      </select>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="h-80">
-              <ResponsiveContainer>
-                <ScatterChart margin={{ top: 10, right: 20, left: 44, bottom: 30 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    type="number"
-                    dataKey="x"
-                    name="x"
-                    label={{
-                      value: metricLabel(scatterXMetric),
-                      angle: 0,
-                      position: 'insideBottom',
-                      offset: -5,
-                    }}
-                  />
-                  <YAxis
-                    type="number"
-                    dataKey="y"
-                    name="y"
-                    width={50}
-                    tickMargin={6}
-                    padding={{ top: 10, bottom: 10 }}
-                    allowDecimals={!isYMetricInteger}
-                    label={{
-                      value: yAxisLabel,
-                      angle: -90,
-                      position: 'insideLeft',
-                      style: { textAnchor: 'middle' },
-                      dx: -20,
-                    }}
-                    domain={isRatioYAxis ? [0, 1] : undefined}
-                    ticks={isRatioYAxis ? [0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1] : undefined}
-                    tickFormatter={(v) => {
-                      if (isRatioYAxis) {
-                        return [0.2, 0.4, 0.6, 0.8].includes(Number(v)) ? v.toFixed(1) : '';
-                      }
-                      // For integer metrics, show integers; for decimals, show 2 places
-                      if (isYMetricInteger) {
-                        return Number.isInteger(v) ? String(v) : '';
-                      }
-                      return Number(v).toFixed(2);
-                    }}
-                  />
-                  <Tooltip
-                    cursor={{ strokeDasharray: '3 3' }}
-                    content={(props: any) => {
-                      const { active, payload } = props;
-                      if (!active || !payload || payload.length === 0) return null;
-                      const p = payload[0]?.payload;
-                      if (!p) return null;
-                      const xFormatted = formatScatterValue(p.xRaw, isXMetricInteger);
-                      const yFormatted = formatScatterValue(p.yRaw, isYMetricInteger);
-                      const roundInfo = scatterRoundMode === 'BOTH' ? ` (${p.round})` : '';
-                      return (
-                        <div className="bg-white border border-gray-200 rounded shadow-lg px-3 py-2 text-sm">
-                          <div className="font-semibold text-gray-900 mb-1">{p.team_name}{roundInfo}</div>
-                          <div className="text-gray-600">
-                            <span className="font-medium">{p.xLabel}:</span> {xFormatted}
-                          </div>
-                          <div className="text-gray-600">
-                            <span className="font-medium">{p.yLabel}:</span> {yFormatted}
-                          </div>
-                        </div>
-                      );
-                    }}
-                  />
-                  <Scatter data={scatterData} shape={renderScatterDot}>
-                    <LabelList content={renderScatterLabel} />
-                  </Scatter>
-                </ScatterChart>
-              </ResponsiveContainer>
-            </div>
-          </Card>
-
-          {!isChartHidden('unrated_jokes') && (
-            <Card
-              title="Unrated Jokes Over Time"
-              className="xl:col-span-2"
-              action={
-                <div className="flex items-center gap-2">
-                  <select
-                    value={unratedTeamFilter}
-                    onChange={(e) => setUnratedTeamFilter(e.target.value)}
-                    className="rounded border border-gray-200 bg-white px-2 py-1 text-xs font-bold text-gray-700 hover:border-gray-300 focus:outline-none"
-                    title="Filter by Team"
-                  >
-                    <option value="ALL">All Teams</option>
-                    {visibleTeamIds.map(tid => (
-                      <option key={tid} value={tid}>{teamNames[tid] || `Team ${tid}`}</option>
-                    ))}
-                  </select>
-                  <div className="flex items-center rounded-md border border-gray-200 bg-white p-0.5">
-                    {(['R1', 'R2', 'BOTH'] as const).map(k => (
-                      <button
-                        key={k}
-                        type="button"
-                        onClick={() => setUnratedTab(k)}
-                        className={`px-2 py-1 rounded text-xs font-bold ${
-                          unratedTab === k ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
-                        }`}
-                        title={k === 'BOTH' ? 'Compare both rounds' : (k === 'R1' ? 'Round 1' : 'Round 2')}
-                      >
-                        {k === 'R1' ? 'R1' : k === 'R2' ? 'R2' : 'Both'}
-                      </button>
-                    ))}
-                  </div>
-                  <button
-                    onClick={() => setExpandedChart('unrated_jokes')}
-                    className="p-1 hover:bg-gray-100 rounded text-gray-500 hover:text-gray-700"
-                    title="Expand chart"
-                  >
-                    <Maximize2 size={18} />
-                  </button>
-                  <button
-                    onClick={() => hideChart('unrated_jokes')}
-                    className="p-1 hover:bg-gray-100 rounded text-gray-500 hover:text-red-600"
-                    title="Hide chart (this session only)"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-              }
-            >
-              <div className="h-72 w-full">
-                {renderChart('unrated_jokes')}
-              </div>
-            </Card>
+          {tab === 'setup' && (
+            <SetupTab
+              localNudge1={localNudge1} setLocalNudge1={setLocalNudge1} localNudge2={localNudge2} setLocalNudge2={setLocalNudge2}
+              localBudget={localBudget} setLocalBudget={setLocalBudget}
+              localMarketPrice={localMarketPrice} setLocalMarketPrice={setLocalMarketPrice}
+              localCostOfPublishing={localCostOfPublishing} setLocalCostOfPublishing={setLocalCostOfPublishing}
+              localFees={localFees} setLocalFees={setLocalFees}
+              canEditNudges={canEditNudges} canEditBudget={canEditBudget} canEditPricing={canEditPricing} canEditLean={canEditLean}
+              LEAN_LOCK_HINT={LEAN_LOCK_HINT} canApply={canApply} hasPendingConfigChanges={hasPendingConfigChanges}
+              feeNotice={feeNotice} handleUpdateSettings={handleUpdateSettings} setShowResetConfirm={setShowResetConfirm}
+            />
           )}
-          </>
-          )}
-
-          {/* Live Market (Instructor view) */}
-          <Card title="Live Market" className="xl:col-span-2 mb-8">
-            <div className="overflow-x-auto max-h-[420px] overflow-y-auto pb-6">
-              <table className="min-w-full text-sm table-fixed">
-                <thead className="sticky top-0 bg-white shadow-sm z-10">
-                  <tr className="bg-gray-50 border-b">
-                    <th className="px-3 py-2 text-left font-medium text-gray-500 w-[72%]">
-                      <button 
-                        type="button"
-                        onClick={() => {
-                          if (marketSortKey === 'id') {
-                            setMarketSortDir(d => (d === 'desc' ? 'asc' : 'desc'));
-                          } else {
-                            setMarketSortKey('id');
-                            setMarketSortDir('desc');
-                          }
-                        }}
-                        className="inline-flex items-center hover:text-gray-800"
-                      >
-                        Joke
-                        {marketSortKey === 'id' && (
-                          <span className="ml-1">{marketSortDir === 'desc' ? '▼' : '▲'}</span>
-                        )}
-                      </button>
-                    </th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-500 w-[14%]">Team</th>
-                    <th className="px-3 py-2 text-right font-medium text-gray-500 w-[14%]">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (marketSortKey === 'sales') {
-                            setMarketSortDir(d => (d === 'desc' ? 'asc' : 'desc'));
-                          } else {
-                            setMarketSortKey('sales');
-                            setMarketSortDir('desc');
-                          }
-                        }}
-                        className="inline-flex items-center justify-end w-full hover:text-gray-800"
-                        title="Sort by total sales (purchase count)"
-                      >
-                        <span>Total Sales</span>
-                        <span className="ml-1 w-3 text-center">
-                          {marketSortKey === 'sales' ? (marketSortDir === 'desc' ? '▼' : '▲') : ''}
-                        </span>
-                      </button>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {(() => {
-                    // The market payload is flat (team_id/team_name/sold_count inline).
-                    // It carries no team-level totals, so there is no "sold / published"
-                    // sub-line to render here.
-                    const rows = (marketItems ?? []).map(it => ({
-                      joke_id: Number(it.joke_id),
-                      joke_title: String(it.joke_title ?? '').trim(),
-                      joke_text: String(it.joke_text ?? ''),
-                      team_id: Number(it.team_id ?? 0),
-                      team_name: String(it.team_name ?? ''),
-                      sold_count: Number(it.sold_count ?? 0),
-                    }));
-
-                    rows.sort((a, b) => {
-                      const dir = marketSortDir === 'asc' ? 1 : -1;
-                      if (marketSortKey === 'sales') {
-                        // Secondary sort by ID desc if sales are equal
-                        if (a.sold_count === b.sold_count) {
-                            return b.joke_id - a.joke_id;
-                        }
-                        return dir * (a.sold_count - b.sold_count);
-                      }
-                      // Default sort by ID (Newest = desc)
-                      return dir * (a.joke_id - b.joke_id);
-                    });
-
-                    const pageSize = 20;
-                    const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
-                    const currentPage = marketPage;
-                    const setCurrentPage = setMarketPage;
-                    const paged = rows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-
-                    if (rows.length === 0) {
-                      return (
-                        <tr>
-                          <td colSpan={3} className="px-3 py-6 text-center text-gray-400 italic">
-                            Market is empty.
-                          </td>
-                        </tr>
-                      );
-                    }
-                    return (
-                      <>
-                        {paged.map(r => {
-                      const id = String(r.joke_id);
-                      const isExpanded = Boolean(expandedMarketJokeIds[id]);
-                      const isLong = r.joke_text.trim().length > 180;
-                      return (
-                        <tr key={id} className="hover:bg-gray-50">
-                          <td className="px-3 py-2 text-gray-900">
-                            <div className="font-extrabold text-sm text-blue-900 mb-1">
-                              {r.joke_title || 'Untitled Joke'}
-                            </div>
-                            <div className={`whitespace-pre-wrap ${isExpanded ? '' : 'line-clamp-3'}`}>
-                              {r.joke_text}
-                            </div>
-                            {isLong && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setExpandedMarketJokeIds(prev => ({ ...prev, [id]: !Boolean(prev[id]) }))
-                                }
-                                className="mt-1 text-xs font-bold text-blue-600 underline hover:text-blue-700"
-                              >
-                                {isExpanded ? 'Show less' : 'Show more'}
-                              </button>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-gray-800 whitespace-nowrap truncate align-top">
-                            <div>
-                              {r.team_name ? r.team_name : `Team ${r.team_id || ''}`}
-                            </div>
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono text-gray-900 align-top">
-                            {r.sold_count}
-                          </td>
-                        </tr>
-                        );
-                        })}
-                        {totalPages > 1 && (
-                          <tr>
-                            <td colSpan={3} className="px-3 py-3">
-                              <div className="flex items-center justify-between text-xs text-gray-600">
-                                <button
-                                  type="button"
-                                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                  disabled={currentPage === 1}
-                                  className="px-2 py-1 rounded border border-gray-300 bg-white disabled:opacity-50"
-                                >
-                                  Prev
-                                </button>
-                                <span className="font-semibold">
-                                  Page {currentPage} / {totalPages}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                  disabled={currentPage === totalPages}
-                                  className="px-2 py-1 rounded border border-gray-300 bg-white disabled:opacity-50"
-                                >
-                                  Next
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </>
-                    );
-                  })()}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-
+          {tab === 'debrief' && <DebriefTab statsR1={statsR1} statsR2={statsR2} />}
         </div>
       </div>
 

@@ -1,5 +1,6 @@
+import { createElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import Instructor from './Instructor';
+import Instructor, { type ScreenTab } from './Instructor';
 import { ControlBar, type ControlBarProps } from '../components/instructor/ControlBar';
 import { TEST_CONFIG, renderWithGame, testUser } from './testing/renderWithGame';
 import { Role } from '../types';
@@ -10,10 +11,12 @@ import { DEFAULT_IDEAL_PROFILE } from '../config/dimensions';
 vi.stubGlobal('window', { location: { search: '' } });
 
 const instructor = testUser(Role.INSTRUCTOR, null);
+/** The Instructor screen opened on one tab (renderToStaticMarkup cannot click a tab). */
+const onTab = (initialTab: ScreenTab) => () => createElement(Instructor, { initialTab });
 
-describe('Instructor screen, one Lean rule set', () => {
+describe('Instructor screen, one Lean rule set (Setup tab)', () => {
   it('shows the fee settings and the batch-size rule, and no market mode, preset or WIP limit', () => {
-    const out = renderWithGame(Instructor, { user: instructor });
+    const out = renderWithGame(onTab('setup'), { user: instructor });
     expect(out).toContain('Shipping fee (1–4 / 5 / 6–10 jokes):');
     expect(out).toContain('Storage fee per joke-minute:');
     expect(out).toContain('Hosting fee per joke-minute:');
@@ -26,9 +29,9 @@ describe('Instructor screen, one Lean rule set', () => {
 
   it('lets the instructor edit the fees between rounds, and greys them out once the selected round has started', () => {
     const between = { ...TEST_CONFIG, isActive: false };
-    const open = renderWithGame(Instructor, { user: instructor, config: between, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' } });
+    const open = renderWithGame(onTab('setup'), { user: instructor, config: between, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' } });
     expect(open).not.toMatch(/id="cfg-storage-fee"[^>]*disabled=""/);
-    const locked = renderWithGame(Instructor, { user: instructor, config: between, roundStatuses: { 1: 'ENDED', 2: 'CONFIGURED' } });
+    const locked = renderWithGame(onTab('setup'), { user: instructor, config: between, roundStatuses: { 1: 'ENDED', 2: 'CONFIGURED' } });
     expect(locked).toMatch(/id="cfg-storage-fee"[^>]*disabled=""/);
     expect(locked).toContain('title="Lean settings lock once the round starts"');
   });
@@ -37,30 +40,30 @@ describe('Instructor screen, one Lean rule set', () => {
     const between = { ...TEST_CONFIG, isActive: false };
     const roster = [1, 2, 3].flatMap(t => [testUser(Role.JOKE_MAKER, t), testUser(Role.QUALITY_CONTROL, t)])
       .map((u, i) => ({ ...u, id: String(i + 10), user_id: i + 10 }));
-    const open = renderWithGame(Instructor, { user: instructor, config: between, roster, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' } });
+    const open = renderWithGame(onTab('setup'), { user: instructor, config: between, roster, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' } });
     expect(open).toContain('Customers per team:');
     expect(open).toContain('≈ 54 customers for 3 teams');
     expect(open).not.toMatch(/id="cfg-customers-per-team"[^>]*disabled=""/);
-    const locked = renderWithGame(Instructor, { user: instructor, config: between, roundStatuses: { 1: 'ENDED', 2: 'CONFIGURED' } });
+    const locked = renderWithGame(onTab('setup'), { user: instructor, config: between, roundStatuses: { 1: 'ENDED', 2: 'CONFIGURED' } });
     expect(locked).toMatch(/id="cfg-customers-per-team"[^>]*disabled=""/);
   });
 
   it('shows the stored customers per team (12 from the round) in CONFIG', () => {
     const stored = { ...TEST_CONFIG, isActive: false, ...leanConfigFromRound({ market_mode: 'LEAN', customers_per_team: 12 }) };
-    const out = renderWithGame(Instructor, { user: instructor, config: stored, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' } });
+    const out = renderWithGame(onTab('setup'), { user: instructor, config: stored, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' } });
     expect(out).toMatch(/id="cfg-customers-per-team"[^>]*value="12"/);
   });
 
   it('shows the stored customer budget in the CONFIG row', () => {
-    const out = renderWithGame(Instructor, { user: instructor, config: { ...TEST_CONFIG, isActive: false, customerBudget: 3 }, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' } });
+    const out = renderWithGame(onTab('setup'), { user: instructor, config: { ...TEST_CONFIG, isActive: false, customerBudget: 3 }, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' } });
     expect(out).toMatch(/Cust\. Budget:<\/label><input[^>]*value="3"/);
   });
 
   it('says inline why shipping fees that fall with batch size cannot be applied', () => {
     const between = { ...TEST_CONFIG, isActive: false, shippingFeeSmall: 4 };
-    const out = renderWithGame(Instructor, { user: instructor, config: between, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' } });
+    const out = renderWithGame(onTab('setup'), { user: instructor, config: between, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' } });
     expect(out).toContain('Shipping fees must rise with batch size: 1–4 jokes ≤ 5 jokes ≤ 6–10 jokes.');
-    const ok = renderWithGame(Instructor, { user: instructor, config: { ...TEST_CONFIG, isActive: false }, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' } });
+    const ok = renderWithGame(onTab('setup'), { user: instructor, config: { ...TEST_CONFIG, isActive: false }, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' } });
     expect(ok).not.toContain('Shipping fees must rise');
   });
 });
@@ -205,14 +208,57 @@ describe('Instructor screen, the Live Market', () => {
   });
 });
 
-describe('Instructor screen, the hidden ideal joke', () => {
+describe('Instructor screen, the hidden ideal joke (Setup tab)', () => {
   const between = { ...TEST_CONFIG, isActive: false };
   it('shows the stored ideal in the picker (Topic Animals selected)', () => {
-    const out = renderWithGame(Instructor, {
+    const out = renderWithGame(onTab('setup'), {
       user: instructor, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' },
       config: { ...between, idealProfile: { ...DEFAULT_IDEAL_PROFILE, TOPIC: 'Animals' } },
     });
     expect(out).toMatch(/<option value="Animals" selected="">Animals<\/option>/);
     expect(out).not.toMatch(/<option value="Work" selected="">/);
+  });
+});
+
+/* Four tabs under the control bar; the one open by default follows the phase
+   (spec 6b): Teams in the lobby, Live during and between rounds, Debrief after Round 2. */
+describe('Instructor screen, the tabs', () => {
+  const stopped = { ...TEST_CONFIG, isActive: false };
+  const selectedTab = (out: string) => out.match(/<button[^>]*role="tab"[^>]*aria-selected="true"[^>]*>([^<]*)</)?.[1];
+
+  it('shows Live, Teams, Setup and Debrief as tabs in a tablist', () => {
+    const out = renderWithGame(Instructor, { user: instructor });
+    expect(out).toMatch(/role="tablist"/);
+    const labels = [...out.matchAll(/<button[^>]*role="tab"[^>]*>([^<]*)</g)].map(m => m[1]);
+    expect(labels).toEqual(['Live', 'Teams', 'Setup', 'Debrief']);
+  });
+
+  it('opens on Teams in the lobby, Live while a round runs or between rounds, and Debrief once both rounds ended', () => {
+    const cases = [
+      [{ 1: 'CONFIGURED', 2: 'CONFIGURED' }, 'Teams'],
+      [{ 1: 'ACTIVE', 2: 'CONFIGURED' }, 'Live'],
+      [{ 1: 'ENDED', 2: 'CONFIGURED' }, 'Live'],
+      [{ 1: 'ENDED', 2: 'ACTIVE' }, 'Live'],
+      [{ 1: 'ENDED', 2: 'ENDED' }, 'Debrief'],
+    ] as const;
+    for (const [roundStatuses, tab] of cases) {
+      const out = renderWithGame(Instructor, { user: instructor, config: stopped, roundStatuses: { ...roundStatuses } });
+      expect(selectedTab(out)).toBe(tab);
+    }
+  });
+
+  it('shows only the open tab: the settings on Setup, the leaderboard on Live, the team cards on Teams', () => {
+    const live = renderWithGame(Instructor, { user: instructor, roundStatuses: { 1: 'ACTIVE', 2: 'CONFIGURED' } });
+    expect(live).toContain('Live Market');
+    expect(live).not.toContain('Storage fee per joke-minute:');
+    expect(live).not.toContain('Team Management');
+    const setup = renderWithGame(onTab('setup'), { user: instructor });
+    expect(selectedTab(setup)).toBe('Setup');
+    expect(setup).toContain('Storage fee per joke-minute:');
+    expect(setup).toContain('Reset game');
+    expect(setup).not.toContain('Live Market');
+    const teams = renderWithGame(onTab('teams'), { user: instructor });
+    expect(teams).toContain('Team Management');
+    expect(teams).not.toContain('Live Market');
   });
 });

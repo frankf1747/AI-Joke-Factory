@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_CUSTOMER_BUDGET, buildApplyUpdates, customerBudgetFromRound, configFromInstructorRound, storedConfigPatch, isRouteMissing } from './roundConfig';
+import { DEFAULT_CUSTOMER_BUDGET, buildApplyUpdates, customerBudgetFromRound, configFromInstructorRound, storedConfigPatch, storedConfigSettled, isRouteMissing } from './roundConfig';
 import { DEFAULT_IDEAL_PROFILE } from '../config/dimensions';
 import { feeValuesOf } from '../components/FeeConfigFields';
 import { TEST_CONFIG } from '../views/testing/renderWithGame';
@@ -111,6 +111,29 @@ describe('storedConfigPatch (when a GET /config result may touch the screen)', (
     expect(patch).not.toHaveProperty('idealProfile');
     expect(patch).not.toHaveProperty('marketPrice');
     expect(patch).toMatchObject({ customerBudget: 5, costOfPublishing: 0.3 });
+  });
+});
+
+/* A failed first read must not leave the session in "first load": the next round
+   change would then put the default profile and prices over Round 1's setup. */
+describe('storedConfigSettled (when a later read stops counting as the first load)', () => {
+  it('settles once a read for the round in view resolves, whether it succeeded or failed', () => {
+    expect(storedConfigSettled(false, true)).toBe(true);
+  });
+
+  it('stays unsettled after a read for a round that is no longer in view', () => {
+    expect(storedConfigSettled(false, false)).toBe(false);
+  });
+
+  it('never unsettles: only a new session (reset) starts over', () => {
+    expect(storedConfigSettled(true, false)).toBe(true);
+    expect(storedConfigSettled(true, true)).toBe(true);
+  });
+
+  it('a failed first read, then a round change to a round with no stored profile, keeps the screen', () => {
+    const settled = storedConfigSettled(false, true);
+    const noProfile = { id: 2, round_number: 2, status: 'CONFIGURED', customer_budget: 3, market_price: 1 } as any;
+    expect(storedConfigPatch(noProfile, { roundStillViewed: true, isFirstLoad: !settled, editedKeys: new Set() })).toEqual({});
   });
 });
 

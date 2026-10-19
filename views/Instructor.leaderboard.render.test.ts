@@ -1,3 +1,4 @@
+import { createElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import Instructor from './Instructor';
 import { renderWithGame, testUser } from './testing/renderWithGame';
@@ -48,9 +49,9 @@ describe('Instructor leaderboard, Lean columns', () => {
     expect(out).not.toContain('NaN');
   });
 
-  it('subtitles the Round 1 vs Round 2 table for one rule set', () => {
+  it('subtitles the Round 1 vs Round 2 table for one rule set (Debrief tab)', () => {
     const lean = { shipping_cost: 8, storage_cost: 1.5, hosting_cost: 0.2 };
-    const out = renderWithGame(Instructor, {
+    const out = renderWithGame(() => createElement(Instructor, { initialTab: 'debrief' }), {
       user: instructor,
       instructorStatsRound1: { round_id: 1, leaderboard: [row(1, lean)] },
       instructorStatsRound2: { round_id: 2, leaderboard: [row(1, lean)] },

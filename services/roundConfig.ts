@@ -83,6 +83,16 @@ export function storedConfigPatch(
 }
 
 /**
+ * Whether the first load is over after a GET /config read resolves (success or failure). Once a
+ * read for the round in view has resolved, a later round change is not a first load, so a failed
+ * first read cannot let Round 2's defaults overwrite Round 1's setup. A read for a round that is
+ * no longer in view settles nothing; nothing unsettles it but a new session.
+ */
+export function storedConfigSettled(wasSettled: boolean, roundStillViewed: boolean): boolean {
+  return wasSettled || roundStillViewed;
+}
+
+/**
  * True when a GET /config failure means this backend has no such route (405, or a 404 that is not
  * the domain NOT_FOUND envelope, which is how a real route answers for an unknown round).
  */
