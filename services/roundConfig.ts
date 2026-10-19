@@ -2,7 +2,7 @@
  * Pure helpers for the instructor's Setup tab: what the Customer budget box
  * shows, the settings Apply sends and the lock banner.
  */
-import { changedFees, feeValuesOf, type FeeConfigValues } from '../components/FeeConfigFields';
+import { changedFees, feeValuesOf, type FeeConfigValues } from './feeConfig';
 import type { ApiInstructorRound, GameConfig } from '../types';
 import { DEFAULT_IDEAL_PROFILE, IDEAL_DIMENSIONS } from '../config/dimensions';
 import type { PhaseStatuses } from './instructorPhase';
@@ -101,10 +101,7 @@ export function isRouteMissing(e: { status: number; code?: string }): boolean {
   return e.status === 405 || (e.status === 404 && e.code !== 'NOT_FOUND');
 }
 
-/** The arrival window is entered in minutes; the backend takes whole seconds (a fraction is a 400). */
-export function arrivalSecondsFromMinutes(min: number): number {
-  return Math.round(min * 60);
-}
+export { arrivalSecondsFromMinutes } from './feeConfig';
 
 /** The Setup tab's edits in progress: the Classic numbers and the shared Lean settings. */
 export interface SetupValues {

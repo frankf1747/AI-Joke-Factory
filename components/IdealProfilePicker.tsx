@@ -38,7 +38,7 @@ export function isCompleteProfile(profile: Partial<Record<string, string>>): boo
 interface Props {
   value: IdealProfile;
   onChange: (next: IdealProfile) => void;
-  /** Locked while a round is ACTIVE; "Use defaults" is hidden then too. */
+  /** Locked while a round is ACTIVE and once both rounds have ended; "Use defaults" is hidden then too. */
   disabled?: boolean;
 }
 

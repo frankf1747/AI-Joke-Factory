@@ -25,8 +25,11 @@ export const SetupInput: React.FC<{
   id: string;
   /** The accessible name (the visible label may cover several inputs). */
   label: string;
-  value: number;
-  onChange: (v: number) => void;
+  /** A number, or the raw text a box keeps while it is being typed in. */
+  value: number | string;
+  /** The typed number, and the raw text for a box that keeps it. */
+  onChange: (v: number, raw: string) => void;
+  onBlur?: () => void;
   disabled: boolean;
   step: string;
   min: string;
@@ -37,7 +40,7 @@ export const SetupInput: React.FC<{
   changed?: boolean;
   /** Tooltip, e.g. why the input is locked. */
   title?: string;
-}> = ({ id, label, value, onChange, disabled, step, min, prefix, suffix, changed = false, title }) => (
+}> = ({ id, label, value, onChange, onBlur, disabled, step, min, prefix, suffix, changed = false, title }) => (
   <div
     data-changed={changed ? 'true' : undefined}
     style={{
@@ -55,7 +58,8 @@ export const SetupInput: React.FC<{
       step={step}
       min={min}
       value={value}
-      onChange={e => onChange(Number(e.target.value))}
+      onChange={e => onChange(Number(e.target.value), e.target.value)}
+      onBlur={onBlur}
       disabled={disabled}
       className="min-w-0 flex-1 appearance-none border-0 bg-transparent px-2.5 py-[7px] font-mono text-[14.5px] font-medium tabular-nums outline-none [-moz-appearance:textfield] disabled:cursor-not-allowed [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       style={{ color: 'var(--ink)' }}

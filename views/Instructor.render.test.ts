@@ -133,6 +133,8 @@ describe('Instructor screen, the Setup tab', () => {
     for (const id of ['cfg-budget', 'cfg-market-price', 'cfg-publishing', 'cfg-storage-fee']) {
       expect(out).toMatch(new RegExp(`id="${id}"[^>]*disabled=""`));
     }
+    for (const dim of IDEAL_DIMENSIONS) expect(out).toMatch(new RegExp(`id="ideal-${dim.id}"[^>]*disabled=""`));
+    expect(out).not.toContain('Use defaults');
   });
 
   it('keeps Reset game at the bottom', () => {
@@ -484,5 +486,32 @@ describe('Instructor screen, the Teams tab', () => {
     const sw = walk(TeamsBoard(p), el => el.type === 'button' && el.props['aria-label'] === 'Switch roles in Team 3')[0];
     sw.props.onClick({ preventDefault() {}, stopPropagation() {} });
     expect(p.onSwap).toHaveBeenCalledWith(3);
+  });
+});
+
+describe('Instructor screen, the Debrief tab', () => {
+  const lean = (profit: number) => ({ round_id: 1, leaderboard: [{
+    rank: 1, team: { id: 4, name: 'Team 4' }, points: 0, total_sales: 3, unsold_jokes: 0, discarded_jokes: 0,
+    batches_processed: 1, profit, total_jokes: 3, published_jokes: 3,
+    lean: { batches_submitted: 1, setup_cost: 0, carrying_cost: 0, avg_submit_to_publish_s: 90, avg_publish_to_first_sale_s: 30, batch_series: [] },
+  }] });
+
+  it('before Round 2 starts: available once Round 2 has started', () => {
+    const out = renderWithGame(onTab('debrief'), {
+      user: instructor, config: { ...TEST_CONFIG, isActive: false, round: 2 }, roundStatuses: { 1: 'ENDED', 2: 'CONFIGURED' },
+      instructorStatsRound1: lean(2),
+    });
+    expect(out).toContain('Round 1 vs Round 2');
+    expect(out).toContain('Available once Round 2 has started');
+  });
+
+  it('once Round 2 has started: each team with the instructor\'s name for it', () => {
+    const out = renderWithGame(onTab('debrief'), {
+      user: instructor, config: { ...TEST_CONFIG, round: 2 }, roundStatuses: { 1: 'ENDED', 2: 'ACTIVE' },
+      instructorStatsRound1: lean(2), instructorStatsRound2: { ...lean(5), round_id: 2 }, teamNames: { '4': 'The Quips' },
+    });
+    expect(out).toContain('The Quips');
+    expect(out).toContain('+$3.00');
+    expect(out).not.toContain('Available once Round 2 has started');
   });
 });

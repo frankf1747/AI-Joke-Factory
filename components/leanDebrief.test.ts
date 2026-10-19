@@ -18,12 +18,14 @@ describe('debriefRows', () => {
     expect(rows[0].team).toBe('Team 7');
     expect(rows[0].r1?.profit).toBe(23.2);
     expect(rows[0].r2?.profit).toBe(30.8);
-    expect(rows[0].delta.profit).toBeCloseTo(7.6);
-    expect(rows[0].delta.leadTimeS).toBe(-240);
+    expect(rows[0].profitChange).toBeCloseTo(7.6);
+    expect(rows[0].r1?.sentToReleased).toBe(360);
+    expect(rows[0].r2?.sentToReleased).toBe(120);
   });
   it('tolerates a team present in one round only', () => {
     const rows = debriefRows(r1 as any, { round_id: 2, leaderboard: [] } as any);
     expect(rows[0].r2).toBeNull();
+    expect(rows[0].profitChange).toBeNull();
   });
   it('shows the instructor\'s renamed team name, as the leaderboard does', () => {
     const rows = debriefRows(r1 as any, r2 as any, { '7': 'The Punchliners' });
@@ -35,8 +37,8 @@ describe('debriefRows', () => {
     const series = [{ seq: 1, submitted_at: '', jokes: 5, published: 4, sold: 1 }];
     const leanR2 = { round_id: 2, leaderboard: [{ ...r2.leaderboard[0], lean: { ...r2.leaderboard[0].lean, batch_series: series } }] };
     const rows = debriefRows(classicR1 as any, leanR2 as any);
-    expect(rows[0].r1?.unsold).toBeNull();
-    expect(rows[0].r2?.unsold).toBe(3);
-    expect(rows[0].delta.unsold).toBeNull();
+    expect(rows[0].r1?.neverSold).toBeNull();
+    expect(rows[0].r1?.fees).toBeNull();
+    expect(rows[0].r2?.neverSold).toBe(3);
   });
 });

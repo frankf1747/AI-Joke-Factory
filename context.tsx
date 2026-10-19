@@ -57,7 +57,7 @@ const DEFAULT_ROUND2_BATCH_LIMIT = 10;
 const DEFAULT_MARKET_PRICE = 1;
 const DEFAULT_COST_OF_PUBLISHING = 0.1;
 const DEFAULT_COST_OF_DISCARD = 0.01;
-// Marketing's decision clock (see services/marketingNudge.ts). Instructor-tunable.
+// Marketing's decision clock (see services/marketingNudge.ts). Fixed: the Setup tab has no nudge settings.
 const DEFAULT_MARKETING_NUDGE_1_SECONDS = 60;
 const DEFAULT_MARKETING_NUDGE_2_SECONDS = 45;
 const POLL_INTERVAL_MS = 2500;

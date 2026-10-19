@@ -309,7 +309,13 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
               onApply={() => { void handleUpdateSettings(); }} onReset={() => setShowResetConfirm(true)}
             />
           )}
-          {tab === 'debrief' && <DebriefTab statsR1={statsR1} statsR2={statsR2} />}
+          {tab === 'debrief' && (
+            <DebriefTab
+              statsR1={statsR1}
+              statsR2={statsR2}
+              round2Started={roundStatuses[2] === 'ACTIVE' || roundStatuses[2] === 'ENDED'}
+            />
+          )}
         </div>
       </div>
 

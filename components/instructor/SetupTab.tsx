@@ -131,7 +131,7 @@ export const SetupTab: React.FC<SetupTabProps> = ({
             <IdealProfilePicker
               value={config.idealProfile as Record<IdealDimension, string>}
               onChange={next => updateConfig({ idealProfile: next })}
-              disabled={config.isActive}
+              disabled={allLocked}
             />
           </div>
           <div className="mt-[18px] flex items-center justify-between gap-4 px-[18px] py-3.5" style={SHEET}>
