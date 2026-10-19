@@ -90,6 +90,21 @@ export function normalizeTeamName(a: string, b: string): string {
 export const JM_DISPLAY_NAME = normalizeTeamName(...JM_MEMBERS);
 export const MK_DISPLAY_NAME = normalizeTeamName(...MK_MEMBERS);
 
+/**
+ * Mirrors services/format.ts `pairNames`: the Teams tab shows a pair as
+ * "E2ejm1 and E2ejm2", not the stored "e2ejm1_e2ejm2".
+ */
+export function pairNames(displayName: string): string {
+  return displayName
+    .split('_')
+    .filter(part => part.length > 0)
+    .map(part => part.charAt(0).toLocaleUpperCase() + part.slice(1))
+    .join(' and ');
+}
+
+export const JM_CHIP_NAME = pairNames(JM_DISPLAY_NAME);
+export const MK_CHIP_NAME = pairNames(MK_DISPLAY_NAME);
+
 /* ─────────────────────────────── page objects ───────────────────────────── */
 
 /**
@@ -162,89 +177,99 @@ export class WaitingRoom {
   }
 }
 
-/** views/Instructor.tsx */
+/** views/Instructor.tsx: the control bar above the Live / Teams / Setup / Debrief tabs. */
 export class InstructorPage {
   readonly login: LoginScreen;
   constructor(readonly page: Page) {
     this.login = new LoginScreen(page);
   }
 
-  get lobbyHeading(): Locator {
-    return this.page.getByRole('heading', { name: /Lobby Management/ });
+  /** The control bar (components/instructor/ControlBar.tsx), a <section aria-label="Round control">. */
+  get controlBar(): Locator {
+    return this.page.getByRole('region', { name: 'Round control' });
   }
+  tab(name: 'Live' | 'Teams' | 'Setup' | 'Debrief'): Locator {
+    return this.page.getByRole('tab', { name, exact: true });
+  }
+  /** The Teams tab's lobby strip title: "Lobby" or "Lobby: n pairs waiting". */
+  get lobbyTitle(): Locator {
+    return this.page.getByText(/^Lobby(: \d+ pairs? waiting)?$/);
+  }
+  /** Reads "Auto-assign" or "Auto-assign n teams"; off while a round runs. */
   get autoAssign(): Locator {
-    return this.page.getByRole('button', { name: /Auto-Assign/ });
+    return this.page.getByRole('button', { name: /^Auto-assign/ }).first();
   }
-  /** Reads "Start" normally, "Resume" for a previously-ended Round 2. */
-  get startRound(): Locator {
-    return this.page.getByRole('button', { name: /^(Start|Resume)$/ });
+  /** With teams already seated, Auto-assign asks first ("Reshuffle the teams?"). */
+  get reshuffleConfirm(): Locator {
+    return this.page.getByRole('dialog').getByRole('button', { name: /^Auto-assign/ });
   }
-  /** Disabled placeholder that replaces Start once the round is running. */
-  get activeIndicator(): Locator {
-    return this.page.getByRole('button', { name: 'Active', disabled: true });
+  /** Gold, and enabled only while the round is CONFIGURED. There is no pause or resume. */
+  startRound(n: 1 | 2): Locator {
+    return this.controlBar.getByRole('button', { name: `Start Round ${n}` });
   }
-  get endRound(): Locator {
-    return this.page.getByRole('button', { name: /End Round/ });
-  }
-  get roundOneTab(): Locator {
-    return this.page.getByRole('button', { name: 'Round 1', exact: true });
+  /** Replaces Start once the round is running; it opens a confirm. */
+  endRound(n: 1 | 2): Locator {
+    return this.controlBar.getByRole('button', { name: `End Round ${n}` });
   }
 
   /**
-   * A roster chip — the instructor's per-student handle.
-   *
-   * SELECTOR NOTE: the chip is a plain <div>, not a button, so it has no ARIA
-   * role. Its only stable, non-class handle is `title="Drag to move, Click to
-   * toggle Role"` (unassigned chips in the lobby have no title at all and are
-   * matched by text instead).
+   * A team slot on the Teams tab: `data-seat` is "JM" or "MARKETING" on the
+   * slot row (components/instructor/TeamsTab.tsx).
    */
-  assignedChip(displayName: string): Locator {
-    return this.page
-      .getByTitle('Drag to move, Click to toggle Role')
-      .filter({ hasText: displayName });
+  seat(seat: 'JM' | 'MARKETING'): Locator {
+    return this.page.locator(`[data-seat="${seat}"]`);
   }
 
-  lobbyChip(displayName: string): Locator {
-    return this.page.getByText(displayName, { exact: true });
+  /** A pair chip, anywhere on the Teams tab. Its name span holds the pair names exactly. */
+  chip(chipName: string): Locator {
+    return this.page.getByText(chipName, { exact: true });
   }
 
   async signIn(password: string): Promise<void> {
     await this.login.goto();
     await this.login.loginAsInstructorWith(INSTRUCTOR_NAME, password);
-    await expect(this.lobbyHeading).toBeVisible({ timeout: POLL_BUDGET_MS });
+    await expect(this.controlBar).toBeVisible({ timeout: POLL_BUDGET_MS });
   }
 
-  /** Assert both students have shown up in the lobby before forming teams. */
-  async waitForStudentsInLobby(displayNames: string[]): Promise<void> {
-    for (const name of displayNames) {
-      await expect(this.lobbyChip(name).first()).toBeVisible({ timeout: POLL_BUDGET_MS });
+  /** Assert both pairs have shown up in the lobby before forming teams. */
+  async waitForStudentsInLobby(chipNames: string[]): Promise<void> {
+    await this.tab('Teams').click();
+    await expect(this.lobbyTitle).toBeVisible();
+    for (const name of chipNames) {
+      await expect(this.chip(name).first()).toBeVisible({ timeout: POLL_BUDGET_MS });
     }
   }
 
   async formTeams(): Promise<void> {
-    await expect(this.autoAssign).toBeEnabled();
+    await expect(this.autoAssign).toBeEnabled({ timeout: POLL_BUDGET_MS });
     await this.autoAssign.click();
+    // A fresh class has no teams, so there is no confirm; a reshuffle asks first.
+    if (await this.reshuffleConfirm.isVisible()) await this.reshuffleConfirm.click();
   }
 
   /**
-   * Auto-Assign hands out JM / Marketing arbitrarily. Clicking a chip toggles
-   * its role (Instructor.tsx `toggleUserRole`), so this nudges each student to
-   * the seat this spec expects.
+   * Auto-assign hands out Joke Maker / Marketing arbitrarily. Chips no longer
+   * toggle on click: the ⇄ button on a seated chip ("Switch roles in {team}")
+   * swaps the team's two roles, so one swap puts both pairs where this spec
+   * expects them.
    */
-  async ensureRole(displayName: string, want: 'JM' | 'Marketing'): Promise<void> {
-    const chip = this.assignedChip(displayName).first();
-    await expect(chip).toBeVisible({ timeout: POLL_BUDGET_MS });
-    if (!(await chip.innerText()).includes(`(${want})`)) {
-      await chip.click();
-      await expect(chip).toContainText(`(${want})`, { timeout: POLL_BUDGET_MS });
-    }
+  async ensureRole(chipName: string, want: 'JM' | 'MARKETING'): Promise<void> {
+    const other = want === 'JM' ? 'MARKETING' : 'JM';
+    const wanted = this.seat(want).getByText(chipName, { exact: true });
+    const wrong = this.seat(other).getByText(chipName, { exact: true });
+    await expect(wanted.or(wrong).first()).toBeVisible({ timeout: POLL_BUDGET_MS });
+    if (await wanted.count()) return;
+    const swap = this.seat(other).filter({ hasText: chipName }).getByRole('button', { name: /^Switch roles in / });
+    // The chip's buttons fade in on hover; Playwright clicks them either way.
+    await swap.hover();
+    await swap.click();
+    await expect(wanted).toBeVisible({ timeout: POLL_BUDGET_MS });
   }
 
   async startRoundOne(): Promise<void> {
-    await this.roundOneTab.click();
-    await expect(this.startRound).toBeVisible();
-    await this.startRound.click();
-    await expect(this.activeIndicator).toBeVisible({ timeout: POLL_BUDGET_MS });
+    await expect(this.startRound(1)).toBeEnabled({ timeout: POLL_BUDGET_MS });
+    await this.startRound(1).click();
+    await expect(this.endRound(1)).toBeVisible({ timeout: POLL_BUDGET_MS });
   }
 }
 
@@ -258,10 +283,10 @@ export class JokeMakerPage {
   }
 
   get productionLine(): Locator {
-    return this.page.getByText('Production line', { exact: true });
+    return this.page.getByRole('heading', { name: 'Production line', exact: true });
   }
   get pausedBanner(): Locator {
-    return this.page.getByText('Game is currently paused. Wait for instructor to start.');
+    return this.page.getByText('Game is paused. Wait for the instructor to start.');
   }
   /** SELECTOR NOTE: the raw-blob textarea has no label — placeholder only. */
   get rawInput(): Locator {
@@ -275,33 +300,28 @@ export class JokeMakerPage {
     return this.page.getByRole('button', { name: /Send to Marketing/ });
   }
   get valueStream(): Locator {
-    return this.page.getByText('Value stream', { exact: true });
+    return this.page.getByRole('region', { name: 'Value stream' });
   }
   get submittedToast(): Locator {
     return this.page.getByText(/Batch sent to Marketing/);
   }
 
-  /**
-   * A "Jokes by stage" row.
-   *
-   * SELECTOR NOTE: the row is `<label> … <dots> … <count>` with no role and no
-   * test id; the label text is the only anchor, hence label → parent row.
-   */
-  stageRow(label: 'In review' | 'On market' | 'Sold' | 'Wasted'): Locator {
-    return this.page.getByText(label, { exact: true }).locator('xpath=..');
-  }
-
-  /** The numeric total at the end of a stage row (its own <span>, exact text). */
-  stageCount(label: 'In review' | 'On market' | 'Sold' | 'Wasted', count: number): Locator {
-    return this.stageRow(label).getByText(String(count), { exact: true });
+  /** The "Jokes by stage" card (components/jokeMaker/JokesByStage.tsx). */
+  get jokesByStage(): Locator {
+    return this.page.getByRole('region', { name: 'Jokes by stage' });
   }
 
   /**
-   * A StatBox tile (components/ui.tsx): `<div><span>{value}</span><span>{label}</span></div>`.
-   * The label is uppercased by CSS only, so the DOM text is the original string.
+   * A "Jokes by stage" row: `<label> <count>` with no role and no test id, so
+   * the label text is the only anchor, hence label → parent row.
    */
-  statBox(label: string): Locator {
-    return this.page.getByText(label, { exact: true }).locator('xpath=..');
+  stageRow(label: 'With Marketing' | 'Selling' | 'Lost its buyers' | 'No buyer yet' | 'Not released'): Locator {
+    return this.jokesByStage.getByText(label, { exact: true }).locator('xpath=..');
+  }
+
+  /** The team's Scoreboard (components/Scoreboard.tsx): rank, profit, found a buyer, sales. */
+  get scoreboard(): Locator {
+    return this.page.getByRole('region', { name: 'Scoreboard' });
   }
 
   async joinAs(members: [string, string]): Promise<void> {
@@ -328,44 +348,17 @@ export class JokeMakerPage {
   }
 
   /**
-   * The Joke Maker's own view of "classification finished": the batch leaves
-   * the `reviewing` bucket, which only happens once batch.status flips to
-   * PROCESSED/RATED (services/jokeState.ts `isProcessed`).
-   */
-  async waitForClassification(jokeCount: number): Promise<void> {
-    /* Jokes only become records once Marketing splits the batch, so this total
-       going from 0 to jokeCount is the "published result landed" signal. */
-    await expect(this.statBox('Sold / Total')).toContainText(`/${jokeCount}`, {
-      timeout: LLM_BUDGET_MS,
-    });
-    /* And the review bucket emptying is the "classification finished" signal. */
-    await expect(this.stageCount('In review', 0)).toBeVisible({ timeout: LLM_BUDGET_MS });
-  }
-
-  /**
-   * The Joke Maker's own "Customer feedback" card.
+   * The Joke Maker's own view of "Marketing released the batch": the
+   * Scoreboard's "of N on market" counts the released jokes, and "With
+   * Marketing" drops to 0 batches once the batch has left Marketing's desk.
    *
-   * WHY THIS ASSERTION EXISTS. The JM used to have a per-BATCH feedback modal
-   * bound to `batch.feedback` — a field the backend never persists, since the
-   * publish payload carries only `{joke_id, joke_title, is_published}`. It was
-   * therefore permanently empty, and no test noticed, because "a modal renders"
-   * and "a modal renders something" are different claims. The panel is now the
-   * same team-level card Marketing has, fed by the per-team feedback route.
-   *
-   * So this checks BOTH halves: the empty state clearing proves rows arrived,
-   * and a real verdict heading proves those rows carry actual dimension content
-   * rather than a row of blanks. Checking only the first would pass against an
-   * empty array rendered as zero cards.
+   * The Joke Maker no longer has a Customer feedback card (it hears from
+   * Marketing through the note in its Value stream), so the feedback check
+   * lives on MarketingPage only.
    */
-  get customerFeedbackEmpty(): Locator {
-    return this.page.getByText(/No feedback yet — release jokes to start uncovering the target/);
-  }
-
-  async waitForCustomerFeedback(): Promise<void> {
-    await expect(this.customerFeedbackEmpty).toHaveCount(0, { timeout: LLM_BUDGET_MS });
-    await expect(this.page.getByText(/^(Landed|Needs work)$/).first()).toBeVisible({
-      timeout: LLM_BUDGET_MS,
-    });
+  async waitForRelease(jokeCount: number): Promise<void> {
+    await expect(this.scoreboard).toContainText(`of ${jokeCount} on market`, { timeout: LLM_BUDGET_MS });
+    await expect(this.stageRow('With Marketing')).toContainText('0 batches', { timeout: LLM_BUDGET_MS });
   }
 }
 
@@ -379,24 +372,18 @@ export class MarketingPage {
   }
 
   get desk(): Locator {
-    return this.page.getByText('Marketing Desk', { exact: true });
+    return this.page.getByRole('heading', { name: 'Marketing desk', exact: true });
   }
   get allClear(): Locator {
     return this.page.getByRole('heading', { name: 'Desk is clear' });
   }
+  /** The desk bar's "Where you are" steps; Split is current while a batch needs splitting. */
   get splitterBanner(): Locator {
-    return this.page.getByText('Split the batch.', { exact: true });
+    return this.page.getByLabel('Where you are').locator('[aria-current="step"]', { hasText: 'Split' });
   }
-  /**
-   * The splitter's working chunk.
-   *
-   * SELECTOR NOTE: this is a readOnly <textarea> with no label, and its
-   * placeholder only renders once it is EMPTY — so it has no accessible name
-   * while it holds text. It is matched positionally as the only textbox inside
-   * the splitting view.
-   */
+  /** The splitter's working chunk: a readOnly <textarea> with its own aria-label. */
   get splitterTextarea(): Locator {
-    return this.page.getByRole('textbox').first();
+    return this.page.getByRole('textbox', { name: /^Unsplit text/ });
   }
   get confirmSplit(): Locator {
     return this.page.getByRole('button', { name: /Confirm, next/ });
@@ -405,16 +392,16 @@ export class MarketingPage {
     return this.page.getByRole('button', { name: /Release to market/ });
   }
   get customerFeedbackEmpty(): Locator {
-    return this.page.getByText(/No feedback yet — release jokes to start uncovering the target/);
+    return this.page.getByText('No feedback yet. Release jokes to start uncovering the target.');
   }
 
   /**
-   * A single joke card, anchored on its position badge's
-   * `title="Card N of M"` — the only per-card handle the app exposes.
-   * `../..` walks badge → flex row → card container.
+   * A single joke card on the choose stage (components/marketing/JokePick.tsx),
+   * by its position: every card carries `data-pick={jokeId}`. `total` is kept so
+   * callers need not change.
    */
-  jokeCard(index: number, total: number): Locator {
-    return this.page.getByTitle(`Card ${index + 1} of ${total}`).locator('xpath=../..');
+  jokeCard(index: number, _total: number): Locator {
+    return this.page.locator('[data-pick]').nth(index);
   }
 
   async joinAs(members: [string, string]): Promise<void> {
@@ -512,21 +499,20 @@ export class MarketingPage {
     await this.confirmSplit.click();
   }
 
-  /** Select a card, then fill its required Topic + market title. */
+  /** Tick a card's "Sell joke #n" checkbox, then pick its Topic and fill its market title. */
   async prepareJoke(index: number, total: number, topic: string, title: string): Promise<void> {
     const card = this.jokeCard(index, total);
     await expect(card).toBeVisible({ timeout: POLL_BUDGET_MS });
 
-    const addBanner = card.getByText('Click to add');
-    if (await addBanner.count()) {
-      await addBanner.click();
+    const sell = card.getByRole('checkbox', { name: `Sell joke #${index + 1}` });
+    if ((await sell.getAttribute('aria-checked')) !== 'true') {
+      await sell.click();
     }
-    await expect(card.getByText('Selected to submit')).toBeVisible();
+    await expect(sell).toHaveAttribute('aria-checked', 'true');
 
-    await card.getByRole('button', { name: topic, exact: true }).click();
-    // SELECTOR NOTE: "Market title" is an unassociated SectionLabel, so the
-    // input is reachable only by placeholder.
-    await card.getByPlaceholder(/A short market title/).fill(title);
+    await card.getByLabel('Topic').selectOption(topic);
+    await card.getByLabel('Market title').fill(title);
+    await expect(card.getByText('To market', { exact: true })).toBeVisible();
   }
 
   async publish(): Promise<void> {
@@ -543,9 +529,14 @@ export class MarketingPage {
     });
   }
 
-  /** Marketing's view of "classification finished": real customer feedback rows. */
+  /**
+   * Marketing's view of "classification finished": real customer feedback rows.
+   * The empty state clearing proves rows arrived; a "Landed" or "Missed" line
+   * proves they carry criteria, not a row of blanks.
+   */
   async waitForCustomerFeedback(): Promise<void> {
     await expect(this.customerFeedbackEmpty).toHaveCount(0, { timeout: LLM_BUDGET_MS });
+    await expect(this.page.getByText(/^(Landed|Missed)$/).first()).toBeVisible({ timeout: LLM_BUDGET_MS });
   }
 }
 
@@ -588,7 +579,7 @@ test.describe('Three-role round: Instructor → Joke Maker → Marketing → Jok
      can honestly do, so skip loudly rather than fail confusingly. */
   test.skip(!ADMIN_PASSWORD, MISSING_PASSWORD_MESSAGE);
 
-  test('a batch travels from Joke Maker through Marketing and back as feedback', async ({
+  test('a batch travels from Joke Maker through Marketing to the market and back', async ({
     browser,
   }) => {
     /* Three independent contexts = three independent localStorage session
@@ -620,10 +611,10 @@ test.describe('Three-role round: Instructor → Joke Maker → Marketing → Jok
       });
 
       await test.step('instructor assigns teams', async () => {
-        await instructor.waitForStudentsInLobby([JM_DISPLAY_NAME, MK_DISPLAY_NAME]);
+        await instructor.waitForStudentsInLobby([JM_CHIP_NAME, MK_CHIP_NAME]);
         await instructor.formTeams();
-        await instructor.ensureRole(JM_DISPLAY_NAME, 'JM');
-        await instructor.ensureRole(MK_DISPLAY_NAME, 'Marketing');
+        await instructor.ensureRole(JM_CHIP_NAME, 'JM');
+        await instructor.ensureRole(MK_CHIP_NAME, 'MARKETING');
       });
 
       await test.step('instructor starts the round', async () => {
@@ -665,14 +656,11 @@ test.describe('Three-role round: Instructor → Joke Maker → Marketing → Jok
       });
 
       /* ── 4. Back to the Joke Maker: published, then classified ──────────── */
-      await test.step('joke maker sees the published result and, later, feedback', async () => {
-        /* Classification is asynchronous on the backend; both of these land via
-           the poll loop, never a reload. */
-        await jm.waitForClassification(JOKE_COUNT);
+      await test.step('joke maker sees the release and marketing, later, the feedback', async () => {
+        /* Both land via the poll loop, never a reload. Classification is
+           asynchronous on the backend, so the feedback can take a while. */
+        await jm.waitForRelease(JOKE_COUNT);
         await mk.waitForCustomerFeedback();
-        /* The whole point of the per-team wiring: the Joke Maker sees the same
-           customer verdicts Marketing does, on its own screen. */
-        await jm.waitForCustomerFeedback();
       });
     } finally {
       await instructorCtx.close();

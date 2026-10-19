@@ -148,10 +148,10 @@ describe('the instructor', () => {
   it('keeps the "How this works" modal, opened once on its own', () => {
     const html = render(Role.INSTRUCTOR);
     expect(html).toContain('title="How this works"');
-    expect(html).toContain('Build the room');
+    expect(html).toContain('Set up the class');
     expect(html).not.toContain('data-test-tour');
     storage.setItem('jf_tutorial_seen_v1:INSTRUCTOR', '1');
-    expect(render(Role.INSTRUCTOR)).not.toContain('Build the room');
+    expect(render(Role.INSTRUCTOR)).not.toContain('Set up the class');
   });
 
   it('a customer seat has no tutorial at all now', () => {

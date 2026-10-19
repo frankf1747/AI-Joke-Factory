@@ -5,9 +5,9 @@
    (components/tour/GuidedTour.tsx), with the "how customers buy" step folded
    into each tour, so this modal is the instructor's alone.
 
-   Ported from design_handoff_joke_factory_ui/Tutorial.jsx.txt, with the copy
-   brought in line with the current rules: 12 judging criteria (incl. Title Fit),
-   Marketing-only costs. */
+   Ported from design_handoff_joke_factory_ui/Tutorial.jsx.txt. The steps follow
+   the Instructor screen's flow: Setup, Teams, the control bar and Live, between
+   rounds, then Debrief. */
 
 import React, { useMemo, useState } from 'react';
 import { SlidersHorizontal, ArrowLeft, ArrowRight, Check, Star, Sparkles } from 'lucide-react';
@@ -18,9 +18,7 @@ import { Button, Card } from './ui';
 import {
   DIMENSIONS, IDEAL_DIMENSIONS, MAX_FIT, DEFAULT_IDEAL_PROFILE, TITLE_FIT_GRADES, dimById,
 } from '../config/dimensions';
-import { DEMO_CONFIG } from '../services/aiCustomerDemo';
 
-const CFG = DEMO_CONFIG;
 const COLOR = BRAND.bruinBlue;
 
 /* ---------------------------------------------------------------- tiny visuals */
@@ -71,7 +69,7 @@ const CriteriaGrid: React.FC = () => (
     </div>
     <p className="text-[11px] text-gray-600 leading-relaxed">
       <b className="text-amber-800">Title Fit</b> is the one criterion Marketing owns outright, and the only
-      one graded on a scale of its own: it rates how well their title matches the joke — {TITLE_FIT_SCALE} —
+      one graded on a scale of its own: it rates how well their title matches the joke ({TITLE_FIT_SCALE}),
       so a vague title costs the team a fraction of a point and a random one costs the whole mark.
     </p>
   </div>
@@ -88,7 +86,7 @@ const ProfileMini: React.FC = () => {
         </div>
       ))}
       <div className="text-[11px] text-gray-400 pt-1">
-        + {Object.keys(DEFAULT_IDEAL_PROFILE).length - shown.length} more criteria — hidden from every team.
+        + {Object.keys(DEFAULT_IDEAL_PROFILE).length - shown.length} more criteria, hidden from every team.
       </div>
     </div>
   );
@@ -112,17 +110,38 @@ const RoundMini: React.FC = () => (
 
 interface Step { t: string; b: string; v: () => React.ReactNode }
 
-function buildSteps(): Step[] {
+export function buildSteps(): Step[] {
   return [
-    { t: 'Build the room', b: 'Create teams, assign Joke Maker / Marketing roles, and watch the live distribution as students join the lobby.', v: () => <CostChip lines={[['4 teams', '8 students'], ['AI customers', String(CFG.customerCount)]]} /> },
-    { t: 'Set the hidden ideal', b: `Choose one level on each of the ${IDEAL_DIMENSIONS.length} criteria that have a target — the secret ideal the AI customers reward. Title Fit is the twelfth: it grades itself, so there is nothing to set. Then tune τ, jitter, swap margin, budget, and the two costs.`, v: () => <ProfileMini /> },
+    {
+      t: 'Set up the class',
+      b: `Open the Setup tab. Set how many minutes customers arrive over, the market and the costs, then press Apply. Below them, pick the hidden ideal joke: one level on each of the ${IDEAL_DIMENSIONS.length} criteria that have a target. It saves as you go. Reset game sits at the bottom of the tab.`,
+      v: () => <ProfileMini />,
+    },
     {
       t: `The ${MAX_FIT} criteria`,
-      b: `Every published joke is judged on ${MAX_FIT} criteria. ${IDEAL_DIMENSIONS.length} of them are matched against a hidden "ideal joke" the instructor sets before the round; Title Fit grades itself. The more criteria a joke matches outright, the more customers buy it.`,
+      b: `Every released joke is judged on ${MAX_FIT} criteria. ${IDEAL_DIMENSIONS.length} of them are matched against the hidden ideal joke you set; Title Fit grades itself, so there is nothing to set for it. The more criteria a joke matches outright, the more customers buy it.`,
       v: () => <CriteriaGrid />,
     },
-    { t: 'Run the rounds', b: 'Start, end, and reset rounds. Between rounds reveal teammates so Round 2 can co-locate Production and Marketing — the intervention that fixes the information flow.', v: () => <RoundMini /> },
-    { t: 'Watch it land', b: 'Your dashboard tracks the leaderboard, sales over time, average fit, waste and lead time — so the chaos-to-kaizen story is visible in the numbers.', v: () => <RoundMini /> },
+    {
+      t: 'Seat the pairs',
+      b: 'Students join in pairs and wait in the lobby on the Teams tab. Auto-assign seats them into teams of one Joke Maker pair and one Marketing pair; it is off while a round runs. Drag a pair to move it, use ⇄ to switch a team\'s two roles and × to remove an account. Team names are kept in this browser only.',
+      v: () => <CostChip lines={[['4 teams', '8 pairs'], ['Joke Maker', '1 pair per team'], ['Marketing', '1 pair per team']]} />,
+    },
+    {
+      t: 'Start and watch',
+      b: 'Press Start Round 1 in the control bar above the tabs. Rounds do not end on their own: the bar says when customers stop arriving, and you press End Round 1 around then. The Live tab shows class totals, the leaderboard (Present puts it on the big screen), the four lean charts and the live market.',
+      v: () => <CostChip lines={[['Class totals', 'sales, profit, fees'], ['Leaderboard', 'sort or Present'], ['Lean charts', 'four, in a grid'], ['Live market', 'best sellers first']]} />,
+    },
+    {
+      t: 'Between rounds',
+      b: 'After Round 1, turn on Show students their teammates so each Joke Maker pair can sit with its Marketing pair, then press Start Round 2. That move is the intervention that fixes the information flow. The Round 1 and Round 2 switch only changes which round you view; Start and End always act on the round in play.',
+      v: () => <RoundMini />,
+    },
+    {
+      t: 'Debrief',
+      b: 'When both rounds have ended, press Open debrief. The Debrief tab puts Round 1 next to Round 2 for every team: profit and its change, jokes never sold, fees, and the time from sent to released. Ask the teams what changed.',
+      v: () => <CostChip lines={[['Profit', 'Round 1, Round 2, change'], ['Never sold', 'Round 1, Round 2'], ['Fees', 'Round 1, Round 2'], ['Sent to released', 'Round 1, Round 2']]} />,
+    },
   ];
 }
 
@@ -183,7 +202,7 @@ const Tutorial: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
                   style={{ background: COLOR }}
                   onClick={() => onClose?.()}
                 >
-                  Got it — start <Check size={14} />
+                  Got it <Check size={14} />
                 </Button>
               )}
             </div>
