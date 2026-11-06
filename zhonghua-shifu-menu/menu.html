@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Zhi+Mang+Xing&family=Noto+Serif+SC:wght@300;400;600;900&family=Cormorant+Garamond:ital,wght@0,500;1,500&display=swap" rel="stylesheet">
 <style>
   :root{
+    --mw:148.5mm; --mh:210mm;   /* one menu: A5 by default, half-letter with ?size=letter */
     --ink:#2a2420;
     --ink-soft:#3b332d;
     --brown:#7a6452;
@@ -22,15 +23,15 @@
   body{ font-family:"Noto Serif SC", serif; color:var(--ink); -webkit-print-color-adjust:exact; print-color-adjust:exact; }
 
   /* ---------- sheet: A4 landscape holding two A5 menus ---------- */
-  .sheet{ width:297mm; height:210mm; display:flex; position:relative; background:var(--paper); }
-  .sheet.single{ width:148.5mm; }
-  .cut{ position:absolute; z-index:10; left:148.5mm; top:0; bottom:0; width:0; border-left:.2mm dashed rgba(90,75,60,.28); }
+  .sheet{ width:calc(var(--mw) * 2); height:var(--mh); display:flex; position:relative; background:var(--paper); }
+  .sheet.single{ width:var(--mw); }
+  .cut{ position:absolute; z-index:10; left:var(--mw); top:0; bottom:0; width:0; border-left:.2mm dashed rgba(90,75,60,.28); }
   .cut::before,.cut::after{ content:"✂"; position:absolute; left:-1.6mm; font-size:3mm; color:rgba(90,75,60,.4); }
   .cut::before{ top:1.5mm } .cut::after{ bottom:1.5mm; transform:rotate(180deg) }
 
   /* ---------- one menu (A5) ---------- */
   .menu{
-    width:148.5mm; height:210mm; position:relative; overflow:hidden;
+    width:var(--mw); height:var(--mh); position:relative; overflow:hidden;
     background:url(paper.jpg) center/cover no-repeat;
     padding:11mm 10.5mm 9mm 10.5mm;
   }
@@ -42,7 +43,7 @@
   .sun{ right:7.5mm; top:7.5mm; width:25mm; height:25mm; border-radius:50%;
         background:#c4513a;
         filter:url(#rough); }
-  .mountains{ left:30mm; right:5.3mm; bottom:5.3mm; height:46mm; }
+  .mountains{ left:30mm; right:6.3mm; bottom:6.3mm; height:46mm; }
 
   /* ---------- header ---------- */
   header{ position:relative; height:47mm; }
@@ -65,7 +66,7 @@
   .intro p{ font-size:2.35mm; line-height:1.75; color:var(--ink-soft); margin-top:1.6mm; font-weight:400; letter-spacing:.15mm; }
 
   /* ---------- sections ---------- */
-  section{ position:relative; display:grid; grid-template-columns:8mm 1fr; column-gap:2.2mm; margin-top:4.2mm; }
+  section{ position:relative; display:grid; grid-template-columns:8mm 1fr; column-gap:2.2mm; margin-top:var(--sec-gap, 4.2mm); }
   .label{ display:flex; flex-direction:column; align-items:center; padding-top:.4mm; }
   .label .no{ font-family:"Zhi Mang Xing"; font-size:5mm; color:var(--cinnabar); line-height:1; }
   .label .cat{ writing-mode:vertical-rl; font-size:2.9mm; letter-spacing:1.4mm; font-weight:600; color:var(--ink); margin-top:1.4mm; }
@@ -284,13 +285,20 @@
 <script>
   const tpl = document.getElementById('menu-tpl');
   const sheet = document.getElementById('sheet');
-  const single = new URLSearchParams(location.search).has('single');
-  if (single) { sheet.classList.add('single'); sheet.querySelector('.cut').remove(); document.querySelector('style').append('@page{size:148.5mm 210mm}'); }
+  const qs = new URLSearchParams(location.search);
+  const single = qs.has('single');
+  // A4 landscape = 2 x A5 (148.5 x 210 mm); US Letter landscape = 2 x half-letter (5.5 x 8.5 in)
+  const [w, h] = qs.get('size') === 'letter' ? [139.7, 215.9] : [148.5, 210];
+  document.documentElement.style.setProperty('--mw', w + 'mm');
+  document.documentElement.style.setProperty('--mh', h + 'mm');
+  if (h > 210) document.documentElement.style.setProperty('--sec-gap', '5.9mm');   // spend Letter's extra height on breathing room
+  document.querySelector('style').append(`@page{size:${single ? w : w * 2}mm ${h}mm}`);
+  if (single) { sheet.classList.add('single'); sheet.querySelector('.cut').remove(); }
   for (let i = 0; i < (single ? 1 : 2); i++) sheet.append(tpl.content.cloneNode(true));
 
   // 排版：词语不拆行（如「辣椒」不会断成 辣/椒），末行至少两个字，标点不落行首
   const seg = new Intl.Segmenter('zh', { granularity: 'word' });
-  const KEEP = ['先酸后甘','青花椒','碾作酱','本味','煳辣椒','弹牙','烧至虎皮','粒粒糯润','黄梅细雨','蓉城烟火','绕梁不散','自有分寸','一缕热带的风','一场','江南','鲜得透','麻得轻','明火','肉脆而弹','嫩滑弹牙'];
+  const KEEP = ['先酸后甘','青花椒','碾作酱','本味','煳辣椒','弹牙','烧至虎皮','粒粒糯润','黄梅细雨','蓉城烟火','绕梁不散','自有分寸','一缕热带的风','一场','江南','鲜得透','麻得轻','明火','肉脆而弹','嫩滑弹牙','只取本味','腌透再炙','绵密如云','果酸化开','焦香微辣'];
   const PUNCT = /^[，。；、！？：”’》）]+$/;
   document.querySelectorAll('.dish p, .intro p').forEach(p => {
     const texts = [];
