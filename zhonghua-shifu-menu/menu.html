@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>中华食付 · 菜单</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Zhi+Mang+Xing&family=Noto+Serif+SC:wght@300;400;600;900&family=Cormorant+Garamond:ital,wght@0,500;1,500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#2a2420;
+    --ink-soft:#4a403a;
+    --brown:#7a6452;
+    --muted:#8d7b68;
+    --rule:#b5a48d;
+    --cinnabar:#b23a28;
+    --paper:#e9e1d4;
+  }
+  @page { size: 297mm 210mm; margin: 0; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ background:#d9d2c6; }
+  body{ font-family:"Noto Serif SC", serif; color:var(--ink); -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+
+  /* ---------- sheet: A4 landscape holding two A5 menus ---------- */
+  .sheet{ width:297mm; height:210mm; display:flex; position:relative; background:var(--paper); }
+  .sheet.single{ width:148.5mm; }
+  .cut{ position:absolute; z-index:10; left:148.5mm; top:0; bottom:0; width:0; border-left:.2mm dashed rgba(90,75,60,.28); }
+  .cut::before,.cut::after{ content:"✂"; position:absolute; left:-1.6mm; font-size:3mm; color:rgba(90,75,60,.4); }
+  .cut::before{ top:1.5mm } .cut::after{ bottom:1.5mm; transform:rotate(180deg) }
+
+  /* ---------- one menu (A5) ---------- */
+  .menu{
+    width:148.5mm; height:210mm; position:relative; overflow:hidden;
+    background:url(paper.jpg) center/cover no-repeat;
+    padding:11mm 10.5mm 9mm 10.5mm;
+  }
+  .frame{ position:absolute; inset:5mm; border:.25mm solid rgba(122,100,82,.45); pointer-events:none; }
+  .frame::after{ content:""; position:absolute; inset:.9mm; border:.12mm solid rgba(122,100,82,.3); }
+
+  /* decorative ink art */
+  .art{ position:absolute; pointer-events:none; }
+  .sun{ right:12.5mm; top:12mm; width:27mm; height:27mm; border-radius:50%;
+        background:radial-gradient(circle at 45% 40%, rgba(196,78,52,.95), rgba(178,58,40,.9) 60%, rgba(160,50,36,.82));
+        filter:url(#rough); opacity:.9; }
+  .mountains{ left:30mm; right:5.3mm; bottom:5.3mm; height:46mm; }
+
+  /* ---------- header ---------- */
+  header{ position:relative; height:47mm; }
+  .badge{ position:absolute; left:0; top:-1mm; width:25mm; height:25mm; }
+  .badge text{ font-family:"Cormorant Garamond", serif; font-size:6.3px; letter-spacing:1.05px; fill:var(--brown); }
+  .badge .zh{ font-family:"Noto Serif SC"; font-size:5.2px; letter-spacing:1.4px; }
+  .badge .core{ font-family:"Ma Shan Zheng"; font-size:11px; fill:var(--cinnabar); }
+
+  .title{ position:absolute; right:4mm; top:1mm; display:flex; flex-direction:row-reverse; gap:1.5mm; align-items:flex-start; }
+  .title .big{
+    font-family:"Ma Shan Zheng", cursive; font-size:18.5mm; line-height:.9; color:var(--ink);
+    writing-mode:vertical-rl; letter-spacing:-1.2mm; text-shadow:0 0 .25mm rgba(42,36,32,.35);
+    position:relative; z-index:2;
+  }
+  .title .big:nth-child(2){ margin-top:7.5mm; }
+  .title .sub{
+    writing-mode:vertical-rl; font-size:2.65mm; letter-spacing:1.1mm; color:var(--brown);
+    font-weight:600; margin-top:1mm; margin-right:1.6mm;
+    border-right:.2mm solid var(--rule); padding-right:1.2mm;
+  }
+  .seal{ position:absolute; right:5.5mm; top:36mm; width:8mm; height:8mm; z-index:3; transform:rotate(-2deg); }
+
+  .intro{ position:absolute; left:0; top:27mm; width:58mm; }
+  .intro .en{ font-family:"Cormorant Garamond", serif; font-style:italic; font-size:3.4mm; color:var(--brown); letter-spacing:.3mm; }
+  .intro .en b{ font-style:normal; font-weight:500; letter-spacing:.9mm; font-size:2.5mm; display:block; margin-bottom:.8mm; color:var(--muted); }
+  .intro p{ font-size:2.35mm; line-height:1.75; color:var(--ink-soft); margin-top:1.6mm; font-weight:300; letter-spacing:.15mm; }
+
+  /* ---------- sections ---------- */
+  section{ position:relative; display:grid; grid-template-columns:8mm 1fr; column-gap:2.2mm; margin-top:4.2mm; }
+  .label{ display:flex; flex-direction:column; align-items:center; padding-top:.4mm; }
+  .label .no{ font-family:"Zhi Mang Xing"; font-size:5mm; color:var(--cinnabar); line-height:1; }
+  .label .cat{ writing-mode:vertical-rl; font-size:2.9mm; letter-spacing:1.4mm; font-weight:600; color:var(--ink); margin-top:1.4mm; }
+  .label .poet{ writing-mode:vertical-rl; font-size:2.1mm; letter-spacing:.7mm; color:var(--muted); margin-top:1.2mm; }
+  .label .line{ flex:1; width:.15mm; background:linear-gradient(var(--rule),transparent); margin-top:1.4mm; min-height:4mm; }
+
+  .dishes{ display:grid; column-gap:5mm; row-gap:3.1mm; }
+  .cold .dishes{ grid-template-columns:repeat(3,1fr); column-gap:4mm; }
+  .hot  .dishes{ grid-template-columns:1fr 1fr; }
+  .sweet .dishes{ grid-template-columns:1fr 1fr; }
+
+  .dish h3{ font-family:"Ma Shan Zheng", cursive; font-weight:400; font-size:5.3mm; line-height:1.05; color:var(--ink); letter-spacing:.3mm; display:flex; align-items:baseline; gap:1.4mm; }
+  .dish h3 i{ font-style:normal; width:1.3mm; height:1.3mm; background:var(--cinnabar); border-radius:50%; flex:none; transform:translateY(-.9mm); opacity:.85; }
+  .dish .real{ font-size:2.25mm; font-weight:600; color:var(--brown); letter-spacing:.5mm; margin-top:.9mm; }
+  .dish p{ font-size:2.22mm; line-height:1.68; color:var(--ink-soft); margin-top:.9mm; font-weight:300; text-align:justify; letter-spacing:.06mm; }
+  .dish p em{ font-style:normal; color:var(--ink); font-weight:400; }
+
+  .hot .dishes{ position:relative; }
+  .hot .dishes::before{ content:""; position:absolute; left:50%; top:1mm; bottom:1mm; width:.12mm; background:rgba(181,164,141,.55); transform:translateX(-50%); }
+
+  .sweet .note{ align-self:end; text-align:right; }
+  .sweet .note .poem{ font-family:"Zhi Mang Xing", cursive; font-size:4.6mm; color:var(--ink); line-height:1.25; letter-spacing:.3mm; }
+  .sweet .note .poem small{ display:block; font-family:"Noto Serif SC"; font-size:2.1mm; color:var(--muted); letter-spacing:.6mm; margin-top:1mm; }
+
+  footer{ position:absolute; left:10.5mm; right:10.5mm; bottom:8.2mm; display:flex; justify-content:space-between; align-items:center;
+          font-size:1.95mm; letter-spacing:.55mm; color:var(--muted); }
+  footer .en{ font-family:"Cormorant Garamond"; letter-spacing:.7mm; font-size:2.3mm; }
+  footer .dot{ color:var(--cinnabar); }
+
+  @media screen{
+    body{ padding:10mm; display:flex; flex-direction:column; align-items:center; gap:10mm; }
+    .sheet{ box-shadow:0 2mm 8mm rgba(0,0,0,.18); }
+  }
+  @media print{ body{ background:none; } }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <filter id="rough" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="3" seed="7"/>
+      <feDisplacementMap in="SourceGraphic" scale="9"/>
+    </filter>
+    <filter id="inkwash" x="-5%" y="-20%" width="110%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.012 0.05" numOctaves="4" seed="3" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="14" result="d"/>
+      <feGaussianBlur in="d" stdDeviation="1.6"/>
+    </filter>
+    <filter id="sealtex">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="11" result="t"/>
+      <feColorMatrix in="t" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.6 1.75" result="m"/>
+      <feComposite in="SourceGraphic" in2="m" operator="in"/>
+    </filter>
+    <path id="ring" d="M 50,50 m -36,0 a 36,36 0 1,1 72,0 a 36,36 0 1,1 -72,0"/>
+    <symbol id="sealsym" viewBox="0 0 100 100">
+      <g filter="url(#sealtex)">
+        <rect x="3" y="3" width="94" height="94" rx="7" fill="#b23a28"/>
+        <text x="72" y="47" text-anchor="middle" font-family="Ma Shan Zheng" font-size="40" fill="#efe6d8">中</text>
+        <text x="72" y="88" text-anchor="middle" font-family="Ma Shan Zheng" font-size="40" fill="#efe6d8">华</text>
+        <text x="28" y="47" text-anchor="middle" font-family="Ma Shan Zheng" font-size="40" fill="#efe6d8">食</text>
+        <text x="28" y="88" text-anchor="middle" font-family="Ma Shan Zheng" font-size="40" fill="#efe6d8">付</text>
+      </g>
+    </symbol>
+    <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a332e" stop-opacity=".16"/><stop offset=".55" stop-color="#3a332e" stop-opacity=".04"/><stop offset="1" stop-color="#3a332e" stop-opacity="0"/></linearGradient>
+    <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2c2622" stop-opacity=".30"/><stop offset=".5" stop-color="#2c2622" stop-opacity=".08"/><stop offset="1" stop-color="#2c2622" stop-opacity="0"/></linearGradient>
+    <linearGradient id="g3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7a6452" stop-opacity=".22"/><stop offset="1" stop-color="#7a6452" stop-opacity="0"/></linearGradient>
+    <filter id="soft" x="-5%" y="-10%" width="110%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.02 0.08" numOctaves="3" seed="5" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="5" result="d"/>
+      <feGaussianBlur in="d" stdDeviation=".6"/>
+    </filter>
+    <symbol id="mtn" viewBox="0 0 560 240" preserveAspectRatio="none">
+      <g>
+        <path d="M150,240 C190,200 215,150 248,126 C262,116 272,124 282,132 C294,142 304,128 318,112 C334,94 352,86 368,96 C384,106 392,128 410,132 C432,137 446,118 466,116 C496,113 520,140 560,150 L560,240 Z" fill="url(#g1)"/>
+        <path d="M300,240 C330,214 356,176 388,158 C402,150 412,160 424,170 C436,180 446,168 462,156 C480,142 500,150 516,166 C532,182 546,186 560,188 L560,240 Z" fill="url(#g2)"/>
+        <path d="M0,240 C30,226 60,212 92,210 C122,208 140,222 170,224 C200,226 226,214 254,216 C290,218 318,232 340,240 Z" fill="url(#g3)"/>
+      </g>
+      <g fill="none" stroke="#2c2622" stroke-opacity=".22" stroke-width=".7" stroke-linecap="round">
+        <path d="M425,96 q6,-4 12,0 q6,-4 12,0"/><path d="M448,108 q4,-3 8,0 q4,-3 8,0"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<template id="menu-tpl">
+  <article class="menu">
+    <div class="frame"></div>
+    <div class="art sun"></div>
+    <svg class="art mountains" viewBox="0 0 560 240" preserveAspectRatio="none"><use href="#mtn"/></svg>
+
+    <header>
+      <svg class="badge" viewBox="0 0 100 100">
+        <text><textPath href="#ring" startOffset="0" textLength="224" lengthAdjust="spacing">ZHONG HUA SHI FU · CHINESE BISTRO · </textPath></text>
+        <circle cx="50" cy="50" r="27" fill="none" stroke="#b5a48d" stroke-width=".5" stroke-dasharray="1 1.6"/>
+        <text class="core" x="50" y="47" text-anchor="middle">食</text>
+        <text class="zh" x="50" y="60" text-anchor="middle" fill="#8d7b68">新中式小馆</text>
+      </svg>
+
+      <div class="intro">
+        <div class="en"><b>MENU · 菜单</b>A table of small poems.</div>
+        <p>一食一饭，皆有来处；<br>一箸一味，付与知音。</p>
+      </div>
+
+      <div class="title">
+        <div class="big">中华</div>
+        <div class="big">食付</div>
+        <div class="sub">人间烟火 · 四时之味</div>
+      </div>
+      <svg class="seal"><use href="#sealsym"/></svg>
+    </header>
+
+    <!-- 冷菜 -->
+    <section class="cold">
+      <div class="label"><span class="no">壹</span><span class="cat">冷菜</span><span class="poet">开卷</span><span class="line"></span></div>
+      <div class="dishes">
+        <div class="dish">
+          <h3><i></i>梅子黄时</h3>
+          <div class="real">话梅番茄</div>
+          <p>番茄褪衣，浸话梅冰汁一宿。先酸后甘，齿颊生津，恰似江南一场<em>黄梅细雨</em>。</p>
+        </div>
+        <div class="dish">
+          <h3><i></i>锦官卤韵</h3>
+          <div class="real">川味冷卤拼盘</div>
+          <p>金钱肚、鸡爪、鸡胗、萝卜、豆腐同浸一锅红卤。<em>麻辣鲜香</em>，层层叠叠，尽是蓉城烟火。</p>
+        </div>
+        <div class="dish">
+          <h3><i></i>青麻踏浪</h3>
+          <div class="real">椒麻虾</div>
+          <p>鲜虾冰镇，肉脆而弹；青花椒碾作酱，热油一激。<em>麻得轻，鲜得透</em>，舌尖一阵春风。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 热菜 -->
+    <section class="hot">
+      <div class="label"><span class="no">贰</span><span class="cat">热菜</span><span class="poet">正章</span><span class="line"></span></div>
+      <div class="dishes">
+        <div class="dish">
+          <h3><i></i>春山拾翠</h3>
+          <div class="real">羊肚菌炒芦笋</div>
+          <p>羊肚菌如蜂巢藏汁，芦笋脆若新竹。清火快炒，只取本味——<em>一盘山野春色</em>。</p>
+        </div>
+        <div class="dish">
+          <h3><i></i>黔火宫灯</h3>
+          <div class="real">宫保虾球 · 贵州煳辣椒</div>
+          <p>虾球金红饱满，裹荔枝味汁，<em>酸甜相宜</em>；底衬贵州煳辣椒，焦香微辣，一口宫廷一口山野。</p>
+        </div>
+        <div class="dish">
+          <h3><i></i>文火流年</h3>
+          <div class="real">文火牛肉 · 薏米</div>
+          <p>牛肉文火慢煨，<em>筷落即开</em>；底铺薏米，吸尽浓汁，粒粒糯润。慢，是唯一的秘方。</p>
+        </div>
+        <div class="dish">
+          <h3><i></i>炭火南风</h3>
+          <div class="real">炭烤牛肉菠萝串</div>
+          <p>牛肉与菠萝相间成串，炭火燎出焦边。果酸化开油脂，<em>肉香里吹来一缕热带的风</em>。</p>
+        </div>
+        <div class="dish">
+          <h3><i></i>听取蛙声</h3>
+          <div class="real">紫苏炒牛蛙</div>
+          <p>稻花香里说丰年，听取蛙声一片。牛蛙爆炒，嫩滑弹牙；紫苏辛香入骨，<em>野趣盎然</em>。</p>
+        </div>
+        <div class="dish">
+          <h3><i></i>茅香雪花</h3>
+          <div class="real">香茅猪颈肉</div>
+          <p>一猪仅得六两颈肉，肥瘦如雪花交织。香茅腌透再炙，<em>焦脆脂润</em>，柠檬草香绕梁不散。</p>
+        </div>
+        <div class="dish">
+          <h3><i></i>但爱鲈鱼</h3>
+          <div class="real">烧椒鲈鱼</div>
+          <p>江上往来人，但爱鲈鱼美。鱼肉细嫩如脂，青椒明火烧至虎皮，捣碎铺面，<em>煳香带辣，鲜得坦荡</em>。</p>
+        </div>
+        <div class="dish">
+          <h3><i></i>金甲卧云</h3>
+          <div class="real">脆皮鸡 · 玉米土豆泥</div>
+          <p>鸡皮烤至金黄，叩之有声；身下玉米土豆泥绵密如云，甘甜似秋。<em>外脆里嫩</em>，自有分寸。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 甜品 -->
+    <section class="sweet">
+      <div class="label"><span class="no">叁</span><span class="cat">甜品</span><span class="poet">余韵</span></div>
+      <div class="dishes">
+        <div class="dish">
+          <h3><i></i>围炉夜话</h3>
+          <div class="real">红薯泥布丁</div>
+          <p>红薯蒸透碾泥，与蛋奶同焗。入口即化，甜而不腻，是<em>冬夜炉边一只烤红薯的温度</em>。</p>
+        </div>
+        <div class="note">
+          <div class="poem">晚来天欲雪<br>能饮一杯无<small>— 白居易《问刘十九》</small></div>
+        </div>
+      </div>
+    </section>
+  </article>
+</template>
+
+<!-- Print sheet: A4 landscape, two identical A5 menus side by side -->
+<div class="sheet" id="sheet"><div class="cut"></div></div>
+
+<script>
+  const tpl = document.getElementById('menu-tpl');
+  const sheet = document.getElementById('sheet');
+  const single = new URLSearchParams(location.search).has('single');
+  if (single) { sheet.classList.add('single'); sheet.querySelector('.cut').remove(); document.querySelector('style').append('@page{size:148.5mm 210mm}'); }
+  for (let i = 0; i < (single ? 1 : 2); i++) sheet.append(tpl.content.cloneNode(true));
+</script>
+</body>
+</html>
