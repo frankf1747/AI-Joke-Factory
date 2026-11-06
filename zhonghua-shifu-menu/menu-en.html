@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Zhong Hua Shi Fu Menu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Zhi+Mang+Xing&family=Noto+Serif+SC:wght@300;400;600;900&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --mw:148.5mm; --mh:210mm;   /* one menu: A5 by default, half-letter with ?size=letter */
+    --ink:#2a2420;
+    --ink-soft:#3b332d;
+    --brown:#7a6452;
+    --muted:#7a6856;
+    --rule:#b5a48d;
+    --cinnabar:#b23a28;
+    --paper:#ffffff;
+  }
+  @page { size: 297mm 210mm; margin: 0; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ background:#d6d3ce; }
+  body{ font-family:"Noto Serif SC", serif; color:var(--ink); -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+
+  /* ---------- sheet: A4 landscape holding two A5 menus ---------- */
+  .sheet{ width:calc(var(--mw) * 2); height:var(--mh); display:flex; position:relative; background:var(--paper); }
+  .sheet.single{ width:var(--mw); }
+  .cut{ position:absolute; z-index:10; left:var(--mw); top:0; bottom:0; width:0; border-left:.2mm dashed rgba(90,75,60,.28); }
+  .cut::before,.cut::after{ content:"✂"; position:absolute; left:-1.6mm; font-size:3mm; color:rgba(90,75,60,.4); }
+  .cut::before{ top:1.5mm } .cut::after{ bottom:1.5mm; transform:rotate(180deg) }
+
+  /* ---------- one menu (A5) ---------- */
+  .menu{
+    width:var(--mw); height:var(--mh); position:relative; overflow:hidden;
+    background:url(paper.jpg) center/cover no-repeat;
+    padding:11mm 10.5mm 9mm 10.5mm;
+  }
+  .frame{ position:absolute; inset:5mm; border:.28mm solid rgba(122,100,82,.7); pointer-events:none; }
+  .frame::after{ content:""; position:absolute; inset:.9mm; border:.18mm solid rgba(122,100,82,.45); }
+
+  /* decorative ink art */
+  .art{ position:absolute; pointer-events:none; }
+  .sun{ right:7.5mm; top:7.5mm; width:25mm; height:25mm; border-radius:50%;
+        background:#c4513a;
+        filter:url(#rough); }
+  .mountains{ left:30mm; right:6.3mm; bottom:6.3mm; height:46mm; }
+
+  /* ---------- header ---------- */
+  header{ position:relative; height:47mm; }
+  .badge{ position:absolute; left:0; top:-1mm; width:25mm; height:25mm; }
+  .badge text{ font-family:"Cormorant Garamond", serif; font-size:6.3px; letter-spacing:1.05px; fill:var(--brown); }
+  .badge .zh{ font-family:"Noto Serif SC"; font-size:5.2px; letter-spacing:1.4px; }
+  .badge .core{ font-family:"Ma Shan Zheng"; font-size:11px; fill:var(--cinnabar); }
+
+  .logo{ position:absolute; right:3mm; top:-.5mm; width:40mm; height:44.8mm; z-index:2; overflow:visible; }
+  .sub{
+    position:absolute; right:45.5mm; top:1.5mm;
+    writing-mode:vertical-rl; font-size:2.65mm; letter-spacing:1.1mm; color:var(--brown);
+    font-weight:600; border-right:.2mm solid var(--rule); padding-right:1.2mm;
+  }
+  .seal{ position:absolute; right:45mm; top:37mm; width:7.6mm; height:7.6mm; z-index:3; }
+
+  .intro{ position:absolute; left:0; top:27mm; width:58mm; }
+  .intro .en{ font-family:"Cormorant Garamond", serif; font-style:italic; font-size:3.4mm; color:var(--brown); letter-spacing:.3mm; }
+  .intro .en b{ font-style:normal; font-weight:500; letter-spacing:.9mm; font-size:2.5mm; display:block; margin-bottom:.8mm; color:var(--muted); }
+  .intro p{ font-size:2.35mm; line-height:1.75; color:var(--ink-soft); margin-top:1.6mm; font-weight:400; letter-spacing:.15mm; }
+
+  /* ---------- sections ---------- */
+  section{ position:relative; display:grid; grid-template-columns:8mm 1fr; column-gap:2.2mm; margin-top:var(--sec-gap, 4.2mm); }
+  .label{ display:flex; flex-direction:column; align-items:center; padding-top:.4mm; }
+  .label .no{ font-family:"Zhi Mang Xing"; font-size:5mm; color:var(--cinnabar); line-height:1; }
+  .label .cat{ writing-mode:vertical-rl; font-size:2.9mm; letter-spacing:1.4mm; font-weight:600; color:var(--ink); margin-top:1.4mm; }
+  .label .poet{ writing-mode:vertical-rl; font-size:2.1mm; letter-spacing:.7mm; color:var(--muted); margin-top:1.2mm; }
+  .label .line{ flex:1; width:.15mm; background:linear-gradient(var(--rule),transparent); margin-top:1.4mm; min-height:4mm; }
+
+  .dishes{ display:grid; column-gap:5mm; row-gap:3.1mm; }
+  .cold .dishes{ grid-template-columns:repeat(3,1fr); column-gap:4mm; }
+  .hot  .dishes{ grid-template-columns:1fr 1fr; }
+  .sweet .dishes{ grid-template-columns:1fr 1fr; }
+
+  .dish h3{ font-family:"Ma Shan Zheng", cursive; font-weight:400; font-size:5.3mm; line-height:1.05; color:var(--ink); letter-spacing:.3mm; display:flex; align-items:baseline; gap:1.4mm; }
+  .dish h3 i{ font-style:normal; width:1.3mm; height:1.3mm; background:var(--cinnabar); border-radius:50%; flex:none; transform:translateY(-.9mm); opacity:.85; }
+  .dish .real{ font-size:2.25mm; font-weight:600; color:var(--brown); letter-spacing:.5mm; margin-top:.9mm; }
+  .dish p{ font-size:2.22mm; line-height:1.68; color:var(--ink-soft); margin-top:.9mm; font-weight:400; text-align:left; letter-spacing:.06mm; }
+  .dish p .w, .intro p .w{ white-space:nowrap; }
+  .dish p, .intro p{ text-wrap:pretty; }
+  .dish p em{ font-style:normal; color:var(--ink); font-weight:400; }
+
+  .hot .dishes{ position:relative; }
+  .hot .dishes::before{ content:""; position:absolute; left:50%; top:1mm; bottom:1mm; width:.12mm; background:rgba(160,140,115,.7); transform:translateX(-50%); }
+
+  .sweet .note{ align-self:end; text-align:right; }
+  .sweet .note .poem{ font-family:"Zhi Mang Xing", cursive; font-size:4.6mm; color:var(--ink); line-height:1.25; letter-spacing:.3mm; }
+  .sweet .note .poem small{ display:block; font-family:"Noto Serif SC"; font-size:2.1mm; color:var(--muted); letter-spacing:.6mm; margin-top:1mm; }
+
+  footer{ position:absolute; left:10.5mm; right:10.5mm; bottom:8.2mm; display:flex; justify-content:space-between; align-items:center;
+          font-size:1.95mm; letter-spacing:.55mm; color:var(--muted); }
+  footer .en{ font-family:"Cormorant Garamond"; letter-spacing:.7mm; font-size:2.3mm; }
+  footer .dot{ color:var(--cinnabar); }
+
+  @media screen{
+    body{ padding:10mm; display:flex; flex-direction:column; align-items:center; gap:10mm; }
+    .sheet{ box-shadow:0 2mm 8mm rgba(0,0,0,.18); }
+  }
+  @media print{ body{ background:none; } }
+  /* ---------- English edition ---------- */
+  .badge .zh.en{ font-family:"Cormorant Garamond"; font-size:5.6px; letter-spacing:1.6px; font-weight:600; }
+  .sub{ font-family:"Cormorant Garamond", serif; font-size:2.35mm; letter-spacing:.75mm; font-weight:600; }
+  .intro p{ font-family:"EB Garamond", serif; font-style:italic; font-size:2.85mm; line-height:1.5; letter-spacing:.05mm; }
+  .label .cat{ font-family:"Cormorant Garamond", serif; text-transform:uppercase; font-size:2.6mm; letter-spacing:.7mm; }
+  .label .poet{ font-family:"Cormorant Garamond", serif; font-style:italic; font-size:2.5mm; letter-spacing:.15mm; }
+  .dish .kick{ font-family:"Ma Shan Zheng", cursive; font-size:3.05mm; line-height:1; color:var(--cinnabar); letter-spacing:.35mm; display:flex; align-items:center; gap:1.2mm; }
+  .dish .kick i{ width:1.1mm; height:1.1mm; background:var(--cinnabar); border-radius:50%; opacity:.85; }
+  .dish h3{ font-family:"Cormorant Garamond", serif; font-style:italic; font-weight:600; font-size:4.1mm; line-height:1.08; letter-spacing:0; display:block; margin-top:.9mm; }
+  .dish .real{ font-family:"Cormorant Garamond", serif; text-transform:uppercase; font-size:2.2mm; letter-spacing:.32mm; margin-top:.8mm; }
+  .dish p{ font-family:"EB Garamond", serif; font-size:2.48mm; line-height:1.38; letter-spacing:0; margin-top:.7mm; hyphens:manual; }
+  .dish p em{ font-style:italic; }
+  .dish h3, .dish p{ text-wrap:pretty; }
+  .sweet .note .poem{ font-family:"Cormorant Garamond", serif; font-style:italic; font-weight:600; font-size:3.7mm; line-height:1.25; letter-spacing:0; }
+  .sweet .note .poem small{ font-family:"Cormorant Garamond", serif; font-style:normal; font-size:2.3mm; letter-spacing:.2mm; }
+  .dishes{ row-gap:2.6mm; }
+  /* English: horizontal section headings, full-width dish grid */
+  section{ display:block; margin-top:var(--sec-gap-en, 3.6mm); }
+  .label{ flex-direction:row; align-items:baseline; gap:2mm; padding-top:0; margin-bottom:2.2mm; }
+  .label .no{ font-size:4.6mm; }
+  .label .cat{ writing-mode:horizontal-tb; margin-top:0; font-size:2.75mm; letter-spacing:.9mm; }
+  .label .poet{ writing-mode:horizontal-tb; margin-top:0; font-size:2.9mm; }
+  .label .line{ height:.15mm; width:auto; min-height:0; margin-top:0; align-self:center; background:linear-gradient(90deg,var(--rule),transparent); }
+  .cold .dishes{ column-gap:5mm; }
+  header{ height:43mm; }
+  .logo{ width:37mm; height:41.4mm; }
+  .sub{ right:42.5mm; }
+  .seal{ right:42mm; top:33.5mm; }
+  .sun{ width:23mm; height:23mm; right:8mm; top:7mm; }
+  .intro{ top:25mm; }
+  .nw{ white-space:nowrap; }
+  .badge{ width:21.5mm; height:21.5mm; top:-1.5mm; }
+  /* English: final fit */
+  header{ height:40mm; }
+  .logo{ width:35mm; height:39.2mm; }
+  .sub{ right:40.5mm; }
+  .seal{ right:40mm; top:31mm; width:7mm; height:7mm; }
+  .sun{ width:21.5mm; height:21.5mm; }
+  .intro{ top:22mm; }
+  .dish .kick{ font-size:2.75mm; }
+  .dish h3{ font-size:3.85mm; margin-top:.6mm; }
+  .dish .real{ margin-top:.6mm; }
+  .dish p{ line-height:1.34; margin-top:.5mm; }
+  .dishes{ row-gap:2.3mm; }
+  .label{ margin-bottom:1.8mm; }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <filter id="rough" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="3" seed="7"/>
+      <feDisplacementMap in="SourceGraphic" scale="9"/>
+    </filter>
+    <filter id="inkwash" x="-5%" y="-20%" width="110%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.012 0.05" numOctaves="4" seed="3" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="14" result="d"/>
+      <feGaussianBlur in="d" stdDeviation="1.6"/>
+    </filter>
+    <filter id="sealtex">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="11" result="t"/>
+      <feColorMatrix in="t" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.6 1.75" result="m"/>
+      <feComposite in="SourceGraphic" in2="m" operator="in"/>
+    </filter>
+    <!-- 中华食付 logotype: outlines from 阿里妈妈东方大楷 (颜真卿《多宝塔碑》, free for commercial use) -->
+    <path id="gz" transform="matrix(1 0 0 -1 0 880)" d="M200 190Q191 203 185.0 220.5Q179 238 173 275Q163 348 149.0 409.0Q135 470 112 547Q109 556 109 563Q109 581 138 581Q167 581 196.0 574.0Q225 567 239 557Q246 553 250 545Q312 549 424 561Q424 646 422 726Q421 753 418.0 771.0Q415 789 408 806Q404 820 404 824Q404 839 433 835Q472 831 505.5 821.5Q539 812 558 802Q569 795 569 782Q569 773 564 760Q558 743 556 708Q553 621 553 576Q713 597 749 614Q761 620 770 620Q781 620 791 613Q846 574 881 529Q889 519 889 509Q889 495 874 484Q856 469 848 443Q820 360 795 269Q788 246 766.0 226.5Q744 207 716 199Q704 195 691 195Q665 195 648 225Q642 236 632 249Q604 248 550 244L551 52Q552 13 552 -43Q552 -103 536.5 -138.0Q521 -173 498 -173Q492 -173 484 -170Q452 -153 431.5 -103.5Q411 -54 416 -2Q422 83 424 229Q365 221 310 206Q313 180 300.5 166.0Q288 152 267 152Q233 152 200 190ZM292 309Q356 314 425 321V475Q340 462 286 449Q277 446 268 446ZM677 349Q699 412 716 496V498Q716 505 711 505Q630 502 552 492Q551 442 551 334Z"/><path id="gh" transform="matrix(1 0 0 -1 0 880)" d="M65 348Q57 348 57 355Q57 359 62 363Q150 435 213.5 521.5Q277 608 307 722Q311 737 311 756Q311 771 307 793Q303 812 322 812Q331 812 341 809Q389 793 443 741Q447 737 451.5 727.0Q456 717 456 705Q456 689 446 672L428 642L411 614Q398 596 373 563Q386 557 396 549Q407 540 411.0 533.0Q415 526 415 518Q415 513 411.5 495.5Q408 478 407 461V440Q411 444 418 447Q471 469 504 492L505 517Q505 530 506.0 546.0Q507 562 508 571Q508 580 509.5 601.0Q511 622 511 640Q511 683 506 724Q505 737 501.0 747.5Q497 758 488 773Q485 779 485 784Q485 793 493.5 798.5Q502 804 511 803Q542 798 575.0 780.0Q608 762 622 748Q643 727 643 706Q643 699 641.0 690.0Q639 681 638 676L630 599Q666 638 687 692Q695 714 711 714Q719 714 729 709Q755 693 777.0 670.5Q799 648 809 625Q813 617 813 610Q813 594 791 580Q712 516 624 474Q631 440 663 426Q683 419 703 419Q724 419 764 430Q797 441 809.5 463.5Q822 486 830 530L835 553Q836 558 837.5 561.0Q839 564 841 564Q845 564 848 555Q851 547 859.0 524.0Q867 501 877.5 482.0Q888 463 905 440Q917 422 917 401Q917 380 904.0 360.5Q891 341 868 331Q801 300 715 300Q669 300 622 310Q530 331 510 432Q463 422 426 422Q414 422 406 428Q406 422 404 362Q404 339 403 324Q401 291 388.5 272.0Q376 253 355 253Q347 253 338 256Q316 263 296.0 291.0Q276 319 276 349Q276 358 277 363Q288 421 286 472Q186 384 70 349Q68 348 65 348ZM148 195Q148 213 179 210Q190 209 220 209Q308 209 446 223V228Q445 256 442.0 273.5Q439 291 432 306Q428 320 428 326Q428 338 434.5 344.0Q441 350 455 348Q492 345 534.5 327.0Q577 309 595 294Q607 285 607 267Q607 258 603 242Q706 256 776 274Q785 278 798 278Q823 278 839 265Q857 251 877.5 224.0Q898 197 907 172Q909 167 909 158Q909 144 901.0 135.5Q893 127 876 128Q828 132 750 132Q657 132 587 127V95L588 22Q589 -1 589 -43Q589 -98 572.0 -128.5Q555 -159 532 -159Q517 -159 506 -149Q473 -122 455.0 -96.0Q437 -70 437 -31Q437 -19 438 -13Q441 14 445 114Q332 99 259 81Q249 79 244 79Q226 79 212 93Q177 122 153 178Q148 190 148 195Z"/><path id="gs" transform="matrix(1 0 0 -1 0 880)" d="M36 287Q28 287 28 293Q28 299 35 303Q113 362 196.0 469.0Q279 576 334.5 678.5Q390 781 390 822Q390 841 414 841Q424 841 428 840Q455 835 484.0 823.0Q513 811 526 800Q544 785 544 772Q544 762 530 744L516 726Q592 652 775 523Q883 448 952 418Q968 410 968 402Q968 394 954 389L930 380Q869 355 834 350Q818 347 802 347Q773 347 748 367Q697 407 619.5 489.5Q542 572 469 665L457 649L411 586Q446 581 480 562Q519 537 519 509Q519 491 502.5 475.5Q486 460 457 453Q455 452 452 452Q445 452 439.5 457.5Q434 463 433 468Q411 515 386 552Q334 483 305 451Q350 442 372 432Q401 435 456 445Q518 454 552 477Q558 482 566.0 484.0Q574 486 580 484Q603 475 631.0 459.0Q659 443 670 431Q678 423 678 414Q678 405 670 395Q658 380 652 348Q650 334 648 310Q646 267 638 233Q631 205 604.0 184.5Q577 164 553 164Q535 164 527 175L516 186L387 172L384 41Q384 38 386.0 35.0Q388 32 390 33Q398 36 423.0 43.0Q448 50 467 58Q477 62 486.5 55.0Q496 48 496 37Q496 27 488 19Q430 -42 340 -116Q321 -131 307.0 -139.0Q293 -147 280 -147Q271 -147 263 -141Q246 -128 230.5 -108.0Q215 -88 204 -68Q199 -56 199 -51Q199 -41 213 -37Q263 -13 265 38Q273 148 273 247Q273 351 262 407Q216 364 164.0 335.0Q112 306 45 289ZM529 254Q530 255 530 257Q542 329 542 378Q542 385 538.5 388.0Q535 391 525 390Q490 388 394 375L393 358L392 336Q416 341 463 348L476 349Q486 349 492 346Q512 334 525 320Q529 312 529 309Q529 293 492 290L416 282H407Q395 282 390 283L389 237ZM409 135Q409 141 415.5 144.5Q422 148 433 148Q483 148 567 120Q604 151 633.5 185.5Q663 220 677 250Q681 258 687 258Q692 258 696 254Q720 237 739.0 218.0Q758 199 764 186Q769 176 769 167Q769 158 762.0 152.0Q755 146 741 140Q680 114 616 101Q662 82 701.0 59.0Q740 36 762 14Q782 -7 792.5 -29.0Q803 -51 803 -71Q803 -97 786 -116Q767 -137 741 -137Q724 -137 715 -128L699 -111Q611 -21 551.0 31.5Q491 84 422 121Q409 127 409 135Z"/><path id="gf" transform="matrix(1 0 0 -1 0 880)" d="M-7 178Q-11 178 -13.0 180.0Q-15 182 -15 184Q-15 189 -9 193Q101 298 177.0 441.0Q253 584 274 713Q277 733 277 753Q277 770 274 785Q269 804 286 804Q296 804 307 800Q335 792 371.0 772.0Q407 752 428 732Q432 728 436.0 718.0Q440 708 440 695Q440 678 431 661Q415 637 395 603Q389 594 366 549Q330 478 301 432Q331 425 338 421Q352 414 348 392Q347 387 345 343Q343 299 343 260L344 146Q345 108 345 36Q345 -26 343 -46Q340 -79 328.5 -98.0Q317 -117 298 -117Q292 -117 280 -113Q265 -108 248.5 -87.0Q232 -66 222.0 -40.0Q212 -14 214 5Q231 119 231 273Q231 316 230 336Q133 226 -1 179Q-3 178 -7 178ZM377 451Q377 466 402 466Q446 466 515.5 476.0Q585 486 659 502L656 652Q655 684 651.5 704.0Q648 724 641 748Q637 757 637 766Q637 779 647.0 784.0Q657 789 675 789Q692 789 730.5 775.5Q769 762 783 750Q790 743 790 734Q790 730 786 714Q779 688 778 673Q777 650 777 581V532Q815 543 836 551Q856 559 864 559Q870 559 876 556Q897 545 916.5 523.0Q936 501 945 481Q949 468 938.5 453.0Q928 438 910 438Q903 438 886.5 439.5Q870 441 854 441Q835 441 811 438L777 434L781 207Q784 92 784 28Q784 -15 779.0 -42.0Q774 -69 757.5 -91.0Q741 -113 708 -133Q696 -141 684 -141Q672 -141 663.0 -130.5Q654 -120 645 -98Q634 -68 615.0 -47.0Q596 -26 567 -10Q560 -6 560 -1Q560 7 569 7L600 6Q604 6 620 8Q646 10 654 43Q660 75 660 310V414Q563 398 466 376Q456 374 449 374Q434 374 426 382Q411 396 403.0 405.5Q395 415 380 439Q377 445 377 451ZM415 309Q415 318 438 318Q466 318 497.0 309.0Q528 300 551 286Q596 255 596 217Q596 194 580.0 174.5Q564 155 537 144L529 142Q521 142 514.0 146.5Q507 151 503 156Q491 172 481.0 193.0Q471 214 468 219Q458 239 446.5 260.0Q435 281 422 298Q415 305 415 309Z"/>
+    <!-- title logotype: 南构无恙行书 outlines (字体家) -->
+    <path id="nz" transform="matrix(1 0 0 -1 0 1000)" d="M475 69Q470 87 467.5 119.5Q465 152 466 178L479 376Q480 399 479.5 404.5Q479 410 476.0 410.0Q473 410 444.0 382.0Q415 354 384 324L352 294L343 306Q334 318 297 355Q273 379 263.0 392.0Q253 405 243 428Q202 512 206 521Q212 539 260 539Q272 539 283.0 540.5Q294 542 298 544Q305 547 351.0 587.0Q397 627 423 652Q446 674 455 688Q459 693 463.0 704.0Q467 715 469 725Q475 750 474.0 791.0Q473 832 467 853Q463 868 463.0 873.5Q463 879 467 886Q473 898 485.5 908.0Q498 918 506 918Q518 918 539.0 896.0Q560 874 572 850Q582 830 590.0 799.5Q598 769 598 752Q598 743 603.0 742.5Q608 742 614.5 749.5Q621 757 643 767Q661 777 686.0 780.0Q711 783 729.0 778.0Q747 773 768.5 758.0Q790 743 805.0 725.5Q820 708 820 698Q820 694 809.0 679.5Q798 665 783 646Q745 604 712 562Q692 536 678.5 523.0Q665 510 642 494Q606 468 598 458Q592 451 591.0 437.5Q590 424 590 370Q590 291 586 253Q580 188 548 143Q525 109 505.5 86.0Q486 63 483.0 62.5Q480 62 478.0 64.5Q476 67 475 69ZM364 405Q378 424 411 459Q424 474 435.5 488.5Q447 503 449 508L461 541Q469 561 469 573Q469 581 467.5 583.5Q466 586 461.0 586.0Q456 586 420.0 559.0Q384 532 356 508L344 497V442Q344 419 345.0 403.0Q346 387 348.5 387.0Q351 387 364 405ZM603 625Q611 635 636 661Q646 672 653.0 682.0Q660 692 660.0 695.0Q660 698 659.0 700.5Q658 703 657 703Q650 703 638.0 697.0Q626 691 614 681Q585 657 580 621Q578 609 578.5 607.5Q579 606 586 610Q596 615 603 625Z"/><path id="nh" transform="matrix(1 0 0 -1 0 1000)" d="M499 44Q495 51 494.0 79.0Q493 107 495 210Q496 298 495.5 332.5Q495 367 493 369Q484 374 409 317Q343 268 307.0 246.5Q271 225 248 221Q232 219 219.5 225.5Q207 232 204.5 238.0Q202 244 208.5 253.5Q215 263 233 281Q280 326 318.0 355.0Q356 384 376 389Q387 391 387.0 387.0Q387 383 356 358Q328 335 306.5 312.0Q285 289 286.5 284.0Q288 279 318.0 304.0Q348 329 387 367Q436 414 459 426L462 428Q479 436 484.0 440.0Q489 444 488.0 449.5Q487 455 480 470L478 473Q468 494 465.5 507.0Q463 520 470 520Q480 520 508.5 509.5Q537 499 556 489L582 475L608 484Q634 493 663 507Q674 512 684.0 515.5Q694 519 696 517Q700 515 756 509Q835 502 845 487Q848 482 848.0 472.5Q848 463 826.0 455.5Q804 448 746 439Q678 429 637.0 415.5Q596 402 590 399Q587 397 587.0 387.5Q587 378 590 347Q595 299 595 242Q596 206 594.0 190.5Q592 175 587 156Q579 130 564.0 101.5Q549 73 534.5 54.0Q520 35 512 35Q509 35 505.0 38.0Q501 41 499 44ZM343 443Q323 463 309.5 485.0Q296 507 294 522Q293 534 295.0 539.0Q297 544 308 555Q315 561 319.5 567.0Q324 573 323.5 574.5Q323 576 316.5 572.0Q310 568 301 561Q279 543 276.0 543.0Q273 543 253.5 527.5Q234 512 227.5 512.0Q221 512 212.0 523.0Q203 534 203.0 544.0Q203 554 243 620Q270 664 312.0 745.5Q354 827 370 866Q378 883 384.5 886.0Q391 889 401 878Q409 869 420 848Q428 832 434.0 827.0Q440 822 445.5 826.5Q451 831 463 854Q470 868 477.0 875.0Q484 882 504 893Q527 906 538.0 907.0Q549 908 561 898Q567 893 581.5 892.0Q596 891 649 892Q661 892 666.5 890.0Q672 888 681 879Q720 842 699 799Q696 792 682.0 774.5Q668 757 652 740Q578 660 578 642Q578 633 597 617Q609 606 614.5 604.0Q620 602 629 603Q643 605 675.5 621.0Q708 637 721 649Q736 662 743.0 679.0Q750 696 748.0 712.5Q746 729 749.5 734.5Q753 740 759.5 736.5Q766 733 772 724L801 671Q825 629 824 627Q818 622 778.0 598.0Q738 574 717 564Q651 532 612 537Q593 539 566.0 551.5Q539 564 526.5 577.0Q514 590 509.5 590.0Q505 590 486 574Q469 560 451.5 551.0Q434 542 428 544Q425 545 423.5 549.0Q422 553 422 557Q422 566 429.5 577.0Q437 588 472 631Q482 644 492.0 659.0Q502 674 506 682Q515 701 523.0 742.0Q531 783 531 810V839L518 845Q505 851 500 857Q488 872 472 850Q462 838 425.5 767.5Q389 697 367 661Q357 646 350.5 633.0Q344 620 344.0 617.0Q344 614 349.5 604.5Q355 595 363 585Q402 537 403 485Q403 459 396 448Q391 440 380.5 433.0Q370 426 363 426Q359 426 343 443ZM605 809Q609 820 611.5 838.0Q614 856 612.0 864.5Q610 873 608.5 873.5Q607 874 602 869Q594 861 592 829Q590 808 590.5 802.5Q591 797 595.5 798.0Q600 799 605 809Z"/><path id="ns" transform="matrix(1 0 0 -1 0 1000)" d="M369 40Q352 59 342.0 79.5Q332 100 332.0 116.5Q332 133 341.5 190.5Q351 248 355 303Q365 426 372 454Q376 473 374.5 474.5Q373 476 366.0 475.0Q359 474 351 471Q330 464 313 462Q304 461 300.5 461.5Q297 462 297 466Q297 477 348 511Q372 527 387.5 543.5Q403 560 414 582Q419 592 421 598Q423 606 424 625L425 685Q426 698 427.5 700.5Q429 703 438 703Q466 703 485 670Q490 661 495.0 654.5Q500 648 502 648Q508 648 521 660Q532 670 543.5 671.5Q555 673 563 667Q569 662 578 648L588 635L585 404L572 380Q559 357 554.0 353.0Q549 349 536.5 346.0Q524 343 509 332Q498 325 484.0 308.5Q470 292 462.0 279.0Q454 266 459 266Q460 266 475 272Q481 275 495.0 286.5Q509 298 523 312Q564 354 602.0 378.5Q640 403 651 394Q672 377 614 311Q606 302 600.0 293.5Q594 285 594.0 282.5Q594 280 601.0 278.5Q608 277 628 277Q660 277 686.5 273.0Q713 269 724.5 262.5Q736 256 741.5 245.5Q747 235 745 226Q740 205 719.0 188.5Q698 172 676 172Q662 172 627.0 181.5Q592 191 568 194Q553 195 547.0 194.5Q541 194 536 189Q529 181 483 121Q407 20 393 20Q391 20 384.0 26.0Q377 32 369 40ZM432 159Q439 165 456.0 187.5Q473 210 473.0 214.0Q473 218 470.5 222.5Q468 227 465 231Q456 239 452.0 250.5Q448 262 444.5 262.0Q441 262 435.0 253.0Q429 244 426 232Q422 215 420.0 193.0Q418 171 420.0 164.5Q422 158 424.5 157.0Q427 156 432 159ZM88 369Q82 376 82.0 378.5Q82 381 102 395Q135 418 177.0 473.5Q219 529 276 627Q307 679 325.5 715.0Q344 751 367 805Q392 862 409.5 895.5Q427 929 432.5 931.5Q438 934 445.5 929.5Q453 925 465.0 910.5Q477 896 479.5 887.0Q482 878 475.5 861.0Q469 844 471 839Q472 836 478.5 832.5Q485 829 493 826Q511 820 575.0 791.5Q639 763 669 748Q764 701 809 656Q834 631 847.0 616.0Q860 601 880 571Q910 526 910.0 509.0Q910 492 882 511Q865 522 838 537Q781 568 760.0 580.5Q739 593 691 623Q635 658 605.5 680.0Q576 702 550 718Q516 739 478.0 758.5Q440 778 437.0 776.5Q434 775 430.5 765.5Q427 756 424 744Q418 723 408.0 704.5Q398 686 361 631Q316 563 289.5 526.5Q263 490 242 467Q222 446 167.5 404.5Q113 363 104 363Q100 363 95.5 365.0Q91 367 88 369ZM458 512Q469 512 480.5 516.5Q492 521 494.5 527.0Q497 533 499 563Q500 582 499.5 588.0Q499 594 496.0 594.0Q493 594 486.5 584.5Q480 575 473 562Q461 540 448.0 524.0Q435 508 429 508Q426 508 426 504Q426 502 429.0 502.5Q432 503 437 506Q449 512 458 512Z"/><path id="nf" transform="matrix(1 0 0 -1 0 1000)" d="M628 128Q587 171 555.5 215.0Q524 259 513 288Q511 294 509.5 307.5Q508 321 508 334Q508 355 506.0 361.5Q504 368 497.0 376.0Q490 384 489.5 386.5Q489 389 494 394Q501 402 503.5 402.0Q506 402 537 420Q549 427 571.0 436.5Q593 446 612 452Q637 460 647.5 465.0Q658 470 660 475Q663 483 656.0 525.5Q649 568 649 573Q648 583 637.5 579.5Q627 576 602 560Q571 539 529.0 518.0Q487 497 451.0 484.5Q415 472 371.5 451.0Q328 430 326.0 424.5Q324 419 331.0 411.5Q338 404 356 391Q364 385 367.5 356.5Q371 328 368.0 293.0Q365 258 357 232Q350 211 337.0 192.0Q324 173 313 168Q304 165 299.0 166.0Q294 167 278 174Q266 181 259.5 187.0Q253 193 247 203Q238 220 238 242Q238 260 245.0 288.0Q252 316 260 327Q264 334 263.5 337.5Q263 341 256 354Q246 371 237.5 371.0Q229 371 180 320Q151 291 140 281Q126 269 118.5 269.0Q111 269 100.5 278.5Q90 288 92.5 297.0Q95 306 118.0 341.5Q141 377 162 420Q193 483 230.5 572.5Q268 662 291 727Q305 766 312.5 779.0Q320 792 328 790Q338 788 362.5 766.0Q387 744 389.5 735.0Q392 726 387.0 705.0Q382 684 363.0 637.5Q344 591 317 534Q285 469 283 459Q281 452 282.0 450.0Q283 448 291.5 451.5Q300 455 321 468L380 503Q426 532 461.0 556.0Q496 580 536 612Q588 654 609.5 682.5Q631 711 639 751Q645 779 646 811Q646 832 644.5 839.5Q643 847 636 859Q631 865 628.0 872.5Q625 880 625 884Q625 893 637.0 909.5Q649 926 659.0 931.0Q669 936 681.0 937.0Q693 938 700.5 935.0Q708 932 716.0 914.5Q724 897 730 870Q735 852 736.5 833.0Q738 814 738 782Q738 727 742.5 727.0Q747 727 753.0 739.0Q759 751 763 769Q764 779 767.0 786.0Q770 793 772 793Q778 793 804.5 774.0Q831 755 851 737Q865 723 870.0 716.5Q875 710 874 704Q873 693 857.0 682.5Q841 672 826 672Q820 672 812.0 670.0Q804 668 800 665Q779 651 760.5 637.5Q742 624 738.0 619.0Q734 614 735.5 598.0Q737 582 746 533Q756 475 769.0 381.5Q782 288 783 268Q783 250 781.0 242.0Q779 234 773 223Q762 205 742 183Q724 163 691.5 136.0Q659 109 652 109Q650 109 643.0 114.5Q636 120 628 128ZM629 270Q654 283 663.0 296.5Q672 310 672.0 335.5Q672 361 665 375Q660 384 656.5 386.5Q653 389 643 388Q626 388 587.5 372.5Q549 357 537 346Q529 338 526.0 332.5Q523 327 523 320Q523 304 530.0 284.5Q537 265 544 260Q554 252 579.5 255.5Q605 259 629 270Z"/>
+    <filter id="inkedge" x="-3%" y="-3%" width="106%" height="106%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="2" seed="4" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="6" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <path id="ring" d="M 50,50 m -36,0 a 36,36 0 1,1 72,0 a 36,36 0 1,1 -72,0"/>
+    <symbol id="sealsym" viewBox="0 0 100 100">
+      <g filter="url(#sealtex)">
+        <rect x="3" y="3" width="94" height="94" rx="6" fill="#b23a28"/>
+        <g fill="#efe6d8">
+          <use href="#gz" transform="translate(52 7) scale(.041)"/>
+          <use href="#gh" transform="translate(52 50) scale(.041)"/>
+          <use href="#gs" transform="translate(8 7) scale(.041)"/>
+          <use href="#gf" transform="translate(8 50) scale(.041)"/>
+        </g>
+      </g>
+    </symbol>
+    <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a332e" stop-opacity=".16"/><stop offset=".55" stop-color="#3a332e" stop-opacity=".04"/><stop offset="1" stop-color="#3a332e" stop-opacity="0"/></linearGradient>
+    <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2c2622" stop-opacity=".30"/><stop offset=".5" stop-color="#2c2622" stop-opacity=".08"/><stop offset="1" stop-color="#2c2622" stop-opacity="0"/></linearGradient>
+    <linearGradient id="g3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7a6452" stop-opacity=".22"/><stop offset="1" stop-color="#7a6452" stop-opacity="0"/></linearGradient>
+    <filter id="soft" x="-5%" y="-10%" width="110%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.02 0.08" numOctaves="3" seed="5" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="5" result="d"/>
+      <feGaussianBlur in="d" stdDeviation=".6"/>
+    </filter>
+    <symbol id="mtn" viewBox="0 0 560 240" preserveAspectRatio="none">
+      <g>
+        <path d="M150,240 C190,200 215,150 248,126 C262,116 272,124 282,132 C294,142 304,128 318,112 C334,94 352,86 368,96 C384,106 392,128 410,132 C432,137 446,118 466,116 C496,113 520,140 560,150 L560,240 Z" fill="url(#g1)"/>
+        <path d="M300,240 C330,214 356,176 388,158 C402,150 412,160 424,170 C436,180 446,168 462,156 C480,142 500,150 516,166 C532,182 546,186 560,188 L560,240 Z" fill="url(#g2)"/>
+        <path d="M0,240 C30,226 60,212 92,210 C122,208 140,222 170,224 C200,226 226,214 254,216 C290,218 318,232 340,240 Z" fill="url(#g3)"/>
+      </g>
+      <g fill="none" stroke="#2c2622" stroke-opacity=".22" stroke-width=".7" stroke-linecap="round">
+        <path d="M425,96 q6,-4 12,0 q6,-4 12,0"/><path d="M448,108 q4,-3 8,0 q4,-3 8,0"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<template id="menu-tpl">
+  <article class="menu">
+    <div class="frame"></div>
+    <div class="art sun"></div>
+    <svg class="art mountains" viewBox="0 0 560 240" preserveAspectRatio="none"><use href="#mtn"/></svg>
+
+    <header>
+      <svg class="badge" viewBox="0 0 100 100">
+        <text><textPath href="#ring" startOffset="0" textLength="224" lengthAdjust="spacing">ZHONG HUA SHI FU · CHINESE BISTRO · </textPath></text>
+        <circle cx="50" cy="50" r="27" fill="none" stroke="#b5a48d" stroke-width=".5" stroke-dasharray="1 1.6"/>
+        <text class="core" x="50" y="47" text-anchor="middle">食</text>
+        <text class="zh en" x="50" y="60" text-anchor="middle" fill="#8d7b68">BISTRO</text>
+      </svg>
+
+      <div class="intro">
+        <div class="en"><b>MENU</b>A table of small poems.</div>
+        <p>Every grain has a story;<br>every bite, a kindred spirit.</p>
+      </div>
+
+      <svg class="logo" viewBox="60 30 1680 1880" aria-label="中华食付">
+        <g fill="#1c1714" filter="url(#inkedge)">
+          <use href="#nz" transform="translate(-50 -35) scale(1.09)"/><use href="#nh" x="700" y="-10"/>
+          <use href="#ns" x="0" y="880"/><use href="#nf" x="820" y="900"/>
+        </g>
+      </svg>
+      <div class="sub">FOUR SEASONS</div>
+      <svg class="seal"><use href="#sealsym"/></svg>
+    </header>
+
+    <section class="cold">
+      <div class="label"><span class="no">壹</span><span class="cat">Cold</span><span class="poet">the overture</span><span class="line"></span></div>
+      <div class="dishes">
+        <div class="dish">
+          <div class="kick"><i></i>梅子黄时</div>
+          <h3>Plum Rain</h3>
+          <div class="real">Sour-Plum Tomatoes</div>
+          <p>Peeled tomatoes steeped overnight in chilled <span class="nw">sour-plum</span> syrup. Tart, then sweet, like <em>a soft rain in Jiangnan</em>.</p>
+        </div>
+        <div class="dish">
+          <div class="kick"><i></i>锦官卤韵</div>
+          <h3>Echoes of Chengdu</h3>
+          <div class="real">Sichuan Cold Platter</div>
+          <p>Tripe, chicken feet, gizzards, radish and tofu, steeped in a red master stock. <em>Numbing, fiery, fragrant.</em></p>
+        </div>
+        <div class="dish">
+          <div class="kick"><i></i>青麻踏浪</div>
+          <h3>Pepper on the Waves</h3>
+          <div class="real">Peppercorn Prawns</div>
+          <p><span class="nw">Ice-chilled</span> prawns under crushed green peppercorn and sizzling oil&nbsp;— <em>a&nbsp;light tingle</em>, a clean sweetness.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="hot">
+      <div class="label"><span class="no">贰</span><span class="cat">Hot</span><span class="poet">the main chapter</span><span class="line"></span></div>
+      <div class="dishes">
+        <div class="dish">
+          <div class="kick"><i></i>春山拾翠</div>
+          <h3>Spring Hills in Green</h3>
+          <div class="real">Morels &amp; Asparagus</div>
+          <p>Honeycomb morels that hold every drop of sauce, asparagus crisp as young bamboo&nbsp;— <em>a plate of mountain spring</em>.</p>
+        </div>
+        <div class="dish">
+          <div class="kick"><i></i>黔火宫灯</div>
+          <h3>Lanterns &amp; Mountain Fire</h3>
+          <div class="real">Kung Pao Prawns · Guizhou Chili</div>
+          <p>Golden prawns in a <span class="nw">lychee-style</span> <em><span class="nw">sweet-and-sour</span> glaze</em> over smoky Guizhou toasted chili. Half palace, half mountain.</p>
+        </div>
+        <div class="dish">
+          <div class="kick"><i></i>文火流年</div>
+          <h3>Slow Fire, Passing Years</h3>
+          <div class="real">Slow-Braised Beef · Pearl Barley</div>
+          <p>Beef braised low and slow until it <em>yields to the chopsticks</em>, over pearl barley that drinks in every drop.</p>
+        </div>
+        <div class="dish">
+          <div class="kick"><i></i>炭火南风</div>
+          <h3>Charcoal &amp; Southern Wind</h3>
+          <div class="real">Beef &amp; Pineapple Skewers</div>
+          <p>Threaded together and kissed by charcoal; the fruit’s bright tang melts the richness&nbsp;— <em>a warm tropical breeze</em>.</p>
+        </div>
+        <div class="dish">
+          <div class="kick"><i></i>听取蛙声</div>
+          <h3>Listening to the Frogs</h3>
+          <div class="real">Bullfrog · Purple Perilla</div>
+          <p>“Amid rice blossoms, the frogs sing of harvest.” Tender <span class="nw">wok-fried</span> bullfrog, <em>wild with peppery perilla</em>.</p>
+        </div>
+        <div class="dish">
+          <div class="kick"><i></i>茅香雪花</div>
+          <h3>Lemongrass &amp; Snowflakes</h3>
+          <div class="real">Lemongrass Pork Jowl</div>
+          <p>A prized cut, marbled like falling snow. <span class="nw">Lemongrass-marinated</span> and grilled&nbsp;— <em>crisp, juicy</em>, softly citrus.</p>
+        </div>
+        <div class="dish">
+          <div class="kick"><i></i>但爱鲈鱼</div>
+          <h3>For the Love of Sea Bass</h3>
+          <div class="real">Sea Bass · Fire-Roasted Chili</div>
+          <p>“All who travel the river love the sea bass.” Silken fish under blistered green chili&nbsp;— <em>smoky, spicy, honest</em>.</p>
+        </div>
+        <div class="dish">
+          <div class="kick"><i></i>金甲卧云</div>
+          <h3>Golden Armor on a Cloud</h3>
+          <div class="real">Crispy Chicken · Corn-Potato Purée</div>
+          <p>Golden, crackling skin on a cloud of sweet corn and potato purée. <em>Crisp outside, tender within</em>.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="sweet">
+      <div class="label"><span class="no">叁</span><span class="cat">Sweet</span><span class="poet">the coda</span><span class="line"></span></div>
+      <div class="dishes">
+        <div class="dish">
+          <div class="kick"><i></i>围炉夜话</div>
+          <h3>Fireside Tales</h3>
+          <div class="real">Sweet Potato Pudding</div>
+          <p>Sweet potato whipped with egg and cream, then baked. Melting and gently sweet&nbsp;— <em>the warmth of a winter fire</em>.</p>
+        </div>
+        <div class="note">
+          <div class="poem">Snow is coming tonight —<br>shall we share a cup?<small>— Bai Juyi, <i>To Liu Shijiu</i></small></div>
+        </div>
+      </div>
+    </section>
+  </article>
+</template>
+
+<!-- Print sheet: A4 landscape, two identical A5 menus side by side -->
+<div class="sheet" id="sheet"><div class="cut"></div></div>
+
+<script>
+  const tpl = document.getElementById('menu-tpl');
+  const sheet = document.getElementById('sheet');
+  const qs = new URLSearchParams(location.search);
+  const single = qs.has('single');
+  // A4 landscape = 2 x A5 (148.5 x 210 mm); US Letter landscape = 2 x half-letter (5.5 x 8.5 in)
+  const [w, h] = qs.get('size') === 'letter' ? [139.7, 215.9] : [148.5, 210];
+  document.documentElement.style.setProperty('--mw', w + 'mm');
+  document.documentElement.style.setProperty('--mh', h + 'mm');
+  if (h > 210) document.documentElement.style.setProperty('--sec-gap', '5.9mm');
+  if (h > 210) document.documentElement.style.setProperty('--sec-gap-en', '5.8mm');   // spend Letter's extra height on breathing room
+  document.querySelector('style').append(`@page{size:${single ? w : w * 2}mm ${h}mm}`);
+  if (single) { sheet.classList.add('single'); sheet.querySelector('.cut').remove(); }
+  for (let i = 0; i < (single ? 1 : 2); i++) sheet.append(tpl.content.cloneNode(true));
+
+  // Typesetting: never leave a single word alone on the last line (bind the last two words with a no-break space)
+  document.querySelectorAll('.dish p, .intro p, .dish h3, .dish .real').forEach(el => {
+    const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT); const nodes = []; let n;
+    while ((n = walk.nextNode())) if (n.data.trim() && !n.parentElement.classList.contains('zh')) nodes.push(n);
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const t = nodes[i].data.replace(/\s+$/, ''); const k = t.lastIndexOf(' ');
+      if (k > 0) { nodes[i].data = t.slice(0, k) + '\u00a0' + t.slice(k + 1) + nodes[i].data.slice(t.length); break; }
+    }
+  });
+</script>
+</body>
+</html>
