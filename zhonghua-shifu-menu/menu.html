@@ -80,7 +80,9 @@
   .dish h3{ font-family:"Ma Shan Zheng", cursive; font-weight:400; font-size:5.3mm; line-height:1.05; color:var(--ink); letter-spacing:.3mm; display:flex; align-items:baseline; gap:1.4mm; }
   .dish h3 i{ font-style:normal; width:1.3mm; height:1.3mm; background:var(--cinnabar); border-radius:50%; flex:none; transform:translateY(-.9mm); opacity:.85; }
   .dish .real{ font-size:2.25mm; font-weight:600; color:var(--brown); letter-spacing:.5mm; margin-top:.9mm; }
-  .dish p{ font-size:2.22mm; line-height:1.68; color:var(--ink-soft); margin-top:.9mm; font-weight:400; text-align:justify; letter-spacing:.06mm; }
+  .dish p{ font-size:2.22mm; line-height:1.68; color:var(--ink-soft); margin-top:.9mm; font-weight:400; text-align:left; letter-spacing:.06mm; }
+  .dish p .w, .intro p .w{ white-space:nowrap; }
+  .dish p, .intro p{ text-wrap:pretty; }
   .dish p em{ font-style:normal; color:var(--ink); font-weight:400; }
 
   .hot .dishes{ position:relative; }
@@ -285,6 +287,30 @@
   const single = new URLSearchParams(location.search).has('single');
   if (single) { sheet.classList.add('single'); sheet.querySelector('.cut').remove(); document.querySelector('style').append('@page{size:148.5mm 210mm}'); }
   for (let i = 0; i < (single ? 1 : 2); i++) sheet.append(tpl.content.cloneNode(true));
+
+  // 排版：词语不拆行（如「辣椒」不会断成 辣/椒），末行至少两个字，标点不落行首
+  const seg = new Intl.Segmenter('zh', { granularity: 'word' });
+  const KEEP = ['先酸后甘','青花椒','碾作酱','本味','煳辣椒','弹牙','烧至虎皮','粒粒糯润','黄梅细雨','蓉城烟火','绕梁不散','自有分寸','一缕热带的风','一场','江南','鲜得透','麻得轻','明火','肉脆而弹','嫩滑弹牙'];
+  const PUNCT = /^[，。；、！？：”’》）]+$/;
+  document.querySelectorAll('.dish p, .intro p').forEach(p => {
+    const texts = [];
+    const walk = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+    let n; while ((n = walk.nextNode())) texts.push(n);
+    texts.forEach((node, ti) => {
+      // word boundaries from the segmenter, minus any inside a phrase that must stay whole
+      const t = node.data, cuts = new Set();
+      let pos = 0; for (const { segment } of seg.segment(t)) { pos += segment.length; cuts.add(pos); }
+      KEEP.forEach(k => { let i = t.indexOf(k); while (i >= 0) { for (let j = i + 1; j < i + k.length; j++) cuts.delete(j); i = t.indexOf(k, i + 1); } });
+      const words = []; let start = 0;
+      [...cuts].sort((a, b) => a - b).forEach(c => { const w = t.slice(start, c); start = c;
+        if (PUNCT.test(w) && words.length) words[words.length - 1] += w; else if (w) words.push(w); });
+      // glue the last word of the paragraph to the previous one so the final line never holds a lone word
+      if (ti === texts.length - 1 && words.length > 2) { const last = words.pop(); words[words.length - 1] += last; }
+      const frag = document.createDocumentFragment();
+      words.forEach(w => { const sp = document.createElement('span'); sp.className = 'w'; sp.textContent = w; frag.append(sp); });
+      node.replaceWith(frag);
+    });
+  });
 </script>
 </body>
 </html>
