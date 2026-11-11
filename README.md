@@ -211,6 +211,10 @@ To test with a full class when you do not have one, open the instructor view wit
   pace, not in how well they pick, so the leaderboard shows whether publishing less ever
   beats publishing more.
 - **Speed** 1× plays at human pace; 10× compresses a round into about a minute.
+- **Bots that use feedback** are a pilot option only (`useFeedback` per team, never on the
+  panel): with a local backend on the trait classifier, `scripts/pilot/feedback-pilot.mts` and
+  `scripts/pilot/cost-sweep.mts` compare teams that read Marketing's notes with twins that do not
+  (see `docs/lean-market-mode.md` §7).
 - **👁** on any bot opens its real Joke Maker or Marketing screen in a new tab, read-only,
   with the bot's reasoning alongside.
 
