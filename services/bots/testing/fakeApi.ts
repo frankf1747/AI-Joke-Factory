@@ -26,7 +26,7 @@ export interface FakeUser {
   status: 'WAITING' | 'ASSIGNED';
 }
 
-interface FakeJoke { joke_id: number; joke_text: string; published: boolean }
+interface FakeJoke { joke_id: number; joke_text: string; published: boolean; title?: string }
 
 export interface FakeBatch {
   id: number;
@@ -39,7 +39,12 @@ export interface FakeBatch {
   lockedBy: number | null;
   /** Set when the batch is published; optional so tests can push a literal batch. */
   processedAt?: string;
+  /** Marketing's note, stored at publish (trimmed; null when blank). */
+  note?: string | null;
 }
+
+/** What the customers said about one classified joke (FeedbackJoke without id, title or sale). */
+export type FakeFeedback = Pick<FeedbackJoke, 'good_dimensions' | 'improve_dimensions' | 'improve_hints'>;
 
 export interface Decision { teamId: number; batchId: number; published: number; total: number }
 
@@ -71,6 +76,12 @@ export class FakeWorld {
   readonly publishOrder: number[] = [];
   /** sold_count per joke id, as the team batch list reports it; see setSold(). */
   readonly sold = new Map<number, number>();
+  /**
+   * The feedback for a classified joke. Null (the default) reports LENGTH as
+   * landed and nothing missed; tests of the feedback loop set the backend's
+   * selection (testing/feedbackSim.ts).
+   */
+  feedbackFor: ((joke: { joke_id: number; joke_text: string }) => FakeFeedback) | null = null;
   /**
    * The order Auto-Assign deals participants into seats, two per team. The
    * default, newest first, puts bots and humans on each other's teams. The real
@@ -157,6 +168,10 @@ export class FakeWorld {
   }
 
   newBatchId(): number { return this.nextBatchId++; }
+  jokeById(id: number): FakeJoke | undefined {
+    for (const b of this.batches) for (const j of b.jokes) if (j.joke_id === id) return j;
+    return undefined;
+  }
   nextAssignCall(): number { return ++this.assignCalls; }
   newJokeId(): number { return this.nextJokeId++; }
 
@@ -273,11 +288,13 @@ class FakeApi implements BotApi {
       .slice(0, this.w.round.feedback_joke_count)
       .map(id => {
         const done = this.w.classified.has(id);
-        return {
-          joke_id: id, joke_title: 't', was_bought: false,
-          good_dimensions: (done ? ['LENGTH'] : []) as FeedbackJoke['good_dimensions'],
-          improve_dimensions: [],
-        };
+        const joke = this.w.jokeById(id);
+        const said: FakeFeedback = !done
+          ? { good_dimensions: [], improve_dimensions: [] }
+          : this.w.feedbackFor && joke
+            ? this.w.feedbackFor(joke)
+            : { good_dimensions: ['LENGTH'], improve_dimensions: [] };
+        return { joke_id: id, joke_title: joke?.title ?? 't', was_bought: false, ...said };
       });
     return { jokes };
   }
@@ -294,13 +311,14 @@ class FakeApi implements BotApi {
         const done = b.state === 'DONE';
         return {
           batch_id: b.id,
+          marketing_note: b.note ?? null,
           status: done ? 'PROCESSED' as const : 'SUBMITTED' as const,
           submitted_at: STAMP,
           processed_at: b.processedAt ?? null,
           jokes: b.jokes.length === 0 ? null : b.jokes.map(j => {
             const sold = this.w.sold.get(j.joke_id) ?? 0;
             return {
-              joke_id: j.joke_id, joke_text: j.joke_text, joke_title: null,
+              joke_id: j.joke_id, joke_text: j.joke_text, joke_title: j.title ?? null,
               publish_status: !done ? 'PENDING' as const : j.published ? 'PUBLISHED' as const : 'DISCARDED' as const,
               published_at: done && j.published ? b.processedAt ?? null : null,
               sold_count: sold,
@@ -358,7 +376,9 @@ class FakeApi implements BotApi {
       new Set(ids).size !== ids.length ||
       ids.length !== batchIds.size ||
       !ids.every(id => batchIds.has(id)) ||
-      body.jokes.some(d => d.is_published && !(d.joke_title ?? '').trim())
+      body.jokes.some(d => d.is_published && !(d.joke_title ?? '').trim()) ||
+      // real: usecase/marketing.go — a note over 500 characters (runes) is refused.
+      Array.from(body.note ?? '').length > 500
     ) {
       throw new FakeApiError(400, 'VALIDATION_ERROR');
     }
@@ -367,6 +387,7 @@ class FakeApi implements BotApi {
     for (const d of body.jokes) {
       const joke = b.jokes.find(j => j.joke_id === d.joke_id) as FakeJoke;
       joke.published = d.is_published;
+      if (d.is_published) joke.title = d.joke_title;
       if (d.is_published) {
         this.w.publishOrder.push(d.joke_id);
         if (this.w.autoClassify) this.w.classified.add(d.joke_id);
@@ -374,6 +395,7 @@ class FakeApi implements BotApi {
     }
     b.state = 'DONE';
     b.processedAt = this.w.nextProcessedAt();
+    b.note = body.note?.trim() ? body.note.trim() : null;
     this.w.decisions.push({ teamId: b.teamId, batchId, published, total: body.jokes.length });
     return {};
   }

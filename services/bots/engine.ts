@@ -12,6 +12,10 @@
  */
 import type { ConfigRequest, PublicRound, SessionMeResponse, TeamBatch } from '../../types/api';
 import { asRawBlob, seededRng, titleFor, variedCorpus, type JokeFixture } from '../shared/jokes';
+import { indexTraitCorpus, normalizeJokeText, type TraitCorpus, type TraitIndex, type TraitJoke } from '../shared/traitCorpus';
+import {
+  applyFeedback, beliefSize, composeNote, emptyBelief, parseNote, pickBatch, seededOrder, type Belief,
+} from './feedbackLoop';
 import { statusOf, type BotApi } from './api';
 import { Deck, drawLearnerBatch } from './deck';
 import { botName, isBotName, parseBotName, SEAT_ROLE, type Seat } from './naming';
@@ -35,6 +39,11 @@ export interface EngineDeps {
   now: () => number;
   emit: (message: FromWorker) => void;
   seed: string;
+  /**
+   * The trait corpus (scripts/traits/loadTraitCorpus.ts), for teams with
+   * BotTeamSpec.useFeedback set. Only the pilot gives it; the browser worker never does.
+   */
+  traitCorpus?: TraitCorpus;
 }
 
 export const TICK_MS = 1_000;
@@ -210,6 +219,33 @@ interface TeamRuntime {
   marketingHoldMs: number;
   /** Seeds this team's joke deck and Marketing choices (BotTeamSpec.deckIndex). */
   deckIndex: number;
+  /** BotTeamSpec.useFeedback: undefined plays the ordinary deck. */
+  useFeedback: boolean | undefined;
+  /** BotTeamSpec.round2BatchSize, else the persona's. */
+  round2BatchSize: number | undefined;
+  /** BotTeamSpec.releaseAll. */
+  releaseAll: boolean;
+  /** Trait teams' Joke Maker, per round id. */
+  traitRounds: Map<number, TraitRound>;
+  /** Trait teams' Marketing: joke ids already reported in a note. */
+  reportedJokeIds: Set<number>;
+}
+
+/**
+ * A trait team's Joke Maker in one round. Its picture of what customers want
+ * starts empty each round (a new round can have a new ideal), and no corpus
+ * joke is written twice in a round.
+ */
+interface TraitRound {
+  belief: Belief;
+  /** The seeded order of corpus ids it falls back on. */
+  order: string[];
+  /** Corpus ids sent this round. */
+  used: Set<string>;
+  /** Titles of the jokes sent this round: a note line about any other title is not about our jokes. */
+  sent: Set<string>;
+  /** Titles whose feedback is already in the belief. */
+  applied: Set<string>;
 }
 
 function newSeat(index: number, seat: Seat): SeatRuntime {
@@ -222,6 +258,8 @@ function newTeam(spec: BotTeamSpec): TeamRuntime {
     jm: newSeat(spec.index, 'A'), marketing: newSeat(spec.index, 'B'),
     submittedByRound: new Map(), submittedJokesByRound: new Map(), publishedByRound: new Map(), published: 0, awaitingFeedback: null,
     memory: new Map(), marketingHoldMs: Math.max(0, spec.marketingHoldMs ?? 0), deckIndex: spec.deckIndex ?? spec.index,
+    useFeedback: spec.useFeedback, round2BatchSize: spec.round2BatchSize, releaseAll: spec.releaseAll === true,
+    traitRounds: new Map(), reportedJokeIds: new Set(),
   };
 }
 
@@ -257,6 +295,7 @@ export class BotEngine {
   /** start, reform and remove queue here; see serialize. */
   private opChain: Promise<unknown> = Promise.resolve();
   private readonly history = new Map<number, ReasoningEntry[]>();
+  private traitIndexCache: TraitIndex | null = null;
 
   constructor(private readonly deps: EngineDeps) {}
 
@@ -331,6 +370,9 @@ export class BotEngine {
     if (options.teams.length === 0) throw new Error('Choose at least one bot team.');
     const maxTeams = options.maxTeams ?? MAX_BOT_TEAMS;
     if (options.teams.length > maxTeams) throw new Error(`At most ${maxTeams} bot teams.`);
+    if (options.teams.some(t => t.useFeedback !== undefined) && !this.deps.traitCorpus) {
+      throw new Error('Teams with useFeedback write trait-corpus jokes: start the engine with deps.traitCorpus.');
+    }
     const controller = new AbortController();
     this.controller = controller;
     const teams = options.teams.map(newTeam);
@@ -576,12 +618,18 @@ export class BotEngine {
         if (signal.aborted) break;
 
         // Round 1 must split into exactly batch_size (5), so the persona's own
-        // size applies only from round 2, capped at that round's batch_size.
+        // size (or the team's pilot override) applies only from round 2,
+        // capped at that round's batch_size.
         const size = round.round_number >= 2
-          ? Math.min(persona.round2BatchSize, round.batch_size)
+          ? Math.min(team.round2BatchSize ?? persona.round2BatchSize, round.batch_size)
           : round.batch_size;
-        let jokes: JokeFixture[];
-        if (persona.learns) {
+        let jokes: Array<Pick<JokeFixture, 'id' | 'text'>>;
+        let traitJokes: TraitJoke[] = [];
+        if (team.useFeedback !== undefined) {
+          traitJokes = await this.drawTraitBatch(me, team, round, size, signal);
+          if (signal.aborted) break;
+          jokes = traitJokes;
+        } else if (persona.learns) {
           // The team's memory, shared with its Marketing seat, refreshed from
           // the same batch list a human team sees.
           await this.learn(me, team, round.id, signal);
@@ -593,9 +641,14 @@ export class BotEngine {
           jokes = deck.draw(size);
         }
         this.setActivity(seat, 'submitting a batch', signal);
-        await me.submitBatch(round.id, { team_id: team.teamId as number, raw_text: asRawBlob(jokes) });
+        await me.submitBatch(round.id, { team_id: team.teamId as number, raw_text: asRawBlob(jokes.map(j => j.text)) });
         // A batch in flight when Stop is pressed lands but is not counted or logged.
         if (signal.aborted) break;
+        const traitRound = team.traitRounds.get(round.id);
+        for (const j of traitJokes) {
+          traitRound?.used.add(j.id);
+          traitRound?.sent.add(j.title);
+        }
         team.submittedByRound.set(round.id, submitted + 1);
         team.submittedJokesByRound.set(round.id, submittedJokes + jokes.length);
         seat.error = null;
@@ -609,6 +662,62 @@ export class BotEngine {
         if (!(await this.recover(team, seat, err, attempt, signal))) break;
       }
     }
+  }
+
+  /** The trait corpus by text and by title (built on first use). */
+  private traitIndex(): TraitIndex | null {
+    if (!this.traitIndexCache && this.deps.traitCorpus) this.traitIndexCache = indexTraitCorpus(this.deps.traitCorpus);
+    return this.traitIndexCache;
+  }
+
+  /** The trait corpus title of a joke text, when it is a corpus joke. */
+  private traitTitle(text: string): string | undefined {
+    return this.traitIndex()?.byText.get(normalizeJokeText(text))?.title;
+  }
+
+  private traitRound(team: TeamRuntime, round: PublicRound): TraitRound {
+    let state = team.traitRounds.get(round.id);
+    if (!state) {
+      const corpus = (this.deps.traitCorpus as TraitCorpus).jokes;
+      // Seeded by the deck index and the round number, so twins draw alike and Round 2 is a new order.
+      const order = seededOrder(corpus, seededRng(`${this.deps.seed}:traits:${team.deckIndex}:${round.round_number}`));
+      state = { belief: emptyBelief(), order, used: new Set(), sent: new Set(), applied: new Set() };
+      team.traitRounds.set(round.id, state);
+    }
+    return state;
+  }
+
+  /**
+   * A trait team's next batch. With feedback on, the Joke Maker first reads
+   * the latest note from Marketing on its own team's batch list (the field its
+   * screen shows) and folds in each line about a joke it sent this round, once.
+   * Then it takes the unused corpus jokes that best fit its picture; with
+   * feedback off (or nothing learned yet) that is its seeded order.
+   */
+  private async drawTraitBatch(
+    me: BotApi, team: TeamRuntime, round: PublicRound, size: number, signal: AbortSignal,
+  ): Promise<TraitJoke[]> {
+    const state = this.traitRound(team, round);
+    if (team.useFeedback && team.teamId != null) {
+      const batches = (await me.teamBatches(round.id, team.teamId)).batches ?? [];
+      if (signal.aborted) return [];
+      const latest = batches
+        .filter(b => b.marketing_note && b.processed_at && !Number.isNaN(Date.parse(b.processed_at)))
+        .sort((a, b) => Date.parse(b.processed_at as string) - Date.parse(a.processed_at as string))[0];
+      const index = this.traitIndex() as TraitIndex;
+      let applied = 0;
+      for (const entry of parseNote(latest?.marketing_note)) {
+        const joke = index.byTitle.get(entry.title);
+        if (!joke || !state.sent.has(entry.title) || state.applied.has(entry.title)) continue;
+        state.belief = applyFeedback(state.belief, joke.traits, entry);
+        state.applied.add(entry.title);
+        applied++;
+      }
+      if (applied > 0) {
+        this.log(team, team.jm, `read Marketing's note on ${applied} joke(s): now aiming at ${beliefSize(state.belief)} criteria`, signal);
+      }
+    }
+    return pickBatch((this.deps.traitCorpus as TraitCorpus).jokes, state.order, state.belief, state.used, size);
   }
 
   /**
@@ -750,21 +859,34 @@ export class BotEngine {
           await this.learn(me, team, round.id, signal);
           if (signal.aborted) break;
         }
-        const keep = persona.learns
+        const chosen = persona.learns
           ? chooseWithMemory(jokes, team.memory, count, rand, round.round_number)
           : choosePublished(jokes.map(j => j.joke_id), count, rand);
-        const kept = jokes.filter(j => keep.has(j.joke_id)).map(j => `"${titleOf(j.joke_text)}"`);
+        const keep = team.releaseAll ? new Set(jokes.map(j => j.joke_id)) : chosen;
+        const title = (text: string) => this.traitTitle(text) ?? titleOf(text);
+        const kept = jokes.filter(j => keep.has(j.joke_id)).map(j => `"${title(j.joke_text)}"`);
         this.log(team, seat, `${persona.label}: keeping ${keep.size} of ${jokes.length} — ${kept.join(', ') || 'none'}`, signal);
         this.setActivity(seat, `publishing ${keep.size} of ${jokes.length}`, signal);
         await this.pace(jitter(decideDwellMs(jokes.length), rand), signal);
         if (signal.aborted) break;
         if (this.scrambled) continue;
 
+        // Feedback on: what customers said about the jokes released so far, in
+        // plain words, goes to the Joke Maker with this release.
+        let note = { note: '', reported: [] as number[] };
+        if (team.useFeedback && team.teamId != null) {
+          note = composeNote((await me.teamFeedback(round.id, team.teamId)).jokes, team.reportedJokeIds);
+          if (signal.aborted) break;
+          if (this.scrambled) continue;
+        }
         await me.marketingPublish(batch.batch_id, {
-          jokes: jokes.map(j => ({ joke_id: j.joke_id, joke_title: titleOf(j.joke_text), is_published: keep.has(j.joke_id) })),
+          jokes: jokes.map(j => ({ joke_id: j.joke_id, joke_title: title(j.joke_text), is_published: keep.has(j.joke_id) })),
+          ...(note.note ? { note: note.note } : {}),
         });
         // A publish in flight when Stop is pressed lands but is not counted or logged.
         if (signal.aborted) break;
+        for (const id of note.reported) team.reportedJokeIds.add(id);
+        if (note.note) this.log(team, seat, `note to the Joke Maker: ${note.note.replace(/\n/g, ' / ')}`, signal);
         team.publishedByRound.set(round.id, (team.publishedByRound.get(round.id) ?? 0) + 1);
         team.published++;
         team.awaitingFeedback = { roundId: round.id, jokeIds: [...keep] };

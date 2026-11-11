@@ -28,6 +28,19 @@ export interface BotTeamSpec {
    * the team's own index.
    */
   deckIndex?: number;
+  /**
+   * Pilot-only (spec 2026-11-10 §4): the team writes trait-corpus jokes
+   * (EngineDeps.traitCorpus). true: Marketing sends a note built from the
+   * team's customer feedback with each release, and the Joke Maker picks its
+   * next batch by what the latest note says. false: the twin that ignores
+   * feedback (no note; it picks by its seed only). Absent: the ordinary deck.
+   * The Bot players panel never sets it.
+   */
+  useFeedback?: boolean;
+  /** Pilot-only: the batch size from round 2 on (capped at the round's batch_size) instead of the persona's. */
+  round2BatchSize?: number;
+  /** Pilot-only: Marketing releases every joke of each batch; the persona still sets the pace. */
+  releaseAll?: boolean;
 }
 
 export interface StartOptions {
