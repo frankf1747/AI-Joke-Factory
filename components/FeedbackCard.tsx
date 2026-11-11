@@ -10,7 +10,7 @@
    and context reaches back into components. */
 
 import React from 'react';
-import type { FeedbackRow } from '../views/feedback';
+import { dimWithDirection, type FeedbackRow } from '../views/feedback';
 
 /* One joke: its title with the buyer tag on the right, then a "Landed" line
    and a "Missed" line. Each criterion sits in its own small chip (green on its
@@ -59,7 +59,7 @@ export const FeedbackCard: React.FC<{ row: FeedbackRow }> = ({ row }) => (
     ) : (
       <div className="mt-2 space-y-1">
         {row.good.length > 0 && <DimLine tone="good" labels={row.good.map(d => d.label)} />}
-        {row.improve.length > 0 && <DimLine tone="improve" labels={row.improve.map(d => d.label)} />}
+        {row.improve.length > 0 && <DimLine tone="improve" labels={row.improve.map(dimWithDirection)} />}
       </div>
     )}
   </div>

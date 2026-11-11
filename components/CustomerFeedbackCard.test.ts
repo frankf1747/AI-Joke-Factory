@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { CustomerFeedbackCardView, WhatCustomersJudge } from './CustomerFeedbackCard';
+import { FeedbackCard } from './FeedbackCard';
 import { DIMENSIONS } from '../config/dimensions';
 import type { FeedbackRow } from '../views/feedback';
 import type { Batch } from '../types';
@@ -135,5 +136,18 @@ describe('WhatCustomersJudge', () => {
 
   it('carries no tallies', () => {
     expect(html()).not.toContain('×');
+  });
+});
+
+describe('feedback card direction words', () => {
+  it('shows the direction beside a missed criterion', () => {
+    const rows: FeedbackRow[] = [{
+      joke_id: 9, joke_title: 'Too Long', was_bought: false,
+      good: [{ id: 'TOPIC', label: 'Topic' }],
+      improve: [{ id: 'LENGTH', label: 'Length', direction: 'shorter' }, { id: 'TOPIC', label: 'Humor Style' }],
+    }];
+    const html = renderToStaticMarkup(createElement(FeedbackCard, { row: rows[0] }));
+    expect(html).toContain('Length: shorter');
+    expect(html).toContain('Humor Style');
   });
 });

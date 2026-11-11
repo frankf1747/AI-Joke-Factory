@@ -612,6 +612,10 @@ export interface FeedbackJoke {
   was_bought: boolean;
   good_dimensions: Dimension[];
   improve_dimensions: Dimension[];
+  /** For a missed dimension on an ordered scale: LOWER (toward the start of
+   *  its scale: shorter, simpler, calmer…) or HIGHER. Which way, never how far.
+   *  Absent on older backends. */
+  improve_hints?: Partial<Record<Dimension, 'LOWER' | 'HIGHER'>>;
 }
 
 /**

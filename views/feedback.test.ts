@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toFeedbackRows } from './feedback';
+import { dimWithDirection, toFeedbackRows } from './feedback';
 
 /* Captured live from GET /v1/rounds/{rid}/teams/{tid}/feedback. The backend
    deliberately sends no numbers, no categories and no ideal levels, because
@@ -61,5 +61,32 @@ describe('toFeedbackRows', () => {
     const [row] = toFeedbackRows({ jokes: [{ joke_id: 2, joke_title: 'x', was_bought: false, good_dimensions: [], improve_dimensions: [] }] } as never);
     expect(row.good).toEqual([]);
     expect(row.improve).toEqual([]);
+  });
+});
+
+describe('direction hints on missed dimensions', () => {
+  const hinted = {
+    jokes: [{
+      joke_id: 2, joke_title: 'Long One', was_bought: false,
+      good_dimensions: ['TOPIC'],
+      improve_dimensions: ['LENGTH', 'HUMOR_STYLE', 'ENERGY', 'WORDPLAY'],
+      improve_hints: { LENGTH: 'LOWER', ENERGY: 'HIGHER', HUMOR_STYLE: 'LOWER', WORDPLAY: 'SIDEWAYS' },
+    }],
+  } as unknown as Parameters<typeof toFeedbackRows>[0];
+
+  it('turns LOWER/HIGHER into a word for ordered scales, and nothing else', () => {
+    const [row] = toFeedbackRows(hinted);
+    expect(row.improve.map(d => [d.id, d.direction])).toEqual([
+      ['LENGTH', 'shorter'],
+      ['HUMOR_STYLE', undefined], // not an ordered scale: no word even if a hint arrives
+      ['ENERGY', 'more energy'],
+      ['WORDPLAY', undefined], // unknown hint value is ignored
+    ]);
+    expect(row.improve.map(dimWithDirection)).toEqual(['Length: shorter', 'Humor Style', 'Energy: more energy', 'Wordplay']);
+  });
+
+  it('works with an older backend that sends no hints', () => {
+    const [row] = toFeedbackRows(payload as Parameters<typeof toFeedbackRows>[0]);
+    expect(row.improve.every(d => d.direction === undefined)).toBe(true);
   });
 });

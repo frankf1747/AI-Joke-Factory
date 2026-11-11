@@ -36,13 +36,17 @@ function buyersLabel(j: FeedbackJoke): string {
   return j.soldCount === 1 ? '1 buyer' : `${j.soldCount} buyers`;
 }
 
-type Mark = { glyph: string; word: 'landed' | 'missed' | 'not mentioned'; style: React.CSSProperties };
+type Mark = { glyph: string; word: string; style: React.CSSProperties };
 function markOf(j: FeedbackJoke, dimId: string): Mark {
   if (j.good.some(d => d.id === dimId)) {
     return { glyph: '✓', word: 'landed', style: { background: 'var(--selling-bg)', color: 'var(--selling)', fontWeight: 600 } };
   }
-  if (j.improve.some(d => d.id === dimId)) {
-    return { glyph: '✕', word: 'missed', style: { background: 'var(--warn-bg)', color: 'var(--warn)', fontWeight: 600 } };
+  const missed = j.improve.find(d => d.id === dimId);
+  if (missed) {
+    return {
+      glyph: '✕', word: missed.direction ? `missed, try ${missed.direction}` : 'missed',
+      style: { background: 'var(--warn-bg)', color: 'var(--warn)', fontWeight: 600 },
+    };
   }
   return { glyph: '·', word: 'not mentioned', style: { color: 'var(--ink-4)' } };
 }
