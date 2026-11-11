@@ -49,6 +49,14 @@ describe('the note', () => {
     expect(out.reported.length).toBeGreaterThan(0);
   });
 
+  it('a title with double quotes round-trips through composeNote and parseNote', () => {
+    const title = 'The "Final" Notice, No. 4';
+    const out = composeNote([fb(7, title, ['TOPIC'], ['ENERGY'], { ENERGY: 'LOWER' })], new Set());
+    expect(parseNote(out.note)).toEqual([
+      { title, landed: ['TOPIC'], missed: [{ dim: 'ENERGY', direction: 'LOWER' }] },
+    ]);
+  });
+
   it('parses back exactly what it says, and ignores anything else', () => {
     const note = [
       'On "Office Memo No. 3": Keep: Topic, Length. Change: Humor Style, Energy. Energy: calmer.',

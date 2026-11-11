@@ -130,3 +130,86 @@ describe('bots that use feedback', () => {
     for (const b of teamBatches(world, on)) expect(textsOf(b)).toHaveLength(3);
   });
 });
+
+describe('how the Joke Maker reads notes', () => {
+  /** A world where customers say nothing, so the only notes are the ones a test writes. */
+  function quiet() {
+    const ctx = setup();
+    ctx.world.feedbackFor = () => ({ good_dimensions: [], improve_dimensions: [] });
+    return ctx;
+  }
+  const one = (over: Partial<StartOptions['teams'][number]> = {}): StartOptions => ({
+    roundId: 1, speed: 10, startRound: true, idealProfile: { ...DEFAULT_IDEAL_PROFILE },
+    teams: [{ index: 1, persona: 'BALANCED', useFeedback: true, releaseAll: true, ...over }],
+  });
+  const titleOf = (text: string) => index.byText.get(normalizeJokeText(text))!.title;
+  const inject = (world: FakeWorld, teamId: number | null, note: string): void => {
+    world.batches.push({
+      id: world.newBatchId(), roundId: world.round.id, teamId: teamId as number, rawText: null, jokes: [],
+      state: 'DONE', lockedBy: null, processedAt: world.nextProcessedAt(), note,
+    });
+  };
+  const reads = (logs: string[]): number[] => logs
+    .map(l => /^1A: read Marketing's note on (\d+) joke/.exec(l))
+    .filter((m): m is RegExpExecArray => m != null)
+    .map(m => Number(m[1]));
+
+  it('a line about a title this Joke Maker did not send (human or another team) changes nothing', async () => {
+    const control = quiet();
+    await control.engine.start(one());
+    const [cid] = control.engine.status().teams.map(t => t.teamId);
+    await until(() => teamBatches(control.world, cid).length >= 6, 'six control batches');
+    control.engine.stop();
+
+    const { world, engine, logs } = quiet();
+    await engine.start(one());
+    const [on] = engine.status().teams.map(t => t.teamId);
+    await until(() => teamBatches(world, on).length >= 1, 'a first batch');
+    const foreign = corpus.jokes[corpus.jokes.length - 1].title;
+    inject(world, on, [
+      `On "${foreign}": Keep: Topic, Humor Style. Change: Length. Length: shorter.`,
+      'Great batch, keep going!',
+      'On "Something a human typed": Change: Topic.',
+    ].join('\n'));
+    await until(() => teamBatches(world, on).filter(b => b.jokes.length || b.rawText).length >= 6, 'six batches');
+    engine.stop();
+
+    const mine = teamBatches(world, on).filter(b => b.rawText || b.jokes.length);
+    expect(mine.flatMap(textsOf).map(titleOf)).not.toContain(foreign);
+    expect(reads(logs)).toEqual([]);
+    expect(mine.slice(0, 6).map(textsOf)).toEqual(teamBatches(control.world, cid).slice(0, 6).map(textsOf));
+  });
+
+  it('a note read at several draws is applied once', async () => {
+    const { world, engine, logs } = quiet();
+    await engine.start(one());
+    const [on] = engine.status().teams.map(t => t.teamId);
+    await until(() => teamBatches(world, on).length >= 1, 'a first batch');
+    const mine = textsOf(teamBatches(world, on)[0]).map(titleOf);
+    inject(world, on, `On "${mine[0]}": Keep: Topic. Change: Humor Style.`);
+    await until(() => teamBatches(world, on).filter(b => b.rawText || b.jokes.length).length >= 7, 'seven batches');
+    engine.stop();
+    expect(reads(logs)).toEqual([1]);
+  });
+
+  it('two notes that land between the same two draws are both applied', async () => {
+    const { world, engine, logs } = quiet();
+    await engine.start(one());
+    const [on] = engine.status().teams.map(t => t.teamId);
+    await until(() => teamBatches(world, on).length >= 2, 'two batches');
+    const [first, second] = teamBatches(world, on).slice(0, 2).map(b => textsOf(b).map(titleOf)[0]);
+    // Both land in the same tick: whichever draw reads them sees two unread notes.
+    inject(world, on, `On "${first}": Keep: Topic. Change: Humor Style.`);
+    inject(world, on, `On "${second}": Keep: Energy. Change: Length. Length: shorter.`);
+    await until(() => teamBatches(world, on).filter(b => b.rawText || b.jokes.length).length >= 7, 'seven batches');
+    engine.stop();
+    expect(reads(logs).reduce((a, n) => a + n, 0)).toBe(2);
+  });
+
+  it('refuses a round2BatchSize that is not a whole number of at least 1', async () => {
+    for (const bad of [0, -3, 2.5, Number.NaN]) {
+      const { engine } = setup();
+      await expect(engine.start(twins({ round2BatchSize: bad }))).rejects.toThrow(/round2BatchSize/);
+    }
+  });
+});

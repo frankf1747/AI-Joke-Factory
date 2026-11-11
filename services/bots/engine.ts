@@ -373,6 +373,11 @@ export class BotEngine {
     if (options.teams.some(t => t.useFeedback !== undefined) && !this.deps.traitCorpus) {
       throw new Error('Teams with useFeedback write trait-corpus jokes: start the engine with deps.traitCorpus.');
     }
+    for (const t of options.teams) {
+      if (t.round2BatchSize !== undefined && (!Number.isInteger(t.round2BatchSize) || t.round2BatchSize < 1)) {
+        throw new Error(`Team ${t.index}: round2BatchSize must be a whole number of at least 1 (got ${t.round2BatchSize}).`);
+      }
+    }
     const controller = new AbortController();
     this.controller = controller;
     const teams = options.teams.map(newTeam);
@@ -701,17 +706,24 @@ export class BotEngine {
     if (team.useFeedback && team.teamId != null) {
       const batches = (await me.teamBatches(round.id, team.teamId)).batches ?? [];
       if (signal.aborted) return [];
-      const latest = batches
+      // Every note on the team's batches, oldest release first: two releases can
+      // land between two draws and Marketing reports each joke only once, so
+      // reading just the latest note would lose the earlier lines. A line is
+      // applied once (state.applied) and only for a joke this team sent.
+      const notes = batches
         .filter(b => b.marketing_note && b.processed_at && !Number.isNaN(Date.parse(b.processed_at)))
-        .sort((a, b) => Date.parse(b.processed_at as string) - Date.parse(a.processed_at as string))[0];
+        .sort((a, b) => Date.parse(a.processed_at as string) - Date.parse(b.processed_at as string) || a.batch_id - b.batch_id);
       const index = this.traitIndex() as TraitIndex;
       let applied = 0;
-      for (const entry of parseNote(latest?.marketing_note)) {
-        const joke = index.byTitle.get(entry.title);
-        if (!joke || !state.sent.has(entry.title) || state.applied.has(entry.title)) continue;
-        state.belief = applyFeedback(state.belief, joke.traits, entry);
-        state.applied.add(entry.title);
-        applied++;
+      for (const batch of notes) {
+        // A note lists its lines newest first: apply them oldest first so the newest evidence wins.
+        for (const entry of parseNote(batch.marketing_note).reverse()) {
+          const joke = index.byTitle.get(entry.title);
+          if (!joke || !state.sent.has(entry.title) || state.applied.has(entry.title)) continue;
+          state.belief = applyFeedback(state.belief, joke.traits, entry);
+          state.applied.add(entry.title);
+          applied++;
+        }
       }
       if (applied > 0) {
         this.log(team, team.jm, `read Marketing's note on ${applied} joke(s): now aiming at ${beliefSize(state.belief)} criteria`, signal);
