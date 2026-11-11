@@ -56,6 +56,10 @@ export function classTeams(perGroup = 5): ClassTeam[] {
   return out;
 }
 
+/** A team's pair number: the feedback team's index, which its no-feedback twin plays as deckIndex. */
+export const pairOf = (t: Pick<ClassTeam, 'index' | 'useFeedback' | 'deckIndex'>): number =>
+  (t.useFeedback ? t.index : t.deckIndex ?? t.index);
+
 /** Listing per released joke and hosting per joke-minute, at classroom (1×) rates. */
 export interface Costs { listing: number; hosting: number }
 
@@ -124,6 +128,8 @@ export interface TeamRow {
   batches: BatchFit[];
   /** Mean seconds from sending a batch to its first sale, over batches that sold; null when none did. */
   sendToFirstSaleS: number | null;
+  /** The pair (pairOf) this team belongs to in its class; absent in sidecars from before pairs were recorded. */
+  pair?: number;
 }
 
 /** A team's row from its leaderboard row, the round's prices, its lean charts batches and its batch fits. */
@@ -247,6 +253,13 @@ export function traitEvidence(
   return e;
 }
 
+/** A note for the class errors when there is too little evidence to tell (the class is kept); null otherwise. */
+export function traitModeNote(e: TraitEvidence): string | null {
+  if (e.aboveBar >= MIN_ABOVE_BAR_JOKES) return null;
+  return `trait-classifier check cannot tell: only ${e.aboveBar} released corpus jokes with fit of ${CUSTOMERS_BAR} or more `
+    + `in Round 1 (needs ${MIN_ABOVE_BAR_JOKES}); the class is kept`;
+}
+
 /** An error when the evidence says the stack is not grading by the corpus traits; null when it looks right or cannot tell. */
 export function traitModeError(e: TraitEvidence): string | null {
   if (e.aboveBar < MIN_ABOVE_BAR_JOKES || e.sold / e.aboveBar >= MIN_SOLD_SHARE) return null;
@@ -304,6 +317,40 @@ export function summariseGroup(rows: readonly TeamRow[]): GroupSummary {
 export interface Check { id: 1 | 2 | 3 | 4 | 5; name: string; pass: boolean; detail: string }
 
 export const money = (v: number) => (v < 0 ? `-$${Math.abs(v).toFixed(2)}` : `$${v.toFixed(2)}`);
+const signed = (v: number) => (v > 0 ? `+${money(v)}` : money(v));
+const pairsText = (n: number) => `${n} ${n === 1 ? 'pair' : 'pairs'}`;
+
+/** The message a failed class leaves in a run's errors. */
+export function failedClassMessage(classNo: number, costs: Costs, err: unknown): string {
+  return `class ${classNo} (listing ${money(costs.listing)}, hosting ${money(costs.hosting)}): ${err instanceof Error ? err.message : String(err)}`;
+}
+
+/**
+ * Round 2 profit of each feedback team minus its own twin's, per class. A pair
+ * counts only when both twins have a row; a pair with one twin missing, and a
+ * row without a pair number, are dropped (counted in `dropped`).
+ */
+export function pairedProfitDiffs(
+  classes: readonly ClassResult[], on: GroupId, off: GroupId,
+): { diffs: number[]; dropped: number } {
+  const diffs: number[] = [];
+  let dropped = 0;
+  for (const c of classes) {
+    const rows = c.rounds.filter(r => r.round === 2).flatMap(r => r.rows).filter(r => r.group === on || r.group === off);
+    const byPair = new Map<number, { on: TeamRow[]; off: TeamRow[] }>();
+    for (const r of rows) {
+      if (r.pair == null) { dropped += 1; continue; }
+      const p = byPair.get(r.pair) ?? { on: [], off: [] };
+      (r.group === on ? p.on : p.off).push(r);
+      byPair.set(r.pair, p);
+    }
+    for (const p of byPair.values()) {
+      if (p.on.length === 1 && p.off.length === 1) diffs.push(p.on[0].profit - p.off[0].profit);
+      else dropped += 1;
+    }
+  }
+  return { diffs, dropped };
+}
 const fit1 = (v: number | null) => (v == null ? '—' : v.toFixed(1));
 const pct = (v: number) => `${Math.round(v * 100)} %`;
 
@@ -325,26 +372,31 @@ export function successChecks(all: readonly ClassResult[]): Check[] {
       + `no feedback ${offRise == null ? '—' : `${offRise >= 0 ? '+' : ''}${offRise.toFixed(2)}`} (rises = at least +${RISE})`,
   };
 
-  const onProfit = mean(on.map(r => r.profit));
-  const offProfit = mean(off.map(r => r.profit));
+  // Checks 2 and 3 compare each feedback team with its own twin (paired differences), so a
+  // missing twin drops its pair instead of shifting a group mean.
+  const smallPairs = pairedProfitDiffs(classes, 'SMALL_ON', 'SMALL_OFF');
+  const largePairs = pairedProfitDiffs(classes, 'LARGE_ON', 'LARGE_OFF');
+  const allDiffs = [...smallPairs.diffs, ...largePairs.diffs];
+  const allDropped = smallPairs.dropped + largePairs.dropped;
+  const droppedText = (n: number) => (n ? `; ${n} dropped (a twin missing)` : '');
   const c2: Check = {
     id: 2, name: 'In Round 2, feedback teams earn more profit than their no-feedback twins',
-    pass: on.length > 0 && off.length > 0 && onProfit > offProfit,
-    detail: on.length === 0 || off.length === 0
-      ? `cannot compare: no ${on.length === 0 ? 'feedback teams' : 'no-feedback teams'} played Round 2`
-      : `mean Round 2 profit: feedback ${money(onProfit)}, no feedback ${money(offProfit)}`,
+    pass: allDiffs.length > 0 && mean(allDiffs) > 0,
+    detail: allDiffs.length === 0
+      ? `cannot compare: no complete pair (a feedback team and its twin) played Round 2${droppedText(allDropped)}`
+      : `mean Round 2 profit difference, each feedback team minus its own twin: ${signed(mean(allDiffs))} over `
+        + `${pairsText(allDiffs.length)}${droppedText(allDropped)}`,
   };
 
-  const gain = (a: GroupId, b: GroupId) => mean(rowsOf(classes, 2, [a]).map(r => r.profit)) - mean(rowsOf(classes, 2, [b]).map(r => r.profit));
-  const small = gain('SMALL_ON', 'SMALL_OFF');
-  const large = gain('LARGE_ON', 'LARGE_OFF');
-  const emptyGroups = GROUPS.filter(g => rowsOf(classes, 2, [g.id]).length === 0).map(g => g.label);
+  const missing = [smallPairs.diffs.length ? null : 'small', largePairs.diffs.length ? null : 'large'].filter(n => n != null);
+  const sizeText = (name: string, p: { diffs: number[] }) => `${name} ${signed(mean(p.diffs))} over ${pairsText(p.diffs.length)}`;
   const c3: Check = {
     id: 3, name: 'The feedback gain is larger for small batches than for large ones',
-    pass: emptyGroups.length === 0 && small > large,
-    detail: emptyGroups.length
-      ? `cannot compare: no teams in ${emptyGroups.join(', ')} played Round 2`
-      : `Round 2 profit gain from feedback: small ${money(small)}, large ${money(large)}`,
+    pass: missing.length === 0 && mean(smallPairs.diffs) > mean(largePairs.diffs),
+    detail: missing.length
+      ? `cannot compare: no complete ${missing.join(' or ')} pair played Round 2${droppedText(allDropped)}`
+      : `Round 2 profit gain from feedback (mean paired difference): ${sizeText('small', smallPairs)}, `
+        + `${sizeText('large', largePairs)}${droppedText(allDropped)}`,
   };
 
   const clears = on.map(firstClear).filter((v): v is number => v != null);
@@ -359,8 +411,8 @@ export function successChecks(all: readonly ClassResult[]): Check[] {
     pass: meanClear != null && meanClear >= 3,
     detail: meanClear == null
       ? `no feedback team cleared the bar of ${CUSTOMERS_BAR} in Round 2`
-      : `feedback teams first clear the bar of ${CUSTOMERS_BAR} at batch ${meanClear.toFixed(1)} on average (${bySize}; `
-        + `${clears.length} of ${on.length} teams cleared it)`,
+      : `mean over the ${clears.length} of ${on.length} feedback teams that cleared the bar of ${CUSTOMERS_BAR} in Round 2: `
+        + `first cleared at batch ${meanClear.toFixed(1)} (${bySize})`,
   };
 
   const all2 = rowsOf(classes, 2, GROUPS.map(g => g.id));
@@ -398,6 +450,19 @@ function roundSection(classes: readonly ClassResult[], round: PilotRound): strin
   ];
 }
 
+/**
+ * How far the comparison can be trusted. Always printed, so a re-rendered
+ * sidecar carries it too.
+ */
+export const EVIDENCE_CAVEATS: readonly string[] = [
+  'Twins share one market. Every team stocks the same shelf and each customer shops once, so a feedback team\'s '
+    + 'extra sales are partly sales its twin (or another team) would have made. The profit gap between twins '
+    + 'therefore overstates the absolute gain from feedback; read it as a direction, not a size.',
+  'This is a best case for feedback. The bots turn each note into exact, known categories (they know every corpus '
+    + 'joke\'s traits), while students do not know which categories their jokes fall into, so people will get less '
+    + 'out of the same feedback.',
+];
+
 export function markdown(side: PilotSidecar): string {
   const checks = successChecks(side.classes);
   const used = usableClasses(side.classes);
@@ -408,6 +473,9 @@ export function markdown(side: PilotSidecar): string {
     ...(side.tag ? [`_${side.tag}_`, ''] : []),
     '## Success checks', '',
     ...checks.map(c => `- **${c.pass ? 'PASS' : 'FAIL'}** — ${c.id}. ${c.name}: ${c.detail}`),
+    '',
+    '## Reading the evidence', '',
+    ...EVIDENCE_CAVEATS.map(x => `- ${x}`),
     '',
     ...(errors.length ? ['## Errors', '', ...errors.map(e => `- ${e}`), ''] : []),
     ...(side.settings.length ? ['## Settings', '', ...side.settings.map(x => `- ${x}`), ''] : []),

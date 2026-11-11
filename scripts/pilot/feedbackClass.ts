@@ -14,7 +14,8 @@ import { DEFAULT_IDEAL_PROFILE, type IdealProfile } from '../../config/dimension
 import { indexTraitCorpus, type TraitCorpus, type TraitIndex } from '../../services/shared/traitCorpus';
 import type { ConfigRequest } from '../../types/api';
 import {
-  batchFits, classTeams, finishClass, pilotConfig, settingsLines, teamProblems, teamRowFrom, timedRound, traitEvidence, traitModeError,
+  batchFits, classTeams, failedClassMessage, finishClass, pairOf, pilotConfig, settingsLines, teamProblems, teamRowFrom, timedRound,
+  traitEvidence, traitModeError, traitModeNote,
   type ClassResult, type Costs, type GroupId, type PilotEnv, type PilotRound, type PilotSidecar, type RoundResult, type TeamRow,
   type TraitEvidence,
 } from './feedbackReport';
@@ -54,6 +55,7 @@ export async function runFeedbackClass(o: ClassOptions): Promise<ClassResult> {
 
   const teams = classTeams(o.perGroup);
   const groupOf = new Map<number, GroupId>(teams.map(t => [t.index, t.group]));
+  const pairs = new Map<number, number>(teams.map(t => [t.index, pairOf(t)]));
   const engine = new BotEngine({
     api, instructorUserId: login.user.user_id, delay: realDelay, now: () => Date.now(),
     emit: m => { if (m.type === 'fatal') o.log(`FATAL ${m.message}`); },
@@ -68,13 +70,19 @@ export async function runFeedbackClass(o: ClassOptions): Promise<ClassResult> {
     o.log(`class ${o.classNo}: ${teams.length} teams, round 1 started`);
     // Fit is scored against the ideal the backend stored, not the one the pilot meant to send.
     const evidence: TraitEvidence = { aboveBar: 0, sold: 0 };
-    result.rounds.push(await playRound(1, ids[1], await storedIdeal(instructor, ids[1]), o, engine, api, instructor, groupOf, index, result, evidence));
+    result.rounds.push(await playRound(1, ids[1], await storedIdeal(instructor, ids[1]), o, engine, api, instructor, groupOf, pairs, index, result, evidence));
     // A hash-mode stack must not produce a normal-looking report: stop the class here.
     const notTraits = traitModeError(evidence);
     if (notTraits) throw new Error(notTraits);
+    // Too little evidence to tell is not a failure: keep the class, but say so in its errors.
+    const cannotTell = traitModeNote(evidence);
+    if (cannotTell) {
+      o.log(`  class ${o.classNo} ${cannotTell}`);
+      (result.errors ??= []).push(`class ${o.classNo} ${cannotTell}`);
+    }
     await instructor.instructorStart(ids[2], { ideal_profile: { ...DEFAULT_IDEAL_PROFILE } as ConfigRequest['ideal_profile'] });
     o.log(`class ${o.classNo}: round 2 started`);
-    result.rounds.push(await playRound(2, ids[2], await storedIdeal(instructor, ids[2]), o, engine, api, instructor, groupOf, index, result, evidence));
+    result.rounds.push(await playRound(2, ids[2], await storedIdeal(instructor, ids[2]), o, engine, api, instructor, groupOf, pairs, index, result, evidence));
   } finally {
     engine.stop();
   }
@@ -108,7 +116,7 @@ export async function runSetting(
         ...base, costs, windowS: env.window, perGroup: env.perGroup, seed: `${env.seed}-c${k}`, classNo: k,
       }));
     } catch (err) {
-      const message = `class ${k} (listing $${costs.listing}, hosting $${costs.hosting}): ${err instanceof Error ? err.message : String(err)}`;
+      const message = failedClassMessage(k, costs, err);
       base.log(`FAILED ${message}`);
       side.errors.push(message);
     }
@@ -119,7 +127,7 @@ export async function runSetting(
 
 async function playRound(
   round: PilotRound, roundId: number, ideal: IdealProfile, o: ClassOptions, engine: BotEngine, api: Client, instructor: Client,
-  groupOf: ReadonlyMap<number, GroupId>, index: TraitIndex, into: ClassResult, evidence: TraitEvidence,
+  groupOf: ReadonlyMap<number, GroupId>, pairs: ReadonlyMap<number, number>, index: TraitIndex, into: ClassResult, evidence: TraitEvidence,
 ): Promise<RoundResult> {
   const startedAt = Date.parse((await instructor.roundsActive()).rounds.find(r => r.id === roundId)?.started_at ?? '') || Date.now();
   const windowEnds = startedAt + o.windowS * 1000;
@@ -152,10 +160,13 @@ async function playRound(
       evidence.aboveBar += e.aboveBar;
       evidence.sold += e.sold;
     }
-    rows.push(teamRowFrom(
-      r, groupOf.get(t.index) as GroupId, prices, charts.teams.find(c => c.team_id === t.teamId)?.batches,
-      batchFits(list, index, ideal),
-    ));
+    rows.push({
+      ...teamRowFrom(
+        r, groupOf.get(t.index) as GroupId, prices, charts.teams.find(c => c.team_id === t.teamId)?.batches,
+        batchFits(list, index, ideal),
+      ),
+      pair: pairs.get(t.index),
+    });
   }
   const endedAt = Date.parse(prices.ended_at ?? '') || Date.now();
   return timedRound(round, Math.round((endedAt - startedAt) / 1000), rows, o.windowS, SETTLE_MS / 1000, SPEED);

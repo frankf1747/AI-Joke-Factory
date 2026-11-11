@@ -3,9 +3,9 @@ import { DEFAULT_IDEAL_PROFILE } from '../../config/dimensions';
 import { indexTraitCorpus, traitFit } from '../../services/shared/traitCorpus';
 import { loadTraitCorpus } from '../traits/loadTraitCorpus';
 import {
-  CUSTOMERS_BAR, GROUPS, MIN_ABOVE_BAR_JOKES, MIN_SOLD_SHARE, batchFits, chooseDefaults, classTeams, finishClass, markdown,
-  money, overLongNote, parsePilotEnv, pilotConfig, settingsLines, successChecks, summariseGroup, sweepCost, sweepMarkdown,
-  teamProblems, teamRowFrom, traitEvidence, traitModeError, usableClasses,
+  CUSTOMERS_BAR, GROUPS, MIN_ABOVE_BAR_JOKES, MIN_SOLD_SHARE, batchFits, chooseDefaults, classTeams, failedClassMessage, finishClass, markdown,
+  money, overLongNote, pairOf, parsePilotEnv, pilotConfig, settingsLines, successChecks, summariseGroup, sweepCost, sweepMarkdown,
+  teamProblems, teamRowFrom, traitEvidence, traitModeError, traitModeNote, usableClasses,
   type BatchFit, type ClassResult, type Costs, type GroupId, type PilotSidecar, type RoundResult, type TeamRow,
 } from './feedbackReport';
 import { classMinuteLimit, classMinutesOf } from './report';
@@ -28,7 +28,9 @@ describe('classTeams', () => {
       const twin = teams.find(t => t.index === off.deckIndex);
       expect(twin?.useFeedback).toBe(true);
       expect(twin?.round2BatchSize).toBe(off.round2BatchSize);
+      expect(pairOf(off)).toBe(pairOf(twin!));
     }
+    expect(new Set(teams.map(pairOf)).size).toBe(10);
   });
 });
 
@@ -92,8 +94,8 @@ const team = (group: GroupId, profit: number, fits: Array<number | null>, clearA
 function goodClass(): ClassResult {
   const r1 = GROUPS.map(g => team(g.id, 5, [5, 5, 5], null, { revenue: 20, listing: 4, hosting: 6 }));
   const r2 = [
-    team('SMALL_ON', 30, [5, 5, 7, 9, 10], 4), team('SMALL_OFF', -4, [5, 5, 5, 5, 5], null),
-    team('LARGE_ON', 6, [5, 5, 6, 7], 3), team('LARGE_OFF', 3, [5, 5, 5, 5], null),
+    team('SMALL_ON', 30, [5, 5, 7, 9, 10], 4, { pair: 1 }), team('SMALL_OFF', -4, [5, 5, 5, 5, 5], null, { pair: 1 }),
+    team('LARGE_ON', 6, [5, 5, 6, 7], 3, { pair: 3 }), team('LARGE_OFF', 3, [5, 5, 5, 5], null, { pair: 3 }),
   ];
   return { classNo: 1, seed: 's-c1', rounds: [{ round: 1, durationS: 94, rows: r1 }, { round: 2, durationS: 94, rows: r2 }] };
 }
@@ -105,17 +107,36 @@ describe('successChecks', () => {
 
   it('fails check 1 when the no-feedback twins rise too, or the feedback teams do not', () => {
     const c = goodClass();
-    c.rounds[1].rows[1] = team('SMALL_OFF', -4, [5, 7], null);
+    c.rounds[1].rows[1] = team('SMALL_OFF', -4, [5, 7], null, { pair: 1 });
     expect(successChecks([c])[0].pass).toBe(false);
   });
 
   it('fails checks 2 and 3 when the twins earn more, and when large batches gain more', () => {
     const c = goodClass();
-    c.rounds[1].rows[0] = team('SMALL_ON', -10, [5, 5, 7, 9], 4);
+    c.rounds[1].rows[0] = team('SMALL_ON', -10, [5, 5, 7, 9], 4, { pair: 1 });
     const checks = successChecks([c]);
     expect(checks[1].pass).toBe(false);
+    expect(checks[1].detail).toContain('-$1.50 over 2 pairs');
     expect(checks[2].pass).toBe(false);
-    expect(checks[2].detail).toContain('small -$6.00, large $3.00');
+    expect(checks[2].detail).toContain('small -$6.00 over 1 pair, large +$3.00 over 1 pair');
+  });
+
+  it('compares each feedback team with its own twin, dropping a pair when either twin is missing', () => {
+    const c = goodClass();
+    // A second small pair whose twin is missing: a group mean would count its loss, a paired difference drops it.
+    c.rounds[1].rows.push(team('SMALL_ON', -80, [5, 5], null, { pair: 5 }));
+    // A twin whose feedback team is missing is dropped too.
+    c.rounds[1].rows.push(team('LARGE_OFF', 50, [5, 5], null, { pair: 7 }));
+    const checks = successChecks([c]);
+    expect(checks[1]).toMatchObject({ pass: true, detail: expect.stringContaining('+$18.50 over 2 pairs; 2 dropped (a twin missing)') });
+    expect(checks[2]).toMatchObject({ pass: true, detail: expect.stringContaining('small +$34.00 over 1 pair, large +$3.00 over 1 pair') });
+    expect(checks[1].detail).toContain('each feedback team minus its own twin');
+  });
+
+  it('pairs within a class only: the same pair number in two classes is two pairs', () => {
+    const a = goodClass();
+    const b = { ...goodClass(), classNo: 2 };
+    expect(successChecks([a, b])[1].detail).toContain('over 4 pairs');
   });
 
   it('fails check 4 when feedback solves it in one or two batches, or never', () => {
@@ -127,6 +148,14 @@ describe('successChecks', () => {
     never.rounds[1].rows[0] = team('SMALL_ON', 30, [5, 5], null);
     never.rounds[1].rows[2] = team('LARGE_ON', 6, [5, 5], null);
     expect(successChecks([never])[3]).toMatchObject({ pass: false, detail: expect.stringContaining('no feedback team cleared') });
+  });
+
+  it('says check 4 is the mean over the feedback teams that cleared the bar, and how many did', () => {
+    const c = goodClass();
+    c.rounds[1].rows[2] = team('LARGE_ON', 6, [5, 5], null, { pair: 3 });
+    expect(successChecks([c])[3].detail).toBe(
+      `mean over the 1 of 2 feedback teams that cleared the bar of ${CUSTOMERS_BAR} in Round 2: first cleared at batch 4.0 (small 4.0, large —)`,
+    );
   });
 
   it('fails check 5 when fewer than about half finish Round 2 in profit, or Round 1 fees are outside 40–60 % of revenue', () => {
@@ -162,6 +191,14 @@ describe('markdown', () => {
       expect(md).toContain(h);
     }
     expect(md.indexOf('## Success checks')).toBeLessThan(md.indexOf('## Round 1'));
+  });
+
+  it('says how to read the evidence: one shared market, and bots that know their jokes\' categories', () => {
+    const md = markdown(sidecar({ listing: 0.1, hosting: 0.05 }));
+    expect(md).toContain('## Reading the evidence');
+    expect(md).toMatch(/share one market.*overstates the absolute gain/s);
+    expect(md).toMatch(/best case/);
+    expect(md.indexOf('## Reading the evidence')).toBeLessThan(md.indexOf('## Round 1'));
   });
 });
 
@@ -315,18 +352,26 @@ describe('checks 2 and 3 with an empty group', () => {
     const noTwins = goodClass();
     noTwins.rounds[1].rows = noTwins.rounds[1].rows.filter(r => !r.group.endsWith('_OFF'));
     const a = successChecks([noTwins]);
-    expect(a[1]).toMatchObject({ pass: false, detail: expect.stringContaining('no no-feedback teams') });
-    expect(a[2]).toMatchObject({ pass: false, detail: expect.stringContaining('Small, no feedback') });
+    expect(a[1]).toMatchObject({ pass: false, detail: expect.stringContaining('cannot compare: no complete pair') });
+    expect(a[1].detail).toContain('2 dropped');
+    expect(a[2]).toMatchObject({ pass: false, detail: expect.stringContaining('no complete small or large pair') });
 
     const noLarge = goodClass();
     noLarge.rounds[1].rows = noLarge.rounds[1].rows.filter(r => !r.group.startsWith('LARGE'));
     const b = successChecks([noLarge]);
     expect(b[1].pass).toBe(true);
-    expect(b[2]).toMatchObject({ pass: false, detail: expect.stringContaining('Large + feedback') });
+    expect(b[2]).toMatchObject({ pass: false, detail: expect.stringContaining('no complete large pair') });
 
     const none = successChecks([{ classNo: 1, seed: 's', rounds: [] }]);
-    expect(none[1]).toMatchObject({ pass: false, detail: expect.stringContaining('no feedback teams') });
+    expect(none[1]).toMatchObject({ pass: false, detail: expect.stringContaining('cannot compare: no complete pair') });
     expect(none[2].pass).toBe(false);
+  });
+
+  it('cannot pair rows without a pair number (a sidecar from before pairs were recorded)', () => {
+    const old = goodClass();
+    old.rounds[1].rows = old.rounds[1].rows.map(({ pair: _p, ...r }) => r);
+    const checks = successChecks([old]);
+    expect(checks[1]).toMatchObject({ pass: false, detail: expect.stringContaining('4 dropped') });
   });
 });
 
@@ -377,9 +422,24 @@ describe('the trait-classifier sanity check', () => {
     expect(traitModeError({ aboveBar: MIN_ABOVE_BAR_JOKES - 1, sold: 0 })).toBeNull();
     expect(traitModeError({ aboveBar: MIN_ABOVE_BAR_JOKES, sold: 0 })).not.toBeNull();
   });
+
+  it('notes "cannot tell" for the class errors (the class is kept), and only then', () => {
+    expect(traitModeNote({ aboveBar: 2, sold: 0 })).toBe(
+      `trait-classifier check cannot tell: only 2 released corpus jokes with fit of ${CUSTOMERS_BAR} or more in Round 1 `
+        + `(needs ${MIN_ABOVE_BAR_JOKES}); the class is kept`,
+    );
+    expect(traitModeNote({ aboveBar: MIN_ABOVE_BAR_JOKES, sold: 0 })).toBeNull();
+    expect(traitModeNote({ aboveBar: 20, sold: 12 })).toBeNull();
+  });
 });
 
 describe('money in the settings lines', () => {
+  it('prints two decimals in a failed class\'s message', () => {
+    expect(failedClassMessage(2, { listing: 0.1, hosting: 0.05 }, new Error('boom')))
+      .toBe('class 2 (listing $0.10, hosting $0.05): boom');
+    expect(failedClassMessage(3, { listing: 0.5, hosting: 0.2 }, 'plain')).toBe('class 3 (listing $0.50, hosting $0.20): plain');
+  });
+
   it('prints two decimals', () => {
     expect(money(0.5)).toBe('$0.50');
     const lines = settingsLines(parsePilotEnv({ PILOT_LISTING: '0.5', PILOT_HOSTING: '0.1' }, 1), 10).join('\n');
