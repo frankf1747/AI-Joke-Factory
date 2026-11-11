@@ -16,6 +16,7 @@ import { feeRoundsText, productionTeamCount } from '../services/leanMode';
 import { DEFAULT_BOARD_SORT, INITIAL_BOARD_RANKS, boardRanksFor, boardRows, nextBoardRanks, type BoardSort } from '../services/liveBoard';
 import { buildApplyUpdates, setupValuesOf, type SetupValues } from '../services/roundConfig';
 import { memberedTeamIds, playingChartTeams, playingStats } from '../services/playingTeams';
+import { ratesFor, useRoundRates } from '../services/roundRates';
 
 /** The four tabs under the control bar (spec 6b). Setup is never a phase's default. */
 export type ScreenTab = InstructorTab | 'setup';
@@ -112,6 +113,14 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
   };
 
   // --- Data Processing ---
+
+  // Each round's own stored fees price its Live and Debrief rows, so a round's Fees always
+  // match the profit the backend computed for it. Until a round is read, the selected config.
+  const feeKey = [config.costOfPublishing, config.costOfDiscard, config.shippingFeeSmall, config.shippingFeeStandard,
+    config.shippingFeeLarge, config.storageFeePerJokeMinute, config.hostingFeePerJokeMinute].join('|');
+  const storedRates = useRoundRates(roundIds, roundStatuses, feeKey);
+  const ratesR1 = useMemo(() => ratesFor(storedRates[1], config), [storedRates[1], config]);
+  const ratesR2 = useMemo(() => ratesFor(storedRates[2], config), [storedRates[2], config]);
 
   // Teams with no members and no activity come back as all-zero rows: leave them out.
   const membered = useMemo(() => memberedTeamIds(instructorLobby), [instructorLobby]);
@@ -309,6 +318,7 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
               boardSort={boardSort} setBoardSort={setBoardSort} boardRanks={boardRanksFor(boardRanks, boardRoundId)}
               marketOpen={marketOpen} leanPanel={leanPanel} leanChartsRound={leanChartsRound}
               leanChartsR1={leanChartsR1} leanChartsR2={leanChartsR2}
+              rates={viewRound === 1 ? ratesR1 : ratesR2}
             />
           )}
           {tab === 'teams' && (
@@ -327,6 +337,7 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
               statsR1={statsR1}
               statsR2={statsR2}
               round2Started={roundStatuses[2] === 'ACTIVE' || roundStatuses[2] === 'ENDED'}
+              ratesR1={ratesR1} ratesR2={ratesR2}
             />
           )}
         </div>

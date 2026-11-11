@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_CUSTOMER_BUDGET, arrivalSecondsFromMinutes, buildApplyUpdates, setupLockText, customerBudgetFromRound, configFromInstructorRound, storedConfigPatch, storedConfigSettled, isRouteMissing, needsRound1Config } from './roundConfig';
+import { DEFAULT_CUSTOMER_BUDGET, listingAndDiscardFromRound, arrivalSecondsFromMinutes, buildApplyUpdates, setupLockText, customerBudgetFromRound, configFromInstructorRound, storedConfigPatch, storedConfigSettled, isRouteMissing, needsRound1Config } from './roundConfig';
 import { DEFAULT_IDEAL_PROFILE } from '../config/dimensions';
 import { feeValuesOf } from '../components/FeeConfigFields';
 import { TEST_CONFIG } from '../views/testing/renderWithGame';
@@ -21,6 +21,24 @@ describe('customerBudgetFromRound (the CONFIG "Cust. Budget" box)', () => {
 
   it('starts from the backend default of 3', () => {
     expect(DEFAULT_CUSTOMER_BUDGET).toBe(3);
+  });
+});
+
+describe('listingAndDiscardFromRound (what the tour, the waiting room and Marketing price)', () => {
+  const known = { costOfPublishing: 0.1, costOfDiscard: 0.01 };
+  it('reads the stored listing and discard before Start, as the Lean fees are read', () => {
+    // The bug: they were read only once the round was ACTIVE or ENDED, so the tour's fee
+    // step and the waiting room showed the front end's defaults, not the class's values.
+    expect(listingAndDiscardFromRound({ status: 'CONFIGURED', cost_of_publishing: 0.25, cost_of_discard: 0 }, known))
+      .toEqual({ costOfPublishing: 0.25, costOfDiscard: 0 });
+    expect(listingAndDiscardFromRound({ status: 'ACTIVE', cost_of_publishing: 0.5, cost_of_discard: 0.05 }, known))
+      .toEqual({ costOfPublishing: 0.5, costOfDiscard: 0.05 });
+  });
+  it('keeps what is known when the round lacks a field or sends a bad value', () => {
+    expect(listingAndDiscardFromRound({}, known)).toEqual(known);
+    expect(listingAndDiscardFromRound(null, known)).toEqual(known);
+    expect(listingAndDiscardFromRound({ cost_of_publishing: null, cost_of_discard: -1 }, known)).toEqual(known);
+    expect(listingAndDiscardFromRound({ cost_of_publishing: 'x', cost_of_discard: '' }, known)).toEqual(known);
   });
 });
 
@@ -49,6 +67,12 @@ describe('buildApplyUpdates (what Apply sends)', () => {
     expect(buildApplyUpdates({ local: local({ budget: 9 }), config, ...all, canEditBudget: false })).toEqual({});
     const fees = { ...feeValuesOf(config), customersPerTeam: 20 };
     expect(buildApplyUpdates({ local: local({ fees }), config, ...all, canEditLean: false })).toEqual({});
+  });
+
+  it('locks listing with the fees once the selected round has started, not with the price', () => {
+    const edit = local({ costOfPublishing: 0.25, marketPrice: 2 });
+    expect(buildApplyUpdates({ local: edit, config, ...all, canEditLean: false })).toEqual({ marketPrice: 2 });
+    expect(buildApplyUpdates({ local: edit, config, ...all })).toEqual({ marketPrice: 2, costOfPublishing: 0.25 });
   });
 
   it('never sends the nudge settings, which are no longer on the screen', () => {

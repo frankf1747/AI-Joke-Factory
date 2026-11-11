@@ -34,8 +34,8 @@ import { ApiError } from './services/apiClient';
 import { clearPersisted, getWatchIdentity, isWatchMode, mayClaimMarketingBatch } from './services/watchMode';
 import { setMockRoundNumber } from './services/mockApi';
 import { DEFAULT_IDEAL_PROFILE } from './config/dimensions';
-import { DEFAULT_CUSTOMER_BUDGET, customerBudgetFromRound, isRouteMissing, needsRound1Config, storedConfigPatch, storedConfigSettled } from './services/roundConfig';
-import { LEAN_DEFAULTS, MARKET_MODE_LOCKED_TEXT, WIP_LIMIT_TEXT, configSaveErrorText, isMarketModeLocked, isWipLimitReached, leanConfigFromRound, leanConfigToBody, leanTargetRounds, saveRoundConfig } from './services/leanMode';
+import { DEFAULT_CUSTOMER_BUDGET, customerBudgetFromRound, listingAndDiscardFromRound, isRouteMissing, needsRound1Config, storedConfigPatch, storedConfigSettled } from './services/roundConfig';
+import { LEAN_DEFAULTS, MARKET_MODE_LOCKED_TEXT, WIP_LIMIT_TEXT, configBodies, configSaveErrorText, isMarketModeLocked, isWipLimitReached, leanConfigFromRound, leanConfigToBody, leanTargetRounds, saveRoundConfig } from './services/leanMode';
 import { isCompleteProfile } from './components/IdealProfilePicker';
 import type { DemoUi } from './services/tour/demoUi';
 
@@ -1100,14 +1100,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   shouldUseBackendConfig && Number(selectedRound?.market_price) > 0
                     ? Number(selectedRound?.market_price)
                     : prev.marketPrice ?? DEFAULT_MARKET_PRICE;
-                const nextCostOfPublishing =
-                  shouldUseBackendConfig && Number((selectedRound as any)?.cost_of_publishing) >= 0
-                    ? Number((selectedRound as any)?.cost_of_publishing)
-                    : prev.costOfPublishing ?? DEFAULT_COST_OF_PUBLISHING;
-                const nextCostOfDiscard =
-                  shouldUseBackendConfig && Number((selectedRound as any)?.cost_of_discard) >= 0
-                    ? Number((selectedRound as any)?.cost_of_discard)
-                    : prev.costOfDiscard ?? DEFAULT_COST_OF_DISCARD;
+                // Listing and discard are read whatever the status, like the Lean fees: the backend stores
+                // the class's values before Start, and the tour and waiting room price them.
+                const { costOfPublishing: nextCostOfPublishing, costOfDiscard: nextCostOfDiscard } = listingAndDiscardFromRound(
+                  selectedRound as any,
+                  { costOfPublishing: prev.costOfPublishing ?? DEFAULT_COST_OF_PUBLISHING, costOfDiscard: prev.costOfDiscard ?? DEFAULT_COST_OF_DISCARD },
+                );
                 return {
                   ...prev,
                   status: isActive ? 'PLAYING' : (round1Status === 'ENDED' ? 'PLAYING' : 'LOBBY'),
@@ -1398,14 +1396,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             shouldUseBackendConfig && Number(selectedRound?.market_price) > 0
               ? Number(selectedRound?.market_price)
               : prev.marketPrice ?? DEFAULT_MARKET_PRICE;
-          const nextCostOfPublishing =
-            shouldUseBackendConfig && Number((selectedRound as any)?.cost_of_publishing) >= 0
-              ? Number((selectedRound as any)?.cost_of_publishing)
-              : prev.costOfPublishing ?? DEFAULT_COST_OF_PUBLISHING;
-          const nextCostOfDiscard =
-            shouldUseBackendConfig && Number((selectedRound as any)?.cost_of_discard) >= 0
-              ? Number((selectedRound as any)?.cost_of_discard)
-              : prev.costOfDiscard ?? DEFAULT_COST_OF_DISCARD;
+          // Listing and discard are read whatever the status, like the Lean fees: the backend stores
+          // the class's values before Start, and the tour and waiting room price them.
+          const { costOfPublishing: nextCostOfPublishing, costOfDiscard: nextCostOfDiscard } = listingAndDiscardFromRound(
+            selectedRound as any,
+            { costOfPublishing: prev.costOfPublishing ?? DEFAULT_COST_OF_PUBLISHING, costOfDiscard: prev.costOfDiscard ?? DEFAULT_COST_OF_DISCARD },
+          );
           return {
             ...prev,
             status: isActive ? 'PLAYING' : (round1Status === 'ENDED' ? 'PLAYING' : 'LOBBY'),
@@ -1782,15 +1778,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // the instructor's settings are silently discarded (they were, until now).
     if (!roundId || !user || user.role !== ('INSTRUCTOR' as Role)) return { saved: true, feeRounds: [] };
 
-    const otherBody: Record<string, unknown> = {};
-    if (updates.customerBudget !== undefined) otherBody.customer_budget = updates.customerBudget;
-    if (updates.marketPrice !== undefined) otherBody.market_price = updates.marketPrice;
-    if (updates.costOfPublishing !== undefined) otherBody.cost_of_publishing = updates.costOfPublishing;
-    if (updates.costOfDiscard !== undefined) otherBody.cost_of_discard = updates.costOfDiscard;
-    if (updates.idealProfile !== undefined) otherBody.ideal_profile = updates.idealProfile;
-    // One rule set and one set of fees for both rounds (spec §1): a Lean edit goes to every
-    // round still CONFIGURED, the selected one included; a started round stays locked.
-    const leanBody = leanConfigToBody(updates) as Record<string, unknown>;
+    // One rule set and one set of fees for both rounds (spec §1): a fee or Lean edit, listing and
+    // discard included, goes to every round still CONFIGURED, the selected one included; a started
+    // round stays locked. Budget, price and the ideal joke go to the selected round only.
+    const { otherBody, leanBody } = configBodies(updates);
 
     if (Object.keys(otherBody).length === 0 && Object.keys(leanBody).length === 0) return { saved: true, feeRounds: [] };
 

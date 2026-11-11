@@ -225,10 +225,38 @@ export function leanTargetRounds(
   return out;
 }
 
+/** The settings updateConfig persists beyond the Lean ones. */
+export interface RoundSettingsUpdate extends LeanConfigUpdate {
+  customerBudget?: number;
+  marketPrice?: number;
+  costOfPublishing?: number;
+  costOfDiscard?: number;
+  idealProfile?: Record<string, string>;
+}
+
+/**
+ * One settings edit as POST /config bodies. `leanBody` holds the shared rules
+ * and every fee, listing (cost_of_publishing) and discard (cost_of_discard)
+ * included: one set of fees for both rounds (spec §1), so it goes to every round
+ * still CONFIGURED and is locked once a round starts (the backend answers 409
+ * MARKET_MODE_LOCKED). `otherBody` (budget, price, ideal joke) goes to the
+ * selected round only.
+ */
+export function configBodies(u: RoundSettingsUpdate): { otherBody: Record<string, unknown>; leanBody: Record<string, unknown> } {
+  const otherBody: Record<string, unknown> = {};
+  if (u.customerBudget !== undefined) otherBody.customer_budget = u.customerBudget;
+  if (u.marketPrice !== undefined) otherBody.market_price = u.marketPrice;
+  if (u.idealProfile !== undefined) otherBody.ideal_profile = u.idealProfile;
+  const leanBody: Record<string, unknown> = { ...leanConfigToBody(u) };
+  if (u.costOfPublishing !== undefined) leanBody.cost_of_publishing = u.costOfPublishing;
+  if (u.costOfDiscard !== undefined) leanBody.cost_of_discard = u.costOfDiscard;
+  return { otherBody, leanBody };
+}
+
 /**
  * Sends one settings edit: the selected round (`current`) gets every changed
- * setting, its Lean part only when it is a target; every other target round
- * gets the Lean part alone. Stops at the first refusal and returns it, with
+ * setting, its fee part (`leanBody`, see configBodies) only when it is a
+ * target; every other target round gets the fee part alone. Stops at the first refusal and returns it, with
  * the round numbers whose fees were written so far (a round whose number is
  * unknown is written but not listed).
  */

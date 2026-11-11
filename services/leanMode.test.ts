@@ -4,7 +4,7 @@ import {
   MARKET_MODE_LOCKED_MESSAGE, WIP_LIMIT_MESSAGE,
   fmtCents, fmtFee, fmtMoney, fmtPerMinute, isLeanRound, isMarketModeLocked, isWipLimitReached,
   leanConfigFromRound, leanConfigToBody, leanFeesOf, learningCurvePoints, neverSold, shippingFeeFor,
-  CONFIG_NOT_SAVED_TEXT, configSaveErrorText, feeRoundsText, leanTargetRounds, saveRoundConfig,
+  CONFIG_NOT_SAVED_TEXT, configBodies, configSaveErrorText, feeRoundsText, leanTargetRounds, saveRoundConfig,
   LEAN_DEFAULTS, customersHint, productionTeamCount,
 } from './leanMode';
 
@@ -220,6 +220,40 @@ describe('saving settings to the rounds', () => {
     });
     expect(sent).toEqual([{ id: 11, body: fee }]);
     expect(out).toEqual({ currentSaved: true, feeRounds: [], error: null });
+  });
+
+  it('treats listing and discard as fees: written to Rounds 1 and 2, like hosting', async () => {
+    const bodies = configBodies({ costOfPublishing: 0.25, costOfDiscard: 0.05, marketPrice: 2 });
+    expect(bodies).toEqual({ otherBody: { market_price: 2 }, leanBody: { cost_of_publishing: 0.25, cost_of_discard: 0.05 } });
+    const { sent, send } = fake();
+    const out = await saveRoundConfig({
+      current: 11, currentNumber: 1, ...bodies,
+      targets: leanTargetRounds(11, ids, { 1: 'CONFIGURED', 2: 'CONFIGURED' }), send,
+    });
+    expect(sent).toEqual([
+      { id: 11, body: { market_price: 2, cost_of_publishing: 0.25, cost_of_discard: 0.05 } },
+      { id: 12, body: { cost_of_publishing: 0.25, cost_of_discard: 0.05 } },
+    ]);
+    expect(feeRoundsText(out.feeRounds)).toBe('Fees applied to Rounds 1 and 2');
+  });
+
+  it('never writes listing to a round that has started (the backend locks it too)', async () => {
+    const { sent, send } = fake();
+    const out = await saveRoundConfig({
+      current: 11, currentNumber: 1, ...configBodies({ costOfPublishing: 0.25 }),
+      targets: leanTargetRounds(11, ids, { 1: 'ACTIVE', 2: 'CONFIGURED' }), send,
+    });
+    expect(sent).toEqual([{ id: 12, body: { cost_of_publishing: 0.25 } }]);
+    expect(out.feeRounds).toEqual([2]);
+  });
+
+  it('keeps the budget, price and ideal joke on the selected round only', () => {
+    const idealProfile = { TOPIC: 'Work' } as any;
+    expect(configBodies({ customerBudget: 4, marketPrice: 2, idealProfile, hostingFeePerJokeMinute: 0.1 })).toEqual({
+      otherBody: { customer_budget: 4, market_price: 2, ideal_profile: idealProfile },
+      leanBody: { hosting_fee_per_joke_minute: 0.1 },
+    });
+    expect(configBodies({})).toEqual({ otherBody: {}, leanBody: {} });
   });
 
   it('stops at the first refusal and reports what was saved', async () => {

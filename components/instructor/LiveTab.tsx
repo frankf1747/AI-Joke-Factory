@@ -13,7 +13,7 @@ import type { LeanChartsState } from '../../services/useLeanCharts';
 import type { LeanChartsPanelState } from '../../services/leanCharts';
 import { classTotals, type LeaderboardRow } from '../../services/classTotals';
 import { boardRows, nextBoardSort, type BoardRanks, type BoardSort } from '../../services/liveBoard';
-import { shownFees } from '../../services/shownFees';
+import { shownFees, type FeeRates } from '../../services/shownFees';
 import { ClassTotalsRow, LeaderboardTable, PresentBoard, QUIET_BUTTON, QUIET_BUTTON_STYLE } from './LiveBoard';
 import { LiveMarket } from './LiveMarket';
 
@@ -36,16 +36,20 @@ export interface LiveTabProps {
   leanChartsRound: 1 | 2;
   leanChartsR1: LeanChartsState;
   leanChartsR2: LeanChartsState;
+  /** The round in view's own fee amounts (services/roundRates); the selected config when absent. */
+  rates?: FeeRates;
 }
 
 export const LiveTab: React.FC<LiveTabProps> = ({
   viewRound, leaderboard, boardLean, boardSort, setBoardSort, boardRanks, marketOpen,
-  leanPanel, leanChartsRound, leanChartsR1, leanChartsR2,
+  leanPanel, leanChartsRound, leanChartsR1, leanChartsR2, rates,
 }) => {
   const { teamNames, marketItems, config } = useGame();
-  // Both rounds play one rule set, so the selected config's prices price every row; only charged fees show.
-  const { costOfPublishing, costOfDiscard } = config;
-  const shown = shownFees(config);
+  // The round in view is priced from its own stored fees, so its Fees match the backend's profit;
+  // only charged fees show.
+  const roundRates = rates ?? config;
+  const { costOfPublishing, costOfDiscard } = roundRates;
+  const shown = shownFees(roundRates);
   const rows = useMemo(
     () => boardRows(leaderboard, teamNames, { costOfPublishing, costOfDiscard }),
     [leaderboard, teamNames, costOfPublishing, costOfDiscard],

@@ -26,6 +26,25 @@ export function customerBudgetFromRound(
 }
 
 /**
+ * Listing (cost_of_publishing) and discard (cost_of_discard) from a polled
+ * round, whatever its status: the backend stores the class's values before
+ * Start, as it does the Lean fees, so the tour's fee step and the waiting room
+ * price what the class will pay. A missing, null or negative field keeps the
+ * value already known.
+ */
+export function listingAndDiscardFromRound(
+  round: { cost_of_publishing?: unknown; cost_of_discard?: unknown; status?: unknown } | null | undefined,
+  known: { costOfPublishing: number; costOfDiscard: number },
+): { costOfPublishing: number; costOfDiscard: number } {
+  const read = (v: unknown, fallback: number): number =>
+    typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : fallback;
+  return {
+    costOfPublishing: read(round?.cost_of_publishing, known.costOfPublishing),
+    costOfDiscard: read(round?.cost_of_discard, known.costOfDiscard),
+  };
+}
+
+/**
  * What the stored round (GET /config) puts back on the instructor screen after a reload: the
  * hidden ideal joke and the numbers the CONFIG row shows (the screen does not show the cost of discard, so it is not read). The profile is always returned whole
  * (a default for any dimension the round lacks, nothing for TITLE_FIT or an unknown key), so the
@@ -158,7 +177,8 @@ export function buildApplyUpdates(i: ApplyInputs): Partial<GameConfig> {
   const updates: Partial<GameConfig> = {};
   if (i.canEditBudget && local.budget !== config.customerBudget) updates.customerBudget = local.budget;
   if (i.canEditPricing && local.marketPrice !== config.marketPrice) updates.marketPrice = local.marketPrice;
-  if (i.canEditPricing && local.costOfPublishing !== config.costOfPublishing) updates.costOfPublishing = local.costOfPublishing;
+  // Listing is a fee: one value for both rounds, locked with the Lean fees once the selected round starts.
+  if (i.canEditLean && local.costOfPublishing !== config.costOfPublishing) updates.costOfPublishing = local.costOfPublishing;
   // The fees, the arrival window and customers per team (shared Lean settings).
   if (i.canEditLean) Object.assign(updates, changedFees(local.fees, config));
   return updates;

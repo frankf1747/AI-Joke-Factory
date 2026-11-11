@@ -38,20 +38,29 @@ const side = (b: BoardRow): DebriefSide => ({
   profit: b.profit, neverSold: b.neverSold, fees: b.feesTotal, sentToReleased: b.sentToReleased,
 });
 
+type ListingRates = Pick<FeeRates, 'costOfPublishing' | 'costOfDiscard'>;
+
+/** One price list for both rounds, or each round's own (its stored config, see services/roundRates). */
+export type DebriefRates = ListingRates | { r1?: ListingRates | null; r2?: ListingRates | null };
+
+const ratesOf = (rates: DebriefRates | null | undefined, key: 'r1' | 'r2'): ListingRates | null | undefined =>
+  rates && ('r1' in rates || 'r2' in rates) ? (rates as { r1?: ListingRates | null; r2?: ListingRates | null })[key] : (rates as ListingRates | null | undefined);
+
 /**
  * One row per team across both rounds, sorted by Round 2 profit; a team with
  * no Round 2 row goes to the bottom, by Round 1 profit. `teamNames` holds the
- * instructor's renames, the same map the Live board reads.
+ * instructor's renames, the same map the Live board reads. `rates` prices each
+ * round's listing and discard: pass each round's own so its Fees match its profit.
  */
 export function debriefRows(
   r1: DebriefStats | null,
   r2: DebriefStats | null,
   teamNames: Record<string, string> = {},
-  rates?: Pick<FeeRates, 'costOfPublishing' | 'costOfDiscard'> | null,
+  rates?: DebriefRates | null,
 ): DebriefRow[] {
   const byTeam = new Map<string, DebriefRow>();
   for (const [key, stats] of [['r1', r1], ['r2', r2]] as const) {
-    for (const b of boardRows(stats?.leaderboard ?? [], teamNames, rates)) {
+    for (const b of boardRows(stats?.leaderboard ?? [], teamNames, ratesOf(rates, key))) {
       const row = byTeam.get(b.teamId) ?? { teamId: b.teamId, team: b.team, r1: null, r2: null, profitChange: null };
       row[key] = side(b);
       byTeam.set(b.teamId, row);
@@ -91,8 +100,8 @@ export const LeanDebrief: React.FC<{
   /** Round 2 is ACTIVE or ENDED; before then there is nothing to compare. */
   round2Started: boolean;
   teamNames?: Record<string, string>;
-  /** Listing and discard prices; both rounds play one rule set. */
-  rates?: Pick<FeeRates, 'costOfPublishing' | 'costOfDiscard'> | null;
+  /** Listing and discard prices: one list, or each round's own stored ones. */
+  rates?: DebriefRates | null;
 }> = ({ r1, r2, round2Started, teamNames, rates }) => {
   if (!round2Started) {
     return (

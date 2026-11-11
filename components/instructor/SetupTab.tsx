@@ -108,7 +108,7 @@ export const SetupTab: React.FC<SetupTabProps> = ({
               <SetupField label="Listing" htmlFor="cfg-publishing" hint="Once for every joke Marketing releases.">
                 <SetupInput
                   id="cfg-publishing" label="Listing fee per joke" value={local.costOfPublishing} step="0.01" min="0" prefix="$" suffix="per joke"
-                  disabled={!canEditPricing} changed={changed.has('costOfPublishing')} onChange={set('costOfPublishing')}
+                  disabled={!canEditLean} changed={changed.has('costOfPublishing')} onChange={set('costOfPublishing')}
                 />
               </SetupField>
               <FeeConfigFields part="costs" {...fees} shown={{ shipping: charged.shipping, storage: charged.storage }} />
