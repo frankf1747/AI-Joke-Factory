@@ -32,8 +32,9 @@ export interface BotTeamSpec {
    * Pilot-only (spec 2026-11-10 §4): the team writes trait-corpus jokes
    * (EngineDeps.traitCorpus). true: Marketing sends a note built from the
    * team's customer feedback with each release, and the Joke Maker picks its
-   * next batch by what the latest note says. false: the twin that ignores
-   * feedback (no note; it picks by its seed only). Absent: the ordinary deck.
+   * next batch by what every unread note says, oldest first. false: the twin
+   * that ignores feedback (no note; it picks by its seed only). Absent: the
+   * ordinary deck.
    * The Bot players panel never sets it.
    */
   useFeedback?: boolean;

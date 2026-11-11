@@ -7,8 +7,9 @@
  *     screen reads: landed, missed, direction hints) into a plain-words note,
  *     one line per joke, named by its title:
  *       On "Office Memo No. 3": Keep: Topic, Length. Change: Humor Style, Energy. Energy: calmer.
- *   - The Joke Maker parses its team's latest note and updates its picture of
- *     what customers want (a Belief): a landed criterion keeps that joke's
+ *   - The Joke Maker parses every unread note of its team, oldest first (so the
+ *     newest evidence wins), and updates its picture of what customers want
+ *     (a Belief): a landed criterion keeps that joke's
  *     category; a missed categorical one (or an ordered one without a
  *     direction) avoids it; a missed ordered one with a direction moves one
  *     step that way from the joke's category; criteria nobody mentioned stay.

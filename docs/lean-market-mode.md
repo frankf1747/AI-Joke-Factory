@@ -71,8 +71,9 @@ profit = sales × $1 − listing − hosting
 ```
 
 Everything else is 0 by default: shipping, storage and discard. The amounts are starting values;
-the defaults are whatever the cost sweep chose (section 7). Both stay editable per class on the
-Setup tab.
+the cost sweep that will choose the final defaults is pending (section 7). Both stay editable per
+class on the Setup tab, and one value applies to both rounds: an edit is written to every round
+that has not started, and a round's fees are locked once it starts.
 
 **A fee that is 0 is shown nowhere**, on any screen, in the tour or in the Next step line. The
 backend still accepts every fee (shipping by batch size, storage while a batch waits on Marketing's
@@ -292,11 +293,12 @@ teams that stayed the same what they expected, and what the improving teams took
 
 ## 7. Limits and open questions
 
-- **The amounts are starting values.** Listing $0.10 and hosting $0.05 per joke-minute; the
-  defaults are the cheapest setting of the cost sweep that passes its checks 2, 3 and 5
-  (`scripts/pilot/cost-sweep.mts`, report under `docs/pilots/`). The customer settings (18 per
-  team, buy threshold 8, preference base 5) come from the fee sweep of 2026-10-11
-  (`docs/pilots/2026-10-11-fee-sweep.md`). Human play will not match bot numbers exactly.
+- **The amounts are starting values.** Listing $0.10 and hosting $0.05 per joke-minute. The cost
+  sweep that will choose the final defaults (the cheapest setting that passes checks 2, 3 and 5;
+  `scripts/pilot/cost-sweep.mts`, report under `docs/pilots/`) is pending: it has not been run yet.
+  The customer settings (18 per team, buy threshold 8, preference base 5) come from the fee sweep
+  of 2026-10-11 (`docs/pilots/2026-10-11-fee-sweep.md`). Human play will not match bot numbers
+  exactly.
 - **Evidence that feedback matters: the feedback pilot.** `scripts/pilot/feedback-pilot.mts` plays
   classes of 20 bot teams at 10× on a local stack running the trait classifier
   (`APP_LLM_MODE=traits`): five matched pairs with Round 2 batches of 3 and five with batches of 10,
@@ -304,18 +306,28 @@ teams that stayed the same what they expected, and what the improving teams took
   that one team uses Marketing's feedback and its twin does not. With feedback on, the Marketing bot
   reads the team's customer feedback and sends the Joke Maker a note with its next release, one
   line per joke ("On "Office Memo No. 3": Keep: Topic, Length. Change: Humor Style, Energy. Energy:
-  calmer."); the Joke Maker bot reads the latest note and picks its next jokes from the trait corpus
-  (1,000 synthetic jokes whose categories it knows) to match: keep what landed, avoid what missed,
-  move one step on a scale that missed with a direction. The pilot computes each released joke's
+  calmer."); the Joke Maker bot reads every unread note, oldest first (so the newest evidence
+  wins), and picks its next jokes from the trait corpus (1,000 synthetic jokes whose categories it
+  knows) to match: keep what landed, avoid what missed, move one step on a scale that missed with a
+  direction. The pilot computes each released joke's
   fit from the corpus and the round's ideal as the backend stored it, read back from the round's
-  config (the bots never see it), and stops a class whose stack is not on the trait classifier. A
-  class that fails or overruns its window is counted and listed in the report (classes ran / classes
+  config (the bots never see it), and stops a class whose stack is not on the trait classifier
+  (a class with too few over-the-bar jokes to tell is kept, with a note in its errors). A class
+  that fails or overruns its window is counted and listed in the report (classes ran / classes
   expected, with the errors) and is left out of the checks. It checks: (1) feedback teams'
   fit rises over Round 2 and their twins' does not; (2) feedback teams earn more in Round 2;
   (3) the gain is larger for small batches; (4) feedback is gradual (at least 3 batches to first
   clear the bar); (5) about half the teams or more end Round 2 in profit, and Round 1 fees are
-  40–60 % of revenue. If check 4 fails, the knobs are the jokes per feedback
-  (`feedback_joke_count`, 3) and the criteria shown per joke (5), not the costs.
+  40–60 % of revenue. Checks 2 and 3 use paired differences: each feedback team's Round 2 profit
+  minus its own twin's, a pair dropped when either twin is missing. If check 4 fails, the knobs are
+  the jokes per feedback (`feedback_joke_count`, 3) and the criteria shown per joke (5), not the
+  costs.
+- **Read the feedback pilot as a best case.** Twins share one market: each customer shops once from
+  a shelf every team stocks, so a feedback team's extra sales are partly sales its twin (or another
+  team) would have made. The profit gap between twins therefore overstates the absolute gain from
+  feedback. And the bots turn feedback into exact, known categories (each corpus joke's traits are
+  known to them), while students do not know which categories their jokes fall into, so people will
+  get less out of the same feedback.
 - **The older fees pilot.** `scripts/pilot/lean-pilot.mts` still plays the persona class of the
   five-fee rule set (shipping and storage sent explicitly) with the hash classifier.
 - **No pilot uses the real classifier.** The feedback pilot uses the trait classifier, the fees

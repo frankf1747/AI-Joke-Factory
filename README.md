@@ -260,6 +260,14 @@ The Netlify config below is retained as a secondary path — if you change the
 backend URL, change it in BOTH places or the two hosts will disagree about which
 API they talk to.
 
+### Deploying the two costs (listing and hosting)
+Deploy this frontend **before** the backend: an old frontend on the new backend names
+fees that are now $0 ("Shipping: $0 per batch of 5", $0 Shipping and Storage tiles,
+a tour step saying a batch "costs $0 to ship"). Then deploy the backend, and press
+**Reset Game** before the next class; live rounds keep the old five fees until reset.
+No migration, so rollback is a redeploy. The full steps are in the backend README
+("Deploying the two costs").
+
 ### Netlify
 This repo ships with:
 - **`netlify.toml`**: build/publish settings + environment defaults

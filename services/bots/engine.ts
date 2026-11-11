@@ -694,8 +694,9 @@ export class BotEngine {
 
   /**
    * A trait team's next batch. With feedback on, the Joke Maker first reads
-   * the latest note from Marketing on its own team's batch list (the field its
-   * screen shows) and folds in each line about a joke it sent this round, once.
+   * every unread note from Marketing on its own team's batch list (the field its
+   * screen shows), oldest first, and folds in each line about a joke it sent
+   * this round, once.
    * Then it takes the unused corpus jokes that best fit its picture; with
    * feedback off (or nothing learned yet) that is its seeded order.
    */
