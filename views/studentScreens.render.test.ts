@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import JokeMaker from './JokeMaker';
 import QualityControl from './QualityControl';
 import { BatchSplitter } from '../components/marketing/BatchSplitter';
-import { TEST_CONFIG, fakeGame, renderWithGame, testUser } from './testing/renderWithGame';
+import { TEST_CONFIG, TWO_COST_CONFIG, fakeGame, renderWithGame, testUser } from './testing/renderWithGame';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { DemoModeContext, GameContext } from '../context';
@@ -33,25 +33,30 @@ const marketing = (lean: Partial<LeanTeamStats>) => renderWithGame(QualityContro
   teamSummary: summary(lean),
 });
 
+/** The Joke Maker pays nothing (spec 2026-11-10 §2.2): no fee, cost or price anywhere on its screen. */
+const NO_COST_COPY = /Shipping|Storage|Hosting|Listing|\bfees?\b|\bcosts?\b|per batch of|Fees and wait times/i;
+
 describe('Joke Maker screen', () => {
-  it('quotes Round 1 shipping for its batch of 5', () => {
-    expect(jokeMaker(1)).toContain('Shipping: $2 per batch of 5');
+  it('names no cost in either round, even in a round that still charges shipping and storage', () => {
+    for (const round of [1, 2] as const) {
+      const out = jokeMaker(round).replace(/<[^>]+>/g, ' ');
+      expect(out).not.toMatch(NO_COST_COPY);
+    }
+    expect(jokeMaker(2)).not.toContain('data-tour="jm-shipping"');
   });
 
-  it('quotes the three Round 2 tiers and says up to 10 jokes, smaller allowed', () => {
-    const out = jokeMaker(2);
-    expect(out).toContain('Shipping: $1 for 1–4 jokes · $2 for 5 · $3 for 6–10');
-    expect(out).toContain('make up to 10 jokes per batch');
+  it('says up to 10 jokes in Round 2, smaller allowed', () => {
+    expect(jokeMaker(2)).toContain('make up to 10 jokes per batch');
   });
 
   describe('Production line card', () => {
     const lean = { marketMode: 'LEAN' as const };
 
-    it('puts Next step first in the card, then the paste box, the send row and the shipping line', () => {
+    it('puts Next step first in the card, then the paste box and the send row', () => {
       const out = jokeMaker(1, { ...lean, round1BatchSize: 5 });
       const at = (t: string) => out.indexOf(`data-tour="${t}"`);
       expect(out.split('data-tour="jm-next-step"').length).toBe(2);
-      const order = ['jm-next-step', 'jm-draft', 'jm-send', 'jm-shipping'].map(at);
+      const order = ['jm-next-step', 'jm-draft', 'jm-send'].map(at);
       expect(order.every(i => i >= 0)).toBe(true);
       expect([...order].sort((a, b) => a - b)).toEqual(order);
       expect(out.indexOf('Production line')).toBeLessThan(at('jm-next-step'));
@@ -61,7 +66,7 @@ describe('Joke Maker screen', () => {
       const out = jokeMaker(1, { ...lean, round1BatchSize: 5 });
       expect(out).toContain('make exactly 5 jokes per batch with any AI tool and paste the whole response below. Marketing will split it into individual jokes.');
       expect(out).toContain('Stuck? Try work, family, food, tech or animals.');
-      expect(out).toContain('Shipping: $2 per batch of 5');
+      expect(out).not.toContain('Shipping');
       expect(out).not.toContain('bg-blue-50');
     });
 
@@ -82,13 +87,14 @@ describe('Joke Maker screen', () => {
     it('keeps the card controls inside the watch-mode fieldset', () => {
       const out = jokeMaker(1, lean);
       const fieldset = out.match(/<fieldset[^>]*>.*<\/fieldset>/s)?.[0] ?? '';
-      for (const t of ['jm-next-step', 'jm-draft', 'jm-send', 'jm-shipping']) expect(fieldset).toContain(`data-tour="${t}"`);
+      for (const t of ['jm-next-step', 'jm-draft', 'jm-send']) expect(fieldset).toContain(`data-tour="${t}"`);
     });
   });
 
-  it('reads the amounts from the round, never from fixed copy', () => {
-    const out = jokeMaker(2, { shippingFeeSmall: 0.5, shippingFeeStandard: 1, shippingFeeLarge: 4 });
-    expect(out).toContain('Shipping: $0.50 for 1–4 jokes · $1 for 5 · $4 for 6–10');
+  it('keeps its own numbers under More numbers: batches, waste and created to publish', () => {
+    const out = jokeMaker(1, { marketMode: 'LEAN' });
+    expect(out).toContain('More numbers');
+    expect(out).not.toContain('Fees and wait times');
   });
 
   it('shows no WIP counter and no setup or carrying wording, even with an old WIP limit stored', () => {
@@ -300,6 +306,16 @@ describe('Marketing screen', () => {
     expect(out).toContain('about 3:33');
     expect(out).not.toContain('Setup cost');
     expect(out).not.toContain('Carrying cost');
+  });
+
+  it('at the two-cost defaults lists only listing and hosting, and the wait timeline names no storage', () => {
+    vi.stubGlobal('localStorage', { getItem: () => '1' });
+    const out = renderWithGame(QualityControl, {
+      user: testUser(Role.QUALITY_CONTROL), config: TWO_COST_CONFIG,
+      teamSummary: summary({ shipping_cost: 0, storage_cost: 0, hosting_cost: 0.2, avg_submit_to_publish_s: 161, avg_publish_to_first_sale_s: 52 }),
+    }).replace(/<[^>]+>/g, ' ');
+    for (const l of ['Listing fees', 'Hosting', 'With Marketing 2:41', 'Waiting for first buyer 0:52']) expect(out).toContain(l);
+    for (const l of ['Shipping', 'Storage', 'storage is charged', 'discard fees']) expect(out).not.toContain(l);
   });
 
   it('counts Content Backlog from queue/count, as the desk header does', () => {
@@ -534,6 +550,13 @@ describe('Choose stage', () => {
 
   it('tallies the sale: Selling 3, discarding 2, costs $0.32', () => {
     expect(choose(THREE).replace(/<[^>]+>/g, '')).toContain('Selling 3, discarding 2, costs $0.32');
+  });
+
+  it('at the two-cost defaults the tally charges listing only, and a free discard shows no cost', () => {
+    expect(choose(THREE, { config: TWO_COST_CONFIG }).replace(/<[^>]+>/g, '')).toContain('Selling 3, discarding 2, costs $0.30');
+    const none = choose({}, { config: TWO_COST_CONFIG }).replace(/<[^>]+>/g, '');
+    expect(none).toContain('Selling 0, discarding 5');
+    expect(none).not.toContain('costs $0.00');
   });
 
   it('keeps the four tour targets on the screen', () => {

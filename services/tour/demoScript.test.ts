@@ -313,7 +313,7 @@ describe('the Next step line runs the real rules on the demo state', () => {
     expect(jmLine(at(opts('JOKE_MAKER', 2), 'jm-welcome'))).toBe("Marketing's desk is empty. Send a small batch now.");
     // The Next step step comes first now, before anything is sent, so the line is still the desk-empty one.
     expect(jmLine(at(opts('JOKE_MAKER'), 'jm-next'))).toBe("Marketing's desk is empty. Send your next batch of 5.");
-    expect(jmLine(at(opts('JOKE_MAKER'), 'jm-shipping'))).toBe('Keep writing. Every batch is another chance to sell.');
+    expect(jmLine(at(opts('JOKE_MAKER'), 'jm-batch-size'))).toBe('Keep writing. Every batch is another chance to sell.');
     // The note is read inside the opened batch (the jm-note spotlight), never on the Next step line.
     expect(jmLine(at(opts('JOKE_MAKER'), 'jm-note'))).not.toContain(DEMO_NOTE);
   });
@@ -327,7 +327,7 @@ describe('the Next step line runs the real rules on the demo state', () => {
 
   it('Marketing: once the next batch has waited too long, the line says so, with the round\'s storage fee', () => {
     expect(mkLine(at(opts('QUALITY_CONTROL'), 'mk-fees'))).toEqual({
-      tone: 'warn', text: "Batch waiting 52 s. Release what's good enough. Storage costs 5¢ a joke each minute.",
+      tone: 'warn', text: "Batch waiting 52 s. Release what's good enough: customers arriving now can't buy it. Storage costs 5¢ a joke each minute.",
     });
     expect(mkLine(at(opts('QUALITY_CONTROL', 2, ODD_FEES), 'mk-fees')).text).toContain('Storage costs 10¢ a joke each minute.');
   });

@@ -92,16 +92,19 @@ describe('the demo plays on the real screen', () => {
     }
   });
 
-  it('shows the round\'s shipping line: Round 1 one size, Round 2 three', () => {
-    expect(renderStep(opts('JOKE_MAKER', 1), 'jm-shipping')).toContain('Shipping: $2 per batch of 5');
-    expect(renderStep(opts('JOKE_MAKER', 2), 'jm-shipping')).toContain('Shipping: $1 for 1–4 jokes · $2 for 5 · $3 for 6–10');
+  it('the batch-size step shows the send row and no shipping line, in either round', () => {
+    for (const round of [1, 2] as const) {
+      const out = renderStep(opts('JOKE_MAKER', round), 'jm-batch-size');
+      expect(out).toContain('data-tour="jm-send"');
+      expect(out).not.toContain('Shipping');
+    }
   });
 
   it('the Next step line reads the demo, not the wall clock', () => {
     expect(renderStep(opts('JOKE_MAKER'), 'jm-next')).toContain('Marketing&#x27;s desk is empty. Send your next batch of 5.');
-    expect(renderStep(opts('JOKE_MAKER'), 'jm-shipping')).toContain('Keep writing. Every batch is another chance to sell.');
+    expect(renderStep(opts('JOKE_MAKER'), 'jm-batch-size')).toContain('Keep writing. Every batch is another chance to sell.');
     expect(renderStep(opts('QUALITY_CONTROL'), 'mk-fees')).toContain(
-      'Batch waiting 52 s. Release what&#x27;s good enough. Storage costs 5¢ a joke each minute.',
+      'Batch waiting 52 s. Release what&#x27;s good enough: customers arriving now can&#x27;t buy it. Storage costs 5¢ a joke each minute.',
     );
   });
 

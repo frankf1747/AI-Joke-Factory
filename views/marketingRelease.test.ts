@@ -36,6 +36,13 @@ describe('releaseOutcome', () => {
     expect(releaseOutcome({ ...base, releasedCount: 1, ok: true, note: '  \n' }).toast).toBe('Released 1 joke · 4 discarded · −$0.14');
   });
 
+  it('at the two-cost defaults (discards free) a pass names no charge, and a release charges listing only', () => {
+    const twoCosts = { ...base, costOfDiscard: 0 };
+    expect(releaseOutcome({ ...twoCosts, releasedCount: 0, ok: true, note: '' }))
+      .toEqual({ toast: 'Passed on this batch · 5 jokes discarded', cost: 0, clearNote: true });
+    expect(releaseOutcome({ ...twoCosts, ok: true, note: 'More puns' }).toast).toBe('Released 2 jokes · 3 discarded · −$0.20 · note sent');
+  });
+
   it('a failed publish shows no toast and keeps the typed note', () => {
     expect(releaseOutcome({ ...base, ok: false, note: 'Keep this' })).toEqual({ toast: null, cost: 0, clearNote: false });
   });

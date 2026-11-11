@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MARKET_MODE_LOCKED_MESSAGE, WIP_LIMIT_MESSAGE,
   fmtCents, fmtFee, fmtMoney, fmtPerMinute, isLeanRound, isMarketModeLocked, isWipLimitReached,
-  leanConfigFromRound, leanConfigToBody, leanFeesOf, learningCurvePoints, neverSold, shippingFeeFor, shippingLine,
+  leanConfigFromRound, leanConfigToBody, leanFeesOf, learningCurvePoints, neverSold, shippingFeeFor,
   CONFIG_NOT_SAVED_TEXT, configSaveErrorText, feeRoundsText, leanTargetRounds, saveRoundConfig,
   LEAN_DEFAULTS, customersHint, productionTeamCount,
 } from './leanMode';
@@ -33,13 +33,6 @@ describe('lean mode helpers', () => {
       marketMode: 'CLASSIC', arrivalWindowSeconds: 900, setupCostPerBatch: 0, carryingCostPerJokeMinute: 0, wipLimit: 0,
       shippingFeeSmall: 0, shippingFeeStandard: 0, shippingFeeLarge: 0, storageFeePerJokeMinute: 0, hostingFeePerJokeMinute: 0,
     });
-  });
-
-  it('writes the Joke Maker\'s shipping line from the round\'s fees', () => {
-    expect(shippingLine(1, 5, fees)).toBe('Shipping: $2 per batch of 5');
-    expect(shippingLine(2, 5, fees)).toBe('Shipping: $1 for 1–4 jokes · $2 for 5 · $3 for 6–10');
-    expect(shippingLine(1, 5, { shippingFeeSmall: 0.5, shippingFeeStandard: 1.5, shippingFeeLarge: 2 }))
-      .toBe('Shipping: $1.50 per batch of 5');
   });
 
   it('prices a batch by its size, an unsplit batch as the standard 5', () => {

@@ -4,10 +4,11 @@ import { stepDuration } from './tourMachine';
 import type { TourMoney, TourRound } from './demoScript';
 import { DIMENSIONS } from '../../config/dimensions';
 
+/** The two-cost defaults: listing $0.10, hosting 5¢ a joke-minute, every other fee 0. */
 const DEFAULT_FEES: TourMoney = {
-  marketPrice: 1, costOfPublishing: 0.1, costOfDiscard: 0.01,
-  shippingFeeSmall: 1, shippingFeeStandard: 2, shippingFeeLarge: 3,
-  storageFeePerJokeMinute: 0.05, hostingFeePerJokeMinute: 0.05,
+  marketPrice: 1, costOfPublishing: 0.1, costOfDiscard: 0,
+  shippingFeeSmall: 0, shippingFeeStandard: 0, shippingFeeLarge: 0,
+  storageFeePerJokeMinute: 0, hostingFeePerJokeMinute: 0.05,
 };
 const R1: TourRound = { roundNumber: 1, fees: DEFAULT_FEES };
 const R2: TourRound = { roundNumber: 2, fees: DEFAULT_FEES };
@@ -17,7 +18,7 @@ const text = (steps: ReadonlyArray<{ title: string; body: unknown }>) => steps.m
 describe('stepsFor', () => {
   it('Joke Maker: ten steps, the same in both rounds', () => {
     const want = [
-      'jm-welcome', 'jm-next', 'jm-write', 'jm-send', 'jm-shipping', 'jm-value-stream', 'jm-note', 'jm-scoreboard',
+      'jm-welcome', 'jm-next', 'jm-write', 'jm-send', 'jm-batch-size', 'jm-value-stream', 'jm-note', 'jm-scoreboard',
       'jm-customers', 'jm-goal',
     ];
     expect(ids(stepsFor('JOKE_MAKER', R1))).toEqual(want);
@@ -75,18 +76,18 @@ describe('captions (spec §4, verbatim)', () => {
       ['Your next step.', "The top of the Production line watches the game and tells you what to do next. Glance at it whenever you're unsure."],
       ['Write, then paste.', 'Write jokes with your AI tool and paste the whole reply here. Marketing splits it into separate jokes.'],
       ['Send a batch.', 'Tick the box and press Send to Marketing. Each send is one batch.'],
-      ['Every batch pays shipping.', 'Each batch of 5 costs $2 to ship, so keep them coming but make them count.'],
+      ['Batch size.', 'Every batch is 5 jokes. Keep them coming.'],
       ['Follow your batches.', 'Each row is a batch and each square is a joke. Outline means with Marketing, green is selling, amber is waiting for a buyer, pale green sold before but lost its buyer, and grey was not released. Open a row to see each joke.'],
       ["Read Marketing's note.", 'Open a batch and Marketing\'s note sits above its jokes. It says what customers liked and what to change. Read it before you write the next batch.'],
-      ['Your scoreboard.', 'Team rank, by profit, is your place among all teams, and profit is sales minus fees. "Found a buyer" counts the jokes that have sold. "Fees and wait times" shows where the money went.'],
+      ['Your scoreboard.', 'Team rank, by profit, is your place among all teams. "Found a buyer" counts the jokes that have sold, so you can see which batches worked.'],
       ['How customers buy.', 'AI customers are picky: they judge every joke on 12 criteria and only buy the ones that fit what they like. Better-aimed jokes beat lots of random ones.'],
       ['Your goal.', 'Keep the line moving, learn from each batch, and improve the next one.'],
     ]);
   });
 
-  it('Joke Maker, Round 2: the shipping step lists the three sizes', () => {
+  it('Joke Maker, Round 2: the batch-size step hands over the choice', () => {
     expect(stepsFor('JOKE_MAKER', R2)[4].body).toBe(
-      'You choose the size now: $1 for 1–4 jokes, $2 for 5, $3 for 6–10. Smaller batches come back with feedback sooner.',
+      'You choose the batch size now. Smaller batches reach customers and come back with feedback sooner.',
     );
     // Every other caption is the same in both rounds.
     const r1 = stepsFor('JOKE_MAKER', R1).map(s => s.body);
@@ -99,12 +100,12 @@ describe('captions (spec §4, verbatim)', () => {
       ["You're Marketing.", 'You decide which jokes go to market. Listing a joke costs $0.10, and each sale earns $1.'],
       ['Your next step.', "The top of the Marketing desk watches the game and tells you what to do next. Glance at it whenever you're unsure."],
       ['A batch arrives.', "Your Joke Maker's batch lands on your desk. Cut it into separate jokes: click between two jokes and press Enter."],
-      ['Pick the winners, quickly.', "Tick the jokes customers will buy and leave the rest to be discarded (discarding costs $0.01). Don't be too strict: customers can only buy what's on the shelf."],
+      ['Pick the winners, quickly.', "Tick the jokes customers will buy and leave the rest to be discarded. Don't be too strict: customers can only buy what's on the shelf."],
       ['Topic and title.', 'Choose a topic from the dropdown and write a title for each joke you sell. A good title helps it sell.'],
       ['Tell your Joke Maker.', 'Say what to change next. Your note is sent with this batch.'],
       ['Release.', 'Release to market puts the jokes you ticked on the market, where customers start buying. The tally beside it shows what it costs.'],
       ['Your scoreboard.', 'Your team rank, by profit, sits beside your profit and sales. "Found a buyer" shows how many of your released jokes have sold so far.'],
-      ['Fees add up.', '"Fees and wait times" shows where your sales went. Every batch pays shipping. A batch waiting on your desk pays storage (5¢ a joke each minute), and an unsold joke pays hosting (5¢ a joke each minute). Release quickly.'],
+      ['Fees add up.', 'Every joke you release costs $0.10 to list, and 5¢ a minute while it sits unsold. Release jokes that will sell.'],
       ['What customers said.', 'For your latest jokes: which criteria landed and which missed. It never says by how much.'],
       ['Keep it in view.', 'Pop out opens a window that stays on top while you work. It groups the criteria into "Fix next" and "Keep doing".'],
       ['Your goal.', 'Ship what sells, tell your Joke Maker why, and improve every batch.'],
@@ -138,13 +139,30 @@ describe('captions (spec §4, verbatim)', () => {
     const mk = stepsFor('QUALITY_CONTROL', { roundNumber: 1, fees: odd }).map(s => s.body);
     expect(mk[0]).toBe('You decide which jokes go to market. Listing a joke costs $0.25, and each sale earns $2.');
     expect(mk[3]).toContain('(discarding costs $0.05)');
-    expect(mk[8]).toContain('pays storage (10¢ a joke each minute), and an unsold joke pays hosting (2.5¢ a joke each minute).');
-    expect(stepsFor('JOKE_MAKER', { roundNumber: 1, fees: odd })[4].body).toBe(
-      'Each batch of 5 costs $1.50 to ship, so keep them coming but make them count.',
+    // A round that still charges shipping and storage names them after the two costs.
+    expect(mk[8]).toBe(
+      'Every joke you release costs $0.25 to list, and 2.5¢ a minute while it sits unsold. Every batch pays shipping. '
+        + 'A batch waiting on your desk pays storage (10¢ a joke each minute). Release jokes that will sell.',
     );
-    expect(stepsFor('JOKE_MAKER', { roundNumber: 2, fees: odd })[4].body).toBe(
-      'You choose the size now: $0.50 for 1–4 jokes, $1.50 for 5, $4 for 6–10. Smaller batches come back with feedback sooner.',
-    );
+  });
+
+  it('the Joke Maker tour names no cost in any round, at any fees', () => {
+    const odd: TourMoney = { ...DEFAULT_FEES, costOfDiscard: 0.05, shippingFeeSmall: 0.5, shippingFeeStandard: 1.5, shippingFeeLarge: 4, storageFeePerJokeMinute: 0.1 };
+    for (const round of [R1, R2, { roundNumber: 1 as const, fees: odd }, { roundNumber: 2 as const, fees: odd }]) {
+      for (const s of stepsFor('JOKE_MAKER', round)) expect(`${s.title} ${s.body}`).not.toMatch(/\bfees?\b|\bcosts?\b|shipping|storage|hosting|listing|\$|¢/i);
+    }
+  });
+
+  it('a fee that is 0 is never named: with no fees at all Marketing hears only about sales', () => {
+    const free: TourMoney = { ...DEFAULT_FEES, costOfPublishing: 0, hostingFeePerJokeMinute: 0 };
+    const mk = stepsFor('QUALITY_CONTROL', { roundNumber: 1, fees: free }).map(s => s.body as string);
+    expect(mk[0]).toBe('You decide which jokes go to market. Each sale earns $1.');
+    expect(mk[8]).toBe('Release jokes that will sell.');
+    for (const b of mk) expect(b).not.toMatch(/\$0[^.]|\$0$|0¢|discarding costs/);
+    const listingOnly = stepsFor('QUALITY_CONTROL', { roundNumber: 1, fees: { ...free, costOfPublishing: 0.1 } })[8].body;
+    expect(listingOnly).toBe('Every joke you release costs $0.10 to list. Release jokes that will sell.');
+    const hostingOnly = stepsFor('QUALITY_CONTROL', { roundNumber: 1, fees: { ...free, hostingFeePerJokeMinute: 0.05 } })[8].body;
+    expect(hostingOnly).toBe('Every joke you release costs 5¢ a minute while it sits unsold. Release jokes that will sell.');
   });
 
   it('the scoreboard and fees captions describe the Scoreboard and "Fees and wait times", not the old tiles', () => {
@@ -152,7 +170,7 @@ describe('captions (spec §4, verbatim)', () => {
     const jm = find(JOKE_MAKER_STEPS, 'jm-scoreboard') as unknown as { body: string };
     const mkFees = find(MARKETING_STEPS, 'mk-fees') as unknown as { body: (r: TourRound) => string };
     expect(jm.body).toContain('Team rank, by profit');
-    expect(jm.body).toContain('Fees and wait times');
+    expect(jm.body).not.toContain('Fees');
     for (const steps of [JOKE_MAKER_STEPS, MARKETING_STEPS]) {
       for (const step of steps) {
         const body = captionText(step, R1);
@@ -160,7 +178,7 @@ describe('captions (spec §4, verbatim)', () => {
         expect(body).not.toContain('Jokes Sold / Made');
       }
     }
-    expect(mkFees.body(R1)).toContain('Fees and wait times');
+    expect(mkFees.body(R1)).toContain('to list');
   });
 
   it('Joke Maker captions use the redesigned screen words, never the old stage names', () => {

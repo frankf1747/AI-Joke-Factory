@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 import Login from './Login';
 import WaitingRoom from './WaitingRoom';
-import { renderWithGame, testUser } from './testing/renderWithGame';
+import { TEST_CONFIG, TWO_COST_CONFIG, renderWithGame, testUser } from './testing/renderWithGame';
 import { Role, type User } from '../types';
 
 const button = (out: string, text: string) =>
@@ -101,6 +101,13 @@ describe('Waiting room', () => {
   const render = (user: User, roundStatuses: Statuses = { 1: 'CONFIGURED', 2: 'CONFIGURED' }) =>
     renderWithGame(WaitingRoom, { user, roundStatuses });
   const text = (out: string) => out.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+
+  it('names discarding as a cost only in a round that charges it', () => {
+    const goal = (config: typeof TEST_CONFIG) =>
+      text(renderWithGame(WaitingRoom, { user: seat(Role.UNASSIGNED), config, roundStatuses: { 1: 'CONFIGURED', 2: 'CONFIGURED' } }));
+    expect(goal(TWO_COST_CONFIG)).toContain('and every joke you release has a cost.');
+    expect(goal(TEST_CONFIG)).toContain('and every joke you release or discard has a cost.');
+  });
 
   it('greets the pair by their formatted names, in the heading and the header', () => {
     const out = render(seat(Role.UNASSIGNED));

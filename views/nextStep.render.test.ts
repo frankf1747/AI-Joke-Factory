@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import JokeMaker from './JokeMaker';
 import QualityControl from './QualityControl';
-import { TEST_CONFIG, renderWithGame, testUser } from './testing/renderWithGame';
+import { TEST_CONFIG, TWO_COST_CONFIG, renderWithGame, testUser } from './testing/renderWithGame';
 import { Role } from '../types';
 
 const summary = {
@@ -10,11 +10,11 @@ const summary = {
 };
 
 describe('the Next step line on the student screens', () => {
-  it('sits under the Joke Maker\'s stat tiles, above Jokes by stage', () => {
+  it('sits in the Joke Maker\'s Production line card, before the stat tiles and Jokes by stage', () => {
     const out = renderWithGame(JokeMaker, { user: testUser(Role.JOKE_MAKER), teamSummary: summary });
     const line = out.indexOf('Next step');
-    expect(line).toBeGreaterThan(out.indexOf('More numbers'));
-    expect(line).toBeGreaterThan(out.indexOf('Created to Publish'));
+    expect(line).toBeGreaterThan(out.indexOf('Production line'));
+    expect(line).toBeLessThan(out.indexOf('More numbers'));
     expect(line).toBeLessThan(out.indexOf('Jokes by stage'));
     expect(out).toContain("Marketing&#x27;s desk is empty. Send your next batch of 5.");
   });
@@ -38,7 +38,7 @@ describe('the Next step line on the student screens', () => {
     }
   });
 
-  it('is the first row of Marketing\'s desk card and prices a waiting batch at the round\'s storage fee', () => {
+  it('is the first row of Marketing\'s desk card; a waiting batch names the customers it misses, and storage only when the round charges it', () => {
     const sent = new Date(Date.now() - 50_000).toISOString();
     const out = renderWithGame(QualityControl, {
       user: testUser(Role.QUALITY_CONTROL),
@@ -49,7 +49,14 @@ describe('the Next step line on the student screens', () => {
     expect(line).toBeGreaterThan(out.indexOf('Marketing desk'));
     expect(line).toBeLessThan(out.indexOf('B-9'));
     expect(line).toBeLessThan(out.indexOf('What customers judge'));
-    expect(out).toMatch(/Batch waiting (5\d) s\. Release what&#x27;s good enough\. Storage costs 5¢ a joke each minute\./);
+    expect(out).toMatch(/Batch waiting (5\d) s\. Release what&#x27;s good enough: customers arriving now can&#x27;t buy it\. Storage costs 5¢ a joke each minute\./);
+    const twoCosts = renderWithGame(QualityControl, {
+      user: testUser(Role.QUALITY_CONTROL), config: TWO_COST_CONFIG,
+      teamSummary: { ...summary, unprocessed_batches: 1 },
+      qcQueue: { batch: { batch_id: 9, round_id: 1, team_id: 1, submitted_at: sent, raw_text: 'one\n\ntwo' }, jokes: [], queue_size: 1 },
+    });
+    expect(twoCosts).toMatch(/Batch waiting (5\d) s\. Release what&#x27;s good enough: customers arriving now can&#x27;t buy it\./);
+    expect(twoCosts).not.toContain('Storage costs');
   });
 
   it('sends both seats to the debrief once Round 2 has ended, but not between rounds', () => {

@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { FeesAndWaits } from './FeesAndWaits';
-import { TEST_CONFIG } from '../views/testing/renderWithGame';
+import { TEST_CONFIG, TWO_COST_CONFIG } from '../views/testing/renderWithGame';
 import type { ApiTeamSummaryResponse } from '../types';
 import type { LeanTeamStats } from '../types/api';
 
@@ -63,10 +63,27 @@ describe('FeesAndWaits', () => {
     expect(t).toContain('How long a joke waits, on average');
     expect(t).toContain('With Marketing 2:41');
     expect(t).toContain('storage is charged');
-    expect(t).toContain('On market, waiting for a buyer 0:52');
+    expect(t).toContain('Waiting for first buyer 0:52');
     expect(t).toContain('hosting is charged');
     expect(t).toContain('about 3:33');
     for (const tick of ['Sent', 'Released', 'First sale']) expect(t).toContain(tick);
+  });
+
+  it('at the two-cost defaults lists only listing and hosting, and no wait says storage is charged', () => {
+    const out = renderToStaticMarkup(
+      <FeesAndWaits summary={summary({ shipping_cost: 0, storage_cost: 0, hosting_cost: 1.65 })} config={TWO_COST_CONFIG} storageKey="k" initialOpen />,
+    );
+    const t = text(out);
+    for (const l of ['Listing fees', '$0.80', 'Hosting', '$1.65', 'With Marketing 2:41', 'Waiting for first buyer 0:52', 'hosting is charged']) {
+      expect(t).toContain(l);
+    }
+    for (const l of ['Shipping', 'Storage', 'storage is charged', 'discard', 'batches sent', '$0.00']) expect(t).not.toContain(l);
+    expect(out).not.toContain('var(--chart-shipping)');
+  });
+
+  it('a round that still charges shipping and storage shows them (and discard joins listing)', () => {
+    const t = text(render(summary()));
+    for (const l of ['Shipping', 'Storage', 'storage is charged', 'Listing and discard fees']) expect(t).toContain(l);
   });
 
   it('chart 2 is hidden when both averages are 0', () => {

@@ -96,13 +96,13 @@ describe('Marketing next step', () => {
       .toEqual({ text: 'Round over. Join the debrief.', tone: 'info' });
   });
 
-  it('rule 2: a batch on the desk for 45 s or more, priced at the round\'s storage fee', () => {
+  it('rule 2: a batch on the desk for 45 s or more; a round that charges storage also prices it', () => {
     expect(marketingNextStep(mk({ deskBatchSentAt: NOW - s(45) }))).toEqual({
-      text: "Batch waiting 45 s. Release what's good enough. Storage costs 5¢ a joke each minute.", tone: 'warn',
+      text: "Batch waiting 45 s. Release what's good enough: customers arriving now can't buy it. Storage costs 5¢ a joke each minute.", tone: 'warn',
     });
     expect(marketingNextStep(mk({ deskBatchSentAt: NOW - s(44) })).tone).toBe('info');
     expect(marketingNextStep(mk({ deskBatchSentAt: NOW - s(130.9), storageFeePerJokeMinute: 0.25 })).text)
-      .toBe("Batch waiting 2 min 10 s. Release what's good enough. Storage costs 25¢ a joke each minute.");
+      .toBe("Batch waiting 2 min 10 s. Release what's good enough: customers arriving now can't buy it. Storage costs 25¢ a joke each minute.");
   });
 
   it('rule 2: the wait reads in minutes from 60 s, whole minutes from 10 min', () => {
@@ -116,9 +116,9 @@ describe('Marketing next step', () => {
     expect(waiting(3391)).toContain('Batch waiting 56 min.');
   });
 
-  it('rule 2: no storage clause when storage is free (CLASSIC)', () => {
+  it('rule 2: at the two-cost defaults (storage 0) the line names no storage price', () => {
     expect(marketingNextStep(mk({ deskBatchSentAt: NOW - s(45), storageFeePerJokeMinute: 0 })).text)
-      .toBe("Batch waiting 45 s. Release what's good enough.");
+      .toBe("Batch waiting 45 s. Release what's good enough: customers arriving now can't buy it.");
   });
 
   it('rule 3: the last decision discarded 60 % or more of a batch', () => {

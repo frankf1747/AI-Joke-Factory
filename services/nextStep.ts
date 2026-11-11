@@ -92,8 +92,10 @@ export function marketingNextStep(i: MarketingStepInput): NextStep {
   if (i.deskBatchSentAt != null) {
     const waited = Math.floor((i.now - i.deskBatchSentAt) / 1000);
     if (waited >= DESK_WAIT_S) {
+      // Two costs by default: no storage, so the cost of waiting is the customers it misses
+      // (spec 2026-11-10 §2.2). A round that still charges storage says so too.
       const storage = i.storageFeePerJokeMinute > 0 ? ` Storage costs ${fmtPerMinute(i.storageFeePerJokeMinute)}.` : '';
-      return warn(`Batch waiting ${fmtDuration(waited)}. Release what's good enough.${storage}`);
+      return warn(`Batch waiting ${fmtDuration(waited)}. Release what's good enough: customers arriving now can't buy it.${storage}`);
     }
   }
   if (i.lastDecision) {

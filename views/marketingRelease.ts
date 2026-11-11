@@ -43,8 +43,10 @@ export function releaseOutcome(i: ReleaseOutcomeInput): ReleaseOutcome {
   /* The jokes not released are discarded, and both are charged at publish. */
   const discarded = Math.max(0, i.batchSize - i.releasedCount);
   const cost = releaseCost(i.releasedCount, i.batchSize, i.costOfPublishing, i.costOfDiscard);
+  // A charge of $0 (no listing, discards free: the two-cost default) is not a fee, so it is not shown.
+  const charge = cost > 0 ? ` · −${fmt$(cost)}` : '';
   const base = i.releasedCount === 0
-    ? `Passed on this batch · ${i.batchSize} joke${i.batchSize > 1 ? 's' : ''} discarded · −${fmt$(cost)}`
-    : `Released ${i.releasedCount} joke${i.releasedCount > 1 ? 's' : ''}${discarded > 0 ? ` · ${discarded} discarded` : ''} · −${fmt$(cost)}`;
+    ? `Passed on this batch · ${i.batchSize} joke${i.batchSize > 1 ? 's' : ''} discarded${charge}`
+    : `Released ${i.releasedCount} joke${i.releasedCount > 1 ? 's' : ''}${discarded > 0 ? ` · ${discarded} discarded` : ''}${charge}`;
   return { toast: base + (i.note.trim() !== '' ? NOTE_SENT_SUFFIX : ''), cost, clearNote: true };
 }

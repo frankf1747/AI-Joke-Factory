@@ -2,12 +2,16 @@
    minute each. Captions are the spec's copy; every amount in them is read from
    the round (stepsFor fills them in), formatted as the game formats money:
    fmtFee for prices and fees ("$2", "$0.10"), cents for per-minute rates
-   ("5¢"). The only round-dependent copy is the Joke Maker's shipping step.
+   ("5¢"). The Joke Maker pays nothing, so its tour names no cost; the only
+   round-dependent copy in it is the batch-size step. Marketing's captions name
+   only the fees the round charges (an amount above 0): listing and hosting by
+   default (docs/superpowers/specs/2026-11-10-two-costs-feedback-bots-design.md §2.2).
 
    `target` is a data-tour id on the real screen (views/JokeMaker.tsx,
    views/QualityControl.tsx, components/StatTiles.tsx,
    components/CustomerFeedbackCard.tsx); null shows a centred card. */
 import { fmtCents, fmtFee, fmtPerMinute } from '../leanMode';
+import { shownFees } from '../shownFees';
 import {
   batchArrives, certify, customersReport, firstSale, nextBatchArrives, openFees, openSentBatch, pick,
   releaseSentBatch, sendBatch, splitOnDesk, swapOutSale, topicsAndTitles, typeDraft, writeNote,
@@ -39,11 +43,11 @@ export const JOKE_MAKER_STEPS: readonly DemoStep[] = [
     onEnter: certify, beats: [{ atMs: 3000, apply: sendBatch }],
   },
   {
-    id: 'jm-shipping', target: 'jm-shipping',
-    title: 'Every batch pays shipping.',
-    body: ({ roundNumber, fees }) => (roundNumber === 1
-      ? `Each batch of 5 costs ${fmtFee(fees.shippingFeeStandard)} to ship, so keep them coming but make them count.`
-      : `You choose the size now: ${fmtFee(fees.shippingFeeSmall)} for 1–4 jokes, ${fmtFee(fees.shippingFeeStandard)} for 5, ${fmtFee(fees.shippingFeeLarge)} for 6–10. Smaller batches come back with feedback sooner.`),
+    id: 'jm-batch-size', target: 'jm-send',
+    title: 'Batch size.',
+    body: ({ roundNumber }) => (roundNumber === 1
+      ? 'Every batch is 5 jokes. Keep them coming.'
+      : 'You choose the batch size now. Smaller batches reach customers and come back with feedback sooner.'),
   },
   {
     id: 'jm-value-stream', target: 'jm-value-stream',
@@ -60,7 +64,7 @@ export const JOKE_MAKER_STEPS: readonly DemoStep[] = [
   {
     id: 'jm-scoreboard', target: 'jm-stats', durationMs: 9000,
     title: 'Your scoreboard.',
-    body: 'Team rank, by profit, is your place among all teams, and profit is sales minus fees. "Found a buyer" counts the jokes that have sold. "Fees and wait times" shows where the money went.',
+    body: 'Team rank, by profit, is your place among all teams. "Found a buyer" counts the jokes that have sold, so you can see which batches worked.',
   },
   {
     id: 'jm-customers', target: null, durationMs: 9000,
@@ -78,7 +82,9 @@ export const MARKETING_STEPS: readonly DemoStep[] = [
   {
     id: 'mk-welcome', target: null,
     title: "You're Marketing.",
-    body: ({ fees }) => `You decide which jokes go to market. Listing a joke costs ${fmtFee(fees.costOfPublishing)}, and each sale earns ${fmtFee(fees.marketPrice)}.`,
+    body: ({ fees }) => (shownFees(fees).listing
+      ? `You decide which jokes go to market. Listing a joke costs ${fmtFee(fees.costOfPublishing)}, and each sale earns ${fmtFee(fees.marketPrice)}.`
+      : `You decide which jokes go to market. Each sale earns ${fmtFee(fees.marketPrice)}.`),
   },
   {
     id: 'mk-next', target: 'mk-next-step',
@@ -94,7 +100,7 @@ export const MARKETING_STEPS: readonly DemoStep[] = [
   {
     id: 'mk-pick', target: 'mk-jokes', durationMs: 9000,
     title: 'Pick the winners, quickly.',
-    body: ({ fees }) => `Tick the jokes customers will buy and leave the rest to be discarded (discarding costs ${fmtFee(fees.costOfDiscard)}). Don't be too strict: customers can only buy what's on the shelf.`,
+    body: ({ fees }) => `Tick the jokes customers will buy and leave the rest to be discarded${shownFees(fees).discard ? ` (discarding costs ${fmtFee(fees.costOfDiscard)})` : ''}. Don't be too strict: customers can only buy what's on the shelf.`,
     onEnter: pick(0), beats: [{ atMs: 1500, apply: pick(1) }, { atMs: 3000, apply: pick(2) }],
   },
   {
@@ -123,7 +129,7 @@ export const MARKETING_STEPS: readonly DemoStep[] = [
   {
     id: 'mk-fees', target: 'mk-more', durationMs: 9000,
     title: 'Fees add up.',
-    body: ({ fees }) => `"Fees and wait times" shows where your sales went. Every batch pays shipping. A batch waiting on your desk pays storage (${fmtCents(fees.storageFeePerJokeMinute)} a joke each minute), and an unsold joke pays hosting (${fmtPerMinute(fees.hostingFeePerJokeMinute)}). Release quickly.`,
+    body: ({ fees }) => feesCaption(fees),
     onEnter: s => nextBatchArrives(openFees(s)),
   },
   {
@@ -143,6 +149,26 @@ export const MARKETING_STEPS: readonly DemoStep[] = [
     body: 'Ship what sells, tell your Joke Maker why, and improve every batch.',
   },
 ];
+
+/**
+ * Marketing's fee step: listing and hosting in the spec's words ("Every joke you
+ * release costs $0.10 to list, and 5¢ a minute while it sits unsold. Release
+ * jokes that will sell."), then shipping and storage only in a round that still
+ * charges them. A fee that is 0 is never named.
+ */
+export function feesCaption(fees: TourRound['fees']): string {
+  const shown = shownFees(fees);
+  const list = `${fmtFee(fees.costOfPublishing)} to list`;
+  const host = `${fmtCents(fees.hostingFeePerJokeMinute)} a minute while it sits unsold`;
+  const parts: string[] = [];
+  if (shown.listing && shown.hosting) parts.push(`Every joke you release costs ${list}, and ${host}.`);
+  else if (shown.listing) parts.push(`Every joke you release costs ${list}.`);
+  else if (shown.hosting) parts.push(`Every joke you release costs ${host}.`);
+  if (shown.shipping) parts.push('Every batch pays shipping.');
+  if (shown.storage) parts.push(`A batch waiting on your desk pays storage (${fmtPerMinute(fees.storageFeePerJokeMinute)}).`);
+  parts.push('Release jokes that will sell.');
+  return parts.join(' ');
+}
 
 /** A step's caption, with the round's amounts filled in. */
 export function captionText(step: Pick<DemoStep, 'body'>, round: TourRound): string {

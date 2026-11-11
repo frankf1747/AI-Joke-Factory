@@ -56,7 +56,8 @@ const LS_QC_RATED_HISTORY = 'joke_factory_qc_rated_history_v1';
 const DEFAULT_ROUND2_BATCH_LIMIT = 10;
 const DEFAULT_MARKET_PRICE = 1;
 const DEFAULT_COST_OF_PUBLISHING = 0.1;
-const DEFAULT_COST_OF_DISCARD = 0.01;
+// The two-cost defaults (jokefactory_be domain defaults): discards are free.
+const DEFAULT_COST_OF_DISCARD = 0;
 // Marketing's decision clock (see services/marketingNudge.ts). Fixed: the Setup tab has no nudge settings.
 const DEFAULT_MARKETING_NUDGE_1_SECONDS = 60;
 const DEFAULT_MARKETING_NUDGE_2_SECONDS = 45;

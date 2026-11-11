@@ -13,11 +13,13 @@ describe('tourPlan', () => {
   it('builds the role\'s steps for the round, captions filled from its fees', () => {
     const r1 = tourPlan('JOKE_MAKER', CONFIG);
     expect(r1.options).toMatchObject({ role: 'JOKE_MAKER', roundNumber: 1 });
-    expect(r1.steps.find(s => s.id === 'jm-shipping')!.body).toBe(
-      'Each batch of 5 costs $2 to ship, so keep them coming but make them count.',
+    expect(r1.steps.find(s => s.id === 'jm-batch-size')!.body).toBe('Every batch is 5 jokes. Keep them coming.');
+    const r2 = tourPlan('JOKE_MAKER', { ...CONFIG, round: 2 });
+    expect(r2.steps.find(s => s.id === 'jm-batch-size')!.body).toBe(
+      'You choose the batch size now. Smaller batches reach customers and come back with feedback sooner.',
     );
-    const r2 = tourPlan('JOKE_MAKER', { ...CONFIG, round: 2, shippingFeeSmall: 0.5 });
-    expect(r2.steps.find(s => s.id === 'jm-shipping')!.body).toContain('You choose the size now: $0.50 for 1–4 jokes');
+    expect(tourPlan('QUALITY_CONTROL', CONFIG).steps.find(s => s.id === 'mk-fees')!.body)
+      .toContain('Every joke you release costs $0.10 to list, and 5¢ a minute while it sits unsold.');
     expect(tourPlan('QUALITY_CONTROL', CONFIG).steps).toHaveLength(12);
   });
 

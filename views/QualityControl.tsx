@@ -478,8 +478,9 @@ const QualityControl: React.FC = () => {
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-[13.5px]" style={{ color: 'var(--ink-2)' }}>
                       Selling <b className="font-semibold tabular-nums" style={{ fontFamily: MONO }}>{submittingIds.length}</b>, discarding{' '}
-                      <b className="font-semibold tabular-nums" style={{ fontFamily: MONO }}>{orderIds.length - submittingIds.length}</b>,{' '}
-                      <span style={{ color: 'var(--ink-3)' }}>{`costs ${fmt$(tallyCost)}`}</span>
+                      <b className="font-semibold tabular-nums" style={{ fontFamily: MONO }}>{orderIds.length - submittingIds.length}</b>
+                      {/* A $0 tally is no fee (nothing listed, discards free), so it is not shown. */}
+                      {tallyCost > 0 && <>, <span style={{ color: 'var(--ink-3)' }}>{`costs ${fmt$(tallyCost)}`}</span></>}
                     </span>
                     <button
                       type="button"
@@ -617,8 +618,8 @@ const QualityControl: React.FC = () => {
             Nothing is selected. You can pass on this batch: the{' '}
             {orderIds.length > 1
               ? `${orderIds.length} jokes stay unpublished and count as waste`
-              : 'joke stays unpublished and counts as waste'}{' '}
-            (<b>{fmt$(discardAllCost)}</b>). Or keep looking for something worth selling.
+              : 'joke stays unpublished and counts as waste'}
+            {discardAllCost > 0 && <> (<b>{fmt$(discardAllCost)}</b>)</>}. Or keep looking for something worth selling.
           </p>
         )}
         <div className="space-y-4">

@@ -165,18 +165,6 @@ export function fmtPerMinute(v: number): string {
   return `${fmtCents(v)} a joke each minute`;
 }
 
-/**
- * The Joke Maker's shipping line under Send. Round 1 sends one size, so it
- * names that size's fee ("Shipping: $2 per batch of 5"); Round 2 lists the
- * three tiers ("Shipping: $1 for 1–4 jokes · $2 for 5 · $3 for 6–10").
- */
-export function shippingLine(roundNumber: number, round1BatchSize: number, f: ShippingFees): string {
-  if (roundNumber <= 1) {
-    return `Shipping: ${fmtFee(shippingFeeFor(round1BatchSize, f))} per batch of ${round1BatchSize}`;
-  }
-  return `Shipping: ${fmtFee(f.shippingFeeSmall)} for 1–4 jokes · ${fmtFee(f.shippingFeeStandard)} for 5 · ${fmtFee(f.shippingFeeLarge)} for 6–10`;
-}
-
 /** The backend reports a WIP refusal as 409 CONFLICT with this prefix in the message. */
 export const WIP_LIMIT_MESSAGE = 'WIP_LIMIT_REACHED';
 

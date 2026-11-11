@@ -1,7 +1,9 @@
 /* "Fees and wait times" (spec 4.4): the disclosure that replaces "More numbers"
-   in Lean rounds, on both student screens. Collapsed by default. Two charts:
-   where this round's sales went (shipping, storage, hosting, listing and
-   discard fees, profit) and how long a joke waits on average. Amber is
+   on Marketing's screen in Lean rounds. Collapsed by default. Two charts: where
+   this round's sales went (the fees the round charges, then profit) and how
+   long a joke waits on average. Only the fees whose amount is above 0 for the
+   round appear (services/shownFees.ts): listing and hosting by default, plus
+   shipping, storage or discard in a round that still charges them. Amber is
    low-contrast, so every segment also has its amount in the legend.
 
    Imports nothing from the components barrel (it pulls in context). The screen
@@ -13,6 +15,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { feeBar, type FeeSegmentKey } from '../services/feeBar';
 import { fmtMinSec } from '../services/format';
 import { fmtMoney, leanFeesOf } from '../services/leanMode';
+import { shownFees, type ShownFees } from '../services/shownFees';
 import { readMoreOpen, writeMoreOpen } from './StatTiles';
 import type { ApiTeamSummaryResponse, GameConfig } from '../types';
 
@@ -22,7 +25,7 @@ const SEGMENT: Record<FeeSegmentKey, { name: string; color: string }> = {
   shipping: { name: 'Shipping', color: 'var(--chart-shipping)' },
   storage: { name: 'Storage', color: 'var(--chart-storage)' },
   hosting: { name: 'Hosting', color: 'var(--chart-hosting)' },
-  listing: { name: 'Listing and discard fees', color: 'var(--chart-discards)' },
+  listing: { name: 'Listing fees', color: 'var(--chart-discards)' },
   profit: { name: 'Profit', color: 'var(--selling)' },
 };
 
@@ -68,6 +71,12 @@ const SalesChart: React.FC<{ summary: ApiTeamSummaryResponse; config: GameConfig
     ...fees, profit: summary.profit,
   });
   const amountOf = (key: FeeSegmentKey) => bar.segments.find(s => s.key === key)?.amount ?? 0;
+  const shown: ShownFees = shownFees(config);
+  // Listing carries the discard fee too (feeBar), so it shows while either is charged.
+  const isShown = (key: FeeSegmentKey) =>
+    key === 'profit' || (key === 'listing' ? shown.listing || shown.discard : shown[key]);
+  const nameOf = (key: FeeSegmentKey) =>
+    key === 'listing' && shown.discard ? 'Listing and discard fees' : SEGMENT[key].name;
   const pct = (amount: number) => (bar.revenue > 0 ? Math.round((amount / bar.revenue) * 100) : 0);
   const sub: Partial<Record<FeeSegmentKey, string | undefined>> = {
     shipping: typeof summary.batches_created === 'number'
@@ -75,7 +84,7 @@ const SalesChart: React.FC<{ summary: ApiTeamSummaryResponse; config: GameConfig
     storage: "while on Marketing's desk",
     hosting: 'while no one has bought',
   };
-  const rows: FeeSegmentKey[] = ['shipping', 'storage', 'hosting', 'listing'];
+  const rows = (['shipping', 'storage', 'hosting', 'listing'] as const).filter(isShown);
   return (
     <section aria-label="Where your sales went" className="space-y-2.5">
       <div className="flex items-baseline justify-between gap-2">
@@ -83,15 +92,15 @@ const SalesChart: React.FC<{ summary: ApiTeamSummaryResponse; config: GameConfig
         <span className="text-sm" style={{ fontFamily: MONO, fontWeight: 500 }}>{fmtMoney(bar.revenue)}</span>
       </div>
       <Bar
-        parts={bar.segments.map(s => ({
+        parts={bar.segments.filter(s => isShown(s.key)).map(s => ({
           key: s.key,
           weight: bar.scaleTo > 0 ? s.amount : 0,
           color: SEGMENT[s.key].color,
-          title: `${SEGMENT[s.key].name} ${fmtMoney(s.amount)}, ${pct(s.amount)}% of sales`,
+          title: `${nameOf(s.key)} ${fmtMoney(s.amount)}, ${pct(s.amount)}% of sales`,
         }))}
       />
       <ul className="space-y-1">
-        {rows.map(k => <LegendRow key={k} color={SEGMENT[k].color} sub={sub[k]} right={fmtMoney(amountOf(k))}>{SEGMENT[k].name}</LegendRow>)}
+        {rows.map(k => <LegendRow key={k} color={SEGMENT[k].color} sub={sub[k]} right={fmtMoney(amountOf(k))}>{nameOf(k)}</LegendRow>)}
         {bar.loss != null ? (
           <LegendRow><span style={{ color: 'var(--warn)', fontWeight: 600 }}>Loss −{fmtMoney(bar.loss)}</span></LegendRow>
         ) : (
@@ -102,8 +111,12 @@ const SalesChart: React.FC<{ summary: ApiTeamSummaryResponse; config: GameConfig
   );
 };
 
-/** Two averages over different sets of jokes, so the total reads "about". The Released label is clamped so the tick labels never collide. */
-const WaitChart: React.FC<{ marketing: number; market: number }> = ({ marketing, market }) => {
+/**
+ * Two averages over different sets of jokes, so the total reads "about". The
+ * Released label is clamped so the tick labels never collide. Each wait says
+ * which fee it costs only while the round charges that fee.
+ */
+const WaitChart: React.FC<{ marketing: number; market: number; shown: ShownFees }> = ({ marketing, market, shown }) => {
   const total = marketing + market;
   const releasedAt = (marketing / total) * 100;
   const tick = 'text-[11px] text-[color:var(--ink-3)]';
@@ -116,7 +129,7 @@ const WaitChart: React.FC<{ marketing: number; market: number }> = ({ marketing,
       <Bar
         parts={[
           { key: 'marketing', weight: marketing, color: 'var(--chart-storage)', title: `With Marketing ${fmtMinSec(marketing)}` },
-          { key: 'market', weight: market, color: 'var(--chart-hosting)', title: `On market, waiting for a buyer ${fmtMinSec(market)}` },
+          { key: 'market', weight: market, color: 'var(--chart-hosting)', title: `Waiting for first buyer ${fmtMinSec(market)}` },
         ]}
       />
       <div className="relative h-4" aria-hidden="true">
@@ -125,8 +138,8 @@ const WaitChart: React.FC<{ marketing: number; market: number }> = ({ marketing,
         <span className={`absolute right-0 ${tick}`}>First sale</span>
       </div>
       <ul className="space-y-1">
-        <LegendRow color="var(--chart-storage)" sub="storage is charged">{`With Marketing ${fmtMinSec(marketing)}`}</LegendRow>
-        <LegendRow color="var(--chart-hosting)" sub="hosting is charged">{`On market, waiting for a buyer ${fmtMinSec(market)}`}</LegendRow>
+        <LegendRow color="var(--chart-storage)" sub={shown.storage ? 'storage is charged' : undefined}>{`With Marketing ${fmtMinSec(marketing)}`}</LegendRow>
+        <LegendRow color="var(--chart-hosting)" sub={shown.hosting ? 'hosting is charged' : undefined}>{`Waiting for first buyer ${fmtMinSec(market)}`}</LegendRow>
       </ul>
     </section>
   );
@@ -187,7 +200,7 @@ export const FeesAndWaits: React.FC<{
             {summary ? (
               <>
                 <SalesChart summary={summary} config={config} />
-                {marketing + market > 0 && <WaitChart marketing={marketing} market={market} />}
+                {marketing + market > 0 && <WaitChart marketing={marketing} market={market} shown={shownFees(config)} />}
               </>
             ) : (
               <p className="text-sm text-[color:var(--ink-3)]">Fees and wait times appear once the round starts.</p>

@@ -6,11 +6,9 @@ import { Batch } from '../types';
 import { stageCounts } from '../services/jokeState';
 import { computeAvgCreatedToPublishSeconds } from '../services/economics';
 import { isWatchMode } from '../services/watchMode';
-import { shippingLine } from '../services/leanMode';
 import { ValueStream } from '../components/jokeMaker/ValueStream';
 import { JokesByStage } from '../components/jokeMaker/JokesByStage';
 import { StatTiles, moreTilesKey } from '../components/StatTiles';
-import { FeesAndWaits } from '../components/FeesAndWaits';
 import { Scoreboard } from '../components/Scoreboard';
 import { foundABuyer, rankInputOf } from '../services/scoreboard';
 import { NextStepLive } from '../components/NextStep';
@@ -40,7 +38,7 @@ const JokeMaker: React.FC = () => {
   const [certifiedState, setCertified] = useState(false);
   const [openSetState, setOpenSet] = useState<Set<string>>(() => new Set());
   /* Guided tour: inside the demo stage the script drives the textbox, the
-     certify box, which batches are open, "Fees and wait times" and the Next step
+     certify box, which batches are open, "More numbers" and the Next step
      line's clock (services/tour/demoUi.ts). In the real game there is no
      DemoUi and the student's own state does. */
   const demoUi = useDemoUi();
@@ -64,8 +62,9 @@ const JokeMaker: React.FC = () => {
   );
 
   const trimmedLen = input.trim().length;
-  /* Lean market mode: every batch sent pays a shipping fee by its size (the
-     line under Send). There is no WIP limit: the Joke Maker may always send. */
+  /* The Joke Maker pays nothing and sees no cost copy: both costs, listing and
+     hosting, are Marketing's (docs/superpowers/specs/2026-11-10-two-costs-feedback-bots-design.md
+     §2.2). There is no WIP limit: the Joke Maker may always send. */
   const leanMode = config.marketMode === 'LEAN';
   const canSubmit = config.isActive && certified && trimmedLen >= MIN_RAW_CHARS;
 
@@ -221,11 +220,6 @@ const JokeMaker: React.FC = () => {
                   Send to Marketing <span aria-hidden="true">→</span>
                 </button>
               </div>
-              {leanMode && (
-                <div data-tour="jm-shipping" className="text-xs text-right text-[color:var(--ink-3)]">
-                  {shippingLine(config.round, config.round1BatchSize, config)}
-                </div>
-              )}
             </div>
           </Card>
           </fieldset>
@@ -250,26 +244,16 @@ const JokeMaker: React.FC = () => {
               publishedJokes={teamSummary ? teamSummary.published_jokes : null}
               foundBuyer={teamSummary ? foundABuyer(myBatches) : null}
             />
-            {leanMode ? (
-              <FeesAndWaits
-                summary={teamSummary}
-                config={config}
-                storageKey={moreTilesKey('joke_maker')}
-                open={demoUi ? demoUi.feesOpen : undefined}
-                extras={[{ label: 'Batches', value: batchesCreated }, { label: 'Content Waste', value: waste }]}
-              />
-            ) : (
-              <StatTiles
-                storageKey={moreTilesKey('joke_maker')}
-                open={demoUi ? demoUi.feesOpen : undefined}
-                keyTiles={[]}
-                moreTiles={[
-                  <StatBox key="lead" label="Created to Publish" value={fmtSeconds(avgLeadSec)} tone="sky" />,
-                  <StatBox key="batches" label="Batches" value={batchesCreated} tone="slate" />,
-                  <StatBox key="waste" label="Content Waste" value={waste} tone="rose" />,
-                ]}
-              />
-            )}
+            <StatTiles
+              storageKey={moreTilesKey('joke_maker')}
+              open={demoUi ? demoUi.feesOpen : undefined}
+              keyTiles={[]}
+              moreTiles={[
+                <StatBox key="lead" label="Created to Publish" value={fmtSeconds(avgLeadSec)} tone="sky" />,
+                <StatBox key="batches" label="Batches" value={batchesCreated} tone="slate" />,
+                <StatBox key="waste" label="Content Waste" value={waste} tone="rose" />,
+              ]}
+            />
           </div>
           <JokesByStage batches={myBatches} unprocessedBatches={teamSummary?.unprocessed_batches} />
         </div>

@@ -58,14 +58,14 @@ describe('student screens', () => {
   const mk = (config = TEST_CONFIG) => renderWithGame(QualityControl, { user: testUser(Role.QUALITY_CONTROL), config });
   const scoreboardCopy = ['Team rank, by profit', 'Profit', 'Found a buyer', 'Sales'];
 
-  it('Joke Maker: the Scoreboard replaces the key tiles; Fees and wait times replaces More numbers in Lean', () => {
+  it('Joke Maker: the Scoreboard replaces the key tiles; More numbers stays folded, with no fees (the Joke Maker pays none)', () => {
     const out = jm();
     expect(out).toContain('data-tour="jm-stats"');
     expect(inOrder(labels(out, scoreboardCopy))).toBe(true);
     for (const gone of ['Current Team Rank', 'Jokes Sold / Made']) expect(out).not.toContain(gone);
-    for (const folded of ['Batches', 'Created to Publish', 'Content Waste', 'Where your sales went']) expect(out).not.toContain(folded);
-    expect(out).toContain('Fees and wait times');
-    expect(out).not.toContain('More numbers');
+    for (const folded of ['Where your sales went']) expect(out).not.toContain(folded);
+    expect(out).toContain('More numbers');
+    expect(out).not.toContain('Fees and wait times');
     expect(out).not.toContain('text-xl" title');
   });
   it('Marketing: the Scoreboard replaces the key tiles; Fees and wait times is folded', () => {
@@ -80,13 +80,11 @@ describe('student screens', () => {
   it('before the round starts the Scoreboard shows dashes on both screens', () => {
     for (const out of [jm(), mk()]) expect(out).toContain('>—<');
   });
-  it('open (remembered), Lean: the charts, then the plain list of the other numbers; the fee and wait tiles are gone', () => {
+  it('open (remembered), Lean: the Joke Maker\'s own numbers; Marketing\'s charts, then the plain list of the other numbers', () => {
     vi.stubGlobal('localStorage', { getItem: () => '1' });
     const j = jm();
-    expect(j).toContain('Fees and wait times appear once the round starts.');
-    expect(j).toContain('Content Waste');
-    expect(j).toContain('Batches');
-    expect(j).not.toContain('Created to Publish');
+    for (const l of ['Fewer numbers', 'Batches', 'Created to Publish', 'Content Waste']) expect(j).toContain(l);
+    expect(j).not.toContain('Fees and wait times');
     const m = mk();
     expect(m).toContain('Content Backlog');
     expect(m).toContain('Content Waste');

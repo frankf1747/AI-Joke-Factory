@@ -8,13 +8,18 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { GameContext, type GameContextType } from '../../context';
 import { Role, type GameConfig, type User } from '../../types';
 
-/** A running Round 1 at the default Lean fees. */
+/** A running Round 1 at the five fees that preceded the two costs (an old round: every fee shown). */
 export const TEST_CONFIG: GameConfig = {
   status: 'PLAYING', round: 1, isActive: true, showTeamPopup: false, startTime: 0, elapsedTime: 60,
   customerBudget: 3, round1BatchSize: 5, round2BatchLimit: 10, marketPrice: 1, costOfPublishing: 0.1, costOfDiscard: 0.01,
   marketingNudge1Seconds: 60, marketingNudge2Seconds: 45, idealProfile: {},
   marketMode: 'LEAN', arrivalWindowSeconds: 900, setupCostPerBatch: 0, carryingCostPerJokeMinute: 0, wipLimit: 0,
   shippingFeeSmall: 1, shippingFeeStandard: 2, shippingFeeLarge: 3, storageFeePerJokeMinute: 0.05, hostingFeePerJokeMinute: 0.05, customersPerTeam: 18,
+};
+
+/** A running Round 1 at the two-cost defaults: listing $0.10 and hosting 5¢ a joke-minute, every other fee 0. */
+export const TWO_COST_CONFIG: GameConfig = {
+  ...TEST_CONFIG, costOfDiscard: 0, shippingFeeSmall: 0, shippingFeeStandard: 0, shippingFeeLarge: 0, storageFeePerJokeMinute: 0,
 };
 
 /** A signed-in user; teamId null for the instructor. */

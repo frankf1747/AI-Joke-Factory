@@ -98,7 +98,7 @@ const Header: React.FC<{ names: string }> = ({ names }) => {
 
 /** Where a signed-in pair waits until the instructor gives it a team and a role. */
 const WaitingRoom: React.FC = () => {
-  const { user, roundStatuses } = useGame();
+  const { user, roundStatuses, config } = useGame();
   const nextStep = nextRoundStep(roundStatuses);
   const names = pairNames(user?.display_name ?? '');
   const seated = seatRole(user?.role);
@@ -170,7 +170,7 @@ const WaitingRoom: React.FC = () => {
         <div className="mt-3.5 grid grid-cols-[auto_1fr] items-baseline gap-3.5 rounded-[12px] border px-5 py-4" style={SHEET}>
           <b className="text-[13px] font-semibold text-[color:var(--ink-3)]">The goal</b>
           <p className="m-0 text-sm text-[color:var(--ink-2)]">
-            Earn the most profit as a team. AI customers buy the jokes that fit their hidden taste, and every joke you release or discard has a cost.
+            Earn the most profit as a team. AI customers buy the jokes that fit their hidden taste, and every joke you release{config.costOfDiscard > 0 ? ' or discard' : ''} has a cost.
           </p>
         </div>
       </main>
