@@ -1,8 +1,10 @@
 /* The Lean settings on the instructor's Setup tab: the arrival window (Round
-   timing), customers per team (Market) and the five fees (Costs). One rule set
-   for both rounds, so there is no market mode, preset or WIP limit to choose.
-   Apply writes them to every round still being configured (both rounds before
-   the class starts); a round that has started is locked. */
+   timing), customers per team (Market) and the per-minute and shipping fees
+   (Costs). One rule set for both rounds, so there is no market mode, preset or
+   WIP limit to choose. Apply writes them to every round still being configured
+   (both rounds before the class starts); a round that has started is locked.
+   Costs shows hosting always; shipping and storage only while the round charges
+   them (spec 2026-11-10 §2.2: two costs, listing and hosting, by default). */
 import React, { useState } from 'react';
 import { customersHint } from '../services/leanMode';
 import { arrivalBoxText, arrivalSecondsFromMinutes, shippingOrderError, type FeeConfigValues } from '../services/feeConfig';
@@ -31,7 +33,9 @@ export const FeeConfigFields: React.FC<{
   teamCount?: number;
   /** The settings Apply would send, each outlined in amber. */
   changed?: ReadonlySet<keyof FeeConfigValues>;
-}> = ({ part, values, onChange, disabled, lockHint, teamCount, changed }) => {
+  /** Costs only: whether the round charges shipping and storage (stored above 0); both shown when not given. */
+  shown?: { shipping: boolean; storage: boolean };
+}> = ({ part, values, onChange, disabled, lockHint, teamCount, changed, shown = { shipping: true, storage: true } }) => {
   // The arrival box's text while it is being typed in; null once it is left.
   const [arrivalDraft, setArrivalDraft] = useState<string | null>(null);
   const set = (k: keyof FeeConfigValues) => (v: number) => onChange({ ...values, [k]: v });
@@ -67,9 +71,16 @@ export const FeeConfigFields: React.FC<{
     );
   }
 
-  const orderError = disabled ? null : shippingOrderError(values);
+  const orderError = disabled || !shown.shipping ? null : shippingOrderError(values);
   return (
     <>
+      <SetupField label="Hosting, unsold on the market" htmlFor="cfg-hosting-fee" hint="Every minute a released joke has not sold.">
+        <SetupInput
+          id="cfg-hosting-fee" label="Hosting fee per joke-minute" value={values.hostingFeePerJokeMinute}
+          step="0.01" min="0" prefix="$" suffix="per joke-minute" {...common('hostingFeePerJokeMinute')} onChange={set('hostingFeePerJokeMinute')}
+        />
+      </SetupField>
+      {shown.shipping && (
       <SetupField label="Shipping per batch, by size" wide hint={orderError ? undefined : 'Must rise with batch size.'}>
         <div className="grid grid-cols-3 gap-2">
           {SHIPPING_TIERS.map(t => (
@@ -84,18 +95,15 @@ export const FeeConfigFields: React.FC<{
         </div>
         {orderError && <p role="alert" className="mt-[3px] text-[12px]" style={{ color: 'var(--warn)' }}>{orderError}</p>}
       </SetupField>
+      )}
+      {shown.storage && (
       <SetupField label="Storage, waiting on Marketing" htmlFor="cfg-storage-fee">
         <SetupInput
           id="cfg-storage-fee" label="Storage fee per joke-minute" value={values.storageFeePerJokeMinute}
           step="0.01" min="0" prefix="$" suffix="per joke-minute" {...common('storageFeePerJokeMinute')} onChange={set('storageFeePerJokeMinute')}
         />
       </SetupField>
-      <SetupField label="Hosting, unsold on the market" htmlFor="cfg-hosting-fee">
-        <SetupInput
-          id="cfg-hosting-fee" label="Hosting fee per joke-minute" value={values.hostingFeePerJokeMinute}
-          step="0.01" min="0" prefix="$" suffix="per joke-minute" {...common('hostingFeePerJokeMinute')} onChange={set('hostingFeePerJokeMinute')}
-        />
-      </SetupField>
+      )}
     </>
   );
 };

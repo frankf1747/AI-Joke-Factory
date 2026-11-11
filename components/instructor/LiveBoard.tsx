@@ -8,6 +8,16 @@ import { boardColumns, sortBoard, type BoardRanks, type BoardRow, type BoardSort
 import { fmtMoney } from '../../services/leanMode';
 import { fmtMinSec } from '../../services/format';
 import { formatProfit } from '../../services/scoreboard';
+import { ALL_FEES_SHOWN, FEE_KINDS, feeNames, type FeeKind, type ShownFees } from '../../services/shownFees';
+
+/** Fee colours on the board, the chart tokens of index.css. */
+const FEE_COLOR: Record<FeeKind, string> = {
+  listing: 'var(--chart-never-sold)', hosting: 'var(--chart-hosting)', shipping: 'var(--chart-shipping)',
+  storage: 'var(--chart-storage)', discard: 'var(--chart-discards)',
+};
+const FEE_LABEL: Record<FeeKind, string> = {
+  listing: 'Listing', hosting: 'Hosting', shipping: 'Shipping', storage: 'Storage', discard: 'Discard',
+};
 
 export const QUIET_BUTTON =
   'inline-flex items-center gap-[7px] rounded-[var(--r-md)] px-3.5 py-[9px] text-sm font-medium transition-colors hover:bg-[color:var(--paper)]';
@@ -23,8 +33,8 @@ const Kpi: React.FC<{ label: string; value: string; sub?: string }> = ({ label, 
   </div>
 );
 
-/** Sales, profit with best and worst, and in a Lean round never sold and fees. */
-export const ClassTotalsRow: React.FC<{ totals: ClassTotals }> = ({ totals: t }) => {
+/** Sales, profit with best and worst, and in a Lean round never sold and fees (the round's charged fees, named). */
+export const ClassTotalsRow: React.FC<{ totals: ClassTotals; shown?: ShownFees }> = ({ totals: t, shown = ALL_FEES_SHOWN }) => {
   const lean = t.neverSold != null && t.fees != null;
   return (
     <div className={`grid grid-cols-2 gap-3 ${lean ? 'lg:grid-cols-4' : ''}`}>
@@ -41,24 +51,25 @@ export const ClassTotalsRow: React.FC<{ totals: ClassTotals }> = ({ totals: t })
             value={String(t.neverSold)}
             sub={t.neverSoldShare != null ? `${Math.round(t.neverSoldShare * 100)}% of released jokes` : undefined}
           />
-          <Kpi label="Fees paid" value={fmtMoney(t.fees!)} sub="shipping, storage and hosting" />
+          <Kpi label="Fees paid" value={fmtMoney(t.fees!)} sub={feeNames(shown)} />
         </>
       )}
     </div>
   );
 };
 
-const FeeBar: React.FC<{ row: BoardRow; max: number }> = ({ row, max }) => {
+/** One segment per fee the round charges (listing and hosting by default), widths to scale with `max`. */
+const FeeBar: React.FC<{ row: BoardRow; max: number; shown: ShownFees }> = ({ row, max, shown }) => {
   const w = (v: number) => `${(Math.max(0, v) / max) * 70}px`;
-  const { shipping, storage, hosting } = row.fees;
+  const kinds = FEE_KINDS.filter(k => shown[k]);
   return (
     <span
       className="mr-2 inline-flex h-[7px] w-[70px] gap-px align-middle"
-      title={`Shipping ${fmtMoney(shipping)}, storage ${fmtMoney(storage)}, hosting ${fmtMoney(hosting)}`}
+      title={kinds.map(k => `${FEE_LABEL[k]} ${fmtMoney(row.fees[k])}`).join(', ')}
     >
-      <i className="block h-full rounded-[1px]" style={{ width: w(shipping), background: 'var(--chart-shipping)' }} />
-      <i className="block h-full rounded-[1px]" style={{ width: w(storage), background: 'var(--chart-storage)' }} />
-      <i className="block h-full rounded-[1px]" style={{ width: w(hosting), background: 'var(--chart-hosting)' }} />
+      {kinds.map(k => (
+        <i key={k} className="block h-full rounded-[1px]" style={{ width: w(row.fees[k]), background: FEE_COLOR[k] }} />
+      ))}
     </span>
   );
 };
@@ -84,9 +95,11 @@ export interface LeaderboardTableProps {
   ranks?: BoardRanks;
   /** Large type for projecting. */
   big?: boolean;
+  /** The fees the round charges: the fee bar has a segment for each. */
+  shown?: ShownFees;
 }
 
-export const LeaderboardTable: React.FC<LeaderboardTableProps> = ({ rows, lean, sort, onSort, ranks, big = false }) => {
+export const LeaderboardTable: React.FC<LeaderboardTableProps> = ({ rows, lean, sort, onSort, ranks, big = false, shown = ALL_FEES_SHOWN }) => {
   const columns = boardColumns(lean);
   const sorted = sortBoard(rows, sort);
   const maxFees = Math.max(...rows.map(r => r.feesTotal ?? 0), 0.01);
@@ -154,7 +167,7 @@ export const LeaderboardTable: React.FC<LeaderboardTableProps> = ({ rows, lean, 
                     <td className={`${pad} whitespace-nowrap text-right`} style={td}>
                       {r.feesTotal != null ? (
                         <>
-                          <FeeBar row={r} max={maxFees} />
+                          <FeeBar row={r} max={maxFees} shown={shown} />
                           <span className="font-mono">{fmtMoney(r.feesTotal)}</span>
                         </>
                       ) : '–'}
@@ -178,10 +191,11 @@ export interface PresentBoardProps {
   lean: boolean;
   sort: BoardSort;
   onClose: () => void;
+  shown?: ShownFees;
 }
 
 /** The full-screen, large-type copy of the board for the projector. Esc or Close exits. */
-export const PresentBoard: React.FC<PresentBoardProps> = ({ round, rows, lean, sort, onClose }) => {
+export const PresentBoard: React.FC<PresentBoardProps> = ({ round, rows, lean, sort, onClose, shown }) => {
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     closeRef.current?.focus();
@@ -205,7 +219,7 @@ export const PresentBoard: React.FC<PresentBoardProps> = ({ round, rows, lean, s
         </button>
       </div>
       <div style={SHEET}>
-        <LeaderboardTable rows={rows} lean={lean} sort={sort} big />
+        <LeaderboardTable rows={rows} lean={lean} sort={sort} big shown={shown} />
       </div>
     </div>
   );

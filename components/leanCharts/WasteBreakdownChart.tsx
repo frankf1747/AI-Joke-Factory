@@ -1,12 +1,14 @@
 /* Chart 1, "Where the money leaked" (instructor only). One bar per team, most
-   fees first, split into the five kinds of waste in dollars, with the total at
-   the end of each bar. Shipping + Storage + Hosting equals the leaderboard's
-   fees for that team. Plain rounded segments, like the fee bars elsewhere. */
+   fees first, split into the kinds of waste in dollars, with the total at the
+   end of each bar. Only the fees the round charges get a segment and a legend
+   entry: Hosting and "Listing fees, never sold" at the two-cost defaults
+   (spec 2026-11-10 §2.2). Plain rounded segments, like the fee bars elsewhere. */
 import React from 'react';
 import { Card } from '../ui';
 import type { LeanChartsResponse } from '../../types/api';
 import { fmtMoney } from '../../services/leanMode';
-import { LEAN_CHARTS_UNAVAILABLE_TEXT, NO_BATCHES_TEXT, WASTE_SEGMENTS, hasWaste, wasteBars } from '../../services/leanCharts';
+import { LEAN_CHARTS_UNAVAILABLE_TEXT, NO_BATCHES_TEXT, hasWaste, wasteBars, wasteSegmentsFor } from '../../services/leanCharts';
+import { ALL_FEES_SHOWN, type ShownFees } from '../../services/shownFees';
 import { ChartLegend, ChartNotice } from './chartParts';
 
 export interface WasteBreakdownChartProps {
@@ -14,12 +16,15 @@ export interface WasteBreakdownChartProps {
   teamNames: Record<string, string>;
   unavailable?: boolean;
   className?: string;
+  /** The fees the round charges; every kind when not given. */
+  shown?: ShownFees;
 }
 
 export const WasteBreakdownChart: React.FC<WasteBreakdownChartProps> = ({
-  data, teamNames, unavailable = false, className = '',
+  data, teamNames, unavailable = false, className = '', shown = ALL_FEES_SHOWN,
 }) => {
   const rows = wasteBars(data, teamNames);
+  const segments = wasteSegmentsFor(shown);
   const max = Math.max(0.01, ...rows.map(r => r.total));
   return (
     <Card title="Where the money leaked" subtitle="Fees per team, most first. Shorter is leaner." className={className}>
@@ -33,7 +38,7 @@ export const WasteBreakdownChart: React.FC<WasteBreakdownChartProps> = ({
               <span className="truncate text-right text-[12.5px]" style={{ color: 'var(--ink-3)' }} title={r.team}>{r.team}</span>
               <span className="flex items-center gap-1.5">
                 <span className="flex h-4 gap-0.5" style={{ width: `calc((100% - 64px) * ${r.total / max})` }}>
-                  {WASTE_SEGMENTS.filter(s => r[s.key] > 0).map(s => (
+                  {segments.filter(s => r[s.key] > 0).map(s => (
                     <i
                       key={s.key}
                       className="block h-full min-w-[4px] rounded-[2px] first:rounded-l-[4px] last:rounded-r-[4px]"
@@ -48,7 +53,7 @@ export const WasteBreakdownChart: React.FC<WasteBreakdownChartProps> = ({
           ))}
         </div>
       )}
-      <ChartLegend items={WASTE_SEGMENTS.map(s => ({ label: s.label, color: s.color, kind: 'square' as const }))} />
+      <ChartLegend items={segments.map(s => ({ label: s.label, color: s.color, kind: 'square' as const }))} />
     </Card>
   );
 };

@@ -23,6 +23,14 @@ describe('classTotals', () => {
     });
   });
 
+  it('counts listing at the round\'s price in the fees: listing + hosting at the two-cost defaults', () => {
+    const rows = [
+      row(1, { published_jokes: 9, discarded_jokes: 1, lean: lean({ shipping_cost: 0, storage_cost: 0, hosting_cost: 0.5 }, []) }),
+      row(2, { published_jokes: 6, discarded_jokes: 4, lean: lean({ shipping_cost: 0, storage_cost: 0, hosting_cost: 0.75 }, []) }),
+    ];
+    expect(classTotals(rows, true, { costOfPublishing: 0.1, costOfDiscard: 0 }).fees).toBeCloseTo(1.5 + 1.25);
+  });
+
   it('gives no never-sold or fee totals for a Classic round', () => {
     const t = classTotals([row(1, { profit: 2 }), row(2, { profit: 5 })], false);
     expect(t.neverSold).toBeNull();

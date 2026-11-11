@@ -28,7 +28,19 @@ describe('boardRows', () => {
       },
     })], { '3': 'Zebras' });
     expect(r).toMatchObject({ teamId: '3', team: 'Zebras', rank: 2, neverSold: 3, feesTotal: 2.75, sentToReleased: 72, toFirstSale: null });
-    expect(r.fees).toEqual({ shipping: 2, storage: 0.5, hosting: 0.25 });
+    expect(r.fees).toEqual({ shipping: 2, storage: 0.5, hosting: 0.25, listing: 0, discard: 0 });
+  });
+
+  it('adds listing (and discard) at the round\'s prices to the fees', () => {
+    const [r] = boardRows([row(3, 2, 1.5, {
+      published_jokes: 8, discarded_jokes: 2,
+      lean: {
+        batches_submitted: 1, setup_cost: 0, carrying_cost: 0, shipping_cost: 0, storage_cost: 0, hosting_cost: 1.25,
+        avg_submit_to_publish_s: 72, avg_publish_to_first_sale_s: 0, batch_series: [],
+      },
+    })], {}, { costOfPublishing: 0.1, costOfDiscard: 0 });
+    expect(r.fees).toEqual({ shipping: 0, storage: 0, hosting: 1.25, listing: 0.8, discard: 0 });
+    expect(r.feesTotal).toBeCloseTo(2.05);
   });
 
   it('keeps never sold and fees empty for a row the backend sent without lean', () => {

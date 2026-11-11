@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import Instructor, { type ScreenTab } from './Instructor';
-import { renderWithGame, testUser, TEST_CONFIG } from './testing/renderWithGame';
+import { renderWithGame, testUser, TEST_CONFIG, TWO_COST_CONFIG } from './testing/renderWithGame';
 import { Role, type ApiInstructorStatsResponse, type ApiMarketItem, type InstructorLobby } from '../types';
 import type { LeanTeamStats } from '../types/api';
 import { LeaderboardTable, PresentBoard } from '../components/instructor/LiveBoard';
@@ -44,8 +44,9 @@ describe('Instructor Live tab, the leaderboard', () => {
     expect(out).toContain('Leaderboard, Round 1');
     expect(headers(out)).toEqual(LEAN_HEADERS);
     expect(out).toMatch(/<th[^>]*aria-sort="descending"[^>]*><button[^>]*>Profit/);
-    expect(out).toContain('title="Shipping $8.00, storage $1.50, hosting $0.20"');
-    expect(out).toContain('$9.70');
+    // An old round charges all five: listing 8 × $0.10 and discard 1 × $0.01 join the Lean fees.
+    expect(out).toContain('title="Listing $0.80, Hosting $0.20, Shipping $8.00, Storage $1.50, Discard $0.01"');
+    expect(out).toContain('$10.51');
     // Sent to released and to first sale read m:ss.
     expect(out).toContain('0:42');
     expect(out).toContain('1:30');
@@ -101,8 +102,8 @@ describe('Instructor Live tab, the leaderboard', () => {
       user: instructor,
       instructorStatsRound1: { round_id: 1, leaderboard: [row(1, { setup_cost: 4, carrying_cost: 2.5 })] },
     });
-    expect(out).toContain('title="Shipping $4.00, storage $2.50, hosting $0.00"');
-    expect(out).toContain('$6.50');
+    expect(out).toContain('title="Listing $0.80, Hosting $0.00, Shipping $4.00, Storage $2.50, Discard $0.01"');
+    expect(out).toContain('$7.31');
     expect(out).not.toContain('NaN');
   });
 
@@ -156,7 +157,18 @@ describe('Instructor Live tab, class totals', () => {
     expect(out).toContain('best $4.00, worst −$1.50');
     // 6 of the 8 jokes the batches released never sold (published_jokes says 16).
     expect(out).toContain('75% of released jokes');
-    expect(out).toContain('shipping, storage and hosting');
+    expect(out).toContain('listing, hosting, shipping, storage and discard');
+  });
+
+  it('at the two-cost defaults: Fees = listing + hosting, named so, with a two-segment fee bar', () => {
+    const out = renderWithGame(Instructor, {
+      user: instructor, config: TWO_COST_CONFIG,
+      instructorStatsRound1: { round_id: 1, leaderboard: [row(1, { shipping_cost: 0, storage_cost: 0, hosting_cost: 0.2 })] },
+    });
+    expect(out).toContain('listing and hosting');
+    expect(out).toContain('title="Listing $0.80, Hosting $0.20"');
+    expect(out).toContain('$1.00');
+    for (const gone of ['Shipping $', 'Storage $', 'shipping, storage', 'var(--chart-shipping)']) expect(out).not.toContain(gone);
   });
 
   it('shows only sales and profit in a Classic round', () => {

@@ -6,6 +6,7 @@ import React from 'react';
 import type { LeaderboardRow } from '../services/classTotals';
 import { boardRows, type BoardRow } from '../services/liveBoard';
 import { fmtMoney } from '../services/leanMode';
+import type { FeeRates } from '../services/shownFees';
 import { fmtMinSec } from '../services/format';
 import { formatProfit } from '../services/scoreboard';
 
@@ -18,7 +19,7 @@ export interface DebriefStats {
 export interface DebriefSide {
   profit: number;
   neverSold: number | null;
-  /** Shipping + storage + hosting (an older backend's setup + carrying). */
+  /** Every fee the team paid (listing + hosting at the two-cost defaults), as the Live board's Fees column. */
   fees: number | null;
   /** Average seconds from sent to released; null before the team has one. */
   sentToReleased: number | null;
@@ -46,10 +47,11 @@ export function debriefRows(
   r1: DebriefStats | null,
   r2: DebriefStats | null,
   teamNames: Record<string, string> = {},
+  rates?: Pick<FeeRates, 'costOfPublishing' | 'costOfDiscard'> | null,
 ): DebriefRow[] {
   const byTeam = new Map<string, DebriefRow>();
   for (const [key, stats] of [['r1', r1], ['r2', r2]] as const) {
-    for (const b of boardRows(stats?.leaderboard ?? [], teamNames)) {
+    for (const b of boardRows(stats?.leaderboard ?? [], teamNames, rates)) {
       const row = byTeam.get(b.teamId) ?? { teamId: b.teamId, team: b.team, r1: null, r2: null, profitChange: null };
       row[key] = side(b);
       byTeam.set(b.teamId, row);
@@ -89,7 +91,9 @@ export const LeanDebrief: React.FC<{
   /** Round 2 is ACTIVE or ENDED; before then there is nothing to compare. */
   round2Started: boolean;
   teamNames?: Record<string, string>;
-}> = ({ r1, r2, round2Started, teamNames }) => {
+  /** Listing and discard prices; both rounds play one rule set. */
+  rates?: Pick<FeeRates, 'costOfPublishing' | 'costOfDiscard'> | null;
+}> = ({ r1, r2, round2Started, teamNames, rates }) => {
   if (!round2Started) {
     return (
       <div className="px-5 py-10 text-center text-sm" style={{ color: 'var(--ink-3)' }}>
@@ -98,7 +102,7 @@ export const LeanDebrief: React.FC<{
       </div>
     );
   }
-  const rows = debriefRows(r1, r2, teamNames);
+  const rows = debriefRows(r1, r2, teamNames, rates);
   if (rows.length === 0) {
     return <p className="px-3 py-6 text-center text-sm" style={{ color: 'var(--ink-3)' }}>No teams on the board yet.</p>;
   }

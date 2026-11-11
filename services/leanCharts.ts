@@ -5,6 +5,7 @@
  * services/leanCharts.test.ts.
  */
 import type { LeanChartsClassAverage, LeanChartsResponse, LeanChartsTeam } from '../types/api';
+import type { FeeKind, ShownFees } from './shownFees';
 
 /** Same meaning, same colour, everywhere: the chart tokens in index.css (spec 3). */
 export const LEAN_CHART_COLORS = {
@@ -146,13 +147,18 @@ export type WasteSegmentKey = 'setup' | 'waiting' | 'shelf' | 'neverSold' | 'dis
 /** Bar segments in stacking order, left to right. The keys are the backend's
     waste keys (setup = shipping, waiting = storage, shelf = hosting); the
     labels are the fee names students see. */
-export const WASTE_SEGMENTS: ReadonlyArray<{ key: WasteSegmentKey; label: string; color: string }> = [
-  { key: 'setup', label: 'Shipping', color: LEAN_CHART_COLORS.shipping },
-  { key: 'waiting', label: 'Storage, waiting on Marketing', color: LEAN_CHART_COLORS.storage },
-  { key: 'shelf', label: 'Hosting, unsold on the market', color: LEAN_CHART_COLORS.hosting },
-  { key: 'neverSold', label: 'Listing fees, never sold', color: LEAN_CHART_COLORS.neverSold },
-  { key: 'discarded', label: 'Discards', color: LEAN_CHART_COLORS.discarded },
+export const WASTE_SEGMENTS: ReadonlyArray<{ key: WasteSegmentKey; label: string; color: string; fee: FeeKind }> = [
+  { key: 'setup', label: 'Shipping', color: LEAN_CHART_COLORS.shipping, fee: 'shipping' },
+  { key: 'waiting', label: 'Storage, waiting on Marketing', color: LEAN_CHART_COLORS.storage, fee: 'storage' },
+  { key: 'shelf', label: 'Hosting, unsold on the market', color: LEAN_CHART_COLORS.hosting, fee: 'hosting' },
+  { key: 'neverSold', label: 'Listing fees, never sold', color: LEAN_CHART_COLORS.neverSold, fee: 'listing' },
+  { key: 'discarded', label: 'Discards', color: LEAN_CHART_COLORS.discarded, fee: 'discard' },
 ];
+
+/** The segments of the fees the round charges: Hosting and Listing fees, never sold, at the two-cost defaults. */
+export function wasteSegmentsFor(shown: ShownFees): typeof WASTE_SEGMENTS {
+  return WASTE_SEGMENTS.filter(s => shown[s.fee]);
+}
 
 /** One bar per team, most waste first (ties: lowest team id first). */
 export function wasteBars(res: LeanChartsResponse | null, teamNames: Record<string, string> = {}): WasteBarRow[] {

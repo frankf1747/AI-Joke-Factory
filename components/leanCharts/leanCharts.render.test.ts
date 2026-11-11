@@ -6,6 +6,8 @@ import { IdleRows } from './IdleRows';
 import { BatchFeedbackChart } from './BatchFeedbackChart';
 import { LearningCyclesChart } from './LearningCyclesChart';
 import { batchScatter, cyclesForInstructor } from '../../services/leanCharts';
+import { shownFees } from '../../services/shownFees';
+import { TWO_COST_CONFIG } from '../../views/testing/renderWithGame';
 import { leanChartsFixture } from '../../services/leanCharts.testdata';
 
 const html = (el: ReactElement) => renderToStaticMarkup(el);
@@ -30,6 +32,13 @@ describe('chart 1, Where the money leaked', () => {
     expect(out).toContain('background:var(--chart-shipping)');
     expect(out).toContain('$13.00');
   });
+  it('at the two-cost defaults shows only Hosting and Listing fees, never sold', () => {
+    const out = html(createElement(WasteBreakdownChart, { data: res, teamNames: {}, shown: shownFees(TWO_COST_CONFIG) }));
+    for (const label of ['Hosting, unsold on the market', 'Listing fees, never sold']) expect(out).toContain(label);
+    for (const label of ['Shipping', 'Storage, waiting on Marketing', 'Discards']) expect(out).not.toContain(label);
+    expect(out).not.toContain('var(--chart-shipping)');
+  });
+
   it('says when the data is unavailable', () => {
     const out = html(createElement(WasteBreakdownChart, { data: res, teamNames: {}, unavailable: true }));
     expect(out).toContain('Chart data unavailable, retrying.');

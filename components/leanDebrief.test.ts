@@ -22,6 +22,12 @@ describe('debriefRows', () => {
     expect(rows[0].r1?.sentToReleased).toBe(360);
     expect(rows[0].r2?.sentToReleased).toBe(120);
   });
+  it('counts listing at the round\'s price in the fees, as the Live board does', () => {
+    const rows = debriefRows(r1 as any, r2 as any, {}, { costOfPublishing: 0.1, costOfDiscard: 0 });
+    expect(rows[0].r1?.fees).toBeCloseTo(24 + 8.8 + 40 * 0.1);
+    expect(rows[0].r2?.fees).toBeCloseTo(4 + 1.2 + 10 * 0.1);
+  });
+
   it('tolerates a team present in one round only', () => {
     const rows = debriefRows(r1 as any, { round_id: 2, leaderboard: [] } as any);
     expect(rows[0].r2).toBeNull();

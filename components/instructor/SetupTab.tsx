@@ -10,6 +10,7 @@ import { FeeConfigFields, type FeeConfigValues } from '../FeeConfigFields';
 import type { IdealDimension } from '../../config/dimensions';
 import type { GameConfig } from '../../types';
 import { productionTeamCount } from '../../services/leanMode';
+import { shownFees } from '../../services/shownFees';
 import { setupLockText, type SetupValues } from '../../services/roundConfig';
 import { SetupField, SetupInput } from './SetupField';
 
@@ -62,6 +63,9 @@ export const SetupTab: React.FC<SetupTabProps> = ({
     changed: changed as ReadonlySet<keyof FeeConfigValues>,
   };
   const set = (k: 'budget' | 'marketPrice' | 'costOfPublishing') => (v: number) => setLocal({ ...local, [k]: v });
+  // Shipping and storage appear only while the round charges them (the saved values, so a field
+  // does not vanish while the instructor types 0 into it).
+  const charged = shownFees(config);
 
   return (
     <div>
@@ -101,13 +105,13 @@ export const SetupTab: React.FC<SetupTabProps> = ({
           </Group>
           <Group title="Costs">
             <div className={FIELDS}>
-              <FeeConfigFields part="costs" {...fees} />
-              <SetupField label="Publishing" htmlFor="cfg-publishing">
+              <SetupField label="Listing" htmlFor="cfg-publishing" hint="Once for every joke Marketing releases.">
                 <SetupInput
-                  id="cfg-publishing" label="Publishing cost per joke" value={local.costOfPublishing} step="0.01" min="0" prefix="$" suffix="per joke"
+                  id="cfg-publishing" label="Listing fee per joke" value={local.costOfPublishing} step="0.01" min="0" prefix="$" suffix="per joke"
                   disabled={!canEditPricing} changed={changed.has('costOfPublishing')} onChange={set('costOfPublishing')}
                 />
               </SetupField>
+              <FeeConfigFields part="costs" {...fees} shown={{ shipping: charged.shipping, storage: charged.storage }} />
             </div>
           </Group>
           <Group title="Batches">

@@ -2,7 +2,8 @@
    columns, sorting and rank-move tags, and the live market's order. */
 import type { ApiMarketItem } from '../types';
 import type { LeaderboardRow } from './classTotals';
-import { leanFeesOf, neverSold, type LeanFees } from './leanMode';
+import { neverSold } from './leanMode';
+import { feesTotal, teamFees, type FeeRates, type TeamFees } from './shownFees';
 
 export interface BoardRow {
   teamId: string;
@@ -15,7 +16,9 @@ export interface BoardRow {
   discarded: number;
   /** Lean figures; null when the backend sent the row without `lean` (shown as "–"). */
   neverSold: number | null;
-  fees: LeanFees;
+  /** Every fee by kind: listing and discard at the round's prices, the rest from the Lean stats. */
+  fees: TeamFees;
+  /** All the team's fees (listing + hosting by default); null without lean figures. */
   feesTotal: number | null;
   /** Average seconds; null before the team has one. */
   sentToReleased: number | null;
@@ -25,11 +28,18 @@ export interface BoardRow {
 const num = (v: unknown): number => (Number.isFinite(Number(v)) ? Number(v) : 0);
 const seconds = (v: unknown): number | null => (num(v) > 0 ? num(v) : null);
 
-/** The stats rows as the board shows them. A renamed team keeps its new name. */
-export function boardRows(rows: LeaderboardRow[], teamNames: Record<string, string>): BoardRow[] {
+/**
+ * The stats rows as the board shows them. A renamed team keeps its new name.
+ * `rates` are the round's listing and discard prices (GameConfig): without
+ * them listing and discard read 0.
+ */
+export function boardRows(
+  rows: LeaderboardRow[], teamNames: Record<string, string>,
+  rates?: Pick<FeeRates, 'costOfPublishing' | 'costOfDiscard'> | null,
+): BoardRow[] {
   return rows.map((r, i) => {
     const teamId = String(r.team.id);
-    const fees = leanFeesOf(r.lean);
+    const fees = teamFees(r, rates);
     return {
       teamId,
       team: teamNames[teamId] || r.team.name || `Team ${teamId}`,
@@ -40,7 +50,7 @@ export function boardRows(rows: LeaderboardRow[], teamNames: Record<string, stri
       discarded: num(r.discarded_jokes),
       neverSold: neverSold(r.lean),
       fees,
-      feesTotal: r.lean ? fees.shipping + fees.storage + fees.hosting : null,
+      feesTotal: r.lean ? feesTotal(fees) : null,
       sentToReleased: seconds(r.lean?.avg_submit_to_publish_s),
       toFirstSale: seconds(r.lean?.avg_publish_to_first_sale_s),
     };

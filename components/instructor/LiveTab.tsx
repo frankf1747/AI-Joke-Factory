@@ -13,6 +13,7 @@ import type { LeanChartsState } from '../../services/useLeanCharts';
 import type { LeanChartsPanelState } from '../../services/leanCharts';
 import { classTotals, type LeaderboardRow } from '../../services/classTotals';
 import { boardRows, nextBoardSort, type BoardRanks, type BoardSort } from '../../services/liveBoard';
+import { shownFees } from '../../services/shownFees';
 import { ClassTotalsRow, LeaderboardTable, PresentBoard, QUIET_BUTTON, QUIET_BUTTON_STYLE } from './LiveBoard';
 import { LiveMarket } from './LiveMarket';
 
@@ -41,9 +42,18 @@ export const LiveTab: React.FC<LiveTabProps> = ({
   viewRound, leaderboard, boardLean, boardSort, setBoardSort, boardRanks, marketOpen,
   leanPanel, leanChartsRound, leanChartsR1, leanChartsR2,
 }) => {
-  const { teamNames, marketItems } = useGame();
-  const rows = useMemo(() => boardRows(leaderboard, teamNames), [leaderboard, teamNames]);
-  const totals = useMemo(() => classTotals(leaderboard, boardLean), [leaderboard, boardLean]);
+  const { teamNames, marketItems, config } = useGame();
+  // Both rounds play one rule set, so the selected config's prices price every row; only charged fees show.
+  const { costOfPublishing, costOfDiscard } = config;
+  const shown = shownFees(config);
+  const rows = useMemo(
+    () => boardRows(leaderboard, teamNames, { costOfPublishing, costOfDiscard }),
+    [leaderboard, teamNames, costOfPublishing, costOfDiscard],
+  );
+  const totals = useMemo(
+    () => classTotals(leaderboard, boardLean, { costOfPublishing, costOfDiscard }),
+    [leaderboard, boardLean, costOfPublishing, costOfDiscard],
+  );
   const [presenting, setPresenting] = useState(false);
   const presentRef = useRef<HTMLButtonElement>(null);
   const closePresent = React.useCallback(() => {
@@ -52,7 +62,7 @@ export const LiveTab: React.FC<LiveTabProps> = ({
   }, []);
   return (
     <>
-      <ClassTotalsRow totals={totals} />
+      <ClassTotalsRow totals={totals} shown={shown} />
 
       <Card
         title={`Leaderboard, Round ${viewRound}`}
@@ -70,11 +80,12 @@ export const LiveTab: React.FC<LiveTabProps> = ({
           sort={boardSort}
           onSort={key => setBoardSort(s => nextBoardSort(s, key))}
           ranks={boardRanks}
+          shown={shown}
         />
       </Card>
       {/* A portal: out of the tab's spacing and any stacking context, over the header too. */}
       {presenting && createPortal(
-        <PresentBoard round={viewRound} rows={rows} lean={boardLean} sort={boardSort} onClose={closePresent} />,
+        <PresentBoard round={viewRound} rows={rows} lean={boardLean} sort={boardSort} onClose={closePresent} shown={shown} />,
         document.body,
       )}
 
@@ -85,6 +96,7 @@ export const LiveTab: React.FC<LiveTabProps> = ({
           r1={leanChartsR1}
           r2={leanChartsR2}
           teamNames={teamNames}
+          shown={shown}
         />
       )}
 

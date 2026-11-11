@@ -2,7 +2,7 @@ import { createElement, type ComponentProps } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import Instructor, { type ScreenTab } from './Instructor';
 import { ControlBar, type ControlBarProps } from '../components/instructor/ControlBar';
-import { TEST_CONFIG, renderWithGame, testUser } from './testing/renderWithGame';
+import { TEST_CONFIG, TWO_COST_CONFIG, renderWithGame, testUser } from './testing/renderWithGame';
 import { Role } from '../types';
 import { leanConfigFromRound } from '../services/leanMode';
 import { DEFAULT_IDEAL_PROFILE, IDEAL_DIMENSIONS } from '../config/dimensions';
@@ -57,8 +57,24 @@ describe('Instructor screen, the Setup tab', () => {
     expect(out).toMatch(/id="cfg-market-price"[^>]*value="1"/);
     expect(out).toMatch(/id="cfg-publishing"[^>]*value="0.1"/);
     expect(out).toContain('Price per sale');
-    expect(out).toContain('Publishing');
+    expect(out).toContain('Listing');
+    expect(out).not.toContain('Publishing');
     expect(out).toContain('per joke-minute');
+  });
+
+  it('Costs shows only Listing and Hosting at the two-cost defaults, and shipping and storage again once charged', () => {
+    const two = setup({ config: { ...TWO_COST_CONFIG, isActive: false } });
+    expect(two).toMatch(/id="cfg-publishing"[^>]*value="0.1"/);
+    expect(two).toMatch(/id="cfg-hosting-fee"[^>]*value="0.05"/);
+    for (const gone of ['cfg-shipping-small', 'cfg-shipping-standard', 'cfg-shipping-large', 'cfg-storage-fee', 'Shipping per batch', 'Storage, waiting']) {
+      expect(two).not.toContain(gone);
+    }
+    expect(two.indexOf('id="cfg-publishing"')).toBeLessThan(two.indexOf('id="cfg-hosting-fee"'));
+    const storageBack = setup({ config: { ...TWO_COST_CONFIG, isActive: false, storageFeePerJokeMinute: 0.02 } });
+    expect(storageBack).toContain('id="cfg-storage-fee"');
+    expect(storageBack).not.toContain('cfg-shipping-small');
+    const oldRound = setup();
+    for (const id of ['cfg-shipping-small', 'cfg-storage-fee']) expect(oldRound).toContain(`id="${id}"`);
   });
 
   it('shows the stored customers per team (12 from the round)', () => {

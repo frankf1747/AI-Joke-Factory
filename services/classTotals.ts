@@ -1,7 +1,8 @@
 /* The class totals above the Instructor's leaderboard (spec 6b, 7.4): sums over
    the rows of GET /v1/instructor/rounds/:id/stats for the round in view. */
 import type { ApiInstructorStatsResponse } from '../types';
-import { leanFeesOf, neverSold } from './leanMode';
+import { neverSold } from './leanMode';
+import { feesTotal, teamFees, type FeeRates } from './shownFees';
 
 /** One team's row on the stats leaderboard. */
 export type LeaderboardRow = ApiInstructorStatsResponse['leaderboard'][number];
@@ -20,13 +21,16 @@ export interface ClassTotals {
       Classic round or before any batch released a joke. published_jokes comes from
       another count and can disagree with the series, so it is not the denominator. */
   neverSoldShare: number | null;
-  /** Shipping + storage + hosting; null in a Classic round. */
+  /** Every fee the teams paid (listing + hosting at the two-cost defaults); null in a Classic round. */
   fees: number | null;
 }
 
 const num = (v: unknown): number => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
-export function classTotals(rows: LeaderboardRow[], lean: boolean): ClassTotals {
+/** `rates` are the round's listing and discard prices (GameConfig); without them those two read 0. */
+export function classTotals(
+  rows: LeaderboardRow[], lean: boolean, rates?: Pick<FeeRates, 'costOfPublishing' | 'costOfDiscard'> | null,
+): ClassTotals {
   let sales = 0, profit = 0, released = 0, never = 0, seriesReleased = 0, fees = 0;
   let best: number | null = null, worst: number | null = null;
   for (const r of rows) {
@@ -38,8 +42,7 @@ export function classTotals(rows: LeaderboardRow[], lean: boolean): ClassTotals 
     worst = worst == null ? p : Math.min(worst, p);
     never += neverSold(r.lean) ?? 0;
     for (const b of r.lean?.batch_series ?? []) seriesReleased += Math.max(0, num(b.published));
-    const f = leanFeesOf(r.lean);
-    fees += f.shipping + f.storage + f.hosting;
+    fees += feesTotal(teamFees(r, rates));
   }
   const neverSoldShare = lean && seriesReleased > 0 ? Math.min(1, never / seriesReleased) : null;
   return { sales, profit, best, worst, released, neverSold: lean ? never : null, neverSoldShare, fees: lean ? fees : null };
