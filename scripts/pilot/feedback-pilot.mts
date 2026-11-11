@@ -50,6 +50,8 @@ const t0 = Date.now();
 const side = await runSetting(
   { baseUrl: BE, password: PASSWORD, instructor: process.env.PILOT_INSTRUCTOR ?? 'Local Instructor', corpus: loadTraitCorpus(), log: l => console.log(l) },
   env, env.costs, TODAY,
+  // After every class, so a stopped pilot keeps what it ran.
+  partial => { writeFileSync(SIDECAR, JSON.stringify(partial, null, 2)); writeFileSync(OUT, markdown(partial)); },
 );
 writeFileSync(SIDECAR, JSON.stringify(side, null, 2));
 writeFileSync(OUT, markdown(side));

@@ -619,6 +619,18 @@ export class JokeFactoryClient {
   }
 
   /**
+   * GET /v1/instructor/rounds/{rid}/config. Read-only: the round as saved, in
+   * the instructor projection (buy_threshold, ideal_profile ...). `ideal_profile`
+   * is absent until one has been saved. 404 for an unknown round.
+   */
+  instructorGetConfig(roundId: number, signal?: AbortSignal): Promise<InstructorRoundResponse> {
+    return this.call<InstructorRoundResponse>({
+      method: 'GET', path: `/v1/instructor/rounds/${roundId}/config`,
+      envelope: 'wrapped', needsIdentity: true, signal,
+    });
+  }
+
+  /**
    * POST /v1/instructor/rounds/{rid}/assign — creates N teams and assigns one
    * JM + one MARKETING per team from the WAITING and ASSIGNED pools, SHUFFLED.
    *

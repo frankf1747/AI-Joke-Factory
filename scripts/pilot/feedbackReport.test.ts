@@ -3,10 +3,12 @@ import { DEFAULT_IDEAL_PROFILE } from '../../config/dimensions';
 import { indexTraitCorpus, traitFit } from '../../services/shared/traitCorpus';
 import { loadTraitCorpus } from '../traits/loadTraitCorpus';
 import {
-  CUSTOMERS_BAR, GROUPS, batchFits, chooseDefaults, classTeams, markdown, parsePilotEnv, pilotConfig, successChecks,
-  summariseGroup, sweepCost, sweepMarkdown, teamRowFrom,
-  type BatchFit, type ClassResult, type Costs, type GroupId, type PilotSidecar, type TeamRow,
+  CUSTOMERS_BAR, GROUPS, MIN_ABOVE_BAR_JOKES, MIN_SOLD_SHARE, batchFits, chooseDefaults, classTeams, finishClass, markdown,
+  money, overLongNote, parsePilotEnv, pilotConfig, settingsLines, successChecks, summariseGroup, sweepCost, sweepMarkdown,
+  teamProblems, teamRowFrom, traitEvidence, traitModeError, usableClasses,
+  type BatchFit, type ClassResult, type Costs, type GroupId, type PilotSidecar, type RoundResult, type TeamRow,
 } from './feedbackReport';
+import { classMinuteLimit, classMinutesOf } from './report';
 
 const corpus = loadTraitCorpus();
 const index = indexTraitCorpus(corpus);
@@ -213,5 +215,174 @@ describe('parsePilotEnv', () => {
       .toMatchObject({ costs: { listing: 0.25, hosting: 0.2 }, classes: 1, seed: 's', tag: 'x' });
     expect(() => parsePilotEnv({ PILOT_HOSTING: '-1' })).toThrow(/PILOT_HOSTING/);
     expect(() => parsePilotEnv({ PILOT_CLASSES: '1.5' })).toThrow(/PILOT_CLASSES/);
+  });
+});
+
+/* ---- Failed, over-long and under-sampled classes ------------------------- */
+
+/** goodClass with its rounds timed: a 94 s round at 10× is 15.7 class minutes, 110 s is 18.3 (limit 16). */
+const timed = (durationS: number, classNo = 1): ClassResult => {
+  const c = goodClass();
+  c.classNo = classNo;
+  for (const r of c.rounds) {
+    r.durationS = durationS;
+    r.classMinutes = classMinutesOf(durationS, 10);
+    r.maxClassMinutes = classMinuteLimit(90, 4, 10);
+  }
+  return c;
+};
+
+describe('over-long rounds', () => {
+  it('notes a round that ran longer than window + settle + slack, and only that', () => {
+    const [ok, over] = [timed(94), timed(110)];
+    expect(overLongNote(1, ok.rounds[0])).toBeNull();
+    expect(overLongNote(1, over.rounds[1])).toContain('class 1 round 2 ran 18.3 class minutes, longer than 16');
+    const untimed: RoundResult = { round: 1, durationS: 500, rows: [] };
+    expect(overLongNote(1, untimed)).toBeNull();
+  });
+
+  it('finishClass records the note in the class errors and excludes the class', () => {
+    const over = finishClass(timed(110, 2));
+    expect(over.excluded).toBe(true);
+    expect(over.errors).toHaveLength(2);
+    expect(finishClass(timed(94)).excluded).toBeFalsy();
+    expect(usableClasses([timed(94), over])).toHaveLength(1);
+  });
+
+  it('leaves an excluded class out of the averages, the checks and the class count', () => {
+    const bad = finishClass(timed(110, 2));
+    bad.rounds[1].rows = bad.rounds[1].rows.map(r => ({ ...r, profit: -100 }));
+    expect(successChecks([timed(94), bad])).toEqual(successChecks([timed(94)]));
+    const side = { ...sidecar({ listing: 0.1, hosting: 0.05 }, timed(94)), classes: [timed(94), bad], requested: 2 };
+    const md = markdown(side);
+    expect(md).toContain('Classes counted: 1 of 2 requested; 1 excluded (a round ran over its limit).');
+    expect(md).toContain('## Errors');
+    expect(md).toContain('class 2 round 1 ran 18.3 class minutes, longer than 16');
+    expect(md).toContain('Means per team over 1 class.');
+  });
+});
+
+describe('the sweep with failed and under-sampled settings', () => {
+  const run = (costs: Costs, ran: number, requested: number, errors: string[] = []): PilotSidecar => ({
+    date: '2026-11-10', costs, settings: [], requested, errors,
+    classes: Array.from({ length: ran }, (_, i) => timed(94, i + 1)),
+  });
+
+  it('shows ran/requested per setting and each setting\'s errors', () => {
+    const md = sweepMarkdown({
+      date: '2026-11-10', settings: [],
+      runs: [run({ listing: 0.1, hosting: 0.05 }, 1, 3, ['class 2 (listing $0.1, hosting $0.05): boom']), run({ listing: 0.25, hosting: 0.05 }, 3, 3)],
+    });
+    expect(md).toContain('| $0.10 | $0.05 | PASS | PASS | PASS | PASS | PASS | 1/3 |');
+    expect(md).toContain('| $0.25 | $0.05 | PASS | PASS | PASS | PASS | PASS | 3/3 |');
+    expect(md).toContain('## Errors');
+    expect(md).toContain('- listing $0.10, hosting $0.05: class 2 (listing $0.1, hosting $0.05): boom');
+  });
+
+  it('never chooses a setting that ran fewer classes than requested, and says so', () => {
+    const md = sweepMarkdown({
+      date: '2026-11-10', settings: [],
+      runs: [run({ listing: 0.1, hosting: 0.05 }, 1, 3), run({ listing: 0.25, hosting: 0.05 }, 3, 3)],
+    });
+    expect(md).toContain('**Chosen defaults:** listing $0.25 per joke');
+    expect(md).toContain('**Not eligible** (fewer classes ran than requested): listing $0.10, hosting $0.05 (1 of 3)');
+    const none = sweepMarkdown({ date: '2026-11-10', settings: [], runs: [run({ listing: 0.1, hosting: 0.05 }, 2, 3)] });
+    expect(none).toContain('**No setting passes checks 2, 3 and 5**');
+    expect(none).toContain('**Not eligible**');
+  });
+
+  it('counts an over-long class as not run', () => {
+    const r = run({ listing: 0.1, hosting: 0.05 }, 2, 2);
+    r.classes[1] = finishClass(timed(110, 2));
+    const md = sweepMarkdown({ date: '2026-11-10', settings: [], runs: [r] });
+    expect(md).toContain('| 1/2 |');
+    expect(md).toContain('**No setting passes checks 2, 3 and 5**');
+    expect(md).toContain('class 2 round 1 ran 18.3 class minutes');
+  });
+
+  it('chooseDefaults skips a setting with ran below expected, and accepts one without counts', () => {
+    const pass = successChecks([goodClass()]);
+    expect(chooseDefaults([
+      { costs: { listing: 0.1, hosting: 0.05 }, checks: pass, ran: 2, expected: 3 },
+      { costs: { listing: 0.5, hosting: 0.2 }, checks: pass, ran: 3, expected: 3 },
+    ])).toEqual({ listing: 0.5, hosting: 0.2 });
+    expect(chooseDefaults([{ costs: { listing: 0.1, hosting: 0.05 }, checks: pass }])).toEqual({ listing: 0.1, hosting: 0.05 });
+  });
+});
+
+describe('checks 2 and 3 with an empty group', () => {
+  it('fail with a detail when there are no feedback teams, no twins, or a size is missing', () => {
+    const noTwins = goodClass();
+    noTwins.rounds[1].rows = noTwins.rounds[1].rows.filter(r => !r.group.endsWith('_OFF'));
+    const a = successChecks([noTwins]);
+    expect(a[1]).toMatchObject({ pass: false, detail: expect.stringContaining('no no-feedback teams') });
+    expect(a[2]).toMatchObject({ pass: false, detail: expect.stringContaining('Small, no feedback') });
+
+    const noLarge = goodClass();
+    noLarge.rounds[1].rows = noLarge.rounds[1].rows.filter(r => !r.group.startsWith('LARGE'));
+    const b = successChecks([noLarge]);
+    expect(b[1].pass).toBe(true);
+    expect(b[2]).toMatchObject({ pass: false, detail: expect.stringContaining('Large + feedback') });
+
+    const none = successChecks([{ classNo: 1, seed: 's', rounds: [] }]);
+    expect(none[1]).toMatchObject({ pass: false, detail: expect.stringContaining('no feedback teams') });
+    expect(none[2].pass).toBe(false);
+  });
+});
+
+describe('teamProblems', () => {
+  const seat = (userId: number | null, error: string | null = null) => ({ userId, error });
+  it('names teams without an id or a leaderboard row, and every seat error', () => {
+    const problems = teamProblems(2, [
+      { index: 1, teamId: 11, jm: seat(5), marketing: seat(6) },
+      { index: 2, teamId: null, jm: seat(null), marketing: seat(null) },
+      { index: 3, teamId: 13, jm: seat(7), marketing: seat(8) },
+      { index: 4, teamId: 14, jm: seat(9, 'HTTP 500'), marketing: seat(10, 'locked') },
+    ], id => id !== 13);
+    expect(problems).toEqual([
+      'round 2 team 2 skipped: it never got a team id',
+      'round 2 team 3 skipped: no leaderboard row',
+      'round 2 team 4 Joke Maker seat error: HTTP 500',
+      'round 2 team 4 Marketing seat error: locked',
+    ]);
+    expect(teamProblems(1, [{ index: 1, teamId: 1, jm: seat(null), marketing: seat(2) }], () => true))
+      .toEqual(['round 1 team 1 skipped: its Joke Maker seat has no user']);
+  });
+});
+
+describe('the trait-classifier sanity check', () => {
+  const good = corpus.jokes.find(j => traitFit(j, DEFAULT_IDEAL_PROFILE) >= CUSTOMERS_BAR)!;
+  const bad = corpus.jokes.find(j => traitFit(j, DEFAULT_IDEAL_PROFILE) < 6)!;
+  const batchOf = (id: number, jokes: Array<{ text: string; sold: boolean; status?: string }>) => ({
+    batch_id: id, submitted_at: '2026-11-10T10:00:00Z',
+    jokes: jokes.map(j => ({ joke_text: j.text, publish_status: j.status ?? 'PUBLISHED', first_sold_at: j.sold ? '2026-11-10T10:00:30Z' : null })),
+  });
+
+  it('counts released corpus jokes over the bar and how many of them sold', () => {
+    const e = traitEvidence([
+      batchOf(1, [{ text: good.text, sold: true }, { text: good.text, sold: false }, { text: bad.text, sold: true }]),
+      batchOf(2, [{ text: good.text, sold: true, status: 'DISCARDED' }, { text: 'not a corpus joke', sold: true }]),
+    ], index, DEFAULT_IDEAL_PROFILE);
+    expect(e).toEqual({ aboveBar: 2, sold: 1 });
+  });
+
+  it('refuses a stack where over-the-bar jokes hardly ever sell, and accepts one where they do', () => {
+    expect(MIN_SOLD_SHARE).toBe(0.25);
+    expect(traitModeError({ aboveBar: 20, sold: 1 })).toMatch(/APP_LLM_MODE=traits.*1 of 20.*5 %/);
+    expect(traitModeError({ aboveBar: 20, sold: 5 })).toBeNull();
+    expect(traitModeError({ aboveBar: 20, sold: 12 })).toBeNull();
+  });
+
+  it('cannot tell on too few over-the-bar jokes, and does not guess', () => {
+    expect(traitModeError({ aboveBar: MIN_ABOVE_BAR_JOKES - 1, sold: 0 })).toBeNull();
+    expect(traitModeError({ aboveBar: MIN_ABOVE_BAR_JOKES, sold: 0 })).not.toBeNull();
+  });
+});
+
+describe('money in the settings lines', () => {
+  it('prints two decimals', () => {
+    expect(money(0.5)).toBe('$0.50');
+    const lines = settingsLines(parsePilotEnv({ PILOT_LISTING: '0.5', PILOT_HOSTING: '0.1' }, 1), 10).join('\n');
+    expect(lines).toContain('listing $0.50 per released joke, hosting $0.10 per joke-minute (sent ×10, $1.00,');
   });
 });

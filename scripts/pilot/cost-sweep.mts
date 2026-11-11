@@ -18,7 +18,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { loadTraitCorpus } from '../traits/loadTraitCorpus';
 import { isLocalUrl } from './report';
 import { runSetting, SPEED } from './feedbackClass';
-import { SWEEP_HOSTING, SWEEP_LISTING, parsePilotEnv, settingsLines, sweepMarkdown, type SweepSidecar } from './feedbackReport';
+import { SWEEP_HOSTING, SWEEP_LISTING, money, parsePilotEnv, settingsLines, sweepMarkdown, type SweepSidecar } from './feedbackReport';
 
 const RENDER_ONLY = process.env.PILOT_RENDER_ONLY;
 if (RENDER_ONLY) {
@@ -48,7 +48,7 @@ const sweep: SweepSidecar = {
   date: TODAY, tag: env.tag,
   // Every line but the costs, which the grid sets.
   settings: [...settingsLines(env, SPEED).filter(l => !l.startsWith('Costs')),
-    `Grid: listing ${SWEEP_LISTING.map(v => `$${v}`).join(' / ')} × hosting ${SWEEP_HOSTING.map(v => `$${v}`).join(' / ')} per joke-minute.`],
+    `Grid: listing ${SWEEP_LISTING.map(money).join(' / ')} × hosting ${SWEEP_HOSTING.map(money).join(' / ')} per joke-minute.`],
   runs: [],
 };
 const t0 = Date.now();

@@ -16,6 +16,7 @@ import type { BotTeamSpec } from '../../services/bots/protocol';
 import { leanFeesOf } from '../../services/leanMode';
 import { normalizeJokeText, traitFit, type TraitIndex } from '../../services/shared/traitCorpus';
 import type { IdealProfile } from '../../config/dimensions';
+import { classMinuteLimit, classMinutesOf } from './report';
 
 export type GroupId = 'SMALL_ON' | 'SMALL_OFF' | 'LARGE_ON' | 'LARGE_OFF';
 export type PilotRound = 1 | 2;
@@ -146,10 +147,111 @@ export function teamRowFrom(
   };
 }
 
-export interface RoundResult { round: PilotRound; durationS: number; rows: TeamRow[] }
-export interface ClassResult { classNo: number; seed: string; rounds: RoundResult[] }
+export interface RoundResult {
+  round: PilotRound; durationS: number; rows: TeamRow[];
+  /** The round's length in class minutes, and the longest it should have run (classMinuteLimit). Absent: never flagged. */
+  classMinutes?: number; maxClassMinutes?: number;
+}
+export interface ClassResult {
+  classNo: number; seed: string; rounds: RoundResult[];
+  /** Problems met while playing it (over-long rounds, skipped teams, seat errors), each already naming the class. */
+  errors?: string[];
+  /** Left out of the averages, the checks and the class count (a round ran over its limit). */
+  excluded?: boolean;
+}
 export interface PilotSidecar {
   date: string; costs: Costs; settings: string[]; classes: ClassResult[]; errors: string[]; tag?: string;
+  /** How many classes the run was asked to play; absent in older sidecars (then the classes it holds). */
+  requested?: number;
+}
+
+/** The classes that count: not excluded for an over-long round. */
+export const usableClasses = (classes: readonly ClassResult[]): ClassResult[] => classes.filter(c => !c.excluded);
+
+/** A note when a round ran longer than its limit (the old lean pilot's rule); null otherwise, and when it was not timed. */
+export function overLongNote(classNo: number, r: RoundResult): string | null {
+  if (r.classMinutes == null || r.maxClassMinutes == null || r.classMinutes <= r.maxClassMinutes) return null;
+  return `class ${classNo} round ${r.round} ran ${r.classMinutes} class minutes, longer than ${r.maxClassMinutes} `
+    + '(window + settle + slack): the class is left out of the averages';
+}
+
+/** Times a round: wall seconds from start to end → class minutes, against window + settle + slack. */
+export function timedRound(round: PilotRound, durationS: number, rows: TeamRow[], windowS: number, settleS: number, speed: number): RoundResult {
+  return {
+    round, durationS, rows,
+    classMinutes: classMinutesOf(durationS, speed), maxClassMinutes: classMinuteLimit(windowS, settleS, speed),
+  };
+}
+
+/** Adds the over-long notes to the class's errors and excludes it when any round ran over. */
+export function finishClass(c: ClassResult): ClassResult {
+  const notes = c.rounds.map(r => overLongNote(c.classNo, r)).filter((n): n is string => n != null);
+  if (!notes.length) return c;
+  return { ...c, errors: [...(c.errors ?? []), ...notes], excluded: true };
+}
+
+/** Every error a run holds: its own (failed classes) then each class's. */
+export const errorsOf = (side: PilotSidecar): string[] => [...side.errors, ...side.classes.flatMap(c => c.errors ?? [])];
+
+/**
+ * What went wrong with a round's teams at its end: a team that never got a
+ * team id, one with no leaderboard row, a seat that has no user or reports an
+ * error. Each is a team that is missing from, or doubtful in, the report.
+ */
+export function teamProblems(
+  round: PilotRound,
+  teams: ReadonlyArray<{ index: number; teamId: number | null; jm: { userId: number | null; error: string | null }; marketing: { error: string | null } }>,
+  onLeaderboard: (teamId: number) => boolean,
+): string[] {
+  const out: string[] = [];
+  for (const t of teams) {
+    const who = `round ${round} team ${t.index}`;
+    if (t.teamId == null) out.push(`${who} skipped: it never got a team id`);
+    else if (!onLeaderboard(t.teamId)) out.push(`${who} skipped: no leaderboard row`);
+    else if (t.jm.userId == null) out.push(`${who} skipped: its Joke Maker seat has no user`);
+    if (t.jm.error) out.push(`${who} Joke Maker seat error: ${t.jm.error}`);
+    if (t.marketing.error) out.push(`${who} Marketing seat error: ${t.marketing.error}`);
+  }
+  return out;
+}
+
+/* ---- Is the stack on the trait classifier? ------------------------------- */
+
+/** Fewer released over-the-bar corpus jokes than this, and the check cannot tell. */
+export const MIN_ABOVE_BAR_JOKES = 5;
+/**
+ * With the trait classifier, a corpus joke whose corpus fit clears the bar is
+ * graded as it is in the corpus, so customers buy it: well over this share of
+ * them sell at least once. On the hash classifier they are graded at random, so
+ * hardly any do. A floor, not an expectation.
+ */
+export const MIN_SOLD_SHARE = 0.25;
+
+export interface TraitEvidence { aboveBar: number; sold: number }
+
+/** Released corpus jokes at or above the bar in these batches, and how many of them ever sold (first_sold_at). */
+export function traitEvidence(
+  batches: ReadonlyArray<{ jokes: ReadonlyArray<{ joke_text: string; publish_status: string; first_sold_at?: string | null }> | null }>,
+  index: TraitIndex, ideal: IdealProfile, bar = CUSTOMERS_BAR,
+): TraitEvidence {
+  const e: TraitEvidence = { aboveBar: 0, sold: 0 };
+  for (const b of batches) {
+    for (const j of b.jokes ?? []) {
+      if (j.publish_status !== 'PUBLISHED') continue;
+      const known = index.byText.get(normalizeJokeText(j.joke_text));
+      if (!known || traitFit(known, ideal) < bar) continue;
+      e.aboveBar += 1;
+      if (j.first_sold_at) e.sold += 1;
+    }
+  }
+  return e;
+}
+
+/** An error when the evidence says the stack is not grading by the corpus traits; null when it looks right or cannot tell. */
+export function traitModeError(e: TraitEvidence): string | null {
+  if (e.aboveBar < MIN_ABOVE_BAR_JOKES || e.sold / e.aboveBar >= MIN_SOLD_SHARE) return null;
+  return `the stack does not look like the trait classifier (APP_LLM_MODE=traits with APP_LLM_HASH_CONFIRM=local-pilot-only): `
+    + `only ${e.sold} of ${e.aboveBar} released corpus jokes with fit of ${CUSTOMERS_BAR} or more sold, under ${Math.round(MIN_SOLD_SHARE * 100)} %`;
 }
 
 const mean = (xs: readonly number[]): number => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
@@ -201,12 +303,13 @@ export function summariseGroup(rows: readonly TeamRow[]): GroupSummary {
 
 export interface Check { id: 1 | 2 | 3 | 4 | 5; name: string; pass: boolean; detail: string }
 
-const money = (v: number) => (v < 0 ? `-$${Math.abs(v).toFixed(2)}` : `$${v.toFixed(2)}`);
+export const money = (v: number) => (v < 0 ? `-$${Math.abs(v).toFixed(2)}` : `$${v.toFixed(2)}`);
 const fit1 = (v: number | null) => (v == null ? '—' : v.toFixed(1));
 const pct = (v: number) => `${Math.round(v * 100)} %`;
 
 /** The five success checks of spec §5, over every class of one setting. */
-export function successChecks(classes: readonly ClassResult[]): Check[] {
+export function successChecks(all: readonly ClassResult[]): Check[] {
+  const classes = usableClasses(all);
   const on = rowsOf(classes, 2, ['SMALL_ON', 'LARGE_ON']);
   const off = rowsOf(classes, 2, ['SMALL_OFF', 'LARGE_OFF']);
   const rise = (rows: TeamRow[]) => {
@@ -226,17 +329,22 @@ export function successChecks(classes: readonly ClassResult[]): Check[] {
   const offProfit = mean(off.map(r => r.profit));
   const c2: Check = {
     id: 2, name: 'In Round 2, feedback teams earn more profit than their no-feedback twins',
-    pass: on.length > 0 && onProfit > offProfit,
-    detail: `mean Round 2 profit: feedback ${money(onProfit)}, no feedback ${money(offProfit)}`,
+    pass: on.length > 0 && off.length > 0 && onProfit > offProfit,
+    detail: on.length === 0 || off.length === 0
+      ? `cannot compare: no ${on.length === 0 ? 'feedback teams' : 'no-feedback teams'} played Round 2`
+      : `mean Round 2 profit: feedback ${money(onProfit)}, no feedback ${money(offProfit)}`,
   };
 
   const gain = (a: GroupId, b: GroupId) => mean(rowsOf(classes, 2, [a]).map(r => r.profit)) - mean(rowsOf(classes, 2, [b]).map(r => r.profit));
   const small = gain('SMALL_ON', 'SMALL_OFF');
   const large = gain('LARGE_ON', 'LARGE_OFF');
+  const emptyGroups = GROUPS.filter(g => rowsOf(classes, 2, [g.id]).length === 0).map(g => g.label);
   const c3: Check = {
     id: 3, name: 'The feedback gain is larger for small batches than for large ones',
-    pass: small > large,
-    detail: `Round 2 profit gain from feedback: small ${money(small)}, large ${money(large)}`,
+    pass: emptyGroups.length === 0 && small > large,
+    detail: emptyGroups.length
+      ? `cannot compare: no teams in ${emptyGroups.join(', ')} played Round 2`
+      : `Round 2 profit gain from feedback: small ${money(small)}, large ${money(large)}`,
   };
 
   const clears = on.map(firstClear).filter((v): v is number => v != null);
@@ -292,17 +400,22 @@ function roundSection(classes: readonly ClassResult[], round: PilotRound): strin
 
 export function markdown(side: PilotSidecar): string {
   const checks = successChecks(side.classes);
+  const used = usableClasses(side.classes);
+  const excluded = side.classes.length - used.length;
+  const errors = errorsOf(side);
   return [
     `# Feedback pilot — listing ${money(side.costs.listing)}, hosting ${money(side.costs.hosting)} per joke-minute — ${side.date}`, '',
     ...(side.tag ? [`_${side.tag}_`, ''] : []),
     '## Success checks', '',
     ...checks.map(c => `- **${c.pass ? 'PASS' : 'FAIL'}** — ${c.id}. ${c.name}: ${c.detail}`),
     '',
-    ...(side.errors.length ? ['## Errors', '', ...side.errors.map(e => `- ${e}`), ''] : []),
+    ...(errors.length ? ['## Errors', '', ...errors.map(e => `- ${e}`), ''] : []),
     ...(side.settings.length ? ['## Settings', '', ...side.settings.map(x => `- ${x}`), ''] : []),
-    `Means per team over ${side.classes.length} ${side.classes.length === 1 ? 'class' : 'classes'}. `
+    `Classes counted: ${used.length}${side.requested != null ? ` of ${side.requested} requested` : ''}`
+      + `${excluded ? `; ${excluded} excluded (a round ran over its limit)` : ''}.`, '',
+    `Means per team over ${used.length} ${used.length === 1 ? 'class' : 'classes'}. `
       + 'Fit is computed by the pilot from each released joke\'s corpus traits and the round\'s ideal; the bots never see it.', '',
-    ...([1, 2] as const).filter(r => side.classes.some(c => c.rounds.some(x => x.round === r))).flatMap(r => roundSection(side.classes, r)),
+    ...([1, 2] as const).filter(r => used.some(c => c.rounds.some(x => x.round === r))).flatMap(r => roundSection(used, r)),
   ].join('\n');
 }
 
@@ -313,11 +426,17 @@ export const SWEEP_HOSTING: readonly number[] = [0.05, 0.1, 0.2];
 /** What "cheapest" orders by: a joke listed and unsold for the whole 15-minute window. */
 export const sweepCost = (c: Costs): number => c.listing + 15 * c.hosting;
 
-export interface SweepSetting { costs: Costs; checks: Check[] }
+/** `ran` of `expected` classes counted; without `expected` the setting is taken as complete. */
+export interface SweepSetting { costs: Costs; checks: Check[]; ran?: number; expected?: number }
 
-/** The cheapest setting that passes checks 2, 3 and 5 (spec §5); null when none does. */
+const complete = (s: SweepSetting): boolean => s.expected === undefined || (s.ran ?? 0) >= s.expected;
+
+/**
+ * The cheapest setting that passes checks 2, 3 and 5 (spec §5) among those that
+ * played every class they were asked to; null when none does.
+ */
 export function chooseDefaults(settings: readonly SweepSetting[]): Costs | null {
-  const ok = settings.filter(s => [2, 3, 5].every(id => s.checks.find(c => c.id === id)?.pass));
+  const ok = settings.filter(s => complete(s) && [2, 3, 5].every(id => s.checks.find(c => c.id === id)?.pass));
   ok.sort((a, b) => sweepCost(a.costs) - sweepCost(b.costs) || a.costs.hosting - b.costs.hosting);
   return ok[0]?.costs ?? null;
 }
@@ -325,8 +444,13 @@ export function chooseDefaults(settings: readonly SweepSetting[]): Costs | null 
 export interface SweepSidecar { date: string; settings: string[]; runs: PilotSidecar[]; tag?: string }
 
 export function sweepMarkdown(side: SweepSidecar): string {
-  const rows: SweepSetting[] = side.runs.map(r => ({ costs: r.costs, checks: successChecks(r.classes) }));
+  const rows: SweepSetting[] = side.runs.map(r => ({
+    costs: r.costs, checks: successChecks(r.classes),
+    ran: usableClasses(r.classes).length, expected: r.requested ?? r.classes.length,
+  }));
   const chosen = chooseDefaults(rows);
+  const short = rows.filter(s => !complete(s));
+  const errors = side.runs.flatMap(r => errorsOf(r).map(e => `listing ${money(r.costs.listing)}, hosting ${money(r.costs.hosting)}: ${e}`));
   const mark = (s: SweepSetting, id: number) => (s.checks.find(c => c.id === id)?.pass ? 'PASS' : 'FAIL');
   return [
     `# Cost sweep — ${side.date}`, '',
@@ -335,17 +459,22 @@ export function sweepMarkdown(side: SweepSidecar): string {
       ? `**Chosen defaults:** listing ${money(chosen.listing)} per joke, hosting ${money(chosen.hosting)} per joke-minute (the cheapest setting that passes checks 2, 3 and 5).`
       : '**No setting passes checks 2, 3 and 5**: keep the starting values (listing $0.10, hosting $0.05) and revisit.',
     '',
+    ...(short.length
+      ? [`**Not eligible** (fewer classes ran than requested): ${short.map(s => `listing ${money(s.costs.listing)}, hosting ${money(s.costs.hosting)} (${s.ran} of ${s.expected})`).join('; ')}.`, '']
+      : []),
+    ...(errors.length ? ['## Errors', '', ...errors.map(e => `- ${e}`), ''] : []),
     ...(side.settings.length ? ['## Settings', '', ...side.settings.map(x => `- ${x}`), ''] : []),
-    '| Listing | Hosting | 1 rises | 2 profit | 3 small > large | 4 gradual | 5 costs | Teams in profit (R2) | Fees % of R1 revenue |',
-    '|---|---|---|---|---|---|---|---|---|',
+    '| Listing | Hosting | 1 rises | 2 profit | 3 small > large | 4 gradual | 5 costs | Classes | Teams in profit (R2) | Fees % of R1 revenue |',
+    '|---|---|---|---|---|---|---|---|---|---|',
     ...side.runs.map((r, i) => {
       const s = rows[i];
-      const all2 = rowsOf(r.classes, 2, GROUPS.map(g => g.id));
-      const r1 = rowsOf(r.classes, 1, GROUPS.map(g => g.id));
+      const used = usableClasses(r.classes);
+      const all2 = rowsOf(used, 2, GROUPS.map(g => g.id));
+      const r1 = rowsOf(used, 1, GROUPS.map(g => g.id));
       const rev = r1.reduce((n, x) => n + x.revenue, 0);
       const fees = r1.reduce((n, x) => n + x.listing + x.hosting + x.otherFees, 0);
       return `| ${money(r.costs.listing)} | ${money(r.costs.hosting)} | ${[1, 2, 3, 4, 5].map(id => mark(s, id)).join(' | ')} | `
-        + `${all2.length ? pct(all2.filter(x => x.profit > 0).length / all2.length) : '—'} | ${rev > 0 ? pct(fees / rev) : '—'} |`;
+        + `${s.ran}/${s.expected} | ${all2.length ? pct(all2.filter(x => x.profit > 0).length / all2.length) : '—'} | ${rev > 0 ? pct(fees / rev) : '—'} |`;
     }),
     '',
     'If check 4 fails (feedback solves the puzzle too fast), the knobs are the jokes per feedback (`feedback_joke_count`, default 3) '
@@ -410,8 +539,8 @@ export function settingsLines(e: PilotEnv, speed: number): string[] {
     `One class = ${4 * e.perGroup} bot teams (${e.perGroup} matched pairs of each batch size), Balanced pace, bots at ${speed}×, `
       + `trait classifier; Round 1 then Round 2; ${e.classes} ${e.classes === 1 ? 'class' : 'classes'}, seeds ${e.seed}-c1… .`,
     'Round 1: batches of 5 for everyone. Round 2: small teams send 3, large teams 10. Every Marketing seat releases every joke.',
-    `Costs (classroom rates): listing $${e.costs.listing} per released joke, hosting $${e.costs.hosting} per joke-minute `
-      + `(sent ×${speed}, $${Number((e.costs.hosting * speed).toFixed(4))}, because the backend charges per wall-clock minute). `
+    `Costs (classroom rates): listing ${money(e.costs.listing)} per released joke, hosting ${money(e.costs.hosting)} per joke-minute `
+      + `(sent ×${speed}, ${money(Number((e.costs.hosting * speed).toFixed(4)))}, because the backend charges per wall-clock minute). `
       + 'Shipping, storage and discard 0.',
     `Arrival window ${e.window} s (${Math.round((e.window * speed) / 60)} class minutes). The ideal is the pilot ideal `
       + `(config/dimensions DEFAULT_IDEAL_PROFILE) in both rounds. The bar is the customers' default buy threshold, ${CUSTOMERS_BAR}.`,
