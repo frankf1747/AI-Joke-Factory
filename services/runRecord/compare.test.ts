@@ -154,6 +154,18 @@ describe('runMeta', () => {
     expect(runMeta(fixtureRecord('A', { exported_at: '2026-11-20T12:00:00Z' }))).toBe('Students · 2026-11-20 · 2 teams');
     expect(runMeta(fixtureRecord('B', { played_by: 'bots', rounds: [fixtureRound(1, { teams: [] })] }))).toBe('Bots · 2026-11-20 · 0 teams');
   });
+
+  it('leaves out who played when the record does not say', () => {
+    const rec = fixtureRecord('A', { exported_at: '2026-11-20T12:00:00Z' });
+    delete (rec as Partial<typeof rec>).played_by;
+    expect(runMeta(rec)).toBe('2026-11-20 · 2 teams');
+  });
+
+  it('does not throw on a missing export time', () => {
+    const rec = fixtureRecord('A');
+    delete (rec as Partial<typeof rec>).exported_at;
+    expect(runMeta(rec)).toBe('Students · 2 teams');
+  });
 });
 
 describe('everyRunHasFit', () => {

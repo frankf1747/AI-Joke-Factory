@@ -150,7 +150,8 @@ export function comparisonCsv(runs: readonly RunRecord[]): string {
 const PLAYED_BY = { students: 'Students', bots: 'Bots', mixed: 'Mixed' } as const;
 
 /** The date a record was saved, in local time; the raw prefix when it does not parse. */
-function localDate(iso: string): string {
+function localDate(value: string): string {
+  const iso = String(value ?? '');
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -161,6 +162,6 @@ function localDate(iso: string): string {
 export function runMeta(record: RunRecord): string {
   const first = record.rounds.find(r => r.round === 1) ?? record.rounds[0];
   const teams = first?.teams.length ?? 0;
-  const who = PLAYED_BY[record.played_by] ?? String(record.played_by);
-  return `${who} · ${localDate(record.exported_at)} · ${teams} ${teams === 1 ? 'team' : 'teams'}`;
+  const who = record.played_by == null ? '' : (PLAYED_BY[record.played_by] ?? String(record.played_by));
+  return [who, localDate(record.exported_at), `${teams} ${teams === 1 ? 'team' : 'teams'}`].filter(Boolean).join(' · ');
 }

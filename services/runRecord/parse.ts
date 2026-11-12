@@ -11,14 +11,28 @@ const NOT_A_RECORD = 'is not a Joke Factory run record';
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
+const PLAYED_BY: readonly unknown[] = ['students', 'bots', 'mixed'];
+
+const isSettingValue = (v: unknown): boolean => typeof v === 'string' || (typeof v === 'number' && Number.isFinite(v));
+
+const looksLikeTeam = (t: unknown): boolean =>
+  isObject(t) && typeof t.team === 'string' && typeof t.team_id === 'number' && typeof t.profit === 'number'
+  && isObject(t.fees) && typeof t.fees.total === 'number';
+
+const looksLikeRound = (r: unknown): boolean =>
+  isObject(r) && (r.round === 1 || r.round === 2)
+  && isObject(r.settings) && Object.values(r.settings).every(isSettingValue)
+  && (r.ideal_profile === undefined
+    || (isObject(r.ideal_profile) && Object.values(r.ideal_profile).every(v => typeof v === 'string')))
+  && Array.isArray(r.teams) && r.teams.every(looksLikeTeam);
+
 /** Only what Compare reads is checked; unknown extra keys are kept as they are. */
 function looksLikeRecord(v: unknown): boolean {
   if (!isObject(v) || v.format !== RUN_RECORD_FORMAT) return false;
+  if (typeof v.version !== 'number' || typeof v.name !== 'string' || typeof v.exported_at !== 'string') return false;
+  if (v.played_by !== undefined && !PLAYED_BY.includes(v.played_by)) return false;
   if (!Array.isArray(v.rounds) || v.rounds.length === 0) return false;
-  return v.rounds.every(r =>
-    isObject(r) && (r.round === 1 || r.round === 2) && isObject(r.settings) && Array.isArray(r.teams)
-    && r.teams.every(t => isObject(t) && typeof t.profit === 'number'
-      && isObject(t.fees) && typeof t.fees.total === 'number'));
+  return v.rounds.every(looksLikeRound);
 }
 
 export function parseRunRecord(text: string): ParseResult {
@@ -31,7 +45,7 @@ export function parseRunRecord(text: string): ParseResult {
   }
   if (!looksLikeRecord(data)) return { ok: false, reason: NOT_A_RECORD };
   const record = data as unknown as RunRecord;
-  if (typeof record.version === 'number' && record.version > RUN_RECORD_VERSION) {
+  if (record.version > RUN_RECORD_VERSION) {
     return { ok: false, reason: `was saved by a newer version of the game (version ${record.version})` };
   }
   return { ok: true, record };

@@ -86,6 +86,51 @@ describe('parseRunRecord', () => {
     expect(parseRunRecord(JSON.stringify(bad))).toEqual({ ok: false, reason: 'is not a Joke Factory run record' });
   });
 
+  describe('refuses malformed shapes', () => {
+    const refused = { ok: false, reason: 'is not a Joke Factory run record' };
+    const withRound0 = (over: Record<string, unknown>) => {
+      const rec = record();
+      return { ...rec, rounds: [{ ...rec.rounds[0], ...over }, rec.rounds[1]] };
+    };
+    const withTeam0 = (over: Record<string, unknown>) => {
+      const rec = record();
+      const r = rec.rounds[0];
+      return { ...rec, rounds: [{ ...r, teams: [{ ...r.teams[0], ...over }, r.teams[1]] }, rec.rounds[1]] };
+    };
+
+    it.each([
+      ['a name that is not a string', { ...record(), name: 42 }],
+      ['an exported_at that is not a string', { ...record(), exported_at: 20261120 }],
+      ['a version that is a string', { ...record(), version: '9' }],
+      ['a team whose name is not a string', withTeam0({ team: 7 })],
+      ['a team whose team_id is not a number', withTeam0({ team_id: '1' })],
+      ['an ideal_profile that is not an object', withRound0({ ideal_profile: 'funny' })],
+      ['an ideal_profile that is an array', withRound0({ ideal_profile: ['a'] })],
+      ['an ideal_profile with a non-string value', withRound0({ ideal_profile: { topic: 3 } })],
+      ['a settings value that is an object', withRound0({ settings: { market_mode: { x: 1 } } })],
+      ['a settings value that is null', withRound0({ settings: { batch_size: null } })],
+      ['a played_by outside students|bots|mixed', { ...record(), played_by: 'robots' }],
+    ])('refuses %s', (_l, bad) => {
+      expect(parseRunRecord(JSON.stringify(bad))).toEqual(refused);
+    });
+
+    it('refuses a settings value that is not finite', () => {
+      // JSON cannot carry Infinity, so build the text by hand.
+      const text = JSON.stringify(withRound0({ settings: { batch_size: 5 } })).replace('"batch_size":5', '"batch_size":1e999');
+      expect(parseRunRecord(text)).toEqual(refused);
+    });
+
+    it('refuses a record missing exported_at', () => {
+      const { exported_at: _e, ...noDate } = record();
+      expect(parseRunRecord(JSON.stringify(noDate))).toEqual(refused);
+    });
+
+    it('still accepts a record with an ideal_profile of strings and no played_by', () => {
+      const { played_by: _p, ...rest } = withRound0({ ideal_profile: { topic: 'cats', tone: 'dry' } });
+      expect(parseRunRecord(JSON.stringify(rest)).ok).toBe(true);
+    });
+  });
+
   it('refuses a newer version and names it', () => {
     const res = parseRunRecord(JSON.stringify({ ...record(), version: 2 }));
     expect(res).toEqual({ ok: false, reason: 'was saved by a newer version of the game (version 2)' });
