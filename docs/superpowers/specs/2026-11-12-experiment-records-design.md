@@ -46,10 +46,9 @@ loaded, so a measure added later also works on old files.
       "started_at": "…", "ended_at": "…",  // ended_at = clock_end
       "settings": { … },                   // §3.1
       "ideal_profile": { "topic": "…", … },// from the stored config; absent if the round had none
-      "teams": [ { … } ]                   // §3.2
+      "teams": [ { …, "bot": { … } } ]     // §3.2; "bot" (§3.3) only on a bot team
     }
-  ],
-  "bots": { … }                            // §3.3, only when bots played
+  ]
 }
 ```
 
@@ -81,8 +80,8 @@ so a record can be shared with colleagues.
 
 ### 3.3 Bots (only when bots played)
 
-Per team: `persona`, `use_feedback`, `round2_batch_size`, `release_all`, `seed`. The pilot scripts
-also add `fit_by_batch` per team and round (mean fit of the batch's released jokes, from the corpus
+On each bot team, a `bot` object: `persona`, and when set, `use_feedback`, `round2_batch_size`,
+`release_all`, `seed`. The pilot scripts also add `fit_by_batch` (`[{seq, fit}]`) on each team and round (mean fit of the batch's released jokes, from the corpus
 traits; §6). Students' jokes have no known traits, so a student record never has it.
 
 ## 4. Export
