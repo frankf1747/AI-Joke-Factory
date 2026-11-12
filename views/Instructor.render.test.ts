@@ -304,17 +304,17 @@ describe('Instructor screen, the hidden ideal joke (Setup tab)', () => {
   });
 });
 
-/* Four tabs under the control bar; the one open by default follows the phase
+/* Five tabs under the control bar; the one open by default follows the phase
    (spec 6b): Teams in the lobby, Live during and between rounds, Debrief after Round 2. */
 describe('Instructor screen, the tabs', () => {
   const stopped = { ...TEST_CONFIG, isActive: false };
   const selectedTab = (out: string) => out.match(/<button[^>]*role="tab"[^>]*aria-selected="true"[^>]*>([^<]*)</)?.[1];
 
-  it('shows Live, Teams, Setup and Debrief as tabs in a tablist', () => {
+  it('shows Live, Teams, Setup, Debrief and Compare as tabs in a tablist', () => {
     const out = renderWithGame(Instructor, { user: instructor });
     expect(out).toMatch(/role="tablist"/);
     const labels = [...out.matchAll(/<button[^>]*role="tab"[^>]*>([^<]*)</g)].map(m => m[1]);
-    expect(labels).toEqual(['Live', 'Teams', 'Setup', 'Debrief']);
+    expect(labels).toEqual(['Live', 'Teams', 'Setup', 'Debrief', 'Compare']);
   });
 
   it('opens on Teams in the lobby, Live while a round runs or between rounds, and Debrief once both rounds ended', () => {

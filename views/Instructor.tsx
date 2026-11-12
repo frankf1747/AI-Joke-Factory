@@ -8,6 +8,8 @@ import { LiveTab } from '../components/instructor/LiveTab';
 import { TeamsTab } from '../components/instructor/TeamsTab';
 import { SetupTab } from '../components/instructor/SetupTab';
 import { DebriefTab } from '../components/instructor/DebriefTab';
+import { CompareTab } from '../components/instructor/CompareTab';
+import type { LoadedRun } from '../services/runRecord/parse';
 import { defaultViewRound, followPhase, instructorPhase, knownPhase, type InstructorTab, type TabFollow } from '../services/instructorPhase';
 import { useLeanCharts } from '../services/useLeanCharts';
 import { leanChartsPanel, leanRoundFlags, resolveLeanChartsRound } from '../services/leanCharts';
@@ -18,13 +20,14 @@ import { buildApplyUpdates, setupValuesOf, type SetupValues } from '../services/
 import { memberedTeamIds, playingChartTeams, playingStats } from '../services/playingTeams';
 import { ratesFor, useRoundRates } from '../services/roundRates';
 
-/** The four tabs under the control bar (spec 6b). Setup is never a phase's default. */
-export type ScreenTab = InstructorTab | 'setup';
+/** The five tabs under the control bar (spec 6b). Setup and Compare are never a phase's default. */
+export type ScreenTab = InstructorTab | 'setup' | 'compare';
 const SCREEN_TABS: ReadonlyArray<{ id: ScreenTab; label: string }> = [
   { id: 'live', label: 'Live' },
   { id: 'teams', label: 'Teams' },
   { id: 'setup', label: 'Setup' },
   { id: 'debrief', label: 'Debrief' },
+  { id: 'compare', label: 'Compare' },
 ];
 
 /** initialTab opens the screen on one tab (the render tests use it); otherwise the phase picks. */
@@ -50,6 +53,8 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
   // never read "End Round  now?" while the modal goes away.
   const [endConfirmOpen, setEndConfirmOpen] = useState(false);
   const [endConfirmRound, setEndConfirmRound] = useState<1 | 2>(1);
+  // The Compare tab's loaded runs, kept here so they survive a switch to another tab.
+  const [compareRuns, setCompareRuns] = useState<LoadedRun[]>([]);
 
   // The round the leaderboard, charts and debrief show (spec decision 6). UI only:
   // Start, End and the popups act on config.round, which the poll sets, and nothing
@@ -340,6 +345,9 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
               ratesR1={ratesR1} ratesR2={ratesR2}
               roundIds={roundIds} roundStatuses={roundStatuses}
             />
+          )}
+          {tab === 'compare' && (
+            <CompareTab initialRuns={compareRuns} onRunsChange={setCompareRuns} />
           )}
         </div>
       </div>
