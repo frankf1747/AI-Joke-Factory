@@ -65,6 +65,27 @@ describe('parseRunRecord', () => {
     expect(parseRunRecord(JSON.stringify(bad))).toEqual({ ok: false, reason: 'is not a Joke Factory run record' });
   });
 
+  it('refuses a team without a fees object', () => {
+    const rec = record();
+    const { fees: _fees, ...noFees } = rec.rounds[0].teams[0];
+    const bad = { ...rec, rounds: [{ ...rec.rounds[0], teams: [noFees] }] };
+    expect(parseRunRecord(JSON.stringify(bad))).toEqual({ ok: false, reason: 'is not a Joke Factory run record' });
+  });
+
+  it('refuses a team whose fees total is not a number', () => {
+    const rec = record();
+    const t = rec.rounds[0].teams[0];
+    const bad = { ...rec, rounds: [{ ...rec.rounds[0], teams: [{ ...t, fees: { ...t.fees, total: '0.6' } }] }] };
+    expect(parseRunRecord(JSON.stringify(bad))).toEqual({ ok: false, reason: 'is not a Joke Factory run record' });
+  });
+
+  it('refuses a round without settings', () => {
+    const rec = record();
+    const { settings: _settings, ...noSettings } = rec.rounds[0];
+    const bad = { ...rec, rounds: [noSettings] };
+    expect(parseRunRecord(JSON.stringify(bad))).toEqual({ ok: false, reason: 'is not a Joke Factory run record' });
+  });
+
   it('refuses a newer version and names it', () => {
     const res = parseRunRecord(JSON.stringify({ ...record(), version: 2 }));
     expect(res).toEqual({ ok: false, reason: 'was saved by a newer version of the game (version 2)' });

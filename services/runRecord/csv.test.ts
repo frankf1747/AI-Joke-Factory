@@ -83,4 +83,12 @@ describe('recordCsv', () => {
     // the quoted run name adds 1 comma to the naive split
     for (const l of lines.slice(1, 5)) expect(l.split(',').length).toBe(width + 1);
   });
+
+  it('prefixes a formula-looking team name, quotes it for its quote, and leaves a negative profit plain', () => {
+    const evil = buildRunRecord({ name: 'R', playedBy: 'students', exportedAt: 'x' }, [
+      round(1, [team(1, { team: '=HYPERLINK("x")', profit: -2.5 })]),
+    ]);
+    const row = recordCsv(evil).split('\r\n')[1];
+    expect(row).toContain(',"\'=HYPERLINK(""x"")",-2.5,');
+  });
 });

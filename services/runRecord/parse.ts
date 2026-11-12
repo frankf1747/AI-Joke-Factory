@@ -16,8 +16,9 @@ function looksLikeRecord(v: unknown): boolean {
   if (!isObject(v) || v.format !== RUN_RECORD_FORMAT) return false;
   if (!Array.isArray(v.rounds) || v.rounds.length === 0) return false;
   return v.rounds.every(r =>
-    isObject(r) && (r.round === 1 || r.round === 2) && Array.isArray(r.teams)
-    && r.teams.every(t => isObject(t) && typeof t.profit === 'number'));
+    isObject(r) && (r.round === 1 || r.round === 2) && isObject(r.settings) && Array.isArray(r.teams)
+    && r.teams.every(t => isObject(t) && typeof t.profit === 'number'
+      && isObject(t.fees) && typeof t.fees.total === 'number'));
 }
 
 export function parseRunRecord(text: string): ParseResult {
