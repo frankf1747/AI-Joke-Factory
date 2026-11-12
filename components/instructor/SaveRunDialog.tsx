@@ -47,6 +47,13 @@ const FIELD = 'w-full rounded-md border px-3 py-2 text-sm';
 
 const download = (f: SavedFile) => downloadText(f.fileName, f.text, f.mime);
 
+/** The body of the dialog's mount effect: `closed` reads false while mounted, true once unmounted.
+    It re-opens on every setup, because StrictMode (index.tsx) runs setup, cleanup, setup on mount. */
+export function trackClosed(closed: { current: boolean }): () => void {
+  closed.current = false;
+  return () => { closed.current = true; };
+}
+
 /** Mounted only while open, so each opening starts from fresh defaults. */
 const SaveRunBody: React.FC<SaveRunDialogProps> = props => {
   const { onClose, roundIds, roundStatuses, statsR1, statsR2, ratesR1, ratesR2, teamNames, deps = REAL_DEPS, initialState } = props;
@@ -61,7 +68,7 @@ const SaveRunBody: React.FC<SaveRunDialogProps> = props => {
   const [error, setError] = useState<string | null>(null);
   // Set when the dialog closes, so a save still in flight downloads nothing.
   const closed = useRef(false);
-  useEffect(() => () => { closed.current = true; }, []);
+  useEffect(() => trackClosed(closed), []);
 
   const save = async () => {
     setSaving(true);

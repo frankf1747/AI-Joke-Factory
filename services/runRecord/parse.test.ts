@@ -110,6 +110,8 @@ describe('parseRunRecord', () => {
       ['a settings value that is an object', withRound0({ settings: { market_mode: { x: 1 } } })],
       ['a settings value that is null', withRound0({ settings: { batch_size: null } })],
       ['a played_by outside students|bots|mixed', { ...record(), played_by: 'robots' }],
+      ['a team whose batches is not an array', withTeam0({ batches: { seq: 1 } })],
+      ['a team whose fit_by_batch is not an array', withTeam0({ fit_by_batch: 'none' })],
     ])('refuses %s', (_l, bad) => {
       expect(parseRunRecord(JSON.stringify(bad))).toEqual(refused);
     });
@@ -123,6 +125,11 @@ describe('parseRunRecord', () => {
     it('refuses a record missing exported_at', () => {
       const { exported_at: _e, ...noDate } = record();
       expect(parseRunRecord(JSON.stringify(noDate))).toEqual(refused);
+    });
+
+    it('still accepts a team with batches and fit_by_batch arrays', () => {
+      const ok = withTeam0({ batches: [], fit_by_batch: [{ seq: 1, fit: null }] });
+      expect(parseRunRecord(JSON.stringify(ok)).ok).toBe(true);
     });
 
     it('still accepts a record with an ideal_profile of strings and no played_by', () => {

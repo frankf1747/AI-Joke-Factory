@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { LeaderboardRow } from '../../services/classTotals';
 import { clearBotTeams, recordBotTeams } from '../../services/runRecord/botRegistry';
-import { SaveRunDialog, type SaveRunDialogProps } from './SaveRunDialog';
+import { SaveRunDialog, trackClosed, type SaveRunDialogProps } from './SaveRunDialog';
 
 const team = (id: number): LeaderboardRow => ({
   rank: 1, team: { id, name: `Team ${id}` }, points: 0, total_sales: 1, unsold_jokes: 0, discarded_jokes: 0,
@@ -70,5 +70,17 @@ describe('SaveRunDialog', () => {
 
   it('renders nothing when closed', () => {
     expect(render({ open: false })).toBe('');
+  });
+});
+
+describe('trackClosed', () => {
+  it('reads open after StrictMode mounts, unmounts and remounts, and closed after the real unmount', () => {
+    const closed = { current: false };
+    const cleanup1 = trackClosed(closed);
+    cleanup1();
+    const cleanup2 = trackClosed(closed);
+    expect(closed.current).toBe(false);
+    cleanup2();
+    expect(closed.current).toBe(true);
   });
 });

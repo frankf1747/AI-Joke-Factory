@@ -55,6 +55,12 @@ describe('recordCsv', () => {
   const text = recordCsv(rec);
   const lines = text.split('\r\n');
 
+  it('leaves the played_by cell empty when the record does not say who played', () => {
+    const { played_by: _p, ...noWho } = rec;
+    const row = recordCsv(noWho).split('\r\n')[1];
+    expect(row.startsWith('"Run, ""A""",,1,')).toBe(true);
+  });
+
   it('ends with CRLF and has a header plus one row per team per round', () => {
     expect(text.endsWith('\r\n')).toBe(true);
     expect(lines).toHaveLength(6);

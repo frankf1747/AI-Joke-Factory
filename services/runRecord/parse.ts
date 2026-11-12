@@ -17,7 +17,9 @@ const isSettingValue = (v: unknown): boolean => typeof v === 'string' || (typeof
 
 const looksLikeTeam = (t: unknown): boolean =>
   isObject(t) && typeof t.team === 'string' && typeof t.team_id === 'number' && typeof t.profit === 'number'
-  && isObject(t.fees) && typeof t.fees.total === 'number';
+  && isObject(t.fees) && typeof t.fees.total === 'number'
+  && (t.batches === undefined || Array.isArray(t.batches))
+  && (t.fit_by_batch === undefined || Array.isArray(t.fit_by_batch));
 
 const looksLikeRound = (r: unknown): boolean =>
   isObject(r) && (r.round === 1 || r.round === 2)

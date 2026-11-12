@@ -64,7 +64,8 @@ export interface RunRecord {
   version: number;
   name: string;
   notes?: string;
-  played_by: PlayedBy;
+  /** Absent in a record that does not say who played. */
+  played_by?: PlayedBy;
   exported_at: string;
   rounds: RunRound[];
 }
