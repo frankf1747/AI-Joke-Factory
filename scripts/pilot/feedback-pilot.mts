@@ -45,6 +45,8 @@ const env = parsePilotEnv(process.env);
 const TODAY = new Date().toISOString().slice(0, 10);
 const OUT = process.argv[2] ?? `docs/pilots/${TODAY}-feedback-pilot.md`;
 const SIDECAR = `${OUT.replace(/\.md$/, '')}.json`;
+// One run record per class (the Compare tab reads them), next to the report.
+const RECORDS = `${OUT.replace(/\.md$/, '')}-records`;
 
 const t0 = Date.now();
 const side = await runSetting(
@@ -52,7 +54,8 @@ const side = await runSetting(
   env, env.costs, TODAY,
   // After every class, so a stopped pilot keeps what it ran.
   partial => { writeFileSync(SIDECAR, JSON.stringify(partial, null, 2)); writeFileSync(OUT, markdown(partial)); },
+  RECORDS,
 );
 writeFileSync(SIDECAR, JSON.stringify(side, null, 2));
 writeFileSync(OUT, markdown(side));
-console.log(`wrote ${OUT} and ${SIDECAR} in ${Math.round((Date.now() - t0) / 1000)} s`);
+console.log(`wrote ${OUT}, ${SIDECAR} and run records in ${RECORDS} in ${Math.round((Date.now() - t0) / 1000)} s`);

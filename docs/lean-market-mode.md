@@ -289,6 +289,16 @@ nothing in Round 2 keeps its Round 1 behaviour while the teams around it improve
 to them and can end Round 2 worse off than Round 1 even though it did nothing differently. Ask the
 teams that stayed the same what they expected, and what the improving teams took from them.
 
+### Keep a record, compare runs
+
+After a class, open the Debrief and press **Save run record**. Give it a name, say who played
+(students, bots or both) and add notes if you like. It saves two files: the record (`.jfrun.json`)
+and a spreadsheet (`.csv`). Keep the files; the game itself forgets a class when you reset it.
+To compare, open the **Compare** tab and press **Add record files**, then choose the records.
+Tick the measures that matter, say whether higher or lower is better, and set a target for each.
+Bot rehearsals and the pilots (`feedback-pilot`, `cost-sweep`) write the same files, the pilots into
+`docs/pilots/<date>-…-records/`, so a rehearsal can be compared with a real class.
+
 ---
 
 ## 7. Limits and open questions

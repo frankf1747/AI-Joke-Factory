@@ -39,6 +39,8 @@ const env = parsePilotEnv(process.env);
 const TODAY = new Date().toISOString().slice(0, 10);
 const OUT = process.argv[2] ?? `docs/pilots/${TODAY}-cost-sweep.md`;
 const SIDECAR = `${OUT.replace(/\.md$/, '')}.json`;
+// One run record per class (the Compare tab reads them), next to the report.
+const RECORDS = `${OUT.replace(/\.md$/, '')}-records`;
 const base = {
   baseUrl: BE, password: PASSWORD, instructor: process.env.PILOT_INSTRUCTOR ?? 'Local Instructor',
   corpus: loadTraitCorpus(), log: (l: string) => console.log(l),
@@ -55,9 +57,9 @@ const t0 = Date.now();
 for (const listing of SWEEP_LISTING) {
   for (const hosting of SWEEP_HOSTING) {
     console.log(`setting: listing $${listing}, hosting $${hosting}`);
-    sweep.runs.push(await runSetting(base, { ...env, seed: `${env.seed}-L${listing}-H${hosting}` }, { listing, hosting }, TODAY));
+    sweep.runs.push(await runSetting(base, { ...env, seed: `${env.seed}-L${listing}-H${hosting}` }, { listing, hosting }, TODAY, undefined, RECORDS));
     writeFileSync(SIDECAR, JSON.stringify(sweep, null, 2));
     writeFileSync(OUT, sweepMarkdown(sweep));
   }
 }
-console.log(`wrote ${OUT} and ${SIDECAR} in ${Math.round((Date.now() - t0) / 1000)} s`);
+console.log(`wrote ${OUT}, ${SIDECAR} and run records in ${RECORDS} in ${Math.round((Date.now() - t0) / 1000)} s`);

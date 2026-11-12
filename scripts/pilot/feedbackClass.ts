@@ -8,17 +8,24 @@
    while the runner ends Round 1 and starts Round 2 (bots read the active round
    every loop). After each round ends, its stats, its lean charts and every
    team's batch list (read as that team's own Joke Maker bot) are collected. */
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { createClient } from '../../services/shared/client';
+import type { BotTeamSpec } from '../../services/bots/protocol';
+import type { LeaderboardRow } from '../../services/classTotals';
+import { buildRunRecord, buildRunRound } from '../../services/runRecord/build';
+import type { RunBot, RunRecord, RunRound } from '../../services/runRecord/types';
 import { BotEngine, realDelay } from '../../services/bots/engine';
 import { DEFAULT_IDEAL_PROFILE, type IdealProfile } from '../../config/dimensions';
 import { indexTraitCorpus, type TraitCorpus, type TraitIndex } from '../../services/shared/traitCorpus';
 import type { ConfigRequest } from '../../types/api';
 import {
-  batchFits, classTeams, failedClassMessage, finishClass, pairOf, pilotConfig, settingsLines, teamProblems, teamRowFrom, timedRound,
+  batchFits, classTeams, failedClassMessage, finishClass, money, pairOf, pilotConfig, settingsLines, teamProblems, teamRowFrom, timedRound,
   traitEvidence, traitModeError, traitModeNote,
-  type ClassResult, type Costs, type GroupId, type PilotEnv, type PilotRound, type PilotSidecar, type RoundResult, type TeamRow,
+  type ClassResult, type ClassTeam, type Costs, type GroupId, type PilotEnv, type PilotRound, type PilotSidecar, type RoundResult, type TeamRow,
   type TraitEvidence,
 } from './feedbackReport';
+import { botOf, fitsOf, pilotRates, recordFileName } from './pilotRecord';
 
 export const SPEED = 10 as const;
 /** After the arrival window: let due arrivals be served, then end the round. */
@@ -41,7 +48,13 @@ export interface ClassOptions {
 
 type Client = ReturnType<typeof createClient>;
 
-export async function runFeedbackClass(o: ClassOptions): Promise<ClassResult> {
+/** What a played class gives back: its report figures and its run record (services/runRecord). */
+export interface PlayedClass { result: ClassResult; record: RunRecord }
+
+/** "listing $0.10 hosting $0.05": how a class's costs read in its record's name and file. */
+const costsLabel = (c: Costs): string => `listing ${money(c.listing)} hosting ${money(c.hosting)}`;
+
+export async function runFeedbackClass(o: ClassOptions): Promise<PlayedClass> {
   const api = createClient({ baseUrl: o.baseUrl });
   const login = await api.instructorLogin({ display_name: o.instructor, password: o.password });
   const instructor = api.as(login.user.user_id, 'instructor');
@@ -63,6 +76,8 @@ export async function runFeedbackClass(o: ClassOptions): Promise<ClassResult> {
   });
   const index = indexTraitCorpus(o.corpus);
   const result: ClassResult = { classNo: o.classNo, seed: o.seed, rounds: [] };
+  const runRounds: RunRound[] = [];
+  const specOf = new Map<number, ClassTeam>(teams.map(t => [t.index, t]));
   try {
     await engine.start({
       roundId: ids[1], teams, speed: SPEED, startRound: true, idealProfile: { ...DEFAULT_IDEAL_PROFILE }, maxTeams: teams.length,
@@ -70,7 +85,9 @@ export async function runFeedbackClass(o: ClassOptions): Promise<ClassResult> {
     o.log(`class ${o.classNo}: ${teams.length} teams, round 1 started`);
     // Fit is scored against the ideal the backend stored, not the one the pilot meant to send.
     const evidence: TraitEvidence = { aboveBar: 0, sold: 0 };
-    result.rounds.push(await playRound(1, ids[1], await storedIdeal(instructor, ids[1]), o, engine, api, instructor, groupOf, pairs, index, result, evidence));
+    const played1 = await playRound(1, ids[1], await storedIdeal(instructor, ids[1]), o, engine, api, instructor, groupOf, pairs, specOf, index, result, evidence);
+    result.rounds.push(played1.result);
+    runRounds.push(played1.run);
     // A hash-mode stack must not produce a normal-looking report: stop the class here.
     const notTraits = traitModeError(evidence);
     if (notTraits) throw new Error(notTraits);
@@ -82,11 +99,17 @@ export async function runFeedbackClass(o: ClassOptions): Promise<ClassResult> {
     }
     await instructor.instructorStart(ids[2], { ideal_profile: { ...DEFAULT_IDEAL_PROFILE } as ConfigRequest['ideal_profile'] });
     o.log(`class ${o.classNo}: round 2 started`);
-    result.rounds.push(await playRound(2, ids[2], await storedIdeal(instructor, ids[2]), o, engine, api, instructor, groupOf, pairs, index, result, evidence));
+    const played2 = await playRound(2, ids[2], await storedIdeal(instructor, ids[2]), o, engine, api, instructor, groupOf, pairs, specOf, index, result, evidence);
+    result.rounds.push(played2.result);
+    runRounds.push(played2.run);
   } finally {
     engine.stop();
   }
-  return finishClass(result);
+  const record = buildRunRecord(
+    { name: `${costsLabel(o.costs)} class ${o.classNo}`, notes: o.seed, playedBy: 'bots', exportedAt: new Date().toISOString() },
+    runRounds,
+  );
+  return { result: finishClass(result), record };
 }
 
 /** The round's ideal as the backend stored it (GET config); an error when it holds none. */
@@ -106,15 +129,22 @@ export async function runSetting(
   env: PilotEnv, costs: Costs, date: string,
   /** Called after every class, played or failed, with the run so far (the runners save their sidecar here). */
   onClass?: (side: PilotSidecar) => void,
+  /** When set, each played class's run record is written here (one .jfrun.json file per class). */
+  recordsDir?: string,
 ): Promise<PilotSidecar> {
   const side: PilotSidecar = {
     date, costs, settings: settingsLines({ ...env, costs }, SPEED), classes: [], errors: [], tag: env.tag, requested: env.classes,
   };
   for (let k = 1; k <= env.classes; k++) {
     try {
-      side.classes.push(await runFeedbackClass({
+      const played = await runFeedbackClass({
         ...base, costs, windowS: env.window, perGroup: env.perGroup, seed: `${env.seed}-c${k}`, classNo: k,
-      }));
+      });
+      side.classes.push(played.result);
+      if (recordsDir) {
+        mkdirSync(recordsDir, { recursive: true });
+        writeFileSync(join(recordsDir, recordFileName(costsLabel(costs), k)), JSON.stringify(played.record, null, 2));
+      }
     } catch (err) {
       const message = failedClassMessage(k, costs, err);
       base.log(`FAILED ${message}`);
@@ -127,8 +157,9 @@ export async function runSetting(
 
 async function playRound(
   round: PilotRound, roundId: number, ideal: IdealProfile, o: ClassOptions, engine: BotEngine, api: Client, instructor: Client,
-  groupOf: ReadonlyMap<number, GroupId>, pairs: ReadonlyMap<number, number>, index: TraitIndex, into: ClassResult, evidence: TraitEvidence,
-): Promise<RoundResult> {
+  groupOf: ReadonlyMap<number, GroupId>, pairs: ReadonlyMap<number, number>, specOf: ReadonlyMap<number, BotTeamSpec>,
+  index: TraitIndex, into: ClassResult, evidence: TraitEvidence,
+): Promise<{ result: RoundResult; run: RunRound }> {
   const startedAt = Date.parse((await instructor.roundsActive()).rounds.find(r => r.id === roundId)?.started_at ?? '') || Date.now();
   const windowEnds = startedAt + o.windowS * 1000;
   while (Date.now() < windowEnds) {
@@ -147,6 +178,8 @@ async function playRound(
   const prices = (await instructor.roundsActive()).rounds.find(r => r.id === roundId);
   if (!prices) throw new Error(`round ${roundId} vanished`);
   const rows: TeamRow[] = [];
+  const bots = new Map<number, RunBot>();
+  const fits = new Map<number, Array<{ seq: number; fit: number | null }>>();
   const teams = engine.status().teams;
   const problems = teamProblems(round, teams, id => stats.leaderboard.some(x => x.team.id === id));
   (into.errors ??= []).push(...problems.map(p => `class ${o.classNo} ${p}`));
@@ -160,14 +193,22 @@ async function playRound(
       evidence.aboveBar += e.aboveBar;
       evidence.sold += e.sold;
     }
+    const fitList = batchFits(list, index, ideal);
     rows.push({
-      ...teamRowFrom(
-        r, groupOf.get(t.index) as GroupId, prices, charts.teams.find(c => c.team_id === t.teamId)?.batches,
-        batchFits(list, index, ideal),
-      ),
+      ...teamRowFrom(r, groupOf.get(t.index) as GroupId, prices, charts.teams.find(c => c.team_id === t.teamId)?.batches, fitList),
       pair: pairs.get(t.index),
     });
+    fits.set(t.teamId, fitsOf(fitList));
+    const spec = specOf.get(t.index);
+    if (spec) bots.set(t.teamId, botOf(spec, `${o.seed}#${spec.deckIndex ?? spec.index}`));
   }
   const endedAt = Date.parse(prices.ended_at ?? '') || Date.now();
-  return timedRound(round, Math.round((endedAt - startedAt) / 1000), rows, o.windowS, SETTLE_MS / 1000, SPEED);
+  // The stored config carries the round's fees and settings; read once, after the round ended.
+  const config = (await instructor.instructorGetConfig(roundId)).round;
+  const played = new Set(rows.map(r => r.teamId));
+  const run = buildRunRound({
+    round, config, stats: { leaderboard: stats.leaderboard.filter(x => played.has(x.team.id)).map((x): LeaderboardRow => ({ points: 0, ...x })) }, charts, teamNames: {},
+    rates: pilotRates(config), bots, fits,
+  });
+  return { result: timedRound(round, Math.round((endedAt - startedAt) / 1000), rows, o.windowS, SETTLE_MS / 1000, SPEED), run };
 }
