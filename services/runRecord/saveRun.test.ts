@@ -71,8 +71,13 @@ describe('collectRunRecord', () => {
     await expect(collectRunRecord(input(), deps({ getCharts }))).rejects.toThrow('Could not read Round 2 batches');
   });
 
-  it('puts a bot on its team', async () => {
-    const rec = await collectRunRecord(input({ bots: new Map([[1, { persona: 'steady' }]]) }), deps());
+  it.each(['bots', 'mixed'] as const)('puts a bot on its team when played by %s', async playedBy => {
+    const rec = await collectRunRecord(input({ playedBy, bots: new Map([[1, { persona: 'steady' }]]) }), deps());
     expect(rec.rounds[0].teams[0].bot).toEqual({ persona: 'steady' });
+  });
+
+  it('marks no team as a bot in a students record, even with bots registered', async () => {
+    const rec = await collectRunRecord(input({ playedBy: 'students', bots: new Map([[1, { persona: 'steady' }]]) }), deps());
+    expect(rec.rounds.flatMap(r => r.teams).some(t => 'bot' in t)).toBe(false);
   });
 });

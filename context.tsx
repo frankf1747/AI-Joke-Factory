@@ -38,6 +38,7 @@ import { DEFAULT_CUSTOMER_BUDGET, customerBudgetFromRound, listingAndDiscardFrom
 import { LEAN_DEFAULTS, MARKET_MODE_LOCKED_TEXT, WIP_LIMIT_TEXT, configBodies, configSaveErrorText, isMarketModeLocked, isWipLimitReached, leanConfigFromRound, leanConfigToBody, leanTargetRounds, saveRoundConfig } from './services/leanMode';
 import { isCompleteProfile } from './components/IdealProfilePicker';
 import type { DemoUi } from './services/tour/demoUi';
+import { clearBotTeams } from './services/runRecord/botRegistry';
 
 const LS_USER_ID = 'joke_factory_user_id';
 const LS_DISPLAY_NAME = 'joke_factory_display_name';
@@ -52,6 +53,14 @@ const PERSISTED_CONFIG_KEYS = new Set<keyof GameConfig>([
 
 const LS_SUBMITTED_BATCH_JOKES = 'joke_factory_submitted_batch_jokes_v1';
 const LS_QC_RATED_HISTORY = 'joke_factory_qc_rated_history_v1';
+
+/** What a successful Reset Game clears outside React state: the locally kept batch and rating
+    history, and which teams the bot panel created (so the next class's record marks no bots). */
+export function clearLocalGameMarks(storage: Pick<Storage, 'removeItem'>): void {
+  storage.removeItem(LS_SUBMITTED_BATCH_JOKES);
+  storage.removeItem(LS_QC_RATED_HISTORY);
+  clearBotTeams();
+}
 
 const DEFAULT_ROUND2_BATCH_LIMIT = 10;
 const DEFAULT_MARKET_PRICE = 1;
@@ -2425,8 +2434,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSavedTeamNames({});
     if (user?.role === ('INSTRUCTOR' as Role) && !isWatchMode()) clearTeamNames(browserNameStore(), teamNamesKey(user.user_id));
     submittedBatchJokesRef.current = {};
-    localStorage.removeItem(LS_SUBMITTED_BATCH_JOKES);
-    localStorage.removeItem(LS_QC_RATED_HISTORY);
+    clearLocalGameMarks(localStorage);
     
     // Explicitly re-fetch lobby state to ensure UI syncs with the fresh backend state immediately.
     // The instructor reset endpoint clears backend data, so we must reload the lobby (which might be empty).

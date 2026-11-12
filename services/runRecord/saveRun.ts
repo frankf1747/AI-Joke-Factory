@@ -24,6 +24,8 @@ export interface SaveRunInput {
 
 /** Fetches each round's config and charts and builds the record. Throws Error("Could not read Round N settings") / ("… batches") naming the failed read. */
 export async function collectRunRecord(input: SaveRunInput, deps: SaveRunDeps): Promise<RunRecord> {
+  // A students record marks no bots, whatever the bot panel registered.
+  const bots = input.playedBy === 'students' ? new Map<number, RunBot>() : input.bots;
   const rounds: RunRound[] = [];
   for (const r of input.rounds) {
     let config: InstructorRound;
@@ -40,7 +42,7 @@ export async function collectRunRecord(input: SaveRunInput, deps: SaveRunDeps): 
       charts = null;
     }
     rounds.push(buildRunRound({
-      round: r.round, config, stats: r.stats, charts, teamNames: input.teamNames, rates: r.rates, bots: input.bots,
+      round: r.round, config, stats: r.stats, charts, teamNames: input.teamNames, rates: r.rates, bots,
     }));
   }
   return buildRunRecord(

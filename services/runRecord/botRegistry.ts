@@ -19,7 +19,7 @@ export function botTeams(): ReadonlyMap<number, RunBot> {
   return teams;
 }
 
-/** Tests. */
+/** Forgets every bot team: on a successful Reset Game (context.tsx) and in tests. */
 export function clearBotTeams(): void {
   teams = new Map();
 }
