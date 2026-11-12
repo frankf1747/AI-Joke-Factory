@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { InstructorRound, LeanChartsResponse } from '../../types/api';
 import type { LeaderboardRow } from '../classTotals';
 import type { FeeRates } from '../shownFees';
-import { collectRunRecord, savableRounds, type SaveRunDeps, type SaveRunInput } from './saveRun';
+import { collectRunRecord, roundInputs, savableRounds, savedFiles, type SaveRunDeps, type SaveRunInput } from './saveRun';
+import { recordCsv } from './csv';
 
 const rates: FeeRates = {
   costOfPublishing: 0.1, costOfDiscard: 0, shippingFeeSmall: 0, shippingFeeStandard: 0, shippingFeeLarge: 0,
@@ -79,5 +80,36 @@ describe('collectRunRecord', () => {
   it('marks no team as a bot in a students record, even with bots registered', async () => {
     const rec = await collectRunRecord(input({ playedBy: 'students', bots: new Map([[1, { persona: 'steady' }]]) }), deps());
     expect(rec.rounds.flatMap(r => r.teams).some(t => 'bot' in t)).toBe(false);
+  });
+});
+
+describe('roundInputs', () => {
+  const stats = { leaderboard: rows };
+  const other: FeeRates = { ...rates, costOfPublishing: 0.25 };
+
+  it('pairs each savable round with its id, results and own rates', () => {
+    expect(roundInputs([1, 2], { 1: 41, 2: 42 }, { 1: stats, 2: stats }, { 1: rates, 2: other })).toEqual([
+      { round: 1, roundId: 41, stats, rates },
+      { round: 2, roundId: 42, stats, rates: other },
+    ]);
+  });
+
+  it('names the round whose results are missing', () => {
+    expect(() => roundInputs([1, 2], { 1: 41, 2: 42 }, { 1: stats, 2: null }, { 1: rates, 2: rates }))
+      .toThrow('Could not read Round 2 results');
+  });
+
+  it('names the round whose id is missing as a settings read', () => {
+    expect(() => roundInputs([1], { 1: null, 2: null }, { 1: stats, 2: null }, { 1: rates, 2: rates }))
+      .toThrow('Could not read Round 1 settings');
+  });
+});
+
+describe('savedFiles', () => {
+  it('gives the record and the spreadsheet under the file-safe name', async () => {
+    const rec = await collectRunRecord(input({ name: 'Class #2' }), deps());
+    const files = savedFiles('Class #2', rec);
+    expect(files.json).toEqual({ fileName: 'Class -2.jfrun.json', text: JSON.stringify(rec, null, 2), mime: 'application/json' });
+    expect(files.csv).toEqual({ fileName: 'Class -2.csv', text: recordCsv(rec), mime: 'text/csv' });
   });
 });

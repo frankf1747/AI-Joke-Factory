@@ -4,7 +4,8 @@ import type { InstructorRound, LeanChartsResponse } from '../../types/api';
 import type { LeaderboardRow } from '../classTotals';
 import { isNotLeanRound } from '../leanCharts';
 import type { FeeRates } from '../shownFees';
-import { buildRunRecord, buildRunRound } from './build';
+import { buildRunRecord, buildRunRound, fileSafeName } from './build';
+import { recordCsv } from './csv';
 import type { PlayedBy, RunBot, RunRecord, RunRound } from './types';
 
 export interface SaveRunDeps {
@@ -55,4 +56,35 @@ export async function collectRunRecord(input: SaveRunInput, deps: SaveRunDeps): 
 export function savableRounds(statuses: Readonly<Record<1 | 2, string | null>>): Array<1 | 2> {
   if (statuses[1] !== 'ENDED') return [];
   return statuses[2] === 'ENDED' ? [1, 2] : [1];
+}
+
+type ByRound<T> = Readonly<Record<1 | 2, T>>;
+
+/** The rounds a save sends to collectRunRecord. Throws "Could not read Round N settings" when a
+    round has no id and "Could not read Round N results" when its results were not loaded. */
+export function roundInputs(
+  rounds: ReadonlyArray<1 | 2>,
+  roundIds: ByRound<number | null>,
+  stats: ByRound<{ leaderboard: LeaderboardRow[] } | null>,
+  rates: ByRound<FeeRates>,
+): SaveRunInput['rounds'] {
+  return rounds.map(round => {
+    const roundId = roundIds[round];
+    if (roundId == null) throw new Error(`Could not read Round ${round} settings`);
+    const s = stats[round];
+    if (!s) throw new Error(`Could not read Round ${round} results`);
+    return { round, roundId, stats: s, rates: rates[round] };
+  });
+}
+
+export interface SavedFile { fileName: string; text: string; mime: string }
+export interface SavedRun { json: SavedFile; csv: SavedFile }
+
+/** The two files a save downloads, kept so the dialog can offer them again. */
+export function savedFiles(name: string, record: RunRecord): SavedRun {
+  const file = fileSafeName(name);
+  return {
+    json: { fileName: `${file}.jfrun.json`, text: JSON.stringify(record, null, 2), mime: 'application/json' },
+    csv: { fileName: `${file}.csv`, text: recordCsv(record), mime: 'text/csv' },
+  };
 }

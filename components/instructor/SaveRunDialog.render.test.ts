@@ -50,6 +50,24 @@ describe('SaveRunDialog', () => {
     expect(isChecked(html, 'students')).toBe(false);
   });
 
+  it('once saved, offers both downloads again and Done, not the form', () => {
+    const file = (fileName: string) => ({ fileName, text: '{}', mime: 'application/json' });
+    const html = render({ initialState: { saved: { json: file('a.jfrun.json'), csv: file('a.csv') } } });
+    expect(html).toContain('Saved. If a file did not download, use the links below.');
+    expect(html).toContain('Download record (.jfrun.json)');
+    expect(html).toContain('Download spreadsheet (.csv)');
+    expect(html).toContain('>Done<');
+    expect(html).not.toContain('Who played');
+    expect(html).not.toContain('>Cancel<');
+  });
+
+  it('while saving, disables Cancel and hides the close button', () => {
+    const html = render({ initialState: { saving: true } });
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Cancel<\/button>/);
+    expect(html).not.toContain('aria-label="Close"');
+    expect(render()).toContain('aria-label="Close"');
+  });
+
   it('renders nothing when closed', () => {
     expect(render({ open: false })).toBe('');
   });

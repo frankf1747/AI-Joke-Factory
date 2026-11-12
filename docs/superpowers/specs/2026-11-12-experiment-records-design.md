@@ -100,11 +100,14 @@ Save downloads two files built in the browser:
 - `<name>.csv`, one row per team per round with the round's settings as columns, for a spreadsheet.
 
 If a fetch fails (stats, config or lean charts), the dialog shows which one and saves nothing.
+After saving, the dialog stays open: "Saved. If a file did not download, use the links below.", with
+both files offered again and Done. While saving, Cancel and the close button are unavailable.
 
 **Bot players panel.** No separate export button. The panel remembers (in memory, for this page) which
 teams it created and their options, so the Debrief dialog can prefill "Who played" and attach the §3.3
 bot fields. After a page reload that link is lost and the dialog falls back to Students; the instructor
-can still pick Bots by hand (the bot fields are then absent).
+can still pick Bots by hand (the bot fields are then absent). Reset Game also clears it, and a record
+saved as Students carries no bot fields.
 
 ## 5. Compare runs
 
