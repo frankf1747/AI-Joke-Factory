@@ -338,6 +338,7 @@ const Instructor: React.FC<{ initialTab?: ScreenTab }> = ({ initialTab }) => {
               statsR2={statsR2}
               round2Started={roundStatuses[2] === 'ACTIVE' || roundStatuses[2] === 'ENDED'}
               ratesR1={ratesR1} ratesR2={ratesR2}
+              roundIds={roundIds} roundStatuses={roundStatuses}
             />
           )}
         </div>

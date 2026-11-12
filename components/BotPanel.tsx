@@ -18,6 +18,7 @@ import { MAX_BOT_TEAMS, PERSONAS, PERSONA_ORDER, personaSequence, type PersonaId
 import {
   SPEEDS, type Command, type EngineStatus, type FromWorker, type ProbeResult, type SeatStatus, type Speed, type ToWorker,
 } from '../services/bots/protocol';
+import { recordBotTeams } from '../services/runRecord/botRegistry';
 import { watchUrl } from '../services/watchMode';
 import { panelControls, probeIsStale, type Pending } from './botPanelLogic';
 
@@ -145,6 +146,11 @@ export const BotPanel: React.FC = () => {
     const timer = window.setInterval(tick, PROBE_EVERY_MS);
     return () => window.clearInterval(timer);
   }, [roundId, instructorId, mock, send]);
+
+  // The Save run record dialog marks these teams as bots.
+  useEffect(() => {
+    if (status) recordBotTeams(status.teams);
+  }, [status]);
 
   if (mock) {
     return (
