@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { CompareTab } from './CompareTab';
+import { CompareTab, readFiles } from './CompareTab';
+import { MAX_RECORD_BYTES } from '../../services/runRecord/parse';
 import type { LoadedRun } from '../../services/runRecord/parse';
 import { CRITERIA_KEY } from '../../services/runRecord/compare';
 import { fixtureRecord, fixtureRound, fixtureTeam, listingPair } from '../../services/runRecord/compare.testdata';
@@ -92,5 +93,27 @@ describe('CompareTab, the instructor\'s criteria', () => {
     const out = render(loaded(...listingPair()));
     expect(out).not.toContain('Best');
     expect(out).not.toContain('targets met');
+  });
+});
+
+describe('readFiles', () => {
+  const fake = (name: string, size: number, text: () => Promise<string>) => ({ name, size, text }) as unknown as File;
+
+  it('refuses a file over 5 MB without reading it', async () => {
+    const text = vi.fn(async () => '{}');
+    const res = await readFiles([fake('big.jfrun.json', MAX_RECORD_BYTES + 1, text)]);
+    expect(res).toEqual({ readable: [], unreadable: [{ fileName: 'big.jfrun.json', reason: 'is larger than 5 MB' }] });
+    expect(text).not.toHaveBeenCalled();
+  });
+
+  it('reads a file within the limit and refuses one that cannot be read', async () => {
+    const res = await readFiles([
+      fake('ok.jfrun.json', 2, async () => '{}'),
+      fake('bad.jfrun.json', 2, async () => { throw new Error('nope'); }),
+    ]);
+    expect(res).toEqual({
+      readable: [{ fileName: 'ok.jfrun.json', text: '{}' }],
+      unreadable: [{ fileName: 'bad.jfrun.json', reason: 'could not be read' }],
+    });
   });
 });

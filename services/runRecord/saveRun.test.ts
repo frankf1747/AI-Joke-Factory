@@ -77,6 +77,13 @@ describe('collectRunRecord', () => {
     expect(rec.rounds[0].teams[0].bot).toEqual({ persona: 'steady' });
   });
 
+  it('prices each round with the fees its fetched config stored, not the rates passed in', async () => {
+    const getConfig = async (id: number) => ({ round: { ...config(id, 5), cost_of_publishing: 0.25 } as InstructorRound });
+    const rec = await collectRunRecord(input(), deps({ getConfig }));
+    expect(rec.rounds[0].settings.cost_of_publishing).toBe(0.25);
+    expect(rec.rounds[0].teams[0].fees.listing).toBeCloseTo(9 * 0.25, 10);
+  });
+
   it('marks no team as a bot in a students record, even with bots registered', async () => {
     const rec = await collectRunRecord(input({ playedBy: 'students', bots: new Map([[1, { persona: 'steady' }]]) }), deps());
     expect(rec.rounds.flatMap(r => r.teams).some(t => 'bot' in t)).toBe(false);

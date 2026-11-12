@@ -7,7 +7,7 @@ import { downloadText } from '../../services/download';
 import {
   comparisonCsv, everyRunHasFit, loadCriteria, saveCriteria, type Criterion, type CriterionKey,
 } from '../../services/runRecord/compare';
-import { addRecords, type LoadedRun, type Refusal } from '../../services/runRecord/parse';
+import { addRecords, MAX_RECORD_BYTES, type LoadedRun, type Refusal } from '../../services/runRecord/parse';
 import { RunHeaders } from './compare/RunHeaders';
 import { SettingsTable } from './compare/SettingsTable';
 import { MeasuresTable } from './compare/MeasuresTable';
@@ -18,18 +18,19 @@ function safeLocalStorage(): Storage | null {
   try { return window.localStorage; } catch { return null; }
 }
 
-/** Reads each file's text, then adds them in one go; a file that cannot be read is refused. */
-async function readFiles(files: readonly File[]): Promise<{ readable: Array<{ fileName: string; text: string }>; unreadable: Refusal[] }> {
-  const results = await Promise.all(files.map(async f => {
+/** Reads each file's text, then adds them in one go; a file over 5 MB is refused unread, one that cannot be read is refused. */
+export async function readFiles(files: readonly File[]): Promise<{ readable: Array<{ fileName: string; text: string }>; unreadable: Refusal[] }> {
+  const results = await Promise.all(files.map(async (f): Promise<{ ok: true; fileName: string; text: string } | { ok: false; fileName: string; reason: string }> => {
+    if (f.size > MAX_RECORD_BYTES) return { ok: false, fileName: f.name, reason: 'is larger than 5 MB' };
     try {
-      return { ok: true as const, fileName: f.name, text: await f.text() };
+      return { ok: true, fileName: f.name, text: await f.text() };
     } catch {
-      return { ok: false as const, fileName: f.name };
+      return { ok: false, fileName: f.name, reason: 'could not be read' };
     }
   }));
   return {
     readable: results.flatMap(r => (r.ok ? [{ fileName: r.fileName, text: r.text }] : [])),
-    unreadable: results.flatMap(r => (r.ok ? [] : [{ fileName: r.fileName, reason: 'could not be read' }])),
+    unreadable: results.flatMap(r => (r.ok ? [] : [{ fileName: r.fileName, reason: r.reason }])),
   };
 }
 

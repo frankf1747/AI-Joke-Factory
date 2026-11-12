@@ -296,8 +296,9 @@ After a class, open the Debrief and press **Save run record**. Give it a name, s
 and a spreadsheet (`.csv`). Keep the files; the game itself forgets a class when you reset it.
 To compare, open the **Compare** tab and press **Add record files**, then choose the records.
 Tick the measures that matter, say whether higher or lower is better, and set a target for each.
-Bot rehearsals and the pilots (`feedback-pilot`, `cost-sweep`) write the same files, the pilots into
-`docs/pilots/<date>-…-records/`, so a rehearsal can be compared with a real class.
+A rehearsal with the Bot players panel is saved from the Debrief like any class (pick Bots under
+who played). The pilots (`feedback-pilot`, `cost-sweep`) write their records automatically, one per
+class, into `docs/pilots/<date>-…-records/`, so a rehearsal or a pilot can be compared with a real class.
 
 ---
 

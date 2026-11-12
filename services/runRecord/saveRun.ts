@@ -3,6 +3,7 @@
 import type { InstructorRound, LeanChartsResponse } from '../../types/api';
 import type { LeaderboardRow } from '../classTotals';
 import { isNotLeanRound } from '../leanCharts';
+import { feeRatesFromRound, ratesFor } from '../roundRates';
 import type { FeeRates } from '../shownFees';
 import { buildRunRecord, buildRunRound, fileSafeName } from './build';
 import { recordCsv } from './csv';
@@ -42,8 +43,10 @@ export async function collectRunRecord(input: SaveRunInput, deps: SaveRunDeps): 
       if (!isNotLeanRound(e)) throw new Error(`Could not read Round ${r.round} batches`);
       charts = null;
     }
+    // Priced with the fees the fetched config stored, so a record's settings and fees always agree.
+    const rates = ratesFor(feeRatesFromRound(config as unknown as Record<string, unknown>), r.rates);
     rounds.push(buildRunRound({
-      round: r.round, config, stats: r.stats, charts, teamNames: input.teamNames, rates: r.rates, bots,
+      round: r.round, config, stats: r.stats, charts, teamNames: input.teamNames, rates, bots,
     }));
   }
   return buildRunRecord(

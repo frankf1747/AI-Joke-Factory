@@ -70,8 +70,9 @@ One entry per team that played (`playingStats`, the same teams as the Live board
 | Field | Source |
 |---|---|
 | `team_id`, `team` (shown name, with the instructor's rename) | stats leaderboard, `teamNames` |
-| `profit`, `sold` (`total_sales`), `released` (`published_jokes`), `made` (`total_jokes`), `never_sold` (`unsold_jokes`), `discarded` | stats leaderboard |
-| `fees`: `listing`, `hosting`, `shipping`, `storage`, `discard`, `total` | `boardRows` with that round's rates (as the Debrief's Fees column) |
+| `profit`, `sold` (`total_sales`), `released` (`published_jokes`), `made` (`total_jokes`), `discarded` (`discarded_jokes`) | stats leaderboard |
+| `never_sold`: released jokes that never sold, as the Debrief's Never sold column (`boardRows`, from the Lean batch series); null in a Classic round | `boardRows` |
+| `fees`: `listing`, `hosting`, `shipping`, `storage`, `discard`, `total` | `boardRows` with that round's rates (as the Debrief's Fees column), the fees its fetched config stores taking precedence, so settings and fees in one record agree |
 | `sent_to_released_s` | `boardRows` |
 | `batches`: `seq`, `sent_s`, `jokes`, `released`, `sold`, `first_sale_s` | lean charts (`GET /v1/instructor/rounds/:id/lean-charts`); omitted in a Classic round |
 

@@ -1,15 +1,15 @@
 /* Node only: plays one feedback-pilot class against a local backend and
-   returns its ClassResult (scripts/pilot/feedbackReport.ts). Used by
-   feedback-pilot.mts and cost-sweep.mts.
+   returns its ClassResult (scripts/pilot/feedbackReport.ts) and its run record
+   (services/runRecord). Used by feedback-pilot.mts and cost-sweep.mts.
 
    The class: an admin reset (it deletes all game data; the runners refuse a
    non-local backend), both rounds configured with the two costs, then the 2×2
    class of bot teams (classTeams) on Round 1. The SAME engine keeps playing
    while the runner ends Round 1 and starts Round 2 (bots read the active round
-   every loop). After each round ends, its stats, its lean charts and every
-   team's batch list (read as that team's own Joke Maker bot) are collected. */
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+   every loop). After each round ends, its stats, its lean charts, every team's
+   batch list (read as that team's own Joke Maker bot) and the round's stored
+   config (its settings and fees, for the record) are collected. runSetting can
+   write each played class's record as a .jfrun.json file. */
 import { createClient } from '../../services/shared/client';
 import type { BotTeamSpec } from '../../services/bots/protocol';
 import type { LeaderboardRow } from '../../services/classTotals';
@@ -25,7 +25,7 @@ import {
   type ClassResult, type ClassTeam, type Costs, type GroupId, type PilotEnv, type PilotRound, type PilotSidecar, type RoundResult, type TeamRow,
   type TraitEvidence,
 } from './feedbackReport';
-import { botOf, fitsOf, pilotRates, recordFileName } from './pilotRecord';
+import { botOf, fitsOf, pilotRates, writeRunRecord } from './pilotRecord';
 
 export const SPEED = 10 as const;
 /** After the arrival window: let due arrivals be served, then end the round. */
@@ -51,7 +51,7 @@ type Client = ReturnType<typeof createClient>;
 /** What a played class gives back: its report figures and its run record (services/runRecord). */
 export interface PlayedClass { result: ClassResult; record: RunRecord }
 
-/** "listing $0.10 hosting $0.05": how a class's costs read in its record's name and file. */
+/** "listing $0.10 hosting $0.05": how a class's costs read in its record's name; the file name drops the "$". */
 const costsLabel = (c: Costs): string => `listing ${money(c.listing)} hosting ${money(c.hosting)}`;
 
 export async function runFeedbackClass(o: ClassOptions): Promise<PlayedClass> {
@@ -129,7 +129,7 @@ export async function runSetting(
   env: PilotEnv, costs: Costs, date: string,
   /** Called after every class, played or failed, with the run so far (the runners save their sidecar here). */
   onClass?: (side: PilotSidecar) => void,
-  /** When set, each played class's run record is written here (one .jfrun.json file per class). */
+  /** When set, each played class's run record is written here (one .jfrun.json file per class); a write that fails is logged. */
   recordsDir?: string,
 ): Promise<PilotSidecar> {
   const side: PilotSidecar = {
@@ -140,11 +140,9 @@ export async function runSetting(
       const played = await runFeedbackClass({
         ...base, costs, windowS: env.window, perGroup: env.perGroup, seed: `${env.seed}-c${k}`, classNo: k,
       });
+      // Its own try/catch inside: a failed write is logged and never marks a played class FAILED.
+      if (recordsDir) writeRunRecord(recordsDir, costsLabel(costs), k, played.record, base.log);
       side.classes.push(played.result);
-      if (recordsDir) {
-        mkdirSync(recordsDir, { recursive: true });
-        writeFileSync(join(recordsDir, recordFileName(costsLabel(costs), k)), JSON.stringify(played.record, null, 2));
-      }
     } catch (err) {
       const message = failedClassMessage(k, costs, err);
       base.log(`FAILED ${message}`);

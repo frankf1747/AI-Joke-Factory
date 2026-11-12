@@ -1,11 +1,12 @@
 /* One CSV per run record: a row per team per round, for a spreadsheet.
-   Cells that start like a formula are neutralised so a team name cannot run in Excel. */
+   Cells that start like a formula (or with a tab or carriage return) are neutralised so a team
+   name cannot run in Excel. */
 import { SETTING_FIELDS, type RunRecord } from './types';
 
 export function csvCell(v: string | number | boolean | null | undefined): string {
   if (v === null || v === undefined) return '';
   let s = String(v);
-  if (typeof v === 'string' && /^[=+\-@]/.test(s)) s = `'${s}`;
+  if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = `'${s}`;
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

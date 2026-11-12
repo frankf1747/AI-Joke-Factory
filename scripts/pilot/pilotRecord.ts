@@ -1,9 +1,11 @@
 /* What the pilot writes into a run record (docs/superpowers/specs/2026-11-12-experiment-records-design.md §6):
-   the bot each team was created with, its fit per batch, the file name. Pure. */
+   the bot each team was created with, its fit per batch, the file name. Pure apart from writeRunRecord. */
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { BotTeamSpec } from '../../services/bots/protocol';
 import { feeRatesFromRound, ratesFor } from '../../services/roundRates';
 import { fileSafeName } from '../../services/runRecord/build';
-import type { RunBot } from '../../services/runRecord/types';
+import type { RunBot, RunRecord } from '../../services/runRecord/types';
 import type { FeeRates } from '../../services/shownFees';
 import type { InstructorRound } from '../../types/api';
 import type { BatchFit } from './feedbackReport';
@@ -34,6 +36,18 @@ export function fitsOf(fits: readonly BatchFit[]): Array<{ seq: number; fit: num
   return fits.map(f => ({ seq: f.seq, fit: f.meanFit }));
 }
 
+/** "listing 0.10 hosting 0.05 class 2.jfrun.json": the "$" is dropped rather than turned into "-". */
 export function recordFileName(costsLabel: string, classNo: number): string {
-  return `${fileSafeName(`${costsLabel} class ${classNo}`)}.jfrun.json`;
+  return `${fileSafeName(`${costsLabel.replace(/\$/g, '')} class ${classNo}`)}.jfrun.json`;
+}
+
+/** Writes a class's record into `dir` (made if missing). A failed write is logged
+    ("could not write record: …") and never thrown, so the played class still counts. */
+export function writeRunRecord(dir: string, costsLabel: string, classNo: number, record: RunRecord, log: (line: string) => void): void {
+  try {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, recordFileName(costsLabel, classNo)), JSON.stringify(record, null, 2));
+  } catch (err) {
+    log(`could not write record: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }

@@ -25,6 +25,10 @@ describe('csvCell', () => {
     expect(csvCell('a\nb')).toBe('"a\nb"');
     expect(csvCell('a\rb')).toBe('"a\rb"');
   });
+  it('neutralises a string that starts with a tab or a carriage return', () => {
+    expect(csvCell('\tx')).toBe("'\tx");
+    expect(csvCell('\r=1')).toBe('"\'\r=1"');
+  });
   it('applies the formula prefix before quoting', () => {
     expect(csvCell('=a,b')).toBe('"\'=a,b"');
   });

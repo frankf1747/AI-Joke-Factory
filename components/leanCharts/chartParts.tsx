@@ -33,8 +33,8 @@ export interface LegendItem {
 
 export const ChartLegend: React.FC<{ items: ReadonlyArray<LegendItem> }> = ({ items }) => (
   <div className="mt-2 flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[12.5px]" style={{ color: 'var(--ink-2)' }}>
-    {items.map(item => (
-      <span key={item.label} className="inline-flex items-center gap-1">
+    {items.map((item, i) => (
+      <span key={i} className="inline-flex items-center gap-1">
         <svg width="14" height="10" aria-hidden="true" opacity={item.faded ? 0.4 : 1}>
           {item.kind === 'square' && <rect x="2" y="1" width="10" height="8" rx="1.5" fill={item.color} />}
           {item.kind === 'circle' && (
@@ -61,8 +61,8 @@ export const ChartTooltipBox: React.FC<{
   <div className="rounded-[var(--r-md)] px-3 py-2 shadow-sm" style={{ background: 'var(--sheet)', border: '1px solid var(--rule)' }}>
     <div className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>{title}</div>
     <div className="mt-1 space-y-0.5 text-sm" style={{ color: 'var(--ink-2)' }}>
-      {rows.map(r => (
-        <div key={r.label} className="flex justify-between gap-4">
+      {rows.map((r, i) => (
+        <div key={i} className="flex justify-between gap-4">
           <span className="flex items-center gap-1.5 font-medium">
             {r.color && <span className="inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: r.color }} />}
             {r.label}

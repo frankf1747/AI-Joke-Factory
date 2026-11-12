@@ -5,7 +5,10 @@ import type { FeeRates } from '../../services/shownFees';
 import { buildRunRecord, buildRunRound } from '../../services/runRecord/build';
 import { parseRunRecord } from '../../services/runRecord/parse';
 import type { BatchFit } from './feedbackReport';
-import { botOf, fitsOf, pilotRates, recordFileName } from './pilotRecord';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { botOf, fitsOf, pilotRates, recordFileName, writeRunRecord } from './pilotRecord';
 
 const rates: FeeRates = {
   costOfPublishing: 0.1, costOfDiscard: 0, shippingFeeSmall: 0, shippingFeeStandard: 0, shippingFeeLarge: 0,
@@ -55,7 +58,31 @@ describe('pilotRates', () => {
 
 describe('recordFileName', () => {
   it('is the safe class name plus .jfrun.json', () => {
-    expect(recordFileName('listing $0.10 hosting $0.05', 2)).toBe('listing -0.10 hosting -0.05 class 2.jfrun.json');
+    expect(recordFileName('listing $0.10 hosting $0.05', 2)).toBe('listing 0.10 hosting 0.05 class 2.jfrun.json');
+  });
+});
+
+describe('writeRunRecord', () => {
+  const rec = buildRunRecord({ name: 'n', playedBy: 'bots', exportedAt: 't' }, [buildRunRound({
+    round: 1, config, stats: { leaderboard: rows }, charts: null, teamNames: {}, rates,
+  })]);
+
+  it('writes the record under its file name, making the folder', () => {
+    const dir = join(mkdtempSync(join(tmpdir(), 'jf-pilot-')), 'records');
+    const lines: string[] = [];
+    writeRunRecord(dir, 'listing $0.10 hosting $0.05', 3, rec, l => lines.push(l));
+    const text = readFileSync(join(dir, 'listing 0.10 hosting 0.05 class 3.jfrun.json'), 'utf8');
+    expect(JSON.parse(text)).toEqual(rec);
+    expect(lines).toEqual([]);
+  });
+
+  it('logs a failed write and does not throw', () => {
+    const blocker = join(mkdtempSync(join(tmpdir(), 'jf-pilot-')), 'a-file');
+    writeFileSync(blocker, 'x');
+    const lines: string[] = [];
+    expect(() => writeRunRecord(join(blocker, 'records'), 'c', 1, rec, l => lines.push(l))).not.toThrow();
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^could not write record: /);
   });
 });
 
