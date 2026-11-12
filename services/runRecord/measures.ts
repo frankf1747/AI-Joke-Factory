@@ -137,7 +137,8 @@ function fitGain(record: RunRecord): number | null {
   if (!r2) return null;
   const gains: number[] = [];
   for (const t of r2.teams) {
-    const fits = nonNull((t.fit_by_batch ?? []).map(f => f.fit));
+    const ordered = [...(t.fit_by_batch ?? [])].sort((a, b) => a.seq - b.seq);
+    const fits = nonNull(ordered.map(f => f.fit));
     if (fits.length >= 2) gains.push(fits[fits.length - 1] - fits[0]);
   }
   return mean(gains);
@@ -145,6 +146,11 @@ function fitGain(record: RunRecord): number | null {
 
 /** `round` is used for scope 'round'; ignored for 'change'; 'bots' reads Round 2. null = cannot be computed. */
 export function measureValue(record: RunRecord, id: MeasureId, round: 1 | 2): number | null {
+  const value = rawMeasure(record, id, round);
+  return value !== null && Number.isFinite(value) ? value : null;
+}
+
+function rawMeasure(record: RunRecord, id: MeasureId, round: 1 | 2): number | null {
   const def = MEASURES.find(m => m.id === id);
   if (!def) return null;
   if (def.scope === 'change') return changeMeasure(record, id);

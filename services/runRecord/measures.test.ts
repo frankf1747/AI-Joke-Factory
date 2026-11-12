@@ -134,6 +134,15 @@ describe('measureValue, change and bots measures', () => {
     expect(v('fit_gain')).toBe(2.5);
   });
 
+  it('fit_gain takes first and last fits by ascending seq, not stored order', () => {
+    const r = record(r1, round(2, [
+      team(1, { fit_by_batch: [{ seq: 2, fit: 6 }, { seq: 1, fit: 3 }] }),
+      team(2, { fit_by_batch: [{ seq: 3, fit: 9 }, { seq: 1, fit: 5 }, { seq: 2, fit: null }] }),
+    ]));
+    // team 1: 6 - 3 = 3; team 2: 9 - 5 = 4
+    expect(v('fit_gain', 1, r)).toBe(3.5);
+  });
+
   it('fit_gain is null with no fit data', () => {
     expect(v('fit_gain', 1, record(r1, round(2, [team(1)])))).toBeNull();
   });
@@ -144,6 +153,13 @@ describe('measureValue, cannot be computed', () => {
     const r = record(round(1, [team(1), team(2)]));
     expect(v('sold_share', 1, r)).toBeNull();
     expect(v('fees_pct_revenue', 1, r)).toBeNull();
+  });
+
+  it('is null, not NaN, when a hand-edited record lacks a field', () => {
+    const t = team(1, { released: 4 }) as unknown as Record<string, unknown>;
+    delete t.sold;
+    const r = record(round(1, [t as unknown as RunTeam]));
+    expect(v('sold_share', 1, r)).toBeNull();
   });
 
   it('fees_pct_revenue is null with no price', () => {
