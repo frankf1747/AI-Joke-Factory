@@ -94,6 +94,17 @@ describe('recordCsv', () => {
     for (const l of lines.slice(1, 5)) expect(l.split(',').length).toBe(width + 1);
   });
 
+  it('rounds money to cents and seconds to tenths, as the record\'s raw floats are unreadable in a sheet', () => {
+    const raw = buildRunRecord({ name: 'R', playedBy: 'bots', exportedAt: 'x' }, [
+      round(1, [team(1, {
+        profit: 113.37064271666667, sent_to_released_s: 12.265778125, to_first_sale_s: 7.6703349375,
+        fees: { listing: 4, hosting: 11.629357283333329, shipping: 0, storage: 0, discard: 0, total: 15.629357283333329 },
+      })]),
+    ]);
+    const row = recordCsv(raw).split('\r\n')[1];
+    expect(row.startsWith('R,bots,1,Team 1,113.37,3,5,6,1,0,4,11.63,0,0,0,15.63,12.3,7.7,,')).toBe(true);
+  });
+
   it('prefixes a formula-looking team name, quotes it for its quote, and leaves a negative profit plain', () => {
     const evil = buildRunRecord({ name: 'R', playedBy: 'students', exportedAt: 'x' }, [
       round(1, [team(1, { team: '=HYPERLINK("x")', profit: -2.5 })]),

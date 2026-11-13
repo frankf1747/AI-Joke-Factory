@@ -15,14 +15,21 @@ const FIXED_COLUMNS = [
   'listing', 'hosting', 'shipping', 'storage', 'discard', 'fees_total', 'sent_to_released_s', 'to_first_sale_s', 'batches',
 ];
 
+/** Rounds for the sheet (the JSON record keeps the raw value); null and undefined pass through. */
+const to = (places: number) => (v: number | null | undefined): number | null | undefined =>
+  typeof v === 'number' && Number.isFinite(v) ? Number(v.toFixed(places)) : v;
+const money = to(2);
+const secs = to(1);
+
 export function recordCsv(record: RunRecord): string {
   const lines = [[...FIXED_COLUMNS, ...SETTING_FIELDS.map(([key]) => key)].map(csvCell).join(',')];
   for (const round of record.rounds) {
     for (const t of round.teams) {
       const cells = [
-        record.name, record.played_by, round.round, t.team, t.profit, t.sold, t.released, t.made, t.never_sold, t.discarded,
-        t.fees.listing, t.fees.hosting, t.fees.shipping, t.fees.storage, t.fees.discard, t.fees.total,
-        t.sent_to_released_s, t.to_first_sale_s, t.batches?.length,
+        record.name, record.played_by, round.round, t.team, money(t.profit), t.sold, t.released, t.made, t.never_sold, t.discarded,
+        money(t.fees.listing), money(t.fees.hosting), money(t.fees.shipping), money(t.fees.storage),
+        money(t.fees.discard), money(t.fees.total),
+        secs(t.sent_to_released_s), secs(t.to_first_sale_s), t.batches?.length,
         ...SETTING_FIELDS.map(([key]) => round.settings[key]),
       ];
       lines.push(cells.map(csvCell).join(','));

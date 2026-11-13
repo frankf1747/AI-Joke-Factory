@@ -1,4 +1,4 @@
-/* The Compare tab's learning curves: sold share (or, for bot runs, fit) by batch
+/* The Compare tab's learning curves: the share of released jokes that sold (or, for bot runs, fit) by batch
    number, one line per run, so runs can be compared batch by batch. */
 import React, { useState } from 'react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -33,7 +33,7 @@ export const BatchChart: React.FC<{ records: readonly RunRecord[]; fitAvailable:
     <div>
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <select value={kind} onChange={e => setPicked(e.target.value === 'fit' ? 'fit' : 'sold_share')} className={CONTROL} style={CONTROL_STYLE} aria-label="Curve">
-          <option value="sold_share">Sold share by batch</option>
+          <option value="sold_share">Released jokes that sold, by batch</option>
           {fitAvailable && <option value="fit">Fit by batch</option>}
         </select>
         <select value={round} onChange={e => setRound(e.target.value === '2' ? 2 : 1)} className={CONTROL} style={CONTROL_STYLE} aria-label="Round">

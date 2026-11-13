@@ -32,7 +32,7 @@ export const MEASURES: readonly MeasureDef[] = [
   { id: 'hosting', group: 'Money', label: 'Hosting', unit: 'money', better: 'lower', scope: 'round' },
   { id: 'sold', group: 'Sales', label: 'Jokes sold', unit: 'count', better: 'higher', scope: 'round' },
   { id: 'released', group: 'Sales', label: 'Released', unit: 'count', better: 'higher', scope: 'round' },
-  { id: 'sold_share', group: 'Sales', label: 'Sold share', unit: 'percent', better: 'higher', scope: 'round' },
+  { id: 'sold_share', group: 'Sales', label: 'Released jokes that sold', unit: 'percent', better: 'higher', scope: 'round' },
   { id: 'never_sold', group: 'Sales', label: 'Never sold', unit: 'count', better: 'lower', scope: 'round' },
   { id: 'batches_per_team', group: 'Flow', label: 'Batches per team', unit: 'number', better: 'higher', scope: 'round' },
   { id: 'mean_batch_size', group: 'Flow', label: 'Mean batch size', unit: 'number', better: 'lower', scope: 'round' },
@@ -41,7 +41,7 @@ export const MEASURES: readonly MeasureDef[] = [
   { id: 'first_sale_in_round_s', group: 'Flow', label: 'First sale in the round', unit: 'seconds', better: 'lower', scope: 'round' },
   { id: 'profit_change', group: 'Round 1 → 2', label: 'Mean profit change', unit: 'money', better: 'higher', scope: 'change' },
   { id: 'teams_improved', group: 'Round 1 → 2', label: 'Teams that improved', unit: 'percent', better: 'higher', scope: 'change' },
-  { id: 'sold_share_change', group: 'Round 1 → 2', label: 'Sold share change', unit: 'points', better: 'higher', scope: 'change' },
+  { id: 'sold_share_change', group: 'Round 1 → 2', label: 'Released jokes that sold, change', unit: 'points', better: 'higher', scope: 'change' },
   { id: 'fit_gain', group: 'Bots only', label: 'Fit, first → last Round 2 batch', unit: 'number', better: 'higher', scope: 'bots' },
 ];
 
@@ -61,8 +61,14 @@ const pct = (a: number, b: number): number | null => (b === 0 ? null : (a / b) *
 
 const roundOf = (record: RunRecord, n: 1 | 2): RunRound | undefined => record.rounds.find(r => r.round === n);
 
-const soldShare = (round: RunRound): number | null =>
-  pct(sum(round.teams.map(t => t.sold)), sum(round.teams.map(t => t.released)));
+/** Released jokes that sold at least once ÷ released, as a percent (the batch curve's measure). Each
+    joke counts once however many copies sold, so it never passes 100%. Teams whose never_sold is
+    unknown (a Classic round) are left out; null when none is known. */
+function soldShare(round: RunRound): number | null {
+  const known = round.teams.filter(t =>
+    typeof t.released === 'number' && typeof t.never_sold === 'number' && t.never_sold >= 0 && t.never_sold <= t.released);
+  return pct(sum(known.map(t => t.released - (t.never_sold as number))), sum(known.map(t => t.released)));
+}
 
 const batchesOf = (round: RunRound) => round.teams.flatMap(t => t.batches ?? []);
 

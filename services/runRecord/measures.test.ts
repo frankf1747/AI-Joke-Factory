@@ -64,7 +64,8 @@ describe('measureValue, round measures (Round 1 by hand)', () => {
   it('sales', () => {
     expect(v('sold')).toBe(12);
     expect(v('released')).toBe(24);
-    expect(v('sold_share')).toBe(50);
+    // released jokes that sold at least once: team 1 8 of 10, team 2 2 of 8; team 3 (never_sold unknown) left out
+    expect(v('sold_share')).toBeCloseTo(1000 / 18, 10);
     expect(v('never_sold')).toBe(8);
   });
 
@@ -79,7 +80,7 @@ describe('measureValue, round measures (Round 1 by hand)', () => {
   it('reads the round it is asked for', () => {
     expect(v('mean_profit', 2)).toBeCloseTo(7 / 3, 10);
     expect(v('sold', 2)).toBe(20);
-    expect(v('sold_share', 2)).toBeCloseTo(83.3333, 3);
+    expect(v('sold_share', 2)).toBe(100);
   });
 
   it('is null for never_sold when every team has null', () => {
@@ -102,7 +103,7 @@ describe('measureValue, change and bots measures', () => {
   it('profit_change, teams_improved, sold_share_change', () => {
     expect(v('profit_change')).toBeCloseTo(1 / 3, 10);
     expect(v('teams_improved')).toBeCloseTo(33.3333, 3);
-    expect(v('sold_share_change')).toBeCloseTo(100 / 3, 10);
+    expect(v('sold_share_change')).toBeCloseTo(100 - 1000 / 18, 10);
   });
 
   it('ignores the round argument for change measures', () => {
@@ -155,9 +156,19 @@ describe('measureValue, cannot be computed', () => {
     expect(v('fees_pct_revenue', 1, r)).toBeNull();
   });
 
+  it('sold_share counts each released joke once, however many copies sold', () => {
+    const r = record(round(1, [team(1, { sold: 30, released: 10, never_sold: 4 })]));
+    expect(v('sold_share', 1, r)).toBe(60);
+  });
+
+  it('sold_share is null in a Classic round (never_sold unknown for every team)', () => {
+    const r = record(round(1, [team(1, { sold: 3, released: 5, never_sold: null })]));
+    expect(v('sold_share', 1, r)).toBeNull();
+  });
+
   it('is null, not NaN, when a hand-edited record lacks a field', () => {
     const t = team(1, { released: 4 }) as unknown as Record<string, unknown>;
-    delete t.sold;
+    delete t.never_sold;
     const r = record(round(1, [t as unknown as RunTeam]));
     expect(v('sold_share', 1, r)).toBeNull();
   });

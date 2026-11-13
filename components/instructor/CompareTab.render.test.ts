@@ -41,7 +41,7 @@ describe('CompareTab', () => {
     expect(html).toContain('Higher is better');
     expect(html).toContain('placeholder="Target"');
     expect(html).toContain('Save comparison (CSV)');
-    expect(html).toContain('Sold share by batch');
+    expect(html).toContain('Released jokes that sold, by batch');
     expect(html).not.toContain('No runs loaded yet.');
     expect(html).not.toContain('Add one more run to compare.');
   });

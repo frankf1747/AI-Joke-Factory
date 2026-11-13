@@ -129,12 +129,12 @@ run (n)". The ideal joke is one row, "Ideal joke", that reads Same or Different 
 | Group | Measure |
 |---|---|
 | Money | Mean profit per team · Median profit · Teams in profit (%) · Total fees · Fees as % of revenue · Listing · Hosting |
-| Sales | Jokes sold · Released · Sold share (sold ÷ released) · Never sold |
+| Sales | Jokes sold · Released · Released jokes that sold (each released joke counted once, however many copies sold; none in a Classic round) · Never sold |
 | Flow | Batches per team · Mean batch size · Sent → released (s) · Send → first sale (s) · First sale in the round (s) |
-| Round 1 → 2 | Mean profit change · Teams that improved (%) · Sold share change |
+| Round 1 → 2 | Mean profit change · Teams that improved (%) · Released jokes that sold, change |
 | Bots only | Fit, first → last Round 2 batch (only when every loaded run has `fit_by_batch`) |
 
-Below the table, a line chart for one chosen measure by batch number (sold share by batch, or fit by
+Below the table, a line chart for one chosen measure by batch number (released jokes that sold, by batch, or fit by
 batch for bot runs), one line per run, so the learning curve can be compared.
 
 **What counts as worked.** Each measure row has a checkbox "Use", a direction (Higher is better /
