@@ -1,0 +1,2728 @@
+{
+  "date": "2026-11-13",
+  "costs": {
+    "listing": 0.25,
+    "hosting": 0.2
+  },
+  "settings": [
+    "One class = 20 bot teams (5 matched pairs of each batch size), Balanced pace, bots at 10×, trait classifier; Round 1 then Round 2; 1 class, seeds feedback-1794608890467-c1… .",
+    "Round 1: batches of 5 for everyone. Round 2: small teams send 3, large teams 10. Every Marketing seat releases every joke.",
+    "Costs (classroom rates): listing $0.25 per released joke, hosting $0.20 per joke-minute (sent ×10, $2.00, because the backend charges per wall-clock minute). Shipping, storage and discard 0.",
+    "Arrival window 90 s (15 class minutes). The ideal is the pilot ideal (config/dimensions DEFAULT_IDEAL_PROFILE) in both rounds. The bar is the customers' default buy threshold, 8."
+  ],
+  "classes": [
+    {
+      "classNo": 1,
+      "seed": "feedback-1794608890467-c1",
+      "rounds": [
+        {
+          "round": 1,
+          "durationS": 95,
+          "rows": [
+            {
+              "teamId": 1,
+              "group": "SMALL_ON",
+              "revenue": 101,
+              "listing": 10,
+              "hosting": 45.31056710000001,
+              "otherFees": 0,
+              "profit": 45.68943289999999,
+              "sales": 101,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 5,
+                  "meanFit": 5.75,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 5,
+                  "meanFit": 6.15,
+                  "aboveBar": 2,
+                  "cleared": true
+                },
+                {
+                  "seq": 3,
+                  "released": 5,
+                  "meanFit": 5.65,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 4,
+                  "released": 5,
+                  "meanFit": 10.85,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 5,
+                  "released": 5,
+                  "meanFit": 10.35,
+                  "aboveBar": 4,
+                  "cleared": true
+                },
+                {
+                  "seq": 6,
+                  "released": 5,
+                  "meanFit": 11.15,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 7,
+                  "released": 5,
+                  "meanFit": 10.85,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 8,
+                  "released": 5,
+                  "meanFit": 10.95,
+                  "aboveBar": 5,
+                  "cleared": true
+                }
+              ],
+              "sendToFirstSaleS": 15.855056666666664,
+              "pair": 1
+            },
+            {
+              "teamId": 2,
+              "group": "SMALL_OFF",
+              "revenue": 55,
+              "listing": 10,
+              "hosting": 58.70296056666666,
+              "otherFees": 0,
+              "profit": -13.702960566666661,
+              "sales": 55,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 5,
+                  "meanFit": 5.75,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 5,
+                  "meanFit": 6.15,
+                  "aboveBar": 2,
+                  "cleared": true
+                },
+                {
+                  "seq": 3,
+                  "released": 5,
+                  "meanFit": 5.65,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 4,
+                  "released": 5,
+                  "meanFit": 5.45,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 5,
+                  "released": 5,
+                  "meanFit": 3.95,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 6,
+                  "released": 5,
+                  "meanFit": 5.95,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 7,
+                  "released": 5,
+                  "meanFit": 6.25,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 8,
+                  "released": 5,
+                  "meanFit": 4.45,
+                  "aboveBar": 0,
+                  "cleared": false
+                }
+              ],
+              "sendToFirstSaleS": 15.591959,
+              "pair": 1
+            },
+            {
+              "teamId": 3,
+              "group": "LARGE_ON",
+              "revenue": 62,
+              "listing": 10,
+              "hosting": 45.28060769999999,
+              "otherFees": 0,
+              "profit": 6.71939230000001,
+              "sales": 62,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 5,
+                  "meanFit": 5.25,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 5,
+                  "meanFit": 5.15,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 5,
+                  "meanFit": 5.35,
+                  "aboveBar": 2,
+                  "cleared": true
+                },
+                {
+                  "seq": 4,
+                  "released": 5,
+                  "meanFit": 8.95,
+                  "aboveBar": 2,
+                  "cleared": true
+                },
+                {
+                  "seq": 5,
+                  "released": 5,
+                  "meanFit": 11.55,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 6,
+                  "released": 5,
+                  "meanFit": 11.55,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 7,
+                  "released": 5,
+                  "meanFit": 10.25,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 8,
+                  "released": 5,
+                  "meanFit": 10.85,
+                  "aboveBar": 5,
+                  "cleared": true
+                }
+              ],
+              "sendToFirstSaleS": 18.553020166666666,
+              "pair": 3
+            },
+            {
+              "teamId": 4,
+              "group": "LARGE_OFF",
+              "revenue": 2,
+              "listing": 10,
+              "hosting": 59.95987840000001,
+              "otherFees": 0,
+              "profit": -67.95987840000001,
+              "sales": 2,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 5,
+                  "meanFit": 5.25,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 5,
+                  "meanFit": 5.15,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 5,
+                  "meanFit": 5.35,
+                  "aboveBar": 2,
+                  "cleared": true
+                },
+                {
+                  "seq": 4,
+                  "released": 5,
+                  "meanFit": 3.85,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 5,
+                  "released": 5,
+                  "meanFit": 4.65,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 6,
+                  "released": 5,
+                  "meanFit": 5.55,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 7,
+                  "released": 5,
+                  "meanFit": 4.75,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 8,
+                  "released": 5,
+                  "meanFit": 6.75,
+                  "aboveBar": 1,
+                  "cleared": true
+                }
+              ],
+              "sendToFirstSaleS": 20.828110000000002,
+              "pair": 3
+            },
+            {
+              "teamId": 5,
+              "group": "SMALL_ON",
+              "revenue": 49,
+              "listing": 10,
+              "hosting": 55.28378969999998,
+              "otherFees": 0,
+              "profit": -16.28378969999998,
+              "sales": 49,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 5,
+                  "meanFit": 3.85,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 5,
+                  "meanFit": 4.05,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 5,
+                  "meanFit": 4.05,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 4,
+                  "released": 5,
+                  "meanFit": 5.75,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 5,
+                  "released": 5,
+                  "meanFit": 10.75,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 6,
+                  "released": 5,
+                  "meanFit": 11.55,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 7,
+                  "released": 5,
+                  "meanFit": 10.85,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 8,
+                  "released": 5,
+                  "meanFit": 10.75,
+                  "aboveBar": 5,
+                  "cleared": true
+                }
+              ],
+              "sendToFirstSaleS": 17.019996749999997,
+              "pair": 5
+            },
+            {
+              "teamId": 6,
+              "group": "SMALL_OFF",
+              "revenue": 1,
+              "listing": 10,
+              "hosting": 64.416055,
+              "otherFees": 0,
+              "profit": -73.416055,
+              "sales": 1,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 5,
+                  "meanFit": 3.85,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 5,
+                  "meanFit": 4.05,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 5,
+                  "meanFit": 4.05,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 4,
+                  "released": 5,
+                  "meanFit": 4.85,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 5,
+                  "released": 5,
+                  "meanFit": 4.25,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 6,
+                  "released": 5,
+                  "meanFit": 4.05,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 7,
+                  "released": 5,
+                  "meanFit": 5.15,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 8,
+                  "released": 5,
+                  "meanFit": 6.65,
+                  "aboveBar": 2,
+                  "cleared": true
+                }
+              ],
+              "sendToFirstSaleS": 29.678624,
+              "pair": 5
+            },
+            {
+              "teamId": 7,
+              "group": "LARGE_ON",
+              "revenue": 76,
+              "listing": 10,
+              "hosting": 44.999799033333325,
+              "otherFees": 0,
+              "profit": 21.000200966666675,
+              "sales": 76,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 5,
+                  "meanFit": 4.35,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 5,
+                  "meanFit": 4.05,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 5,
+                  "meanFit": 7.05,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 4,
+                  "released": 5,
+                  "meanFit": 10.55,
+                  "aboveBar": 4,
+                  "cleared": true
+                },
+                {
+                  "seq": 5,
+                  "released": 5,
+                  "meanFit": 11.65,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 6,
+                  "released": 5,
+                  "meanFit": 10.65,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 7,
+                  "released": 5,
+                  "meanFit": 10.85,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 8,
+                  "released": 5,
+                  "meanFit": 10.15,
+                  "aboveBar": 4,
+                  "cleared": true
+                }
+              ],
+              "sendToFirstSaleS": 18.784949166666667,
+              "pair": 7
+            },
+            {
+              "teamId": 8,
+              "group": "LARGE_OFF",
+              "revenue": 30,
+              "listing": 10,
+              "hosting": 59.14940729999997,
+              "otherFees": 0,
+              "profit": -39.14940729999997,
+              "sales": 30,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 5,
+                  "meanFit": 4.35,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 5,
+                  "meanFit": 4.05,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 5,
+                  "meanFit": 7.05,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 4,
+                  "released": 5,
+                  "meanFit": 4.55,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 5,
+                  "released": 5,
+                  "meanFit": 5.85,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 6,
+                  "released": 5,
+                  "meanFit": 4.95,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 7,
+                  "released": 5,
+                  "meanFit": 5.75,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 8,
+                  "released": 5,
+                  "meanFit": 4.95,
+                  "aboveBar": 0,
+                  "cleared": false
+                }
+              ],
+              "sendToFirstSaleS": 18.378403,
+              "pair": 7
+            },
+            {
+              "teamId": 9,
+              "group": "SMALL_ON",
+              "revenue": 47,
+              "listing": 10,
+              "hosting": 51.25608073333331,
+              "otherFees": 0,
+              "profit": -14.256080733333313,
+              "sales": 47,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 5,
+                  "meanFit": 3.75,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 5,
+                  "meanFit": 4.45,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 5,
+                  "meanFit": 4.35,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 4,
+                  "released": 5,
+                  "meanFit": 6.25,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 5,
+                  "released": 5,
+                  "meanFit": 11.45,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 6,
+                  "released": 5,
+                  "meanFit": 11.65,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 7,
+                  "released": 5,
+                  "meanFit": 10.85,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 8,
+                  "released": 5,
+                  "meanFit": 10.75,
+                  "aboveBar": 5,
+                  "cleared": true
+                }
+              ],
+              "sendToFirstSaleS": 17.872608,
+              "pair": 9
+            },
+            {
+              "teamId": 10,
+              "group": "SMALL_OFF",
+              "revenue": 0,
+              "listing": 10,
+              "hosting": 63.79867399999994,
+              "otherFees": 0,
+              "profit": -73.79867399999995,
+              "sales": 0,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 5,
+                  "meanFit": 3.75,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 5,
+                  "meanFit": 4.45,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 5,
+                  "meanFit": 4.35,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 4,
+                  "released": 5,
+                  "meanFit": 4.15,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 5,
+                  "released": 5,
+                  "meanFit": 4.95,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 6,
+                  "released": 5,
+                  "meanFit": 3.95,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 7,
+                  "released": 5,
+                  "meanFit": 4.35,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 8,
+                  "released": 5,
+                  "meanFit": 3.95,
+                  "aboveBar": 0,
+                  "cleared": false
+                }
+              ],
+              "sendToFirstSaleS": null,
+              "pair": 9
+            },
+            {
+              "teamId": 11,
+              "group": "LARGE_ON",
+              "revenue": 100,
+              "listing": 10,
+              "hosting": 48.83983189999998,
+              "otherFees": 0,
+              "profit": 41.16016810000002,
+              "sales": 100,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 5,
+                  "meanFit": 5.45,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 2,
+                  "released": 5,
+                  "meanFit": 4.05,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 5,
+                  "meanFit": 6.05,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 4,
+                  "released": 5,
+                  "meanFit": 7.85,
+                  "aboveBar": 2,
+                  "cleared": true
+                },
+                {
+                  "seq": 5,
+                  "released": 5,
+                  "meanFit": 11.15,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 6,
+                  "released": 5,
+                  "meanFit": 11.55,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 7,
+                  "released": 5,
+                  "meanFit": 10.95,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 8,
+                  "released": 5,
+                  "meanFit": 11.15,
+                  "aboveBar": 5,
+                  "cleared": true
+                }
+              ],
+              "sendToFirstSaleS": 18.5773974,
+              "pair": 11
+            },
+            {
+              "teamId": 12,
+              "group": "LARGE_OFF",
+              "revenue": 41,
+              "listing": 10,
+              "hosting": 56.406170366666665,
+              "otherFees": 0,
+              "profit": -25.406170366666665,
+              "sales": 41,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 5,
+                  "meanFit": 5.45,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 2,
+                  "released": 5,
+                  "meanFit": 4.05,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 5,
+                  "meanFit": 6.05,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 4,
+                  "released": 5,
+                  "meanFit": 4.75,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 5,
+                  "released": 5,
+                  "meanFit": 3.95,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 6,
+                  "released": 5,
+                  "meanFit": 4.35,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 7,
+                  "released": 5,
+                  "meanFit": 4.75,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 8,
+                  "released": 5,
+                  "meanFit": 4.75,
+                  "aboveBar": 0,
+                  "cleared": false
+                }
+              ],
+              "sendToFirstSaleS": 13.088429,
+              "pair": 11
+            },
+            {
+              "teamId": 13,
+              "group": "SMALL_ON",
+              "revenue": 79,
+              "listing": 10,
+              "hosting": 43.4327779333333,
+              "otherFees": 0,
+              "profit": 25.5672220666667,
+              "sales": 79,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 5,
+                  "meanFit": 4.55,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 5,
+                  "meanFit": 5.95,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 3,
+                  "released": 5,
+                  "meanFit": 5.35,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 4,
+                  "released": 5,
+                  "meanFit": 9.95,
+                  "aboveBar": 4,
+                  "cleared": true
+                },
+                {
+                  "seq": 5,
+                  "released": 5,
+                  "meanFit": 10.65,
+                  "aboveBar": 4,
+                  "cleared": true
+                },
+                {
+                  "seq": 6,
+                  "released": 5,
+                  "meanFit": 10.85,
+                  "aboveBar": 4,
+                  "cleared": true
+                },
+                {
+                  "seq": 7,
+                  "released": 5,
+                  "meanFit": 10.85,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 8,
+                  "released": 5,
+                  "meanFit": 10.75,
+                  "aboveBar": 5,
+                  "cleared": true
+                }
+              ],
+              "sendToFirstSaleS": 16.075656857142853,
+              "pair": 13
+            },
+            {
+              "teamId": 14,
+              "group": "SMALL_OFF",
+              "revenue": 18,
+              "listing": 10,
+              "hosting": 56.97886063333338,
+              "otherFees": 0,
+              "profit": -48.97886063333338,
+              "sales": 18,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 5,
+                  "meanFit": 4.55,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 5,
+                  "meanFit": 5.95,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 3,
+                  "released": 5,
+                  "meanFit": 5.35,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 4,
+                  "released": 5,
+                  "meanFit": 5.95,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 5,
+                  "released": 5,
+                  "meanFit": 4.25,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 6,
+                  "released": 5,
+                  "meanFit": 4.65,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 7,
+                  "released": 5,
+                  "meanFit": 4.35,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 8,
+                  "released": 5,
+                  "meanFit": 5.45,
+                  "aboveBar": 0,
+                  "cleared": false
+                }
+              ],
+              "sendToFirstSaleS": 14.037221333333335,
+              "pair": 13
+            },
+            {
+              "teamId": 15,
+              "group": "LARGE_ON",
+              "revenue": 37,
+              "listing": 10,
+              "hosting": 49.430666333333356,
+              "otherFees": 0,
+              "profit": -22.430666333333356,
+              "sales": 37,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 5,
+                  "meanFit": 4.25,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 5,
+                  "meanFit": 5.35,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 5,
+                  "meanFit": 4.55,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 4,
+                  "released": 5,
+                  "meanFit": 8.45,
+                  "aboveBar": 2,
+                  "cleared": true
+                },
+                {
+                  "seq": 5,
+                  "released": 5,
+                  "meanFit": 10.95,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 6,
+                  "released": 5,
+                  "meanFit": 11.55,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 7,
+                  "released": 5,
+                  "meanFit": 10.85,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 8,
+                  "released": 5,
+                  "meanFit": 11.25,
+                  "aboveBar": 5,
+                  "cleared": true
+                }
+              ],
+              "sendToFirstSaleS": 15.904262,
+              "pair": 15
+            },
+            {
+              "teamId": 16,
+              "group": "LARGE_OFF",
+              "revenue": 0,
+              "listing": 10,
+              "hosting": 62.65519166666669,
+              "otherFees": 0,
+              "profit": -72.6551916666667,
+              "sales": 0,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 5,
+                  "meanFit": 4.25,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 5,
+                  "meanFit": 5.35,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 5,
+                  "meanFit": 4.55,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 4,
+                  "released": 5,
+                  "meanFit": 3.95,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 5,
+                  "released": 5,
+                  "meanFit": 4.25,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 6,
+                  "released": 5,
+                  "meanFit": 5.25,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 7,
+                  "released": 5,
+                  "meanFit": 7.65,
+                  "aboveBar": 2,
+                  "cleared": true
+                },
+                {
+                  "seq": 8,
+                  "released": 5,
+                  "meanFit": 4.95,
+                  "aboveBar": 0,
+                  "cleared": false
+                }
+              ],
+              "sendToFirstSaleS": null,
+              "pair": 15
+            },
+            {
+              "teamId": 17,
+              "group": "SMALL_ON",
+              "revenue": 98,
+              "listing": 10,
+              "hosting": 41.812099366666665,
+              "otherFees": 0,
+              "profit": 46.187900633333335,
+              "sales": 98,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 5,
+                  "meanFit": 5.75,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 2,
+                  "released": 5,
+                  "meanFit": 5.05,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 5,
+                  "meanFit": 4.85,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 4,
+                  "released": 5,
+                  "meanFit": 11.05,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 5,
+                  "released": 5,
+                  "meanFit": 11.05,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 6,
+                  "released": 5,
+                  "meanFit": 11.25,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 7,
+                  "released": 5,
+                  "meanFit": 11.15,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 8,
+                  "released": 5,
+                  "meanFit": 10.35,
+                  "aboveBar": 5,
+                  "cleared": true
+                }
+              ],
+              "sendToFirstSaleS": 16.809264333333335,
+              "pair": 17
+            },
+            {
+              "teamId": 18,
+              "group": "SMALL_OFF",
+              "revenue": 32,
+              "listing": 10,
+              "hosting": 60.28464919999999,
+              "otherFees": 0,
+              "profit": -38.28464919999999,
+              "sales": 32,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 5,
+                  "meanFit": 5.75,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 2,
+                  "released": 5,
+                  "meanFit": 5.05,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 5,
+                  "meanFit": 4.85,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 4,
+                  "released": 5,
+                  "meanFit": 4.55,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 5,
+                  "released": 5,
+                  "meanFit": 4.15,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 6,
+                  "released": 5,
+                  "meanFit": 5.55,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 7,
+                  "released": 5,
+                  "meanFit": 5.05,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 8,
+                  "released": 5,
+                  "meanFit": 3.95,
+                  "aboveBar": 0,
+                  "cleared": false
+                }
+              ],
+              "sendToFirstSaleS": 12.979446,
+              "pair": 17
+            },
+            {
+              "teamId": 19,
+              "group": "LARGE_ON",
+              "revenue": 57,
+              "listing": 10,
+              "hosting": 47.915857300000006,
+              "otherFees": 0,
+              "profit": -0.9158573000000061,
+              "sales": 57,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 5,
+                  "meanFit": 5.45,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 5,
+                  "meanFit": 4.95,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 5,
+                  "meanFit": 3.95,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 4,
+                  "released": 5,
+                  "meanFit": 10.75,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 5,
+                  "released": 5,
+                  "meanFit": 10.55,
+                  "aboveBar": 4,
+                  "cleared": true
+                },
+                {
+                  "seq": 6,
+                  "released": 5,
+                  "meanFit": 11.45,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 7,
+                  "released": 5,
+                  "meanFit": 10.65,
+                  "aboveBar": 5,
+                  "cleared": true
+                },
+                {
+                  "seq": 8,
+                  "released": 5,
+                  "meanFit": 10.75,
+                  "aboveBar": 5,
+                  "cleared": true
+                }
+              ],
+              "sendToFirstSaleS": 13.501106,
+              "pair": 19
+            },
+            {
+              "teamId": 20,
+              "group": "LARGE_OFF",
+              "revenue": 0,
+              "listing": 10,
+              "hosting": 64.47968383333331,
+              "otherFees": 0,
+              "profit": -74.47968383333331,
+              "sales": 0,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 5,
+                  "meanFit": 5.45,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 5,
+                  "meanFit": 4.95,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 5,
+                  "meanFit": 3.95,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 4,
+                  "released": 5,
+                  "meanFit": 4.65,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 5,
+                  "released": 5,
+                  "meanFit": 5.65,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 6,
+                  "released": 5,
+                  "meanFit": 4.25,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 7,
+                  "released": 5,
+                  "meanFit": 4.95,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 8,
+                  "released": 5,
+                  "meanFit": 4.35,
+                  "aboveBar": 0,
+                  "cleared": false
+                }
+              ],
+              "sendToFirstSaleS": null,
+              "pair": 19
+            }
+          ],
+          "classMinutes": 15.8,
+          "maxClassMinutes": 16
+        },
+        {
+          "round": 2,
+          "durationS": 94,
+          "rows": [
+            {
+              "teamId": 1,
+              "group": "SMALL_ON",
+              "revenue": 113,
+              "listing": 7.5,
+              "hosting": 28.158545899999993,
+              "otherFees": 0,
+              "profit": 77.3414541,
+              "sales": 113,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 3,
+                  "meanFit": 4.583333333333333,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 3,
+                  "meanFit": 4.083333333333333,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 3,
+                  "meanFit": 8.416666666666666,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 4,
+                  "released": 3,
+                  "meanFit": 11.416666666666666,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 5,
+                  "released": 3,
+                  "meanFit": 11.083333333333334,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 6,
+                  "released": 3,
+                  "meanFit": 11.75,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 7,
+                  "released": 3,
+                  "meanFit": 11.25,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 8,
+                  "released": 3,
+                  "meanFit": 10.75,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 9,
+                  "released": 3,
+                  "meanFit": 11.083333333333334,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 10,
+                  "released": 3,
+                  "meanFit": 10.75,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 11,
+                  "released": 0,
+                  "meanFit": null,
+                  "aboveBar": 0,
+                  "cleared": false
+                }
+              ],
+              "sendToFirstSaleS": 11.571299285714286,
+              "pair": 1
+            },
+            {
+              "teamId": 2,
+              "group": "SMALL_OFF",
+              "revenue": 2,
+              "listing": 7.5,
+              "hosting": 44.54310573333335,
+              "otherFees": 0,
+              "profit": -50.04310573333335,
+              "sales": 2,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 3,
+                  "meanFit": 4.583333333333333,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 3,
+                  "meanFit": 4.083333333333333,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 3,
+                  "meanFit": 5.083333333333333,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 4,
+                  "released": 3,
+                  "meanFit": 4.75,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 5,
+                  "released": 3,
+                  "meanFit": 4.75,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 6,
+                  "released": 3,
+                  "meanFit": 5.416666666666667,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 7,
+                  "released": 3,
+                  "meanFit": 6.083333333333333,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 8,
+                  "released": 3,
+                  "meanFit": 3.9166666666666665,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 9,
+                  "released": 3,
+                  "meanFit": 4.583333333333333,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 10,
+                  "released": 3,
+                  "meanFit": 5.083333333333333,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 11,
+                  "released": 0,
+                  "meanFit": null,
+                  "aboveBar": 0,
+                  "cleared": false
+                }
+              ],
+              "sendToFirstSaleS": 17.911038,
+              "pair": 1
+            },
+            {
+              "teamId": 3,
+              "group": "LARGE_ON",
+              "revenue": 33,
+              "listing": 10,
+              "hosting": 62.31007146666664,
+              "otherFees": 0,
+              "profit": -39.31007146666664,
+              "sales": 33,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 10,
+                  "meanFit": 5,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 2,
+                  "released": 10,
+                  "meanFit": 5.35,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 10,
+                  "meanFit": 5.65,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 4,
+                  "released": 10,
+                  "meanFit": 4.8,
+                  "aboveBar": 0,
+                  "cleared": false
+                }
+              ],
+              "sendToFirstSaleS": 26.900638,
+              "pair": 3
+            },
+            {
+              "teamId": 4,
+              "group": "LARGE_OFF",
+              "revenue": 27,
+              "listing": 10,
+              "hosting": 62.51494803333332,
+              "otherFees": 0,
+              "profit": -45.51494803333332,
+              "sales": 27,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 10,
+                  "meanFit": 5,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 2,
+                  "released": 10,
+                  "meanFit": 5.35,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 10,
+                  "meanFit": 5.65,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 4,
+                  "released": 10,
+                  "meanFit": 4.8,
+                  "aboveBar": 0,
+                  "cleared": false
+                }
+              ],
+              "sendToFirstSaleS": 28.410687000000003,
+              "pair": 3
+            },
+            {
+              "teamId": 5,
+              "group": "SMALL_ON",
+              "revenue": 182,
+              "listing": 7.5,
+              "hosting": 24.018847300000004,
+              "otherFees": 0,
+              "profit": 150.4811527,
+              "sales": 182,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 3,
+                  "meanFit": 7.416666666666667,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 2,
+                  "released": 3,
+                  "meanFit": 5.083333333333333,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 3,
+                  "meanFit": 11.75,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 4,
+                  "released": 3,
+                  "meanFit": 11.75,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 5,
+                  "released": 3,
+                  "meanFit": 10.416666666666666,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 6,
+                  "released": 3,
+                  "meanFit": 10.75,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 7,
+                  "released": 3,
+                  "meanFit": 10.75,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 8,
+                  "released": 3,
+                  "meanFit": 10.75,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 9,
+                  "released": 3,
+                  "meanFit": 10.25,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 10,
+                  "released": 3,
+                  "meanFit": 10.75,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 11,
+                  "released": 0,
+                  "meanFit": null,
+                  "aboveBar": 0,
+                  "cleared": false
+                }
+              ],
+              "sendToFirstSaleS": 14.862224124999997,
+              "pair": 5
+            },
+            {
+              "teamId": 6,
+              "group": "SMALL_OFF",
+              "revenue": 99,
+              "listing": 8.25,
+              "hosting": 39.730895100000005,
+              "otherFees": 0,
+              "profit": 51.019104899999995,
+              "sales": 99,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 3,
+                  "meanFit": 7.416666666666667,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 2,
+                  "released": 3,
+                  "meanFit": 5.083333333333333,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 3,
+                  "meanFit": 5.916666666666667,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 4,
+                  "released": 3,
+                  "meanFit": 4.083333333333333,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 5,
+                  "released": 3,
+                  "meanFit": 7.583333333333333,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 6,
+                  "released": 3,
+                  "meanFit": 3.9166666666666665,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 7,
+                  "released": 3,
+                  "meanFit": 5.083333333333333,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 8,
+                  "released": 3,
+                  "meanFit": 4.583333333333333,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 9,
+                  "released": 3,
+                  "meanFit": 5.25,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 10,
+                  "released": 3,
+                  "meanFit": 5.25,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 11,
+                  "released": 3,
+                  "meanFit": 6.416666666666667,
+                  "aboveBar": 0,
+                  "cleared": false
+                }
+              ],
+              "sendToFirstSaleS": 7.018704,
+              "pair": 5
+            },
+            {
+              "teamId": 7,
+              "group": "LARGE_ON",
+              "revenue": 4,
+              "listing": 10,
+              "hosting": 65.48734139999995,
+              "otherFees": 0,
+              "profit": -71.48734139999995,
+              "sales": 4,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 10,
+                  "meanFit": 4.7,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 10,
+                  "meanFit": 4.05,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 10,
+                  "meanFit": 4.15,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 4,
+                  "released": 10,
+                  "meanFit": 6.05,
+                  "aboveBar": 1,
+                  "cleared": true
+                }
+              ],
+              "sendToFirstSaleS": 44.873308,
+              "pair": 7
+            },
+            {
+              "teamId": 8,
+              "group": "LARGE_OFF",
+              "revenue": 5,
+              "listing": 10,
+              "hosting": 66.82619680000003,
+              "otherFees": 0,
+              "profit": -71.82619680000003,
+              "sales": 5,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 10,
+                  "meanFit": 4.7,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 10,
+                  "meanFit": 4.05,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 10,
+                  "meanFit": 4.15,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 4,
+                  "released": 10,
+                  "meanFit": 6.05,
+                  "aboveBar": 1,
+                  "cleared": true
+                }
+              ],
+              "sendToFirstSaleS": 49.660301,
+              "pair": 7
+            },
+            {
+              "teamId": 9,
+              "group": "SMALL_ON",
+              "revenue": 104,
+              "listing": 7.5,
+              "hosting": 29.378111666666673,
+              "otherFees": 0,
+              "profit": 67.12188833333333,
+              "sales": 104,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 3,
+                  "meanFit": 4.083333333333333,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 3,
+                  "meanFit": 5.25,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 3,
+                  "meanFit": 4.583333333333333,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 4,
+                  "released": 3,
+                  "meanFit": 11.25,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 5,
+                  "released": 3,
+                  "meanFit": 11.416666666666666,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 6,
+                  "released": 3,
+                  "meanFit": 11.75,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 7,
+                  "released": 3,
+                  "meanFit": 11.416666666666666,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 8,
+                  "released": 3,
+                  "meanFit": 11.25,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 9,
+                  "released": 3,
+                  "meanFit": 10.416666666666666,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 10,
+                  "released": 3,
+                  "meanFit": 10.75,
+                  "aboveBar": 3,
+                  "cleared": true
+                }
+              ],
+              "sendToFirstSaleS": 11.5192178,
+              "pair": 9
+            },
+            {
+              "teamId": 10,
+              "group": "SMALL_OFF",
+              "revenue": 1,
+              "listing": 7.5,
+              "hosting": 45.45350813333334,
+              "otherFees": 0,
+              "profit": -51.95350813333334,
+              "sales": 1,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 3,
+                  "meanFit": 4.083333333333333,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 3,
+                  "meanFit": 5.25,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 3,
+                  "meanFit": 4.583333333333333,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 4,
+                  "released": 3,
+                  "meanFit": 7.083333333333333,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 5,
+                  "released": 3,
+                  "meanFit": 6.083333333333333,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 6,
+                  "released": 3,
+                  "meanFit": 4.083333333333333,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 7,
+                  "released": 3,
+                  "meanFit": 5.083333333333333,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 8,
+                  "released": 3,
+                  "meanFit": 6.75,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 9,
+                  "released": 3,
+                  "meanFit": 5.083333333333333,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 10,
+                  "released": 3,
+                  "meanFit": 5.583333333333333,
+                  "aboveBar": 0,
+                  "cleared": false
+                }
+              ],
+              "sendToFirstSaleS": 22.315303,
+              "pair": 9
+            },
+            {
+              "teamId": 11,
+              "group": "LARGE_ON",
+              "revenue": 0,
+              "listing": 10,
+              "hosting": 70.69388333333336,
+              "otherFees": 0,
+              "profit": -80.69388333333336,
+              "sales": 0,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 10,
+                  "meanFit": 4.55,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 10,
+                  "meanFit": 4.55,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 10,
+                  "meanFit": 4.3,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 4,
+                  "released": 10,
+                  "meanFit": 4.55,
+                  "aboveBar": 0,
+                  "cleared": false
+                }
+              ],
+              "sendToFirstSaleS": null,
+              "pair": 11
+            },
+            {
+              "teamId": 12,
+              "group": "LARGE_OFF",
+              "revenue": 0,
+              "listing": 10,
+              "hosting": 69.99972200000005,
+              "otherFees": 0,
+              "profit": -79.99972200000005,
+              "sales": 0,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 10,
+                  "meanFit": 4.55,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 10,
+                  "meanFit": 4.55,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 10,
+                  "meanFit": 4.3,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 4,
+                  "released": 10,
+                  "meanFit": 4.55,
+                  "aboveBar": 0,
+                  "cleared": false
+                }
+              ],
+              "sendToFirstSaleS": null,
+              "pair": 11
+            },
+            {
+              "teamId": 13,
+              "group": "SMALL_ON",
+              "revenue": 68,
+              "listing": 7.5,
+              "hosting": 29.310051299999998,
+              "otherFees": 0,
+              "profit": 31.189948700000002,
+              "sales": 68,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 3,
+                  "meanFit": 3.25,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 3,
+                  "meanFit": 5.416666666666667,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 3,
+                  "meanFit": 5.25,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 4,
+                  "released": 3,
+                  "meanFit": 7.583333333333333,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 5,
+                  "released": 3,
+                  "meanFit": 11.416666666666666,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 6,
+                  "released": 3,
+                  "meanFit": 11.75,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 7,
+                  "released": 3,
+                  "meanFit": 11.583333333333334,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 8,
+                  "released": 3,
+                  "meanFit": 10.916666666666666,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 9,
+                  "released": 3,
+                  "meanFit": 11.25,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 10,
+                  "released": 3,
+                  "meanFit": 10.75,
+                  "aboveBar": 3,
+                  "cleared": true
+                }
+              ],
+              "sendToFirstSaleS": 10.057984333333334,
+              "pair": 13
+            },
+            {
+              "teamId": 14,
+              "group": "SMALL_OFF",
+              "revenue": 1,
+              "listing": 7.5,
+              "hosting": 43.00128580000001,
+              "otherFees": 0,
+              "profit": -49.50128580000001,
+              "sales": 1,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 3,
+                  "meanFit": 3.25,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 3,
+                  "meanFit": 5.416666666666667,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 3,
+                  "meanFit": 5.25,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 4,
+                  "released": 3,
+                  "meanFit": 4.583333333333333,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 5,
+                  "released": 3,
+                  "meanFit": 5.916666666666667,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 6,
+                  "released": 3,
+                  "meanFit": 4.416666666666667,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 7,
+                  "released": 3,
+                  "meanFit": 8.25,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 8,
+                  "released": 3,
+                  "meanFit": 5.75,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 9,
+                  "released": 3,
+                  "meanFit": 5.25,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 10,
+                  "released": 3,
+                  "meanFit": 3.75,
+                  "aboveBar": 0,
+                  "cleared": false
+                }
+              ],
+              "sendToFirstSaleS": 27.546945,
+              "pair": 13
+            },
+            {
+              "teamId": 15,
+              "group": "LARGE_ON",
+              "revenue": 41,
+              "listing": 10,
+              "hosting": 68.30948686666669,
+              "otherFees": 0,
+              "profit": -37.30948686666669,
+              "sales": 41,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 10,
+                  "meanFit": 4.8,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 2,
+                  "released": 10,
+                  "meanFit": 5.35,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 10,
+                  "meanFit": 4.75,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 4,
+                  "released": 10,
+                  "meanFit": 4.5,
+                  "aboveBar": 0,
+                  "cleared": false
+                }
+              ],
+              "sendToFirstSaleS": 19.3829,
+              "pair": 15
+            },
+            {
+              "teamId": 16,
+              "group": "LARGE_OFF",
+              "revenue": 43,
+              "listing": 10,
+              "hosting": 69.18111343333328,
+              "otherFees": 0,
+              "profit": -36.18111343333328,
+              "sales": 43,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 10,
+                  "meanFit": 4.8,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 2,
+                  "released": 10,
+                  "meanFit": 5.35,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 10,
+                  "meanFit": 4.75,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 4,
+                  "released": 10,
+                  "meanFit": 4.5,
+                  "aboveBar": 0,
+                  "cleared": false
+                }
+              ],
+              "sendToFirstSaleS": 19.683531,
+              "pair": 15
+            },
+            {
+              "teamId": 17,
+              "group": "SMALL_ON",
+              "revenue": 111,
+              "listing": 6.75,
+              "hosting": 26.550956933333328,
+              "otherFees": 0,
+              "profit": 77.69904306666668,
+              "sales": 111,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 3,
+                  "meanFit": 3.75,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 3,
+                  "meanFit": 6.25,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 3,
+                  "released": 3,
+                  "meanFit": 6.416666666666667,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 4,
+                  "released": 3,
+                  "meanFit": 11.75,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 5,
+                  "released": 3,
+                  "meanFit": 11.75,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 6,
+                  "released": 3,
+                  "meanFit": 11.083333333333334,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 7,
+                  "released": 3,
+                  "meanFit": 10.75,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 8,
+                  "released": 3,
+                  "meanFit": 11.25,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 9,
+                  "released": 3,
+                  "meanFit": 11.25,
+                  "aboveBar": 3,
+                  "cleared": true
+                },
+                {
+                  "seq": 10,
+                  "released": 0,
+                  "meanFit": null,
+                  "aboveBar": 0,
+                  "cleared": false
+                }
+              ],
+              "sendToFirstSaleS": 10.694857857142859,
+              "pair": 17
+            },
+            {
+              "teamId": 18,
+              "group": "SMALL_OFF",
+              "revenue": 25,
+              "listing": 6.75,
+              "hosting": 35.53580126666666,
+              "otherFees": 0,
+              "profit": -17.28580126666666,
+              "sales": 25,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 3,
+                  "meanFit": 3.75,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 2,
+                  "released": 3,
+                  "meanFit": 6.25,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 3,
+                  "released": 3,
+                  "meanFit": 8.916666666666666,
+                  "aboveBar": 2,
+                  "cleared": true
+                },
+                {
+                  "seq": 4,
+                  "released": 3,
+                  "meanFit": 4.416666666666667,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 5,
+                  "released": 3,
+                  "meanFit": 3.5833333333333335,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 6,
+                  "released": 3,
+                  "meanFit": 5.25,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 7,
+                  "released": 3,
+                  "meanFit": 4.583333333333333,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 8,
+                  "released": 3,
+                  "meanFit": 3.9166666666666665,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 9,
+                  "released": 3,
+                  "meanFit": 4.083333333333333,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 10,
+                  "released": 0,
+                  "meanFit": null,
+                  "aboveBar": 0,
+                  "cleared": false
+                }
+              ],
+              "sendToFirstSaleS": 9.4663835,
+              "pair": 17
+            },
+            {
+              "teamId": 19,
+              "group": "LARGE_ON",
+              "revenue": 26,
+              "listing": 10,
+              "hosting": 65.34006343333336,
+              "otherFees": 0,
+              "profit": -49.340063433333356,
+              "sales": 26,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 10,
+                  "meanFit": 5.85,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 2,
+                  "released": 10,
+                  "meanFit": 4.45,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 10,
+                  "meanFit": 4.45,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 4,
+                  "released": 10,
+                  "meanFit": 5.2,
+                  "aboveBar": 0,
+                  "cleared": false
+                }
+              ],
+              "sendToFirstSaleS": 17.831237,
+              "pair": 19
+            },
+            {
+              "teamId": 20,
+              "group": "LARGE_OFF",
+              "revenue": 28,
+              "listing": 10,
+              "hosting": 65.1315020333333,
+              "otherFees": 0,
+              "profit": -47.131502033333305,
+              "sales": 28,
+              "batches": [
+                {
+                  "seq": 1,
+                  "released": 10,
+                  "meanFit": 5.85,
+                  "aboveBar": 1,
+                  "cleared": true
+                },
+                {
+                  "seq": 2,
+                  "released": 10,
+                  "meanFit": 4.45,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 3,
+                  "released": 10,
+                  "meanFit": 4.45,
+                  "aboveBar": 0,
+                  "cleared": false
+                },
+                {
+                  "seq": 4,
+                  "released": 10,
+                  "meanFit": 5.2,
+                  "aboveBar": 0,
+                  "cleared": false
+                }
+              ],
+              "sendToFirstSaleS": 15.453452,
+              "pair": 19
+            }
+          ],
+          "classMinutes": 15.7,
+          "maxClassMinutes": 16
+        }
+      ],
+      "errors": []
+    }
+  ],
+  "errors": [],
+  "requested": 1
+}

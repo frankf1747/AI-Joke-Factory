@@ -1,0 +1,4990 @@
+{
+  "format": "jf-run-record",
+  "version": 1,
+  "name": "listing $0.25 hosting $0.20 class 1",
+  "played_by": "bots",
+  "exported_at": "2026-11-13T22:31:28.231Z",
+  "rounds": [
+    {
+      "round": 1,
+      "round_id": 1,
+      "status": "ENDED",
+      "started_at": "2026-11-13T22:28:19.093322Z",
+      "ended_at": "2026-11-13T22:29:53.801942Z",
+      "settings": {
+        "market_mode": "LEAN",
+        "batch_size": 5,
+        "max_batch_size": 5,
+        "arrival_window_seconds": 90,
+        "market_price": 1,
+        "customer_budget": 3,
+        "customers_per_team": 18,
+        "customer_count": 360,
+        "buy_threshold": 8,
+        "jitter": 0.3,
+        "preference_base": 5,
+        "swap_margin": 0.5,
+        "feedback_pass_threshold": 0.75,
+        "feedback_joke_count": 3,
+        "wip_limit": 0,
+        "cost_of_publishing": 0.25,
+        "hosting_fee_per_joke_minute": 2,
+        "shipping_fee_small": 0,
+        "shipping_fee_standard": 0,
+        "shipping_fee_large": 0,
+        "storage_fee_per_joke_minute": 0,
+        "cost_of_discard": 0
+      },
+      "teams": [
+        {
+          "team_id": 17,
+          "team": "Team 17",
+          "profit": 46.187900633333335,
+          "sold": 98,
+          "released": 40,
+          "made": 40,
+          "never_sold": 21,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 41.812099366666665,
+            "listing": 10,
+            "discard": 0,
+            "total": 51.812099366666665
+          },
+          "sent_to_released_s": 14.207793500000001,
+          "to_first_sale_s": 4.435535263157895,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 0.368549,
+              "jokes": 5,
+              "released": 5,
+              "sold": 1,
+              "first_sale_s": 10.944177
+            },
+            {
+              "seq": 2,
+              "sent_s": 9.558872000000001,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 19.780422,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 27.966539,
+              "jokes": 5,
+              "released": 5,
+              "sold": 4,
+              "first_sale_s": 15.602731
+            },
+            {
+              "seq": 5,
+              "sent_s": 39.250309,
+              "jokes": 5,
+              "released": 5,
+              "sold": 4,
+              "first_sale_s": 13.148068
+            },
+            {
+              "seq": 6,
+              "sent_s": 47.835075,
+              "jokes": 5,
+              "released": 5,
+              "sold": 5,
+              "first_sale_s": 15.708397
+            },
+            {
+              "seq": 7,
+              "sent_s": 55.140053,
+              "jokes": 5,
+              "released": 5,
+              "sold": 4,
+              "first_sale_s": 16.230465
+            },
+            {
+              "seq": 8,
+              "sent_s": 63.264164,
+              "jokes": 5,
+              "released": 5,
+              "sold": 1,
+              "first_sale_s": 29.221748
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 5.75
+            },
+            {
+              "seq": 2,
+              "fit": 5.05
+            },
+            {
+              "seq": 3,
+              "fit": 4.85
+            },
+            {
+              "seq": 4,
+              "fit": 11.05
+            },
+            {
+              "seq": 5,
+              "fit": 11.05
+            },
+            {
+              "seq": 6,
+              "fit": 11.25
+            },
+            {
+              "seq": 7,
+              "fit": 11.15
+            },
+            {
+              "seq": 8,
+              "fit": 10.35
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": true,
+            "round2_batch_size": 3,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#17"
+          }
+        },
+        {
+          "team_id": 1,
+          "team": "Team 1",
+          "profit": 45.68943289999999,
+          "sold": 101,
+          "released": 40,
+          "made": 40,
+          "never_sold": 22,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 45.31056710000001,
+            "listing": 10,
+            "discard": 0,
+            "total": 55.31056710000001
+          },
+          "sent_to_released_s": 12.83096475,
+          "to_first_sale_s": 7.9711031111111135,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 0.416851,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 11.541461,
+              "jokes": 5,
+              "released": 5,
+              "sold": 2,
+              "first_sale_s": 19.828419
+            },
+            {
+              "seq": 3,
+              "sent_s": 19.968017,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 28.631016,
+              "jokes": 5,
+              "released": 5,
+              "sold": 4,
+              "first_sale_s": 13.764737
+            },
+            {
+              "seq": 5,
+              "sent_s": 39.252395,
+              "jokes": 5,
+              "released": 5,
+              "sold": 2,
+              "first_sale_s": 15.509422
+            },
+            {
+              "seq": 6,
+              "sent_s": 50.257211,
+              "jokes": 5,
+              "released": 5,
+              "sold": 3,
+              "first_sale_s": 14.397215
+            },
+            {
+              "seq": 7,
+              "sent_s": 59.634156,
+              "jokes": 5,
+              "released": 5,
+              "sold": 5,
+              "first_sale_s": 12.596125
+            },
+            {
+              "seq": 8,
+              "sent_s": 66.594774,
+              "jokes": 5,
+              "released": 5,
+              "sold": 2,
+              "first_sale_s": 19.034422
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 5.75
+            },
+            {
+              "seq": 2,
+              "fit": 6.15
+            },
+            {
+              "seq": 3,
+              "fit": 5.65
+            },
+            {
+              "seq": 4,
+              "fit": 10.85
+            },
+            {
+              "seq": 5,
+              "fit": 10.35
+            },
+            {
+              "seq": 6,
+              "fit": 11.15
+            },
+            {
+              "seq": 7,
+              "fit": 10.85
+            },
+            {
+              "seq": 8,
+              "fit": 10.95
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": true,
+            "round2_batch_size": 3,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#1"
+          }
+        },
+        {
+          "team_id": 11,
+          "team": "Team 11",
+          "profit": 41.16016810000002,
+          "sold": 100,
+          "released": 40,
+          "made": 40,
+          "never_sold": 26,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 48.83983189999998,
+            "listing": 10,
+            "discard": 0,
+            "total": 58.83983189999998
+          },
+          "sent_to_released_s": 14.94696975,
+          "to_first_sale_s": 7.322284571428571,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 0.411159,
+              "jokes": 5,
+              "released": 5,
+              "sold": 1,
+              "first_sale_s": 11.440396
+            },
+            {
+              "seq": 2,
+              "sent_s": 9.531762,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 20.198012,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 30.917194,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 5,
+              "sent_s": 41.722231,
+              "jokes": 5,
+              "released": 5,
+              "sold": 4,
+              "first_sale_s": 14.700397
+            },
+            {
+              "seq": 6,
+              "sent_s": 50.752621,
+              "jokes": 5,
+              "released": 5,
+              "sold": 5,
+              "first_sale_s": 16.828622
+            },
+            {
+              "seq": 7,
+              "sent_s": 58.34607,
+              "jokes": 5,
+              "released": 5,
+              "sold": 3,
+              "first_sale_s": 23.221628
+            },
+            {
+              "seq": 8,
+              "sent_s": 65.840327,
+              "jokes": 5,
+              "released": 5,
+              "sold": 1,
+              "first_sale_s": 26.695944
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 5.45
+            },
+            {
+              "seq": 2,
+              "fit": 4.05
+            },
+            {
+              "seq": 3,
+              "fit": 6.05
+            },
+            {
+              "seq": 4,
+              "fit": 7.85
+            },
+            {
+              "seq": 5,
+              "fit": 11.15
+            },
+            {
+              "seq": 6,
+              "fit": 11.55
+            },
+            {
+              "seq": 7,
+              "fit": 10.95
+            },
+            {
+              "seq": 8,
+              "fit": 11.15
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": true,
+            "round2_batch_size": 10,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#11"
+          }
+        },
+        {
+          "team_id": 13,
+          "team": "Team 13",
+          "profit": 25.5672220666667,
+          "sold": 79,
+          "released": 40,
+          "made": 40,
+          "never_sold": 22,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 43.4327779333333,
+            "listing": 10,
+            "discard": 0,
+            "total": 53.4327779333333
+          },
+          "sent_to_released_s": 12.165972125,
+          "to_first_sale_s": 5.157221611111112,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 0.411956,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 10.980459,
+              "jokes": 5,
+              "released": 5,
+              "sold": 1,
+              "first_sale_s": 20.395477
+            },
+            {
+              "seq": 3,
+              "sent_s": 22.767776,
+              "jokes": 5,
+              "released": 5,
+              "sold": 1,
+              "first_sale_s": 12.449603
+            },
+            {
+              "seq": 4,
+              "sent_s": 30.816749,
+              "jokes": 5,
+              "released": 5,
+              "sold": 3,
+              "first_sale_s": 12.633354
+            },
+            {
+              "seq": 5,
+              "sent_s": 40.46754,
+              "jokes": 5,
+              "released": 5,
+              "sold": 4,
+              "first_sale_s": 13.93916
+            },
+            {
+              "seq": 6,
+              "sent_s": 49.453817,
+              "jokes": 5,
+              "released": 5,
+              "sold": 4,
+              "first_sale_s": 18.110825
+            },
+            {
+              "seq": 7,
+              "sent_s": 60.076721,
+              "jokes": 5,
+              "released": 5,
+              "sold": 3,
+              "first_sale_s": 20.864639
+            },
+            {
+              "seq": 8,
+              "sent_s": 70.822964,
+              "jokes": 5,
+              "released": 5,
+              "sold": 2,
+              "first_sale_s": 14.13654
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 4.55
+            },
+            {
+              "seq": 2,
+              "fit": 5.95
+            },
+            {
+              "seq": 3,
+              "fit": 5.35
+            },
+            {
+              "seq": 4,
+              "fit": 9.95
+            },
+            {
+              "seq": 5,
+              "fit": 10.65
+            },
+            {
+              "seq": 6,
+              "fit": 10.85
+            },
+            {
+              "seq": 7,
+              "fit": 10.85
+            },
+            {
+              "seq": 8,
+              "fit": 10.75
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": true,
+            "round2_batch_size": 3,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#13"
+          }
+        },
+        {
+          "team_id": 7,
+          "team": "Team 7",
+          "profit": 21.000200966666675,
+          "sold": 76,
+          "released": 40,
+          "made": 40,
+          "never_sold": 24,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 44.999799033333325,
+            "listing": 10,
+            "discard": 0,
+            "total": 54.999799033333325
+          },
+          "sent_to_released_s": 13.833439125000002,
+          "to_first_sale_s": 6.3285265625000005,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 0.394317,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 10.421056,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 19.855863,
+              "jokes": 5,
+              "released": 5,
+              "sold": 1,
+              "first_sale_s": 21.298577
+            },
+            {
+              "seq": 4,
+              "sent_s": 31.453829,
+              "jokes": 5,
+              "released": 5,
+              "sold": 4,
+              "first_sale_s": 12.911512
+            },
+            {
+              "seq": 5,
+              "sent_s": 42.636961,
+              "jokes": 5,
+              "released": 5,
+              "sold": 5,
+              "first_sale_s": 13.772668
+            },
+            {
+              "seq": 6,
+              "sent_s": 49.69494,
+              "jokes": 5,
+              "released": 5,
+              "sold": 3,
+              "first_sale_s": 20.002558
+            },
+            {
+              "seq": 7,
+              "sent_s": 56.624454,
+              "jokes": 5,
+              "released": 5,
+              "sold": 1,
+              "first_sale_s": 19.587797
+            },
+            {
+              "seq": 8,
+              "sent_s": 67.38729,
+              "jokes": 5,
+              "released": 5,
+              "sold": 2,
+              "first_sale_s": 25.136583
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 4.35
+            },
+            {
+              "seq": 2,
+              "fit": 4.05
+            },
+            {
+              "seq": 3,
+              "fit": 7.05
+            },
+            {
+              "seq": 4,
+              "fit": 10.55
+            },
+            {
+              "seq": 5,
+              "fit": 11.65
+            },
+            {
+              "seq": 6,
+              "fit": 10.65
+            },
+            {
+              "seq": 7,
+              "fit": 10.85
+            },
+            {
+              "seq": 8,
+              "fit": 10.15
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": true,
+            "round2_batch_size": 10,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#7"
+          }
+        },
+        {
+          "team_id": 3,
+          "team": "Team 3",
+          "profit": 6.71939230000001,
+          "sold": 62,
+          "released": 40,
+          "made": 40,
+          "never_sold": 23,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 45.28060769999999,
+            "listing": 10,
+            "discard": 0,
+            "total": 55.28060769999999
+          },
+          "sent_to_released_s": 15.220230125,
+          "to_first_sale_s": 6.767377117647058,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 0.412782,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 7.655462,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 18.697519,
+              "jokes": 5,
+              "released": 5,
+              "sold": 2,
+              "first_sale_s": 14.563866
+            },
+            {
+              "seq": 4,
+              "sent_s": 27.817026,
+              "jokes": 5,
+              "released": 5,
+              "sold": 2,
+              "first_sale_s": 15.750963
+            },
+            {
+              "seq": 5,
+              "sent_s": 35.046148,
+              "jokes": 5,
+              "released": 5,
+              "sold": 5,
+              "first_sale_s": 19.722766
+            },
+            {
+              "seq": 6,
+              "sent_s": 46.129212,
+              "jokes": 5,
+              "released": 5,
+              "sold": 5,
+              "first_sale_s": 18.516299
+            },
+            {
+              "seq": 7,
+              "sent_s": 56.726942,
+              "jokes": 5,
+              "released": 5,
+              "sold": 2,
+              "first_sale_s": 27.052158
+            },
+            {
+              "seq": 8,
+              "sent_s": 67.424922,
+              "jokes": 5,
+              "released": 5,
+              "sold": 1,
+              "first_sale_s": 15.712069
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 5.25
+            },
+            {
+              "seq": 2,
+              "fit": 5.15
+            },
+            {
+              "seq": 3,
+              "fit": 5.35
+            },
+            {
+              "seq": 4,
+              "fit": 8.95
+            },
+            {
+              "seq": 5,
+              "fit": 11.55
+            },
+            {
+              "seq": 6,
+              "fit": 11.55
+            },
+            {
+              "seq": 7,
+              "fit": 10.25
+            },
+            {
+              "seq": 8,
+              "fit": 10.85
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": true,
+            "round2_batch_size": 10,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#3"
+          }
+        },
+        {
+          "team_id": 19,
+          "team": "Team 19",
+          "profit": -0.9158573000000061,
+          "sold": 57,
+          "released": 40,
+          "made": 40,
+          "never_sold": 25,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 47.915857300000006,
+            "listing": 10,
+            "discard": 0,
+            "total": 57.915857300000006
+          },
+          "sent_to_released_s": 12.69760175,
+          "to_first_sale_s": 6.219985199999999,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 0.376243,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 11.589661,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 22.454493,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 30.054257,
+              "jokes": 5,
+              "released": 5,
+              "sold": 4,
+              "first_sale_s": 12.631058
+            },
+            {
+              "seq": 5,
+              "sent_s": 39.935368,
+              "jokes": 5,
+              "released": 5,
+              "sold": 3,
+              "first_sale_s": 13.162666
+            },
+            {
+              "seq": 6,
+              "sent_s": 48.808127,
+              "jokes": 5,
+              "released": 5,
+              "sold": 4,
+              "first_sale_s": 14.158134
+            },
+            {
+              "seq": 7,
+              "sent_s": 56.217458,
+              "jokes": 5,
+              "released": 5,
+              "sold": 4,
+              "first_sale_s": 14.052566
+            },
+            {
+              "seq": 8,
+              "sent_s": 64.929989,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 5.45
+            },
+            {
+              "seq": 2,
+              "fit": 4.95
+            },
+            {
+              "seq": 3,
+              "fit": 3.95
+            },
+            {
+              "seq": 4,
+              "fit": 10.75
+            },
+            {
+              "seq": 5,
+              "fit": 10.55
+            },
+            {
+              "seq": 6,
+              "fit": 11.45
+            },
+            {
+              "seq": 7,
+              "fit": 10.65
+            },
+            {
+              "seq": 8,
+              "fit": 10.75
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": true,
+            "round2_batch_size": 10,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#19"
+          }
+        },
+        {
+          "team_id": 2,
+          "team": "Team 2",
+          "profit": -13.702960566666661,
+          "sold": 55,
+          "released": 40,
+          "made": 40,
+          "never_sold": 38,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 58.70296056666666,
+            "listing": 10,
+            "discard": 0,
+            "total": 68.70296056666666
+          },
+          "sent_to_released_s": 13.619223375,
+          "to_first_sale_s": 3.686363,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 0.392668,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 11.521594,
+              "jokes": 5,
+              "released": 5,
+              "sold": 2,
+              "first_sale_s": 15.591959
+            },
+            {
+              "seq": 3,
+              "sent_s": 18.986511,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 27.515959,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 5,
+              "sent_s": 38.119743,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 6,
+              "sent_s": 49.122546,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 7,
+              "sent_s": 58.420622,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 8,
+              "sent_s": 65.382817,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 5.75
+            },
+            {
+              "seq": 2,
+              "fit": 6.15
+            },
+            {
+              "seq": 3,
+              "fit": 5.65
+            },
+            {
+              "seq": 4,
+              "fit": 5.45
+            },
+            {
+              "seq": 5,
+              "fit": 3.95
+            },
+            {
+              "seq": 6,
+              "fit": 5.95
+            },
+            {
+              "seq": 7,
+              "fit": 6.25
+            },
+            {
+              "seq": 8,
+              "fit": 4.45
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": false,
+            "round2_batch_size": 3,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#1"
+          }
+        },
+        {
+          "team_id": 9,
+          "team": "Team 9",
+          "profit": -14.256080733333313,
+          "sold": 47,
+          "released": 40,
+          "made": 40,
+          "never_sold": 25,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 51.25608073333331,
+            "listing": 10,
+            "discard": 0,
+            "total": 61.25608073333331
+          },
+          "sent_to_released_s": 11.9622805,
+          "to_first_sale_s": 6.7258298,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 0.46434,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 9.83201,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 19.832529,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 31.031853,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 5,
+              "sent_s": 41.356972999999996,
+              "jokes": 5,
+              "released": 5,
+              "sold": 5,
+              "first_sale_s": 11.559966
+            },
+            {
+              "seq": 6,
+              "sent_s": 50.804326,
+              "jokes": 5,
+              "released": 5,
+              "sold": 5,
+              "first_sale_s": 12.259373
+            },
+            {
+              "seq": 7,
+              "sent_s": 57.963404,
+              "jokes": 5,
+              "released": 5,
+              "sold": 4,
+              "first_sale_s": 23.518361
+            },
+            {
+              "seq": 8,
+              "sent_s": 68.354586,
+              "jokes": 5,
+              "released": 5,
+              "sold": 1,
+              "first_sale_s": 24.152732
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 3.75
+            },
+            {
+              "seq": 2,
+              "fit": 4.45
+            },
+            {
+              "seq": 3,
+              "fit": 4.35
+            },
+            {
+              "seq": 4,
+              "fit": 6.25
+            },
+            {
+              "seq": 5,
+              "fit": 11.45
+            },
+            {
+              "seq": 6,
+              "fit": 11.65
+            },
+            {
+              "seq": 7,
+              "fit": 10.85
+            },
+            {
+              "seq": 8,
+              "fit": 10.75
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": true,
+            "round2_batch_size": 3,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#9"
+          }
+        },
+        {
+          "team_id": 5,
+          "team": "Team 5",
+          "profit": -16.28378969999998,
+          "sold": 49,
+          "released": 40,
+          "made": 40,
+          "never_sold": 28,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 55.28378969999998,
+            "listing": 10,
+            "discard": 0,
+            "total": 65.28378969999997
+          },
+          "sent_to_released_s": 12.498266625,
+          "to_first_sale_s": 4.509213083333333,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 0.424499,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 7.623593,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 19.644745,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 29.238918,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 5,
+              "sent_s": 38.157726,
+              "jokes": 5,
+              "released": 5,
+              "sold": 3,
+              "first_sale_s": 10.842664
+            },
+            {
+              "seq": 6,
+              "sent_s": 46.808409,
+              "jokes": 5,
+              "released": 5,
+              "sold": 4,
+              "first_sale_s": 12.740376
+            },
+            {
+              "seq": 7,
+              "sent_s": 55.651949,
+              "jokes": 5,
+              "released": 5,
+              "sold": 3,
+              "first_sale_s": 25.865308
+            },
+            {
+              "seq": 8,
+              "sent_s": 63.668235,
+              "jokes": 5,
+              "released": 5,
+              "sold": 2,
+              "first_sale_s": 18.631639
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 3.85
+            },
+            {
+              "seq": 2,
+              "fit": 4.05
+            },
+            {
+              "seq": 3,
+              "fit": 4.05
+            },
+            {
+              "seq": 4,
+              "fit": 5.75
+            },
+            {
+              "seq": 5,
+              "fit": 10.75
+            },
+            {
+              "seq": 6,
+              "fit": 11.55
+            },
+            {
+              "seq": 7,
+              "fit": 10.85
+            },
+            {
+              "seq": 8,
+              "fit": 10.75
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": true,
+            "round2_batch_size": 3,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#5"
+          }
+        },
+        {
+          "team_id": 15,
+          "team": "Team 15",
+          "profit": -22.430666333333356,
+          "sold": 37,
+          "released": 40,
+          "made": 40,
+          "never_sold": 27,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 49.430666333333356,
+            "listing": 10,
+            "discard": 0,
+            "total": 59.430666333333356
+          },
+          "sent_to_released_s": 11.782905375,
+          "to_first_sale_s": 5.87808553846154,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 0.400726,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 11.041511,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 23.597402,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 33.517447,
+              "jokes": 5,
+              "released": 5,
+              "sold": 2,
+              "first_sale_s": 10.367719
+            },
+            {
+              "seq": 5,
+              "sent_s": 41.422863,
+              "jokes": 5,
+              "released": 5,
+              "sold": 4,
+              "first_sale_s": 13.969097
+            },
+            {
+              "seq": 6,
+              "sent_s": 51.465855,
+              "jokes": 5,
+              "released": 5,
+              "sold": 4,
+              "first_sale_s": 16.089416
+            },
+            {
+              "seq": 7,
+              "sent_s": 61.550291,
+              "jokes": 5,
+              "released": 5,
+              "sold": 2,
+              "first_sale_s": 18.468124
+            },
+            {
+              "seq": 8,
+              "sent_s": 71.797876,
+              "jokes": 5,
+              "released": 5,
+              "sold": 1,
+              "first_sale_s": 20.626954
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 4.25
+            },
+            {
+              "seq": 2,
+              "fit": 5.35
+            },
+            {
+              "seq": 3,
+              "fit": 4.55
+            },
+            {
+              "seq": 4,
+              "fit": 8.45
+            },
+            {
+              "seq": 5,
+              "fit": 10.95
+            },
+            {
+              "seq": 6,
+              "fit": 11.55
+            },
+            {
+              "seq": 7,
+              "fit": 10.85
+            },
+            {
+              "seq": 8,
+              "fit": 11.25
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": true,
+            "round2_batch_size": 10,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#15"
+          }
+        },
+        {
+          "team_id": 12,
+          "team": "Team 12",
+          "profit": -25.406170366666665,
+          "sold": 41,
+          "released": 40,
+          "made": 40,
+          "never_sold": 38,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 56.406170366666665,
+            "listing": 10,
+            "discard": 0,
+            "total": 66.40617036666666
+          },
+          "sent_to_released_s": 14.39059575,
+          "to_first_sale_s": 1.389495,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 0.366944,
+              "jokes": 5,
+              "released": 5,
+              "sold": 1,
+              "first_sale_s": 10.920547
+            },
+            {
+              "seq": 2,
+              "sent_s": 9.433294,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 19.966209,
+              "jokes": 5,
+              "released": 5,
+              "sold": 1,
+              "first_sale_s": 15.256311
+            },
+            {
+              "seq": 4,
+              "sent_s": 30.720136,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 5,
+              "sent_s": 41.500439,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 6,
+              "sent_s": 50.263366,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 7,
+              "sent_s": 57.890907,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 8,
+              "sent_s": 65.384431,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 5.45
+            },
+            {
+              "seq": 2,
+              "fit": 4.05
+            },
+            {
+              "seq": 3,
+              "fit": 6.05
+            },
+            {
+              "seq": 4,
+              "fit": 4.75
+            },
+            {
+              "seq": 5,
+              "fit": 3.95
+            },
+            {
+              "seq": 6,
+              "fit": 4.35
+            },
+            {
+              "seq": 7,
+              "fit": 4.75
+            },
+            {
+              "seq": 8,
+              "fit": 4.75
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": false,
+            "round2_batch_size": 10,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#11"
+          }
+        },
+        {
+          "team_id": 18,
+          "team": "Team 18",
+          "profit": -38.28464919999999,
+          "sold": 32,
+          "released": 40,
+          "made": 40,
+          "never_sold": 38,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 60.28464919999999,
+            "listing": 10,
+            "discard": 0,
+            "total": 70.28464919999999
+          },
+          "sent_to_released_s": 13.744896125000002,
+          "to_first_sale_s": 1.240125,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 0.345336,
+              "jokes": 5,
+              "released": 5,
+              "sold": 1,
+              "first_sale_s": 10.845058
+            },
+            {
+              "seq": 2,
+              "sent_s": 9.34221,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 19.641426,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 28.09662,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 5,
+              "sent_s": 39.268158,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 6,
+              "sent_s": 47.856963,
+              "jokes": 5,
+              "released": 5,
+              "sold": 1,
+              "first_sale_s": 15.113834
+            },
+            {
+              "seq": 7,
+              "sent_s": 55.141832,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 8,
+              "sent_s": 63.258141,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 5.75
+            },
+            {
+              "seq": 2,
+              "fit": 5.05
+            },
+            {
+              "seq": 3,
+              "fit": 4.85
+            },
+            {
+              "seq": 4,
+              "fit": 4.55
+            },
+            {
+              "seq": 5,
+              "fit": 4.15
+            },
+            {
+              "seq": 6,
+              "fit": 5.55
+            },
+            {
+              "seq": 7,
+              "fit": 5.05
+            },
+            {
+              "seq": 8,
+              "fit": 3.95
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": false,
+            "round2_batch_size": 3,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#17"
+          }
+        },
+        {
+          "team_id": 8,
+          "team": "Team 8",
+          "profit": -39.14940729999997,
+          "sold": 30,
+          "released": 40,
+          "made": 40,
+          "never_sold": 38,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 59.14940729999997,
+            "listing": 10,
+            "discard": 0,
+            "total": 69.14940729999998
+          },
+          "sent_to_released_s": 14.138143000000001,
+          "to_first_sale_s": 1.3975710000000001,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 0.429273,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 10.328807,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 18.975053,
+              "jokes": 5,
+              "released": 5,
+              "sold": 1,
+              "first_sale_s": 16.575567
+            },
+            {
+              "seq": 4,
+              "sent_s": 30.803254,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 5,
+              "sent_s": 41.966361,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 6,
+              "sent_s": 49.012958,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 7,
+              "sent_s": 55.932305,
+              "jokes": 5,
+              "released": 5,
+              "sold": 1,
+              "first_sale_s": 20.181239
+            },
+            {
+              "seq": 8,
+              "sent_s": 66.668746,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 4.35
+            },
+            {
+              "seq": 2,
+              "fit": 4.05
+            },
+            {
+              "seq": 3,
+              "fit": 7.05
+            },
+            {
+              "seq": 4,
+              "fit": 4.55
+            },
+            {
+              "seq": 5,
+              "fit": 5.85
+            },
+            {
+              "seq": 6,
+              "fit": 4.95
+            },
+            {
+              "seq": 7,
+              "fit": 5.75
+            },
+            {
+              "seq": 8,
+              "fit": 4.95
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": false,
+            "round2_batch_size": 10,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#7"
+          }
+        },
+        {
+          "team_id": 14,
+          "team": "Team 14",
+          "profit": -48.97886063333338,
+          "sold": 18,
+          "released": 40,
+          "made": 40,
+          "never_sold": 37,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 56.97886063333338,
+            "listing": 10,
+            "discard": 0,
+            "total": 66.97886063333338
+          },
+          "sent_to_released_s": 12.5274175,
+          "to_first_sale_s": 1.7397453333333335,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 0.434176,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 10.946313,
+              "jokes": 5,
+              "released": 5,
+              "sold": 1,
+              "first_sale_s": 16.022397
+            },
+            {
+              "seq": 3,
+              "sent_s": 22.540749,
+              "jokes": 5,
+              "released": 5,
+              "sold": 1,
+              "first_sale_s": 12.926874
+            },
+            {
+              "seq": 4,
+              "sent_s": 29.627493,
+              "jokes": 5,
+              "released": 5,
+              "sold": 1,
+              "first_sale_s": 13.162393
+            },
+            {
+              "seq": 5,
+              "sent_s": 39.273398,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 6,
+              "sent_s": 48.322475,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 7,
+              "sent_s": 58.958466,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 8,
+              "sent_s": 69.693458,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 4.55
+            },
+            {
+              "seq": 2,
+              "fit": 5.95
+            },
+            {
+              "seq": 3,
+              "fit": 5.35
+            },
+            {
+              "seq": 4,
+              "fit": 5.95
+            },
+            {
+              "seq": 5,
+              "fit": 4.25
+            },
+            {
+              "seq": 6,
+              "fit": 4.65
+            },
+            {
+              "seq": 7,
+              "fit": 4.35
+            },
+            {
+              "seq": 8,
+              "fit": 5.45
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": false,
+            "round2_batch_size": 3,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#13"
+          }
+        },
+        {
+          "team_id": 4,
+          "team": "Team 4",
+          "profit": -67.95987840000001,
+          "sold": 2,
+          "released": 40,
+          "made": 40,
+          "never_sold": 38,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 59.95987840000001,
+            "listing": 10,
+            "discard": 0,
+            "total": 69.95987840000001
+          },
+          "sent_to_released_s": 15.758097875000002,
+          "to_first_sale_s": 4.9550160000000005,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 0.396317,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 7.62527,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 17.96705,
+              "jokes": 5,
+              "released": 5,
+              "sold": 1,
+              "first_sale_s": 16.410575
+            },
+            {
+              "seq": 4,
+              "sent_s": 27.900068,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 5,
+              "sent_s": 35.120763,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 6,
+              "sent_s": 46.181802,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 7,
+              "sent_s": 56.747969,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 8,
+              "sent_s": 67.433592,
+              "jokes": 5,
+              "released": 5,
+              "sold": 1,
+              "first_sale_s": 25.245645
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 5.25
+            },
+            {
+              "seq": 2,
+              "fit": 5.15
+            },
+            {
+              "seq": 3,
+              "fit": 5.35
+            },
+            {
+              "seq": 4,
+              "fit": 3.85
+            },
+            {
+              "seq": 5,
+              "fit": 4.65
+            },
+            {
+              "seq": 6,
+              "fit": 5.55
+            },
+            {
+              "seq": 7,
+              "fit": 4.75
+            },
+            {
+              "seq": 8,
+              "fit": 6.75
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": false,
+            "round2_batch_size": 10,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#3"
+          }
+        },
+        {
+          "team_id": 16,
+          "team": "Team 16",
+          "profit": -72.6551916666667,
+          "sold": 0,
+          "released": 40,
+          "made": 40,
+          "never_sold": 40,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 62.65519166666669,
+            "listing": 10,
+            "discard": 0,
+            "total": 72.6551916666667
+          },
+          "sent_to_released_s": 12.072197874999999,
+          "to_first_sale_s": null,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 0.358076,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 11.021426,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 21.706733,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 31.979236,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 5,
+              "sent_s": 39.898741,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 6,
+              "sent_s": 49.921194,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 7,
+              "sent_s": 60.013907,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 8,
+              "sent_s": 70.260914,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 4.25
+            },
+            {
+              "seq": 2,
+              "fit": 5.35
+            },
+            {
+              "seq": 3,
+              "fit": 4.55
+            },
+            {
+              "seq": 4,
+              "fit": 3.95
+            },
+            {
+              "seq": 5,
+              "fit": 4.25
+            },
+            {
+              "seq": 6,
+              "fit": 5.25
+            },
+            {
+              "seq": 7,
+              "fit": 7.65
+            },
+            {
+              "seq": 8,
+              "fit": 4.95
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": false,
+            "round2_batch_size": 10,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#15"
+          }
+        },
+        {
+          "team_id": 6,
+          "team": "Team 6",
+          "profit": -73.416055,
+          "sold": 1,
+          "released": 40,
+          "made": 40,
+          "never_sold": 39,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 64.416055,
+            "listing": 10,
+            "discard": 0,
+            "total": 74.416055
+          },
+          "sent_to_released_s": 14.32127875,
+          "to_first_sale_s": 10.281059,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 0.33427,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 7.574105,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 18.006531,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 28.758058,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 5,
+              "sent_s": 37.569139,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 6,
+              "sent_s": 46.206419,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 7,
+              "sent_s": 54.855074,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 8,
+              "sent_s": 62.866006,
+              "jokes": 5,
+              "released": 5,
+              "sold": 1,
+              "first_sale_s": 29.678624
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 3.85
+            },
+            {
+              "seq": 2,
+              "fit": 4.05
+            },
+            {
+              "seq": 3,
+              "fit": 4.05
+            },
+            {
+              "seq": 4,
+              "fit": 4.85
+            },
+            {
+              "seq": 5,
+              "fit": 4.25
+            },
+            {
+              "seq": 6,
+              "fit": 4.05
+            },
+            {
+              "seq": 7,
+              "fit": 5.15
+            },
+            {
+              "seq": 8,
+              "fit": 6.65
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": false,
+            "round2_batch_size": 3,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#5"
+          }
+        },
+        {
+          "team_id": 10,
+          "team": "Team 10",
+          "profit": -73.79867399999995,
+          "sold": 0,
+          "released": 40,
+          "made": 40,
+          "never_sold": 40,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 63.79867399999994,
+            "listing": 10,
+            "discard": 0,
+            "total": 73.79867399999995
+          },
+          "sent_to_released_s": 11.9495385,
+          "to_first_sale_s": null,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 0.36358,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 9.80097,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 19.711083,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 31.027385,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 5,
+              "sent_s": 41.350452,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 6,
+              "sent_s": 50.794547,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 7,
+              "sent_s": 57.948105,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 8,
+              "sent_s": 68.284486,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 3.75
+            },
+            {
+              "seq": 2,
+              "fit": 4.45
+            },
+            {
+              "seq": 3,
+              "fit": 4.35
+            },
+            {
+              "seq": 4,
+              "fit": 4.15
+            },
+            {
+              "seq": 5,
+              "fit": 4.95
+            },
+            {
+              "seq": 6,
+              "fit": 3.95
+            },
+            {
+              "seq": 7,
+              "fit": 4.35
+            },
+            {
+              "seq": 8,
+              "fit": 3.95
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": false,
+            "round2_batch_size": 3,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#9"
+          }
+        },
+        {
+          "team_id": 20,
+          "team": "Team 20",
+          "profit": -74.47968383333331,
+          "sold": 0,
+          "released": 40,
+          "made": 40,
+          "never_sold": 40,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 64.47968383333331,
+            "listing": 10,
+            "discard": 0,
+            "total": 74.47968383333331
+          },
+          "sent_to_released_s": 13.314550125000002,
+          "to_first_sale_s": null,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 0.40025,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 11.601102000000001,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 20.972324,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 28.315241,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 5,
+              "sent_s": 38.185801,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 6,
+              "sent_s": 47.096466,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 7,
+              "sent_s": 54.49709,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 8,
+              "sent_s": 63.206182,
+              "jokes": 5,
+              "released": 5,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 5.45
+            },
+            {
+              "seq": 2,
+              "fit": 4.95
+            },
+            {
+              "seq": 3,
+              "fit": 3.95
+            },
+            {
+              "seq": 4,
+              "fit": 4.65
+            },
+            {
+              "seq": 5,
+              "fit": 5.65
+            },
+            {
+              "seq": 6,
+              "fit": 4.25
+            },
+            {
+              "seq": 7,
+              "fit": 4.95
+            },
+            {
+              "seq": 8,
+              "fit": 4.35
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": false,
+            "round2_batch_size": 10,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#19"
+          }
+        }
+      ],
+      "ideal_profile": {
+        "CLARITY": "Crystal clear",
+        "COMPLEXITY": "Moderate",
+        "EDGINESS": "Clean",
+        "ENERGY": "Conversational",
+        "FRESHNESS": "Timeless",
+        "HUMOR_STYLE": "Observational",
+        "LENGTH": "Medium",
+        "SETUP_PAYOFF": "Balanced",
+        "STRUCTURE": "Setup–punchline",
+        "TOPIC": "Work",
+        "WORDPLAY": "Light"
+      }
+    },
+    {
+      "round": 2,
+      "round_id": 2,
+      "status": "ENDED",
+      "started_at": "2026-11-13T22:29:54.007668Z",
+      "ended_at": "2026-11-13T22:31:28.065187Z",
+      "settings": {
+        "market_mode": "LEAN",
+        "batch_size": 10,
+        "max_batch_size": 10,
+        "arrival_window_seconds": 90,
+        "market_price": 1,
+        "customer_budget": 3,
+        "customers_per_team": 18,
+        "customer_count": 360,
+        "buy_threshold": 8,
+        "jitter": 0.3,
+        "preference_base": 5,
+        "swap_margin": 0.5,
+        "feedback_pass_threshold": 0.75,
+        "feedback_joke_count": 3,
+        "wip_limit": 0,
+        "cost_of_publishing": 0.25,
+        "hosting_fee_per_joke_minute": 2,
+        "shipping_fee_small": 0,
+        "shipping_fee_standard": 0,
+        "shipping_fee_large": 0,
+        "storage_fee_per_joke_minute": 0,
+        "cost_of_discard": 0
+      },
+      "teams": [
+        {
+          "team_id": 5,
+          "team": "Team 5",
+          "profit": 150.4811527,
+          "sold": 182,
+          "released": 30,
+          "made": 30,
+          "never_sold": 13,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 24.018847300000004,
+            "listing": 7.5,
+            "discard": 0,
+            "total": 31.518847300000004
+          },
+          "sent_to_released_s": 7.7453758,
+          "to_first_sale_s": 9.993823941176473,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 2.401135,
+              "jokes": 3,
+              "released": 3,
+              "sold": 1,
+              "first_sale_s": 6.936477
+            },
+            {
+              "seq": 2,
+              "sent_s": 10.097416,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 20.652076,
+              "jokes": 3,
+              "released": 3,
+              "sold": 3,
+              "first_sale_s": 8.416167
+            },
+            {
+              "seq": 4,
+              "sent_s": 27.706362,
+              "jokes": 3,
+              "released": 3,
+              "sold": 3,
+              "first_sale_s": 13.998288
+            },
+            {
+              "seq": 5,
+              "sent_s": 34.50583,
+              "jokes": 3,
+              "released": 3,
+              "sold": 2,
+              "first_sale_s": 8.220709
+            },
+            {
+              "seq": 6,
+              "sent_s": 44.005845,
+              "jokes": 3,
+              "released": 3,
+              "sold": 3,
+              "first_sale_s": 33.943627
+            },
+            {
+              "seq": 7,
+              "sent_s": 52.006621,
+              "jokes": 3,
+              "released": 3,
+              "sold": 3,
+              "first_sale_s": 10.15413
+            },
+            {
+              "seq": 8,
+              "sent_s": 61.955215,
+              "jokes": 3,
+              "released": 3,
+              "sold": 1,
+              "first_sale_s": 29.214266
+            },
+            {
+              "seq": 9,
+              "sent_s": 71.054283,
+              "jokes": 3,
+              "released": 3,
+              "sold": 1,
+              "first_sale_s": 8.014129
+            },
+            {
+              "seq": 10,
+              "sent_s": 79.44069,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 11,
+              "sent_s": 87.104967,
+              "jokes": 3,
+              "released": 0,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 7.416666666666667
+            },
+            {
+              "seq": 2,
+              "fit": 5.083333333333333
+            },
+            {
+              "seq": 3,
+              "fit": 11.75
+            },
+            {
+              "seq": 4,
+              "fit": 11.75
+            },
+            {
+              "seq": 5,
+              "fit": 10.416666666666666
+            },
+            {
+              "seq": 6,
+              "fit": 10.75
+            },
+            {
+              "seq": 7,
+              "fit": 10.75
+            },
+            {
+              "seq": 8,
+              "fit": 10.75
+            },
+            {
+              "seq": 9,
+              "fit": 10.25
+            },
+            {
+              "seq": 10,
+              "fit": 10.75
+            },
+            {
+              "seq": 11,
+              "fit": null
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": true,
+            "round2_batch_size": 3,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#5"
+          }
+        },
+        {
+          "team_id": 17,
+          "team": "Team 17",
+          "profit": 77.69904306666668,
+          "sold": 111,
+          "released": 27,
+          "made": 27,
+          "never_sold": 13,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 26.550956933333328,
+            "listing": 6.75,
+            "discard": 0,
+            "total": 33.300956933333325
+          },
+          "sent_to_released_s": 7.358598444444445,
+          "to_first_sale_s": 5.7073425,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 1.957569,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 9.508159,
+              "jokes": 3,
+              "released": 3,
+              "sold": 1,
+              "first_sale_s": 7.101737
+            },
+            {
+              "seq": 3,
+              "sent_s": 20.742646,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 31.041683,
+              "jokes": 3,
+              "released": 3,
+              "sold": 3,
+              "first_sale_s": 10.680514
+            },
+            {
+              "seq": 5,
+              "sent_s": 38.978924,
+              "jokes": 3,
+              "released": 3,
+              "sold": 3,
+              "first_sale_s": 8.389455
+            },
+            {
+              "seq": 6,
+              "sent_s": 48.949339,
+              "jokes": 3,
+              "released": 3,
+              "sold": 2,
+              "first_sale_s": 8.284412
+            },
+            {
+              "seq": 7,
+              "sent_s": 58.215698,
+              "jokes": 3,
+              "released": 3,
+              "sold": 1,
+              "first_sale_s": 19.643714
+            },
+            {
+              "seq": 8,
+              "sent_s": 68.801848,
+              "jokes": 3,
+              "released": 3,
+              "sold": 3,
+              "first_sale_s": 12.307406
+            },
+            {
+              "seq": 9,
+              "sent_s": 78.674917,
+              "jokes": 3,
+              "released": 3,
+              "sold": 1,
+              "first_sale_s": 8.456767
+            },
+            {
+              "seq": 10,
+              "sent_s": 86.568433,
+              "jokes": 3,
+              "released": 0,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 3.75
+            },
+            {
+              "seq": 2,
+              "fit": 6.25
+            },
+            {
+              "seq": 3,
+              "fit": 6.416666666666667
+            },
+            {
+              "seq": 4,
+              "fit": 11.75
+            },
+            {
+              "seq": 5,
+              "fit": 11.75
+            },
+            {
+              "seq": 6,
+              "fit": 11.083333333333334
+            },
+            {
+              "seq": 7,
+              "fit": 10.75
+            },
+            {
+              "seq": 8,
+              "fit": 11.25
+            },
+            {
+              "seq": 9,
+              "fit": 11.25
+            },
+            {
+              "seq": 10,
+              "fit": null
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": true,
+            "round2_batch_size": 3,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#17"
+          }
+        },
+        {
+          "team_id": 1,
+          "team": "Team 1",
+          "profit": 77.3414541,
+          "sold": 113,
+          "released": 30,
+          "made": 30,
+          "never_sold": 17,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 28.158545899999993,
+            "listing": 7.5,
+            "discard": 0,
+            "total": 35.65854589999999
+          },
+          "sent_to_released_s": 7.1020658,
+          "to_first_sale_s": 4.4918654615384614,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 2.322579,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 12.453535,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 20.321846,
+              "jokes": 3,
+              "released": 3,
+              "sold": 1,
+              "first_sale_s": 12.533841
+            },
+            {
+              "seq": 4,
+              "sent_s": 28.422729,
+              "jokes": 3,
+              "released": 3,
+              "sold": 3,
+              "first_sale_s": 9.107867
+            },
+            {
+              "seq": 5,
+              "sent_s": 37.695648,
+              "jokes": 3,
+              "released": 3,
+              "sold": 2,
+              "first_sale_s": 8.215528
+            },
+            {
+              "seq": 6,
+              "sent_s": 47.744808,
+              "jokes": 3,
+              "released": 3,
+              "sold": 3,
+              "first_sale_s": 6.746562
+            },
+            {
+              "seq": 7,
+              "sent_s": 55.275604,
+              "jokes": 3,
+              "released": 3,
+              "sold": 2,
+              "first_sale_s": 9.504565
+            },
+            {
+              "seq": 8,
+              "sent_s": 62.125752,
+              "jokes": 3,
+              "released": 3,
+              "sold": 1,
+              "first_sale_s": 25.036642
+            },
+            {
+              "seq": 9,
+              "sent_s": 73.508167,
+              "jokes": 3,
+              "released": 3,
+              "sold": 1,
+              "first_sale_s": 9.85409
+            },
+            {
+              "seq": 10,
+              "sent_s": 80.915078,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 11,
+              "sent_s": 88.403717,
+              "jokes": 3,
+              "released": 0,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 4.583333333333333
+            },
+            {
+              "seq": 2,
+              "fit": 4.083333333333333
+            },
+            {
+              "seq": 3,
+              "fit": 8.416666666666666
+            },
+            {
+              "seq": 4,
+              "fit": 11.416666666666666
+            },
+            {
+              "seq": 5,
+              "fit": 11.083333333333334
+            },
+            {
+              "seq": 6,
+              "fit": 11.75
+            },
+            {
+              "seq": 7,
+              "fit": 11.25
+            },
+            {
+              "seq": 8,
+              "fit": 10.75
+            },
+            {
+              "seq": 9,
+              "fit": 11.083333333333334
+            },
+            {
+              "seq": 10,
+              "fit": 10.75
+            },
+            {
+              "seq": 11,
+              "fit": null
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": true,
+            "round2_batch_size": 3,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#1"
+          }
+        },
+        {
+          "team_id": 9,
+          "team": "Team 9",
+          "profit": 67.12188833333333,
+          "sold": 104,
+          "released": 30,
+          "made": 30,
+          "never_sold": 16,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 29.378111666666673,
+            "listing": 7.5,
+            "discard": 0,
+            "total": 36.87811166666667
+          },
+          "sent_to_released_s": 7.298206899999999,
+          "to_first_sale_s": 8.322380857142857,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 1.989517,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 9.230912,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 16.279361,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 24.999953,
+              "jokes": 3,
+              "released": 3,
+              "sold": 3,
+              "first_sale_s": 10.326008
+            },
+            {
+              "seq": 5,
+              "sent_s": 34.038126,
+              "jokes": 3,
+              "released": 3,
+              "sold": 3,
+              "first_sale_s": 10.016971
+            },
+            {
+              "seq": 6,
+              "sent_s": 44.580127,
+              "jokes": 3,
+              "released": 3,
+              "sold": 3,
+              "first_sale_s": 8.972857
+            },
+            {
+              "seq": 7,
+              "sent_s": 54.459311,
+              "jokes": 3,
+              "released": 3,
+              "sold": 3,
+              "first_sale_s": 14.066386
+            },
+            {
+              "seq": 8,
+              "sent_s": 64.861648,
+              "jokes": 3,
+              "released": 3,
+              "sold": 2,
+              "first_sale_s": 14.213867
+            },
+            {
+              "seq": 9,
+              "sent_s": 75.995978,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 10,
+              "sent_s": 84.967458,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 4.083333333333333
+            },
+            {
+              "seq": 2,
+              "fit": 5.25
+            },
+            {
+              "seq": 3,
+              "fit": 4.583333333333333
+            },
+            {
+              "seq": 4,
+              "fit": 11.25
+            },
+            {
+              "seq": 5,
+              "fit": 11.416666666666666
+            },
+            {
+              "seq": 6,
+              "fit": 11.75
+            },
+            {
+              "seq": 7,
+              "fit": 11.416666666666666
+            },
+            {
+              "seq": 8,
+              "fit": 11.25
+            },
+            {
+              "seq": 9,
+              "fit": 10.416666666666666
+            },
+            {
+              "seq": 10,
+              "fit": 10.75
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": true,
+            "round2_batch_size": 3,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#9"
+          }
+        },
+        {
+          "team_id": 6,
+          "team": "Team 6",
+          "profit": 51.019104899999995,
+          "sold": 99,
+          "released": 33,
+          "made": 33,
+          "never_sold": 30,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 39.730895100000005,
+            "listing": 8.25,
+            "discard": 0,
+            "total": 47.980895100000005
+          },
+          "sent_to_released_s": 7.369071363636363,
+          "to_first_sale_s": 0.047306666666666664,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 1.9742199999999999,
+              "jokes": 3,
+              "released": 3,
+              "sold": 1,
+              "first_sale_s": 6.554757
+            },
+            {
+              "seq": 2,
+              "sent_s": 9.656665,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 20.217166,
+              "jokes": 3,
+              "released": 3,
+              "sold": 1,
+              "first_sale_s": 7.033866
+            },
+            {
+              "seq": 4,
+              "sent_s": 27.425663,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 5,
+              "sent_s": 34.23871,
+              "jokes": 3,
+              "released": 3,
+              "sold": 1,
+              "first_sale_s": 7.467489
+            },
+            {
+              "seq": 6,
+              "sent_s": 43.749752,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 7,
+              "sent_s": 51.911742,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 8,
+              "sent_s": 61.779576,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 9,
+              "sent_s": 70.855518,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 10,
+              "sent_s": 79.242779,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 11,
+              "sent_s": 86.983399,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 7.416666666666667
+            },
+            {
+              "seq": 2,
+              "fit": 5.083333333333333
+            },
+            {
+              "seq": 3,
+              "fit": 5.916666666666667
+            },
+            {
+              "seq": 4,
+              "fit": 4.083333333333333
+            },
+            {
+              "seq": 5,
+              "fit": 7.583333333333333
+            },
+            {
+              "seq": 6,
+              "fit": 3.9166666666666665
+            },
+            {
+              "seq": 7,
+              "fit": 5.083333333333333
+            },
+            {
+              "seq": 8,
+              "fit": 4.583333333333333
+            },
+            {
+              "seq": 9,
+              "fit": 5.25
+            },
+            {
+              "seq": 10,
+              "fit": 5.25
+            },
+            {
+              "seq": 11,
+              "fit": 6.416666666666667
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": false,
+            "round2_batch_size": 3,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#5"
+          }
+        },
+        {
+          "team_id": 13,
+          "team": "Team 13",
+          "profit": 31.189948700000002,
+          "sold": 68,
+          "released": 30,
+          "made": 30,
+          "never_sold": 17,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 29.310051299999998,
+            "listing": 7.5,
+            "discard": 0,
+            "total": 36.8100513
+          },
+          "sent_to_released_s": 7.729338299999999,
+          "to_first_sale_s": 2.2283618461538466,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 1.999873,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 13.127022,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 21.635528,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 28.4609,
+              "jokes": 3,
+              "released": 3,
+              "sold": 1,
+              "first_sale_s": 8.665633
+            },
+            {
+              "seq": 5,
+              "sent_s": 37.070477,
+              "jokes": 3,
+              "released": 3,
+              "sold": 3,
+              "first_sale_s": 8.842664
+            },
+            {
+              "seq": 6,
+              "sent_s": 47.229969,
+              "jokes": 3,
+              "released": 3,
+              "sold": 3,
+              "first_sale_s": 7.999481
+            },
+            {
+              "seq": 7,
+              "sent_s": 54.73649,
+              "jokes": 3,
+              "released": 3,
+              "sold": 3,
+              "first_sale_s": 8.323684
+            },
+            {
+              "seq": 8,
+              "sent_s": 63.687419,
+              "jokes": 3,
+              "released": 3,
+              "sold": 1,
+              "first_sale_s": 14.273809
+            },
+            {
+              "seq": 9,
+              "sent_s": 74.926363,
+              "jokes": 3,
+              "released": 3,
+              "sold": 2,
+              "first_sale_s": 12.242635
+            },
+            {
+              "seq": 10,
+              "sent_s": 84.412922,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 3.25
+            },
+            {
+              "seq": 2,
+              "fit": 5.416666666666667
+            },
+            {
+              "seq": 3,
+              "fit": 5.25
+            },
+            {
+              "seq": 4,
+              "fit": 7.583333333333333
+            },
+            {
+              "seq": 5,
+              "fit": 11.416666666666666
+            },
+            {
+              "seq": 6,
+              "fit": 11.75
+            },
+            {
+              "seq": 7,
+              "fit": 11.583333333333334
+            },
+            {
+              "seq": 8,
+              "fit": 10.916666666666666
+            },
+            {
+              "seq": 9,
+              "fit": 11.25
+            },
+            {
+              "seq": 10,
+              "fit": 10.75
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": true,
+            "round2_batch_size": 3,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#13"
+          }
+        },
+        {
+          "team_id": 18,
+          "team": "Team 18",
+          "profit": -17.28580126666666,
+          "sold": 25,
+          "released": 27,
+          "made": 27,
+          "never_sold": 24,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 35.53580126666666,
+            "listing": 6.75,
+            "discard": 0,
+            "total": 42.28580126666666
+          },
+          "sent_to_released_s": 7.308274000000001,
+          "to_first_sale_s": 2.42902,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 2.259467,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 9.78474,
+              "jokes": 3,
+              "released": 3,
+              "sold": 1,
+              "first_sale_s": 7.095534
+            },
+            {
+              "seq": 3,
+              "sent_s": 21.001975,
+              "jokes": 3,
+              "released": 3,
+              "sold": 2,
+              "first_sale_s": 11.837233
+            },
+            {
+              "seq": 4,
+              "sent_s": 31.272826,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 5,
+              "sent_s": 39.214945,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 6,
+              "sent_s": 49.156889,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 7,
+              "sent_s": 58.382867,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 8,
+              "sent_s": 68.949523,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 9,
+              "sent_s": 78.831262,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 10,
+              "sent_s": 86.720633,
+              "jokes": 3,
+              "released": 0,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 3.75
+            },
+            {
+              "seq": 2,
+              "fit": 6.25
+            },
+            {
+              "seq": 3,
+              "fit": 8.916666666666666
+            },
+            {
+              "seq": 4,
+              "fit": 4.416666666666667
+            },
+            {
+              "seq": 5,
+              "fit": 3.5833333333333335
+            },
+            {
+              "seq": 6,
+              "fit": 5.25
+            },
+            {
+              "seq": 7,
+              "fit": 4.583333333333333
+            },
+            {
+              "seq": 8,
+              "fit": 3.9166666666666665
+            },
+            {
+              "seq": 9,
+              "fit": 4.083333333333333
+            },
+            {
+              "seq": 10,
+              "fit": null
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": false,
+            "round2_batch_size": 3,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#17"
+          }
+        },
+        {
+          "team_id": 16,
+          "team": "Team 16",
+          "profit": -36.18111343333328,
+          "sold": 43,
+          "released": 40,
+          "made": 40,
+          "never_sold": 39,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 69.18111343333328,
+            "listing": 10,
+            "discard": 0,
+            "total": 79.18111343333328
+          },
+          "sent_to_released_s": 26.5175765,
+          "to_first_sale_s": 2.796206,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 2.000281,
+              "jokes": 10,
+              "released": 10,
+              "sold": 1,
+              "first_sale_s": 19.683531
+            },
+            {
+              "seq": 2,
+              "sent_s": 8.876848,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 16.907632,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 27.594298,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 4.8
+            },
+            {
+              "seq": 2,
+              "fit": 5.35
+            },
+            {
+              "seq": 3,
+              "fit": 4.75
+            },
+            {
+              "seq": 4,
+              "fit": 4.5
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": false,
+            "round2_batch_size": 10,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#15"
+          }
+        },
+        {
+          "team_id": 15,
+          "team": "Team 15",
+          "profit": -37.30948686666669,
+          "sold": 41,
+          "released": 40,
+          "made": 40,
+          "never_sold": 39,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 68.30948686666669,
+            "listing": 10,
+            "discard": 0,
+            "total": 78.30948686666669
+          },
+          "sent_to_released_s": 26.870091000000002,
+          "to_first_sale_s": 2.292755,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 2.296815,
+              "jokes": 10,
+              "released": 10,
+              "sold": 1,
+              "first_sale_s": 19.3829
+            },
+            {
+              "seq": 2,
+              "sent_s": 9.172512,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 17.21041,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 27.903734,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 4.8
+            },
+            {
+              "seq": 2,
+              "fit": 5.35
+            },
+            {
+              "seq": 3,
+              "fit": 4.75
+            },
+            {
+              "seq": 4,
+              "fit": 4.5
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": true,
+            "round2_batch_size": 10,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#15"
+          }
+        },
+        {
+          "team_id": 3,
+          "team": "Team 3",
+          "profit": -39.31007146666664,
+          "sold": 33,
+          "released": 40,
+          "made": 40,
+          "never_sold": 38,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 62.31007146666664,
+            "listing": 10,
+            "discard": 0,
+            "total": 72.31007146666664
+          },
+          "sent_to_released_s": 29.819666249999997,
+          "to_first_sale_s": 1.9313125,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 2.287318,
+              "jokes": 10,
+              "released": 10,
+              "sold": 1,
+              "first_sale_s": 17.546074
+            },
+            {
+              "seq": 2,
+              "sent_s": 9.970607,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 18.980758,
+              "jokes": 10,
+              "released": 10,
+              "sold": 1,
+              "first_sale_s": 36.255202
+            },
+            {
+              "seq": 4,
+              "sent_s": 27.477945,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 5
+            },
+            {
+              "seq": 2,
+              "fit": 5.35
+            },
+            {
+              "seq": 3,
+              "fit": 5.65
+            },
+            {
+              "seq": 4,
+              "fit": 4.8
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": true,
+            "round2_batch_size": 10,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#3"
+          }
+        },
+        {
+          "team_id": 4,
+          "team": "Team 4",
+          "profit": -45.51494803333332,
+          "sold": 27,
+          "released": 40,
+          "made": 40,
+          "never_sold": 38,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 62.51494803333332,
+            "listing": 10,
+            "discard": 0,
+            "total": 72.51494803333333
+          },
+          "sent_to_released_s": 29.86269025,
+          "to_first_sale_s": 3.5308535,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 2.256027,
+              "jokes": 10,
+              "released": 10,
+              "sold": 1,
+              "first_sale_s": 16.032391
+            },
+            {
+              "seq": 2,
+              "sent_s": 9.925874,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 18.880958,
+              "jokes": 10,
+              "released": 10,
+              "sold": 1,
+              "first_sale_s": 40.788983
+            },
+            {
+              "seq": 4,
+              "sent_s": 27.155944,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 5
+            },
+            {
+              "seq": 2,
+              "fit": 5.35
+            },
+            {
+              "seq": 3,
+              "fit": 5.65
+            },
+            {
+              "seq": 4,
+              "fit": 4.8
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": false,
+            "round2_batch_size": 10,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#3"
+          }
+        },
+        {
+          "team_id": 20,
+          "team": "Team 20",
+          "profit": -47.131502033333305,
+          "sold": 28,
+          "released": 40,
+          "made": 40,
+          "never_sold": 39,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 65.1315020333333,
+            "listing": 10,
+            "discard": 0,
+            "total": 75.1315020333333
+          },
+          "sent_to_released_s": 28.730782250000004,
+          "to_first_sale_s": 0.062669,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 2.326538,
+              "jokes": 10,
+              "released": 10,
+              "sold": 1,
+              "first_sale_s": 15.453452
+            },
+            {
+              "seq": 2,
+              "sent_s": 9.952616,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 17.719266,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 28.286268,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 5.85
+            },
+            {
+              "seq": 2,
+              "fit": 4.45
+            },
+            {
+              "seq": 3,
+              "fit": 4.45
+            },
+            {
+              "seq": 4,
+              "fit": 5.2
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": false,
+            "round2_batch_size": 10,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#19"
+          }
+        },
+        {
+          "team_id": 19,
+          "team": "Team 19",
+          "profit": -49.340063433333356,
+          "sold": 26,
+          "released": 40,
+          "made": 40,
+          "never_sold": 39,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 65.34006343333336,
+            "listing": 10,
+            "discard": 0,
+            "total": 75.34006343333336
+          },
+          "sent_to_released_s": 28.93661925,
+          "to_first_sale_s": 2.387194,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 1.9961950000000002,
+              "jokes": 10,
+              "released": 10,
+              "sold": 1,
+              "first_sale_s": 17.831237
+            },
+            {
+              "seq": 2,
+              "sent_s": 9.640794,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 17.416082,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 27.987329,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 5.85
+            },
+            {
+              "seq": 2,
+              "fit": 4.45
+            },
+            {
+              "seq": 3,
+              "fit": 4.45
+            },
+            {
+              "seq": 4,
+              "fit": 5.2
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": true,
+            "round2_batch_size": 10,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#19"
+          }
+        },
+        {
+          "team_id": 14,
+          "team": "Team 14",
+          "profit": -49.50128580000001,
+          "sold": 1,
+          "released": 30,
+          "made": 30,
+          "never_sold": 29,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 43.00128580000001,
+            "listing": 7.5,
+            "discard": 0,
+            "total": 50.50128580000001
+          },
+          "sent_to_released_s": 7.686956799999999,
+          "to_first_sale_s": 19.193956,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 2.316203,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 13.437983,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 21.926591,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 28.742573,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 5,
+              "sent_s": 37.351762,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 6,
+              "sent_s": 47.511922,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 7,
+              "sent_s": 54.963013,
+              "jokes": 3,
+              "released": 3,
+              "sold": 1,
+              "first_sale_s": 27.546945
+            },
+            {
+              "seq": 8,
+              "sent_s": 63.912668,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 9,
+              "sent_s": 75.133856,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 10,
+              "sent_s": 84.547006,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 3.25
+            },
+            {
+              "seq": 2,
+              "fit": 5.416666666666667
+            },
+            {
+              "seq": 3,
+              "fit": 5.25
+            },
+            {
+              "seq": 4,
+              "fit": 4.583333333333333
+            },
+            {
+              "seq": 5,
+              "fit": 5.916666666666667
+            },
+            {
+              "seq": 6,
+              "fit": 4.416666666666667
+            },
+            {
+              "seq": 7,
+              "fit": 8.25
+            },
+            {
+              "seq": 8,
+              "fit": 5.75
+            },
+            {
+              "seq": 9,
+              "fit": 5.25
+            },
+            {
+              "seq": 10,
+              "fit": 3.75
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": false,
+            "round2_batch_size": 3,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#13"
+          }
+        },
+        {
+          "team_id": 2,
+          "team": "Team 2",
+          "profit": -50.04310573333335,
+          "sold": 2,
+          "released": 30,
+          "made": 30,
+          "never_sold": 29,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 44.54310573333335,
+            "listing": 7.5,
+            "discard": 0,
+            "total": 52.04310573333335
+          },
+          "sent_to_released_s": 7.115817900000001,
+          "to_first_sale_s": 10.749973,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 1.948156,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 12.10526,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 19.966095,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 28.059915,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 5,
+              "sent_s": 37.367446,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 6,
+              "sent_s": 47.408554,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 7,
+              "sent_s": 54.93218,
+              "jokes": 3,
+              "released": 3,
+              "sold": 1,
+              "first_sale_s": 17.911038
+            },
+            {
+              "seq": 8,
+              "sent_s": 61.779378,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 9,
+              "sent_s": 72.994951,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 10,
+              "sent_s": 80.352585,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 11,
+              "sent_s": 87.85796,
+              "jokes": 3,
+              "released": 0,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 4.583333333333333
+            },
+            {
+              "seq": 2,
+              "fit": 4.083333333333333
+            },
+            {
+              "seq": 3,
+              "fit": 5.083333333333333
+            },
+            {
+              "seq": 4,
+              "fit": 4.75
+            },
+            {
+              "seq": 5,
+              "fit": 4.75
+            },
+            {
+              "seq": 6,
+              "fit": 5.416666666666667
+            },
+            {
+              "seq": 7,
+              "fit": 6.083333333333333
+            },
+            {
+              "seq": 8,
+              "fit": 3.9166666666666665
+            },
+            {
+              "seq": 9,
+              "fit": 4.583333333333333
+            },
+            {
+              "seq": 10,
+              "fit": 5.083333333333333
+            },
+            {
+              "seq": 11,
+              "fit": null
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": false,
+            "round2_batch_size": 3,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#1"
+          }
+        },
+        {
+          "team_id": 10,
+          "team": "Team 10",
+          "profit": -51.95350813333334,
+          "sold": 1,
+          "released": 30,
+          "made": 30,
+          "never_sold": 29,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 45.45350813333334,
+            "listing": 7.5,
+            "discard": 0,
+            "total": 52.95350813333334
+          },
+          "sent_to_released_s": 7.271558300000001,
+          "to_first_sale_s": 14.812497,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 1.946418,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 9.19904,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 16.253126,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 24.977095,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 5,
+              "sent_s": 34.005697,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 6,
+              "sent_s": 44.542337,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 7,
+              "sent_s": 54.447953,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 8,
+              "sent_s": 64.818232,
+              "jokes": 3,
+              "released": 3,
+              "sold": 1,
+              "first_sale_s": 22.315303
+            },
+            {
+              "seq": 9,
+              "sent_s": 75.929983,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 10,
+              "sent_s": 84.89665,
+              "jokes": 3,
+              "released": 3,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 4.083333333333333
+            },
+            {
+              "seq": 2,
+              "fit": 5.25
+            },
+            {
+              "seq": 3,
+              "fit": 4.583333333333333
+            },
+            {
+              "seq": 4,
+              "fit": 7.083333333333333
+            },
+            {
+              "seq": 5,
+              "fit": 6.083333333333333
+            },
+            {
+              "seq": 6,
+              "fit": 4.083333333333333
+            },
+            {
+              "seq": 7,
+              "fit": 5.083333333333333
+            },
+            {
+              "seq": 8,
+              "fit": 6.75
+            },
+            {
+              "seq": 9,
+              "fit": 5.083333333333333
+            },
+            {
+              "seq": 10,
+              "fit": 5.583333333333333
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": false,
+            "round2_batch_size": 3,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#9"
+          }
+        },
+        {
+          "team_id": 7,
+          "team": "Team 7",
+          "profit": -71.48734139999995,
+          "sold": 4,
+          "released": 40,
+          "made": 40,
+          "never_sold": 39,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 65.48734139999995,
+            "listing": 10,
+            "discard": 0,
+            "total": 75.48734139999995
+          },
+          "sent_to_released_s": 31.401905749999997,
+          "to_first_sale_s": 0.097054,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 2.324264,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 9.381996000000001,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 16.260753,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 23.638883,
+              "jokes": 10,
+              "released": 10,
+              "sold": 1,
+              "first_sale_s": 44.873308
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 4.7
+            },
+            {
+              "seq": 2,
+              "fit": 4.05
+            },
+            {
+              "seq": 3,
+              "fit": 4.15
+            },
+            {
+              "seq": 4,
+              "fit": 6.05
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": true,
+            "round2_batch_size": 10,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#7"
+          }
+        },
+        {
+          "team_id": 8,
+          "team": "Team 8",
+          "profit": -71.82619680000003,
+          "sold": 5,
+          "released": 40,
+          "made": 40,
+          "never_sold": 39,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 66.82619680000003,
+            "listing": 10,
+            "discard": 0,
+            "total": 76.82619680000003
+          },
+          "sent_to_released_s": 30.86093775,
+          "to_first_sale_s": 5.693514,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 1.962542,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 9.042656,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 15.91021,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 23.280672,
+              "jokes": 10,
+              "released": 10,
+              "sold": 1,
+              "first_sale_s": 49.660301
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 4.7
+            },
+            {
+              "seq": 2,
+              "fit": 4.05
+            },
+            {
+              "seq": 3,
+              "fit": 4.15
+            },
+            {
+              "seq": 4,
+              "fit": 6.05
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": false,
+            "round2_batch_size": 10,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#7"
+          }
+        },
+        {
+          "team_id": 12,
+          "team": "Team 12",
+          "profit": -79.99972200000005,
+          "sold": 0,
+          "released": 40,
+          "made": 40,
+          "never_sold": 40,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 69.99972200000005,
+            "listing": 10,
+            "discard": 0,
+            "total": 79.99972200000005
+          },
+          "sent_to_released_s": 25.81322325,
+          "to_first_sale_s": null,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 2.300124,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 10.630165,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 20.756437,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 29.291291,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 4.55
+            },
+            {
+              "seq": 2,
+              "fit": 4.55
+            },
+            {
+              "seq": 3,
+              "fit": 4.3
+            },
+            {
+              "seq": 4,
+              "fit": 4.55
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": false,
+            "round2_batch_size": 10,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#11"
+          }
+        },
+        {
+          "team_id": 11,
+          "team": "Team 11",
+          "profit": -80.69388333333336,
+          "sold": 0,
+          "released": 40,
+          "made": 40,
+          "never_sold": 40,
+          "discarded": 0,
+          "fees": {
+            "shipping": 0,
+            "storage": 0,
+            "hosting": 70.69388333333336,
+            "listing": 10,
+            "discard": 0,
+            "total": 80.69388333333336
+          },
+          "sent_to_released_s": 25.57846275,
+          "to_first_sale_s": null,
+          "batches": [
+            {
+              "seq": 1,
+              "sent_s": 1.9659879999999998,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 2,
+              "sent_s": 10.338883,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 3,
+              "sent_s": 20.497679,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            },
+            {
+              "seq": 4,
+              "sent_s": 29.032025,
+              "jokes": 10,
+              "released": 10,
+              "sold": 0,
+              "first_sale_s": null
+            }
+          ],
+          "fit_by_batch": [
+            {
+              "seq": 1,
+              "fit": 4.55
+            },
+            {
+              "seq": 2,
+              "fit": 4.55
+            },
+            {
+              "seq": 3,
+              "fit": 4.3
+            },
+            {
+              "seq": 4,
+              "fit": 4.55
+            }
+          ],
+          "bot": {
+            "persona": "BALANCED",
+            "use_feedback": true,
+            "round2_batch_size": 10,
+            "release_all": true,
+            "seed": "feedback-1794608890467-c1#11"
+          }
+        }
+      ],
+      "ideal_profile": {
+        "CLARITY": "Crystal clear",
+        "COMPLEXITY": "Moderate",
+        "EDGINESS": "Clean",
+        "ENERGY": "Conversational",
+        "FRESHNESS": "Timeless",
+        "HUMOR_STYLE": "Observational",
+        "LENGTH": "Medium",
+        "SETUP_PAYOFF": "Balanced",
+        "STRUCTURE": "Setup–punchline",
+        "TOPIC": "Work",
+        "WORDPLAY": "Light"
+      }
+    }
+  ],
+  "notes": "feedback-1794608890467-c1"
+}
