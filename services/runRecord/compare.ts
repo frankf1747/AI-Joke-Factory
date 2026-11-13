@@ -16,6 +16,16 @@ const stableJson = (o: Record<string, string>): string =>
 
 const allSame = (values: ReadonlyArray<SettingValue | null>): boolean => values.every(v => v === values[0]);
 
+const MONEY_SETTINGS: ReadonlySet<string> = new Set([
+  'market_price', 'customer_budget', 'cost_of_publishing', 'hosting_fee_per_joke_minute', 'shipping_fee_small',
+  'shipping_fee_standard', 'shipping_fee_large', 'storage_fee_per_joke_minute', 'cost_of_discard',
+]);
+
+/** How a setting reads in the Settings table: money as $0.10, everything else as stored. */
+export function formatSetting(key: string, value: SettingValue): string {
+  return MONEY_SETTINGS.has(key) && typeof value === 'number' && Number.isFinite(value) ? `$${value.toFixed(2)}` : String(value);
+}
+
 /** One row per SETTING_FIELDS key per round present in any run, plus key 'ideal_profile' label "Ideal joke" whose values are 'Same'|'Different' strings compared as JSON. Differing rows first, then SETTING_FIELDS order, Round 1 before Round 2. A run missing the round/key gives null (null vs a value differs). */
 export function settingRows(records: readonly RunRecord[]): SettingRow[] {
   const rows: Array<SettingRow & { order: number }> = [];

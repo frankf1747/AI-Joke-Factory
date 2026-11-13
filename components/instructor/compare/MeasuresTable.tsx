@@ -73,6 +73,14 @@ export const MeasuresTable: React.FC<MeasuresTableProps> = ({ records, showBots,
   const summary = targetsSummary(targeted.map(r => r.values), targeted.map(r => r.c));
   return (
     <div>
+      {/* Above the table, so the verdict on the instructor's own targets is read first. */}
+      {targeted.length > 0 && (
+        <ul className="mb-3 space-y-0.5 text-[13px]" style={{ color: 'var(--ink-2)' }} aria-label="Targets met">
+          {summary.map((s, i) => (
+            <li key={i}><span className="font-semibold" style={{ color: 'var(--ink)' }}>{records[i].name}</span>{`: ${s.met} of ${s.of} targets met`}</li>
+          ))}
+        </ul>
+      )}
       <table className={TABLE} aria-label="Measures">
         <RunColumns count={records.length} />
         <thead>
@@ -123,13 +131,6 @@ export const MeasuresTable: React.FC<MeasuresTableProps> = ({ records, showBots,
           })}
         </tbody>
       </table>
-      {targeted.length > 0 && (
-        <ul className="mt-3 space-y-0.5 text-[13px]" style={{ color: 'var(--ink-2)' }}>
-          {summary.map((s, i) => (
-            <li key={i}><span className="font-semibold" style={{ color: 'var(--ink)' }}>{records[i].name}</span>{`: ${s.met} of ${s.of} targets met`}</li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 };

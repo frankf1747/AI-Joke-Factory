@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CRITERIA_KEY, bestRuns, comparisonCsv, criterionKey, defaultCriterion, everyRunHasFit, loadCriteria, meetsTarget, runMeta,
-  saveCriteria, settingRows, targetsSummary, type Criterion,
+  formatSetting, saveCriteria, settingRows, targetsSummary, type Criterion,
 } from './compare';
 import { MEASURES } from './measures';
 import { fixtureRecord, fixtureRound, IDEAL, listingPair, SETTINGS } from './compare.testdata';
@@ -178,5 +178,20 @@ describe('everyRunHasFit', () => {
     expect(everyRunHasFit([withFit('A'), fixtureRecord('B')])).toBe(false);
     expect(everyRunHasFit([fixtureRecord('A', { rounds: [fixtureRound(1, { teams: [{ ...fixtureRecord('x').rounds[0].teams[0], fit_by_batch: [{ seq: 1, fit: 2 }] }] })] })])).toBe(false);
     expect(everyRunHasFit([])).toBe(false);
+  });
+});
+
+describe('formatSetting', () => {
+  it('writes money settings as dollars and cents', () => {
+    expect(formatSetting('cost_of_publishing', 0.1)).toBe('$0.10');
+    expect(formatSetting('hosting_fee_per_joke_minute', 2)).toBe('$2.00');
+    expect(formatSetting('market_price', 1)).toBe('$1.00');
+    expect(formatSetting('cost_of_discard', 0)).toBe('$0.00');
+  });
+  it('leaves other settings, and a non-number money value, as they are', () => {
+    expect(formatSetting('batch_size', 5)).toBe('5');
+    expect(formatSetting('jitter', 0.3)).toBe('0.3');
+    expect(formatSetting('market_mode', 'LEAN')).toBe('LEAN');
+    expect(formatSetting('cost_of_publishing', 'free')).toBe('free');
   });
 });

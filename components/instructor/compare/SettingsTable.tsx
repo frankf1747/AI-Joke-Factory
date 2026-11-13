@@ -1,7 +1,7 @@
 /* The Compare tab's settings: rows that differ between runs first and highlighted,
    the rest folded behind "Same in every run (n)". */
 import React from 'react';
-import { settingRows, type SettingRow } from '../../../services/runRecord/compare';
+import { formatSetting, settingRows, type SettingRow } from '../../../services/runRecord/compare';
 import type { RunRecord } from '../../../services/runRecord/types';
 import { DASH, ROW_BORDER, RunColumns, TABLE } from './layout';
 
@@ -29,7 +29,7 @@ const Rows: React.FC<{ rows: readonly SettingRow[]; records: readonly RunRecord[
           <td key={i} className="px-2 py-1.5 text-left font-mono" style={{ color: 'var(--ink)' }}>
             {v === null ? DASH : row.key === 'ideal_profile'
               ? <IdealCell value={String(v)} profile={records[i].rounds.find(x => x.round === row.round)?.ideal_profile} />
-              : String(v)}
+              : formatSetting(row.key, v)}
           </td>
         ))}
       </tr>
