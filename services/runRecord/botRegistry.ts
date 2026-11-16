@@ -1,6 +1,7 @@
 /* Which teams the bot panel created, so a saved record can mark them
    (docs/superpowers/specs/2026-11-12-experiment-records-design.md §4). Module state: the bot
    panel writes it, the Save run record dialog reads it. */
+import { PERSONAS, type PersonaId } from '../bots/personas';
 import type { RunBot } from './types';
 
 let teams: ReadonlyMap<number, RunBot> = new Map();
@@ -10,7 +11,10 @@ export function recordBotTeams(list: ReadonlyArray<{ teamId: number | null; pers
   if (list.length === 0) return;
   const next = new Map<number, RunBot>();
   for (const t of list) {
-    if (t.teamId != null) next.set(t.teamId, { persona: t.persona });
+    if (t.teamId == null) continue;
+    // A "Uses feedback" team says so in the record, as a pilot team does.
+    const usesFeedback = PERSONAS[t.persona as PersonaId]?.usesFeedback === true;
+    next.set(t.teamId, usesFeedback ? { persona: t.persona, use_feedback: true } : { persona: t.persona });
   }
   teams = next;
 }

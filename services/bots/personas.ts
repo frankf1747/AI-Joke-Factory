@@ -14,7 +14,7 @@
  * sales: a human Marketing seat reads its own team's batch list with each
  * joke's sold_count, and the Learner reads exactly that and nothing more.
  */
-export type PersonaId = 'CAREFUL' | 'BALANCED' | 'SPRAY' | 'LEARNER';
+export type PersonaId = 'CAREFUL' | 'BALANCED' | 'SPRAY' | 'LEARNER' | 'FEEDBACK';
 
 export interface Persona {
   readonly id: PersonaId;
@@ -34,6 +34,13 @@ export interface Persona {
   readonly round2BatchSize: number;
   /** Marketing remembers which joke texts sold and chooses with chooseWithMemory. */
   readonly learns?: boolean;
+  /**
+   * The team plays with feedback on (BotTeamSpec.useFeedback true) from the
+   * graded live jokes (services/bots/gradedJokes.ts): Marketing sends a note
+   * with each release, and the Joke Maker picks its next batch by what the
+   * notes say.
+   */
+  readonly usesFeedback?: boolean;
 }
 
 export const PERSONAS: Readonly<Record<PersonaId, Persona>> = {
@@ -62,6 +69,16 @@ export const PERSONAS: Readonly<Record<PersonaId, Persona>> = {
     id: 'LEARNER', label: 'Learner', submitIntervalMs: 60_000, waitForFeedback: true,
     publish: n => Math.min(2, n), round2BatchSize: 3, learns: true,
   },
+  /**
+   * Balanced's pace and publishing, plus the feedback loop of the feedback
+   * pilot: the same 60 jokes a Balanced team draws from, chosen by Marketing's
+   * notes instead of at random, so a Balanced team in the same class is its
+   * no-feedback comparison.
+   */
+  FEEDBACK: {
+    id: 'FEEDBACK', label: 'Uses feedback', submitIntervalMs: 90_000, waitForFeedback: false,
+    publish: (n, rand) => Math.min(rand() < 0.5 ? 3 : 4, n), round2BatchSize: 5, usesFeedback: true,
+  },
 };
 
 /**
@@ -73,7 +90,7 @@ export const PERSONAS: Readonly<Record<PersonaId, Persona>> = {
 export const BALANCED_HOLDS = { persona: 'BALANCED', label: 'Balanced (holds)', marketingHoldMs: 60_000 } as const;
 
 /** Panel and team-number order. New personas go at the end so existing ones keep their slots. */
-export const PERSONA_ORDER: readonly PersonaId[] = ['CAREFUL', 'BALANCED', 'SPRAY', 'LEARNER'];
+export const PERSONA_ORDER: readonly PersonaId[] = ['CAREFUL', 'BALANCED', 'SPRAY', 'LEARNER', 'FEEDBACK'];
 
 /** Marketing's pause after each stage, at 1×, so a watched screen shows every state. */
 export const DWELL_MS = { claim: 10_000, split: 15_000, decide: 10_000, reviewPerJoke: 12_000 } as const;

@@ -40,8 +40,10 @@ export interface EngineDeps {
   emit: (message: FromWorker) => void;
   seed: string;
   /**
-   * The trait corpus (scripts/traits/loadTraitCorpus.ts), for teams with
-   * BotTeamSpec.useFeedback set. Only the pilot gives it; the browser worker never does.
+   * The trait corpus, for teams with BotTeamSpec.useFeedback set or a persona
+   * that uses feedback. The pilot gives the 1,000-joke corpus
+   * (scripts/traits/loadTraitCorpus.ts); the browser worker gives the graded
+   * live jokes (services/bots/gradedJokes.ts).
    */
   traitCorpus?: TraitCorpus;
 }
@@ -258,7 +260,7 @@ function newTeam(spec: BotTeamSpec): TeamRuntime {
     jm: newSeat(spec.index, 'A'), marketing: newSeat(spec.index, 'B'),
     submittedByRound: new Map(), submittedJokesByRound: new Map(), publishedByRound: new Map(), published: 0, awaitingFeedback: null,
     memory: new Map(), marketingHoldMs: Math.max(0, spec.marketingHoldMs ?? 0), deckIndex: spec.deckIndex ?? spec.index,
-    useFeedback: spec.useFeedback, round2BatchSize: spec.round2BatchSize, releaseAll: spec.releaseAll === true,
+    useFeedback: spec.useFeedback ?? (PERSONAS[spec.persona].usesFeedback ? true : undefined), round2BatchSize: spec.round2BatchSize, releaseAll: spec.releaseAll === true,
     traitRounds: new Map(), reportedJokeIds: new Set(),
   };
 }
@@ -370,7 +372,7 @@ export class BotEngine {
     if (options.teams.length === 0) throw new Error('Choose at least one bot team.');
     const maxTeams = options.maxTeams ?? MAX_BOT_TEAMS;
     if (options.teams.length > maxTeams) throw new Error(`At most ${maxTeams} bot teams.`);
-    if (options.teams.some(t => t.useFeedback !== undefined) && !this.deps.traitCorpus) {
+    if (options.teams.some(t => t.useFeedback !== undefined || PERSONAS[t.persona].usesFeedback) && !this.deps.traitCorpus) {
       throw new Error('Teams with useFeedback write trait-corpus jokes: start the engine with deps.traitCorpus.');
     }
     for (const t of options.teams) {

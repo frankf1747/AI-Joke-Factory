@@ -10,6 +10,12 @@ describe('botRegistry', () => {
     expect(botTeams().get(4)).toEqual({ persona: 'steady' });
   });
 
+  it('marks a "Uses feedback" team as using feedback', () => {
+    recordBotTeams([{ teamId: 4, persona: 'FEEDBACK' }, { teamId: 5, persona: 'BALANCED' }]);
+    expect(botTeams().get(4)).toEqual({ persona: 'FEEDBACK', use_feedback: true });
+    expect(botTeams().get(5)).toEqual({ persona: 'BALANCED' });
+  });
+
   it('keeps what it has when told about no teams', () => {
     recordBotTeams([{ teamId: 4, persona: 'steady' }]);
     recordBotTeams([]);

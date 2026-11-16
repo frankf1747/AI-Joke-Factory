@@ -81,6 +81,8 @@ const SIDECAR = OUT.replace(/\.md$/, '') + '.json';
 
 const COUNTS: Record<PersonaId, number> = {
   CAREFUL: TUNING.perPersona, BALANCED: TUNING.perPersona, SPRAY: TUNING.perPersona, LEARNER: TUNING.perPersona,
+  // The lean pilot predates feedback bots and keeps its four personas.
+  FEEDBACK: 0,
 };
 /** Extra Balanced teams whose Marketing holds each batch (BALANCED_HOLDS), reported as HOLDS. */
 const HOLD_TEAMS = TUNING.holdTeams;

@@ -34,8 +34,8 @@ export interface BotTeamSpec {
    * team's customer feedback with each release, and the Joke Maker picks its
    * next batch by what every unread note says, oldest first. false: the twin
    * that ignores feedback (no note; it picks by its seed only). Absent: the
-   * ordinary deck.
-   * The Bot players panel never sets it.
+   * ordinary deck, unless the persona uses feedback (PERSONAS.FEEDBACK).
+   * The Bot players panel never sets it: it offers the "Uses feedback" persona.
    */
   useFeedback?: boolean;
   /** Pilot-only: the batch size from round 2 on (capped at the round's batch_size) instead of the persona's. */

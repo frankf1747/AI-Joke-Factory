@@ -65,20 +65,20 @@ describe('jitter', () => {
 
 describe('personaSequence', () => {
   it('interleaves personas so each spans the team numbers', () => {
-    expect(personaSequence({ CAREFUL: 2, BALANCED: 2, SPRAY: 2, LEARNER: 0 }))
+    expect(personaSequence({ CAREFUL: 2, BALANCED: 2, SPRAY: 2, LEARNER: 0, FEEDBACK: 0 }))
       .toEqual(['CAREFUL', 'BALANCED', 'SPRAY', 'CAREFUL', 'BALANCED', 'SPRAY']);
   });
 
   it('handles uneven and empty counts', () => {
-    expect(personaSequence({ CAREFUL: 2, BALANCED: 0, SPRAY: 1, LEARNER: 0 })).toEqual(['CAREFUL', 'SPRAY', 'CAREFUL']);
-    expect(personaSequence({ CAREFUL: 0, BALANCED: 0, SPRAY: 0, LEARNER: 0 })).toEqual([]);
+    expect(personaSequence({ CAREFUL: 2, BALANCED: 0, SPRAY: 1, LEARNER: 0, FEEDBACK: 0 })).toEqual(['CAREFUL', 'SPRAY', 'CAREFUL']);
+    expect(personaSequence({ CAREFUL: 0, BALANCED: 0, SPRAY: 0, LEARNER: 0, FEEDBACK: 0 })).toEqual([]);
   });
 });
 
 describe('round 2 batch sizes and the joke cap', () => {
   it('sends Spray 10, Balanced 5, Careful 5 and Learner 3 jokes a batch from round 2', () => {
     expect(Object.fromEntries(PERSONA_ORDER.map(id => [id, PERSONAS[id].round2BatchSize]))).toEqual({
-      CAREFUL: 5, BALANCED: 5, SPRAY: 10, LEARNER: 3,
+      CAREFUL: 5, BALANCED: 5, SPRAY: 10, LEARNER: 3, FEEDBACK: 5,
     });
   });
 

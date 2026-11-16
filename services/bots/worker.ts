@@ -14,6 +14,7 @@ import { createClient } from '../shared/client';
 import type { BotApi } from './api';
 import { handleMessage } from './commands';
 import { BotEngine, realDelay } from './engine';
+import { GRADED_JOKES } from './gradedJokes';
 import { BOT_CHANNEL, type ChannelMessage, type FromWorker, type ToWorker } from './protocol';
 
 // Typed narrowly instead of pulling in the WebWorker lib, which conflicts with
@@ -68,6 +69,8 @@ async function handle(m: ToWorker): Promise<void> {
     engine = new BotEngine({
       api, instructorUserId: m.instructorUserId, delay: realDelay,
       now: () => Date.now(), emit: post, seed: m.seed,
+      // "Uses feedback" teams need their jokes' traits: the graded live jokes.
+      traitCorpus: GRADED_JOKES,
     });
   } catch (err) {
     // No command waits on init, so its failure has no `done` to ride on.
