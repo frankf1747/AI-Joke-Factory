@@ -238,8 +238,10 @@ const Customer: React.FC = () => {
                 <Bot size={20} className="text-indigo-600" /> AI Customer Engine — how the backend buys
               </h1>
               <p className="text-sm text-gray-500">
-                {CFG.customerCount} AI customers deciding on a batch of {DEMO_JOKES.length} published jokes.
-                Click any joke to see its scoring.
+                Dev-only illustration of the older Classic rules: {CFG.customerCount} AI customers, a bar of {CFG.tau} and
+                swaps, deciding on a batch of {DEMO_JOKES.length} published jokes. Click any joke to see its scoring.
+                Classes play Lean: 18 customers per team arrive over the round, each with a bar of about 8, and shop
+                once with no swaps (docs/lean-market-mode.md §5).
               </p>
             </div>
             <Pipeline />

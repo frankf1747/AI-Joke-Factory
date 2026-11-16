@@ -271,21 +271,25 @@ function demoConfig(o: DemoOptions): GameConfig {
 /** The round's `feedback_joke_count` (its default): the feedback card never lists more jokes than this. */
 export const DEMO_FEEDBACK_JOKE_COUNT = 3;
 
-/* Each joke's customer read is 5 of the 12 criteria, pass or fail. The ids are jokes of the demo
+/* Each joke's customer read is 5 of the 12 criteria, pass or fail; a missed one on an ordered
+   scale says which way to move (improve_hints), as the backend's feedback does. The ids are jokes of the demo
    batches, so the pop-out matrix can head each column "B-{id} #{position}". */
 const EARLIER_FEEDBACK: TeamFeedbackResponse = {
   jokes: [
     {
       joke_id: demoJokeId(EARLIER_BATCH_ID, 3), joke_title: 'Desk Plant Solidarity', was_bought: true,
       good_dimensions: ['TOPIC', 'LENGTH', 'CLARITY'], improve_dimensions: ['WORDPLAY', 'ENERGY'],
+      improve_hints: { WORDPLAY: 'HIGHER', ENERGY: 'LOWER' },
     },
     {
       joke_id: demoJokeId(EARLIER_BATCH_ID, 2), joke_title: 'Coffee Confidential', was_bought: true,
       good_dimensions: ['TOPIC', 'STRUCTURE', 'LENGTH'], improve_dimensions: ['FRESHNESS', 'WORDPLAY'],
+      improve_hints: { FRESHNESS: 'LOWER', WORDPLAY: 'HIGHER' },
     },
     {
       joke_id: demoJokeId(EARLIER_BATCH_ID, 0), joke_title: 'Reaction Overload', was_bought: false,
       good_dimensions: ['LENGTH', 'CLARITY'], improve_dimensions: ['TOPIC', 'SETUP_PAYOFF', 'TITLE_FIT'],
+      improve_hints: { SETUP_PAYOFF: 'LOWER' },
     },
   ],
 };
@@ -438,6 +442,7 @@ export function customersReport(s: DemoState): DemoState {
   const newest: FeedbackJoke = {
     joke_id: id, joke_title: DEMO_KEEP[0].title, was_bought: true,
     good_dimensions: ['TOPIC', 'LENGTH', 'STRUCTURE'], improve_dimensions: ['WORDPLAY', 'ENERGY'],
+    improve_hints: { WORDPLAY: 'HIGHER', ENERGY: 'LOWER' },
   };
   return withGame(s, { teamFeedback: { jokes: [newest, ...rest].slice(0, DEMO_FEEDBACK_JOKE_COUNT) } });
 }

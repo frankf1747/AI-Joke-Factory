@@ -106,7 +106,7 @@ describe('captions (spec §4, verbatim)', () => {
       ['Release.', 'Release to market puts the jokes you ticked on the market, where customers start buying. The tally beside it shows what it costs.'],
       ['Your scoreboard.', 'Your team rank, by profit, sits beside your profit and sales. "Found a buyer" shows how many of your released jokes have sold so far.'],
       ['Fees add up.', 'Every joke you release costs $0.10 to list, and 5¢ a minute while it sits unsold. Release jokes that will sell.'],
-      ['What customers said.', 'For your latest jokes: which criteria landed and which missed. It never says by how much.'],
+      ['What customers said.', 'For your latest jokes: which criteria landed and which missed. A miss can say which way to move, like "Energy: calmer", but never how far.'],
       ['Keep it in view.', 'Pop out opens a window that stays on top while you work. It groups the criteria into "Fix next" and "Keep doing".'],
       ['Your goal.', 'Ship what sells, tell your Joke Maker why, and improve every batch.'],
     ]);

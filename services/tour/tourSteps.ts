@@ -135,7 +135,7 @@ export const MARKETING_STEPS: readonly DemoStep[] = [
   {
     id: 'mk-feedback', target: 'mk-feedback',
     title: 'What customers said.',
-    body: 'For your latest jokes: which criteria landed and which missed. It never says by how much.',
+    body: 'For your latest jokes: which criteria landed and which missed. A miss can say which way to move, like "Energy: calmer", but never how far.',
     onEnter: customersReport,
   },
   {
